@@ -49,9 +49,13 @@ func (e *Engine) measureTransport(ctx context.Context, req contract.ProbeRequest
 		m.Result.Duration = e.opts.Clock().Sub(start)
 		return m
 	}
+	// A protocol v1 cannot dial is never probed, including a legacy unknown
+	// record for http or an unknown scheme (pool.EffectiveStatus derives it as
+	// unsupported). An empty protocol keeps its previous handling.
 	if rec.Status == contract.RecordInvalid || rec.Status == contract.RecordUnsupported ||
+		(rec.Protocol != "" && !rec.Protocol.Supported()) ||
 		(rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "") ||
-		rec.Security == contract.SecurityReality || rec.Protocol == contract.ProtocolHTTP {
+		rec.Security == contract.SecurityReality {
 		m.Result.Outcome = contract.OutcomeRejected
 		m.Result.Failure = contract.Unsupported
 		m.Result.Duration = e.opts.Clock().Sub(start)

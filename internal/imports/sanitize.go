@@ -25,11 +25,11 @@ const (
 	ReasonInvalidHostHeader    = "invalid_host_header"
 	ReasonInvalidPin           = "invalid_pinned_peer_cert_sha256"
 	ReasonInvalidVerifyName    = "invalid_verify_peer_cert_by_name"
-	ReasonUnsupportedProtocol  = "protocol_unsupported"
+	ReasonUnsupportedProtocol  = contract.ReasonProtocolUnsupported
 	ReasonUnsupportedTransport = "transport_unsupported"
 	ReasonUnsupportedSecurity  = "security_unsupported"
 	ReasonRealityUnverified    = "reality_not_verified"
-	ReasonHTTPExitUnverified   = "http_exit_not_verified"
+	ReasonHTTPExitUnverified   = contract.ReasonHTTPExitNotVerified
 	ReasonUnknownExtraKey      = "xhttp_extra_key_rejected"
 	ReasonInvalidExtra         = "xhttp_extra_invalid"
 	ReasonRootScopeKey         = "root_scope_key_rejected"

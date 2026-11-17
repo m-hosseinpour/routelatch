@@ -738,6 +738,18 @@ unsupported/quarantined هشدار می‌دهد. حذف آن فقط با فرم
 طریق management socket است؛ v1 هیچ فرمان حذف آفلاین ندارد، چون startup دیگر به یک
 رکورد خراب وابسته نیست.
 
+**وضعیت مشتق‌شده برای رکورد قدیمی یا دست‌ویرایش‌شده.** state قدیمی یا ویرایش دستی
+می‌تواند برای پروتکلی که v1 هرگز نمی‌تواند dial کند همچنان `unknown` (یا فیلد خالی)
+داشته باشد. نمای pool هنگام خواندن و گزارش، وضعیت را مشتق می‌کند: `http` →
+`unsupported` با `StatusReason = http_exit_not_verified`، و هر پروتکل غیرخالی خارج از
+`{vless, trojan, socks5, http}` → `unsupported` با
+`StatusReason = protocol_unsupported`. دلیل مشتق‌شده بر دلیل کهنهٔ ذخیره‌شده (مثلاً
+`engine_record_rejected`) اولویت دارد. این کار **فقط در view** انجام می‌شود و state را
+بازنویسی نمی‌کند: `pool list`، شمارندهٔ هشدار `status` و `doctor` همگی همین وضعیت را
+می‌شمارند، رکورد از شمار `unknown` خارج و در شمار `unsupported` می‌آید، و رکورد هرگز
+dial یا probe نمی‌شود. رکورد با پروتکل خالی و statusهای ذخیره‌شدهٔ `invalid`،
+`unsupported`، `healthy` و `cooling` رفتار فعلی خود را نگه می‌دارند.
+
 **VLESS/Trojan بدون TLS به exit عمومی.** `validateRecord` هستهٔ pin‌شده این حالت را رد
 می‌کند: اگر protocol غیر از SOCKS5 باشد، `security` برابر `tls` نباشد و `publicServer`
 سرور را عمومی بداند (IP غیر `private`/`loopback`/`link-local`، یا دامنه‌ای که در
@@ -757,7 +769,11 @@ security `none`/`tls`؛ آدرس، پورت، UUID/password، `sni`, `alpn`, `fi
 مسیر/Host برای ws/xhttp، `serviceName` برای gRPC، `pinnedPeerCertSha256`،
 `verifyPeerCertByName`، و `extra` XHTTP با allow-list زیر.
 `http` و `reality` شناخته می‌شوند ولی تا بسته‌شدن گیت‌های R-2/R-13 به‌صورت `unsupported`
-وارد می‌شوند (نه حذف بی‌صدا).
+وارد می‌شوند (نه حذف بی‌صدا). هر `http://`/`https://` با دلیل
+`StatusReason = http_exit_not_verified` و هر scheme ناشناس با
+`StatusReason = protocol_unsupported` ذخیره می‌شود؛ import هرگز رکورد `unknown` برای
+این پروتکل‌ها نمی‌سازد. رکورد قدیمی/دست‌ویرایش‌شده‌ای که هنوز `unknown` است در view
+مشتق می‌شود (§۵.۳) و state آن بازنویسی نمی‌شود.
 
 **حذف‌شده و شمارش‌شده (بدون اجرا):** کلیدهای ریشه‌ای `routing`, `dns`, `api`, `env`,
 `inbounds`, `observatory`, `policy`, `stats`, `reverse`, `fakedns`, `log`؛ `mux` (v1
@@ -985,6 +1001,10 @@ state. پیشنهادها و شواهدشان هم فقط در حافظه‌ان
 
 `pool remove <id>` تنها مسیر حذف رکورد است (از جمله رکورد `unsupported` با دلیل
 `engine_record_rejected`)؛ v1 هیچ فرمان حذف آفلاین ندارد.
+
+شمارندهٔ unsupported در هشدارهای `status` و در checkهای `doctor` از همان نمای مشتق‌شدهٔ
+`pool list` می‌آید: رکورد قدیمی `unknown` با پروتکل غیرقابل‌dial در هر سه سطح
+`unsupported` شمرده می‌شود و در شمار `unknown` نمی‌ماند (§۵.۳).
 
 `exec` در حالت `--json` دقیقاً یک `Envelope` روی stdout می‌نویسد و stdout و stderr
 فرزند را به stderr هدایت می‌کند؛ exit code فرمان همان exit code فرزند است. در حالت

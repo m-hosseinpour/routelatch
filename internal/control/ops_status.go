@@ -103,24 +103,24 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 
 func statusWarnings(snap contract.Snapshot, now time.Time, listenersOpen, stopped bool, engineTransports int) []string {
 	var warnings []string
-	unsupported := 0
+	p := pool.Build(snap.State, now)
+	counts := p.Counts()
 	insecure := 0
-	for _, rec := range snap.State.Records {
-		if rec.Status == contract.RecordUnsupported {
-			unsupported++
-			if rec.StatusReason == contract.ReasonInsecureTLSRemoved || rec.InsecureTLS {
-				insecure++
-			}
+	for _, rec := range p.Records() {
+		// p.Records carries the derived status, so this warning and the
+		// unsupported count below agree with `pool list` and `doctor`.
+		if rec.Status == contract.RecordUnsupported &&
+			(rec.StatusReason == contract.ReasonInsecureTLSRemoved || rec.InsecureTLS) {
+			insecure++
 		}
 	}
-	if unsupported > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d record(s) are unsupported or quarantined", unsupported))
+	if counts.Unsupported > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d record(s) are unsupported or quarantined", counts.Unsupported))
 	}
 	if insecure > 0 {
 		warnings = append(warnings, "TLS verification was disabled in an imported link; replace it with a valid certificate or pinnedPeerCertSha256")
 	}
-	p := pool.Build(snap.State, now)
-	if p.Counts().Usable == 0 && (snap.State.Mode == contract.ModeTargeted || snap.State.Mode == contract.ModeProxyAll) {
+	if counts.Usable == 0 && (snap.State.Mode == contract.ModeTargeted || snap.State.Mode == contract.ModeProxyAll) {
 		warnings = append(warnings, "pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'")
 	}
 	if snap.State.SelectedExit != "" && !poolHas(p, snap.State.SelectedExit) {

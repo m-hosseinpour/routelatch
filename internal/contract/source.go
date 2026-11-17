@@ -43,6 +43,18 @@ type Source struct {
 // valid certificate or a pinnedPeerCertSha256 link.
 const ReasonInsecureTLSRemoved = "insecure_tls_removed"
 
+// ReasonProtocolUnsupported and ReasonHTTPExitNotVerified are the stable
+// reasons for a link whose scheme v1 can never dial. They are defined here, once,
+// because both the importer (which stores them) and the pool view (which derives
+// them for a legacy unknown record) must report the same literal
+// (docs/contracts.md §5.3–5.4).
+const (
+	// ReasonProtocolUnsupported: the scheme is outside {vless, trojan, socks5}.
+	ReasonProtocolUnsupported = "protocol_unsupported"
+	// ReasonHTTPExitNotVerified: an HTTP(S) exit cannot be verified in v1 (R-2).
+	ReasonHTTPExitNotVerified = "http_exit_not_verified"
+)
+
 // RecordID is stable while the record's connection settings are unchanged.
 type RecordID string
 

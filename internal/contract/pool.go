@@ -20,6 +20,18 @@ const (
 	ProtocolHTTP   Protocol = "http"
 )
 
+// Supported reports whether v1 can ever dial the protocol. `http` is
+// representable but gated on R-2, and any other value is a scheme outside the
+// v1 set; both are imported as unsupported and never dialed (docs/contracts.md
+// §5.4).
+func (p Protocol) Supported() bool {
+	switch p {
+	case ProtocolVLESS, ProtocolTrojan, ProtocolSOCKS5:
+		return true
+	}
+	return false
+}
+
 // ProofClass is the strength of the evidence a pool dial carries. It is the
 // single place where the T1 handshake gate lives (docs/contracts.md §2.1–2.2).
 type ProofClass string
