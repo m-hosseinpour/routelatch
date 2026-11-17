@@ -98,7 +98,7 @@ setting is used.
   address at `config set` (asserted), and the runtime listener check
   (`platform.Targets.Validate`) returns the same kind (`run` with
   `http_listen=0.0.0.0:1000` exits 7 without binding, observed manually). §7.1's
-  `config get|set|path` row still lists only 0/2/3/6 and should gain 7.
+  `config get|set|path` row now lists 0/2/3/6/7.
 * **F7 (found here, fixed in `659064f`)** — absolute-form `https` was refused
   with `policy_denied`/403, while §3.1 reserves that kind for self/local
   prohibition and an operation outside v1 maps to `unsupported`/405–501. It is
