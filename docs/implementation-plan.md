@@ -262,6 +262,14 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   منو، `run`، doctor). بازبینی مستقل بدون یافتهٔ مسدودکننده.
   گپ باقی‌مانده: مسیر accept/reject پیشنهاد unroute فقط source-traced است، چون تولیدکنندهٔ
   آن در جریان عادی وجود ندارد؛ در T7 آزموده شود.
+- **T7 (پذیرش) شروع شد و سه نقص واقعی پیدا کرد (۲۰۲۶-۱۱-۱۷):**
+  F1 تونل pool بعد از reply می‌مرد (context با `defer cancel()` عمر session را می‌بست؛
+  HTTP 200 سپس EOF، SOCKS `0x00` سپس ۰ بایت)؛ F2 خطای cooldown probe به `internal`/exit 1
+  نگاشت می‌شد؛ F3 `fenceMu` کل dial را قفل می‌کرد و mode switch تا deadline (~9.8s) می‌ماند.
+  هر سه رفع و بازبینی شدند؛ اکنون mode switch ۰٫۱۳–۰٫۳۷ms و بستن dial در جریان
+  ۰٫۱۶–۰٫۴۳ms است. harness: ۸۴ pass/۵ fail → ۸۹ pass/۰ fail.
+  **درس ثبت‌شده:** آزمون واحد پکیج‌ها این کلاس (مالکیت lifetime و seam بین‌پکیجی) را
+  نمی‌گیرد؛ harness جریان کامل باید بخشی از تعریف «انجام‌شده» بماند.
 - **T2 بسته شد:** `docs/contracts.md` (مدل مقصد، proof class و ماتریس حالت، تاکسونومی خطا،
   state/مدیریت، pool/import/sanitization، probe/سلامت، CLI/menu، نگاشت A01–A14) و
   `internal/contract` یخ‌زده با ۲۲ kind خطا (پس از اصلاحیه). بازبینی مستقل ۱۱ یافتهٔ مادی و ۲ رگرسیون
@@ -276,7 +284,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | T4 — pool و import | پیاده و آزمون واحد؛ پذیرش یکپارچه نشده | fixture مخرب و refresh اتمیک آزموده شده؛ خروجی عمومی آزموده نشده |
 | T5 — پیشنهادها و مدیریت | پیاده (diagnostics/proposals/control/CLI/menu)؛ پذیرش یکپارچه نشده | must: no-rule-without-approval و no-replay |
 | T6 — نصب و سرویس | فایل‌های unit/launcher/desktop آماده؛ نصب واقعی انجام نشده (نیاز به مجوز جدا) | آزمون با runner جعلی، بدون تغییر تنظیم واقعی |
-| T7 — پذیرش و انتشار | در جریان: harness با ۸۴ pass؛ سه نقص یکپارچهٔ واقعی (F1 تونل pool، F2 exit code، F3 fence) در رفع | شواهد یکپارچه؛ A01/A07/A11/A14 هنوز پذیرفته‌نشده؛ انتشار مسدود تا D20 |
+| T7 — پذیرش و انتشار | در جریان: harness ۸۹ pass / ۰ fail پس از رفع F1–F3؛ گسترش پوشش A-itemهای باقی‌مانده در جریان | A01/A14 و systemd/دسکتاپ واقعی/خروجی عمومی قابل‌آزمون نیستند؛ انتشار مسدود تا D20 |
 | Windows / UDP / TUN / Android / GUI | شروع نشده؛ هنوز پلن اجرایی ندارند | تصمیم scope و دروازه‌های milestones بعدی |
 
 T1 اجرا شد و دروازهٔ handshake با تصمیم صریح کاربر بسته شد؛ T2 در جریان است. مرزهای
