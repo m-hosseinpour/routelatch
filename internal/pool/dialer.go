@@ -68,13 +68,15 @@ func (d *Dialer) DialPool(ctx context.Context, req contract.PoolDialRequest) (co
 		return contract.PoolDialResult{}, fail
 	}
 
-	dialCtx := ctx
-	var cancel context.CancelFunc
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		dialCtx, cancel = context.WithTimeout(ctx, contract.PoolDialDeadline)
-		defer cancel()
-	}
-	conn, proof, tag, err := d.dial(dialCtx, contract.ExitID(rec.ID), req.Destination)
+	// ctx is the connection lifetime, not a dial scope: the returned session
+	// must stay attached to it so only the caller's registry/close path can end
+	// it (docs/contracts.md §2.6, §3.4). Each dial adapter bounds its own
+	// blocking dial phase instead — the SOCKS5 adapter applies
+	// contract.PoolDialDeadline when ctx has no earlier deadline, and the core
+	// path has no observable dial phase to bound (§2.1). Deriving a dial
+	// deadline here would hand the engine a context that kills the tunnel at
+	// that deadline (finding F1).
+	conn, proof, tag, err := d.dial(ctx, contract.ExitID(rec.ID), req.Destination)
 	if err != nil {
 		return contract.PoolDialResult{}, mapDialError(err, req.Destination, contract.ExitID(rec.ID), proof)
 	}

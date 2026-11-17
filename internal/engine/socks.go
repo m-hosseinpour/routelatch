@@ -60,9 +60,18 @@ func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.De
 		return DialResult{}, adapterFailure(dialCtx, spec.exit.ID, dst, "the exit address could not be reached", err)
 	}
 
+	// The timer hook unblocks a handshake read or write that is waiting on a
+	// silent peer. deadlineMu makes "the handshake is over" and the hook
+	// mutually exclusive, so a timer that fires exactly at the boundary cannot
+	// put an immediate deadline on an established tunnel (finding F1's edge).
+	var deadlineMu sync.Mutex
+	handshaking := true
 	stop := context.AfterFunc(dialCtx, func() {
-		// Unblock a handshake read or write that is waiting on a silent peer.
-		_ = conn.SetDeadline(time.Now())
+		deadlineMu.Lock()
+		if handshaking {
+			_ = conn.SetDeadline(time.Now())
+		}
+		deadlineMu.Unlock()
 	})
 	defer stop()
 	if !deadline.IsZero() {
@@ -106,9 +115,14 @@ func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.De
 	}
 
 	// The handshake succeeded; from here the connection is a plain tunnel with
-	// no deadline of ours. A later session-context cancel closes it, exactly as
-	// it tears down a core session.
+	// no deadline of ours. Under deadlineMu the hook either already ran (our
+	// clear wins) or will see handshaking=false, so an established tunnel can
+	// never inherit the dial bound.
+	deadlineMu.Lock()
+	handshaking = false
 	_ = conn.SetDeadline(time.Time{})
+	deadlineMu.Unlock()
+	stop()
 	accepted := time.Now()
 	ac.arm()
 
@@ -393,6 +407,21 @@ func (c *adapterConn) Close() error {
 		c.engine.untrackAdapter(c)
 	})
 	return err
+}
+
+// CloseWrite forwards a client half-close to the exit so the destination sees
+// EOF and can finish its reply. The frontend requires a pool conn to expose
+// CloseWrite when the transport supports half-close (frontend.Options); the
+// exit socket is a *net.TCPConn in production, so this is the normal path.
+// It is best effort: net.Conn does not promise CloseWrite, and the core-backed
+// poolConn has no such API in the pinned core, so the frontend's documented
+// fallback (the connection ends when the client, the registry or an error
+// closes it) applies there.
+func (c *adapterConn) CloseWrite() error {
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
 }
 
 func (c *adapterConn) classify(err error, read bool) error {

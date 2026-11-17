@@ -12,6 +12,7 @@ import (
 	"routelatch/internal/contract"
 	"routelatch/internal/diagnostics"
 	"routelatch/internal/platform"
+	"routelatch/internal/probes"
 	"routelatch/internal/proposals"
 	"routelatch/internal/routing"
 )
@@ -85,6 +86,14 @@ func mapDiagnosticsError(err error) error {
 		return &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "proposal expired"}
 	case errors.Is(err, diagnostics.ErrCooldown):
 		return &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "probe cooldown has not elapsed"}
+	case errors.Is(err, probes.ErrProbeCooldown):
+		// The prober enforces its own fixed destination cooldown, which can
+		// still be running after the diagnostics cooldown has elapsed. It is
+		// the same "come back later" outcome, not an internal defect: the
+		// documented proposals exit set is 0/3/5/6 (docs/contracts.md §7.1).
+		return &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "probe cooldown has not elapsed"}
+	case errors.Is(err, probes.ErrProbeInFlight):
+		return &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "a probe for this destination is already running"}
 	case errors.Is(err, diagnostics.ErrInFlight):
 		return &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "a probe for this destination is already running"}
 	case errors.Is(err, diagnostics.ErrClosed):

@@ -32,8 +32,10 @@ const (
 // error is a vanished client and does cancel the pending dial (the contract's
 // canceled kind includes "client went away"). The cost of the FIN choice is
 // explicit: a client that cleanly closes during a pending dial is not
-// detected there; its dial is bounded by PoolDialDeadline/DirectDialDeadline
-// and the first copy/registry close tears the connection down. This is the
+// detected there; the dial is bounded by its own dialer (PoolDialDeadline for
+// the SOCKS5 exit handshake, DirectDialDeadline for the direct path; the
+// core-backed pool path has no observable dial phase, §2.1) and the first
+// copy or a registry close ends the connection. This is the
 // only consistent choice, because canceling on FIN would reject valid
 // half-closing clients.
 //

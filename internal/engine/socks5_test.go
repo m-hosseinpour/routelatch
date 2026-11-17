@@ -250,6 +250,40 @@ func TestSocks5AdapterSendsDomainUnresolvedAndConfirms(t *testing.T) {
 	}
 }
 
+// TestSocks5TunnelForwardsHalfClose: the frontend requires a pool conn to
+// expose CloseWrite, otherwise a client half-close never reaches the exit and
+// the tunnel (and its descriptors) cannot end. The adapter wraps the exit
+// socket, so it must pass the half-close through rather than swallow it.
+func TestSocks5TunnelForwardsHalfClose(t *testing.T) {
+	p := newSocksPeer(t, socksPeerConfig{})
+	e := startEngine(t, 1, socksRecord("x-socks", "127.0.0.1", p.port(), "", ""))
+
+	res, err := e.Dial(context.Background(), dialRequest("x-socks", domainDestination("dest.example.test", 443), 1))
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer res.Conn.Close()
+
+	cw, ok := res.Conn.(interface{ CloseWrite() error })
+	if !ok {
+		t.Fatal("the SOCKS5 tunnel does not expose CloseWrite; a client half-close cannot reach the exit")
+	}
+	if _, err := res.Conn.Write([]byte("bye")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := readWithin(res.Conn, 2*time.Second); got.err != nil || string(got.data) != "bye" {
+		t.Fatalf("echo = %q, %v", got.data, got.err)
+	}
+	if err := cw.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite: %v", err)
+	}
+	// The peer echoes until it sees the half-close, then closes its side, so
+	// the tunnel must report a clean end of stream.
+	if got := readWithin(res.Conn, 2*time.Second); !errors.Is(got.err, io.EOF) {
+		t.Fatalf("read after CloseWrite = %q, %v; want EOF", got.data, got.err)
+	}
+}
+
 func TestSocks5AdapterRejectionsAreTyped(t *testing.T) {
 	cases := []struct {
 		name string

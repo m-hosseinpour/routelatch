@@ -70,10 +70,12 @@ type Service struct {
 	// after a mode commit and make the in-memory mode regress (§4.4).
 	pubMu sync.Mutex
 
-	// fenceMu makes "snapshot check + exit dial" atomic with respect to a
-	// policy commit. A mode/rule change waits for an in-flight pool dial to
-	// resolve, then swaps the policy and sweeps; it can never relabel an old
-	// dial with the new PolicyVersion.
+	// fenceMu orders policy publication against a pool dial's admission and
+	// completion checks. It is held only for those short checks, never across
+	// the dial, so a mode/rule change can commit and sweep at once: the sweep
+	// cancels a pending dial through the handle context instead of waiting for
+	// its deadline (docs/contracts.md §2.6, §3.4). A dial that still finishes
+	// against a superseded version is rejected and closed by fencedPool.
 	fenceMu sync.RWMutex
 
 	httpListen    string
@@ -556,18 +558,104 @@ func isLoopbackListen(addr string) bool {
 
 var _ Handler = (*Service)(nil)
 
-// fencedPool holds a read lease across the pool dialer's snapshot check,
-// exit selection and exit dial. commitSnapshot takes the write lease, so a
-// stale request cannot be silently re-admitted under the new version.
+// fencedPool enforces the policy fence around a pool dial without holding a
+// lease for the dial's whole lifetime.
+//
+// The read lease covers two short moments: the admission check (so a dial can
+// never observe a half-published snapshot/policy pair) and the completion
+// revalidation. It is deliberately not held across the dial: a mode/rule change
+// must be able to commit and sweep immediately, so the sweep can cancel a
+// pending dial inside the documented bound instead of waiting for its deadline
+// (docs/contracts.md §3.4, finding F3).
+//
+// Safety does not depend on the lease. A dial that finishes after the policy
+// moved is revalidated when it completes and is closed and reported Canceled
+// unless the new policy still keeps it (same pool route, usable exit); and
+// every pool dial runs on the registry handle's context, so the sweep's close
+// cancels it. Together they preserve §2.7's rule that a stale dial can never
+// complete against a superseded policy, while §2.5's audit-only version bump
+// does not cancel work the sweep itself would have kept.
 type fencedPool struct {
 	svc   *Service
 	inner contract.PoolDialer
 }
 
 func (p *fencedPool) DialPool(ctx context.Context, req contract.PoolDialRequest) (contract.PoolDialResult, error) {
+	if err := p.admitted(req.PolicyVersion); err != nil {
+		return contract.PoolDialResult{}, err
+	}
+	res, err := p.inner.DialPool(ctx, req)
+	if err != nil {
+		return res, err
+	}
+	if !p.current(req.PolicyVersion) && !p.completedUnderCurrentPolicy(ctx, req.Destination, res.Exit) {
+		// The dial crossed a policy commit that superseded it. The registry
+		// sweep has already closed the handle this dial belongs to; close the
+		// connection it produced instead of letting it be attached and used.
+		if res.Conn != nil {
+			_ = res.Conn.Close()
+		}
+		return contract.PoolDialResult{}, &contract.Failure{
+			Kind:        contract.Canceled,
+			Path:        contract.PathLocal,
+			Op:          "control.pool",
+			Destination: req.Destination,
+			Retryable:   true,
+			Message:     "policy changed while the dial was in flight; the stale connection was closed",
+		}
+	}
+	return res, nil
+}
+
+// admitted reports whether reqVersion is the currently published policy
+// version. It runs under the read lease, so it cannot see a snapshot/policy
+// pair that is only half stored.
+func (p *fencedPool) admitted(reqVersion contract.PolicyVersion) error {
 	p.svc.fenceMu.RLock()
-	defer p.svc.fenceMu.RUnlock()
-	return p.inner.DialPool(ctx, req)
+	policy := p.svc.policy.Load()
+	p.svc.fenceMu.RUnlock()
+	if policy == nil || reqVersion != policy.PolicyVersion() {
+		return &contract.Failure{
+			Kind:      contract.Canceled,
+			Path:      contract.PathLocal,
+			Op:        "control.pool",
+			Retryable: true,
+			Message:   "connection was admitted under a stale policy version",
+		}
+	}
+	return nil
+}
+
+// current reports whether version is still the published policy version.
+func (p *fencedPool) current(version contract.PolicyVersion) bool {
+	p.svc.fenceMu.RLock()
+	policy := p.svc.policy.Load()
+	p.svc.fenceMu.RUnlock()
+	return policy != nil && policy.PolicyVersion() == version
+}
+
+// completedUnderCurrentPolicy reports whether a connection that finished
+// dialing after the policy moved may still be used. The rule mirrors the
+// sweep's keep predicate for connections that were already live — the new
+// policy must still route the destination to the pool — and adds the exit
+// check a pending dial cannot get from the registry, because its exit is
+// unknown until the dial returns. That keeps an audit-only version bump
+// (`pool select`, which §2.5 says closes no connection) from cancelling a
+// pending dial, while a mode/rule change or a removed/unusable exit still
+// rejects it. §2.5, §2.6, §2.7.
+func (p *fencedPool) completedUnderCurrentPolicy(ctx context.Context, dst contract.Destination, exit contract.ExitID) bool {
+	p.svc.fenceMu.RLock()
+	policy := p.svc.policy.Load()
+	snap := p.svc.Snapshot()
+	p.svc.fenceMu.RUnlock()
+	if policy == nil {
+		return false
+	}
+	dec, err := policy.Decide(ctx, dst)
+	if err != nil || dec.Route != contract.RoutePool {
+		return false
+	}
+	return pool.Build(snap.State, p.svc.now()).Usable(exit)
 }
 
 // directDialer is the production direct path: system resolver allowed, but a

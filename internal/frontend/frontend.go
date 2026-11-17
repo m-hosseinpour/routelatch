@@ -25,9 +25,13 @@
 //   - A client reset while a dial is pending cancels that dial within the
 //     pending-dial bound. A clean FIN is a half-close (TCP cannot distinguish
 //     it from a full close), so it is not treated as "client went away"; the
-//     tunnel forwards it after the reply, and a cleanly gone client is bounded
-//     by the dial deadline. Bytes pipelined during the watch are replayed,
-//     never lost, including past the capture cap.
+//     tunnel forwards it after the reply with CloseWrite, and a cleanly gone
+//     client that never sees a teardown is bounded by the dialer's own dial
+//     deadline (PoolDialDeadline for the SOCKS5 exit handshake,
+//     DirectDialDeadline for the direct path; the core-backed pool path has
+//     no observable dial phase, §2.1) and by the registry/close path. Bytes
+//     pipelined during the watch are replayed, never lost, including past the
+//     capture cap.
 //   - There is no TLS, certificate or interception code in this package. A
 //     CONNECT target's certificate is the origin's certificate because the
 //     bytes are forwarded, not terminated.
@@ -366,15 +370,21 @@ func (f *Frontend) decide(ctx context.Context, dst contract.Destination) (contra
 func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract.Destination) (net.Conn, contract.ExitID, contract.ProofClass, *contract.Failure) {
 	switch dec.Route {
 	case contract.RoutePool:
-		pctx, cancel := context.WithTimeout(ctx, contract.PoolDialDeadline)
-		defer cancel()
-		res, err := f.opts.Pool.DialPool(pctx, contract.PoolDialRequest{
+		// ctx is the connection lifetime owned by the registry handle, which is
+		// what cancels a tunnel on close or a conflicting mode/rule change
+		// (docs/contracts.md §2.6, §3.4, D13). It is passed through unwrapped:
+		// a dial-scoped timeout/deadline here would become the session's
+		// lifetime, and the deferred cancel would tear a live tunnel down as
+		// soon as the dial returned. The pool layer bounds its own blocking
+		// dial phase (PoolDialDeadline applies to the adapter handshake; the
+		// core path has no observable dial phase, §2.1).
+		res, err := f.opts.Pool.DialPool(ctx, contract.PoolDialRequest{
 			Destination:   dst,
 			RuleID:        dec.RuleID,
 			PolicyVersion: dec.PolicyVersion,
 		})
 		if err != nil {
-			return nil, "", "", dialFailure(err, pctx, contract.PathPool)
+			return nil, "", "", dialFailure(err, ctx, contract.PathPool)
 		}
 		if res.Conn == nil || (res.Proof != contract.ProofConfirmed && res.Proof != contract.ProofAccepted) {
 			if res.Conn != nil {
