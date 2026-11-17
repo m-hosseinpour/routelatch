@@ -2,6 +2,7 @@ package pool
 
 import (
 	"testing"
+	"time"
 
 	"routelatch/internal/contract"
 )
@@ -51,6 +52,56 @@ func TestEffectiveStatusDerivesLegacyUnsupported(t *testing.T) {
 	}
 	for _, tc := range cases {
 		status, reason := EffectiveStatus(tc.rec, contract.ExitHealth{}, now)
+		if status != tc.status || reason != tc.reason {
+			t.Errorf("%s: got %s/%q, want %s/%q", tc.name, status, reason, tc.status, tc.reason)
+		}
+	}
+}
+
+// TestUndialableDerivationWinsOverStoredStatus locks the rule that a protocol v1
+// can never dial reports the importer's verdict whatever the stored status is
+// (legacy cooling, healthy, unsupported with a pre-R5 engine reason), while a
+// supported protocol keeps every stored status and stored invalid stays invalid.
+func TestUndialableDerivationWinsOverStoredStatus(t *testing.T) {
+	now := t0()
+	withProtocol := func(id string, order int, protocol contract.Protocol, status contract.RecordStatus, reason string) contract.Record {
+		rec := record(id, order, status)
+		rec.Protocol = protocol
+		rec.StatusReason = reason
+		return rec
+	}
+	coolingHealth := func(exit contract.ExitID, until time.Time) contract.ExitHealth {
+		h := health(exit, contract.HealthCooling, 0, 0)
+		h.CooldownUntil = until
+		h.LastFailureKind = contract.ExitUnreachable
+		return h
+	}
+
+	cases := []struct {
+		name   string
+		rec    contract.Record
+		h      contract.ExitHealth
+		status contract.RecordStatus
+		reason string
+	}{
+		{"http stored cooling", withProtocol("x-http-cooling", 0, contract.ProtocolHTTP, contract.RecordCooling, "cooling:timeout"), contract.ExitHealth{}, contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"http stored healthy", withProtocol("x-http-healthy", 1, contract.ProtocolHTTP, contract.RecordHealthy, ""), contract.ExitHealth{}, contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"http stored unsupported keeps no engine reason", withProtocol("x-http-unsupported", 2, contract.ProtocolHTTP, contract.RecordUnsupported, "engine_record_rejected"), contract.ExitHealth{}, contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"http stored cooling with live health", withProtocol("x-http-live", 3, contract.ProtocolHTTP, contract.RecordCooling, "cooling:timeout"), coolingHealth("x-http-live", now.Add(time.Minute)), contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"http stored cooling with expired health", withProtocol("x-http-expired", 4, contract.ProtocolHTTP, contract.RecordCooling, "cooling:timeout"), coolingHealth("x-http-expired", now.Add(-time.Minute)), contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"http stored cooling with healthy cache", withProtocol("x-http-cache", 5, contract.ProtocolHTTP, contract.RecordCooling, "cooling:timeout"), health("x-http-cache", contract.HealthHealthy, 10, 3), contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
+		{"vmess stored cooling", withProtocol("x-vmess-cooling", 6, contract.Protocol("vmess"), contract.RecordCooling, "cooling:timeout"), contract.ExitHealth{}, contract.RecordUnsupported, contract.ReasonProtocolUnsupported},
+		{"vmess stored unsupported keeps no engine reason", withProtocol("x-vmess-unsupported", 7, contract.Protocol("vmess"), contract.RecordUnsupported, "engine_record_rejected"), contract.ExitHealth{}, contract.RecordUnsupported, contract.ReasonProtocolUnsupported},
+		{"http stored invalid stays invalid", withProtocol("x-http-invalid", 8, contract.ProtocolHTTP, contract.RecordInvalid, ""), contract.ExitHealth{}, contract.RecordInvalid, "invalid"},
+		{"vmess stored invalid stays invalid", withProtocol("x-vmess-invalid", 9, contract.Protocol("vmess"), contract.RecordInvalid, "tls_verification_disabled"), contract.ExitHealth{}, contract.RecordInvalid, "tls_verification_disabled"},
+		{"vless stored cooling stays cooling", withProtocol("x-vless-cooling", 10, contract.ProtocolVLESS, contract.RecordCooling, "cooling:timeout"), contract.ExitHealth{}, contract.RecordCooling, "cooling:timeout"},
+		{"vless stored healthy stays healthy", withProtocol("x-vless-healthy", 11, contract.ProtocolVLESS, contract.RecordHealthy, ""), contract.ExitHealth{}, contract.RecordHealthy, ""},
+		{"vless stored unsupported keeps the engine reason", withProtocol("x-vless-unsupported", 12, contract.ProtocolVLESS, contract.RecordUnsupported, "engine_record_rejected"), contract.ExitHealth{}, contract.RecordUnsupported, "engine_record_rejected"},
+		{"vless unknown with live health cools", withProtocol("x-vless-live", 13, contract.ProtocolVLESS, contract.RecordUnknown, ""), coolingHealth("x-vless-live", now.Add(time.Minute)), contract.RecordCooling, "cooling:exit_unreachable"},
+		{"vless unknown with expired health is unknown", withProtocol("x-vless-expired", 14, contract.ProtocolVLESS, contract.RecordUnknown, ""), coolingHealth("x-vless-expired", now.Add(-time.Minute)), contract.RecordUnknown, ""},
+	}
+	for _, tc := range cases {
+		status, reason := EffectiveStatus(tc.rec, tc.h, now)
 		if status != tc.status || reason != tc.reason {
 			t.Errorf("%s: got %s/%q, want %s/%q", tc.name, status, reason, tc.status, tc.reason)
 		}

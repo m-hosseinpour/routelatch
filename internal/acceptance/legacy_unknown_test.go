@@ -94,6 +94,73 @@ func writeLegacyState(t *testing.T, dir string, port uint16) {
 	}
 }
 
+// writeLegacyStoredStatusState builds a hand-edited pre-R5 state whose
+// undialable records keep a stored status other than unknown: cooling with an
+// expired cooldown, cooling inside its cooldown, healthy, invalid, and the
+// unsupported/engine_record_rejected a pre-R5 start could persist. A supported
+// vless record keeps its engine reason so the derivation stays scoped.
+func writeLegacyStoredStatusState(t *testing.T, dir string, port uint16) {
+	t.Helper()
+	const srcID = "s-0123456789ab"
+	now := time.Now().UTC()
+	httpWith := func(id string, order int, status, reason string) map[string]any {
+		doc := legacyRecordDoc(id, "http", reason, srcID, port)
+		doc["status"] = status
+		doc["order"] = order
+		return doc
+	}
+	cooling := func(id string, order int) map[string]any {
+		return httpWith(id, order, "cooling", "cooling:exit_unreachable")
+	}
+	rejected := func(id, protocol string, order int) map[string]any {
+		doc := legacyRecordDoc(id, protocol, "engine_record_rejected", srcID, port)
+		doc["status"] = "unsupported"
+		doc["order"] = order
+		return doc
+	}
+	health := func(exit string, until time.Time) map[string]any {
+		return map[string]any{
+			"exit": exit, "status": "cooling", "consecutive_failures": 1,
+			"ewma_latency_ms": 0, "samples": 0,
+			"last_failure_kind": "exit_unreachable",
+			"cooldown_until":    until.Format(time.RFC3339Nano),
+		}
+	}
+	doc := map[string]any{
+		"schema_version": 1,
+		"policy_version": 1,
+		"mode":           "targeted",
+		"rules":          []any{},
+		"sources": []any{
+			map[string]any{
+				"id": srcID, "kind": "manual", "label": "legacy", "order": 0,
+				"added_at": now.Format(time.RFC3339Nano), "record_count": 6,
+			},
+		},
+		"records": []any{
+			cooling("x-http-cooling-expired", 0),
+			cooling("x-http-cooling-live", 1),
+			httpWith("x-http-healthy", 2, "healthy", ""),
+			httpWith("x-http-invalid", 3, "invalid", ""),
+			rejected("x-http-engine-rejected", "http", 4),
+			rejected("x-vless-engine-rejected", "vless", 5),
+		},
+		"health": []any{
+			health("x-http-cooling-expired", now.Add(-time.Minute)),
+			health("x-http-cooling-live", now.Add(time.Hour)),
+		},
+		"desktop":    map[string]any{},
+		"updated_at": now.Format(time.RFC3339Nano),
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal legacy state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), append(raw, '\n'), 0o600); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+}
+
 func recordStatuses(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, "state.json"))
@@ -273,5 +340,124 @@ func TestLegacyUnknownRecordsDeriveUnsupported(t *testing.T) {
 		r.pass("R5", "the import and probes never rewrote the legacy records in state")
 	} else {
 		r.fail("R5", "post-import state statuses http=%q vmess=%q", statuses["x-legacy-http"], statuses["x-legacy-vmess"])
+	}
+}
+
+// TestLegacyStoredCoolingRecordsDeriveUnsupported drives the same real product
+// over a state whose undialable records were persisted as cooling (expired and
+// live cooldown), healthy or unsupported/engine_record_rejected instead of
+// unknown. The derived unsupported verdict and the importer's reason must win
+// whatever the stored status is, except invalid; a supported protocol keeps its
+// stored reason. Nothing may dial, and the derivation must never write
+// unsupported to disk.
+func TestLegacyStoredCoolingRecordsDeriveUnsupported(t *testing.T) {
+	r := report{t: t}
+	env := newTestEnv(t)
+	dir := filepath.Join(env.home, "lgc")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("data dir: %v", err)
+	}
+	counter := newLegacyDialCounter(t)
+	writeLegacyStoredStatusState(t, dir, counter.port())
+
+	svc := startService(t, env, dir, serviceConfig{
+		Probes: map[string]any{"targets": []string{}, "timeout_ms": 20000},
+	})
+	t.Cleanup(func() { _ = svc.stop() })
+
+	// pool list: the stored cooling is no reason to leave the unknown-era record
+	// out of the unsupported count, and the pre-R5 engine reason loses to the
+	// importer's reason only for protocols v1 can never dial.
+	list := svc.mustOK("pool", "list")
+	counts, _ := list.mapData(t)["counts"].(map[string]any)
+	rows := list.list(t, "records")
+	if num(counts["total"]) == 6 && num(counts["unknown"]) == 0 && num(counts["healthy"]) == 0 &&
+		num(counts["cooling"]) == 0 && num(counts["unsupported"]) == 5 && num(counts["invalid"]) == 1 &&
+		num(counts["usable"]) == 0 {
+		r.pass("R5", "pool list counts five undialable records as unsupported and keeps the stored invalid record as invalid (total 6, unknown/healthy/cooling 0, unsupported 5, invalid 1)")
+	} else {
+		r.fail("R5", "pool list counts=%+v, want total 6, unknown/healthy/cooling 0, unsupported 5, invalid 1", counts)
+	}
+	rowChecks := []struct {
+		id     string
+		status string
+		reason string
+		label  string
+	}{
+		{"x-http-cooling-expired", "unsupported", "http_exit_not_verified", "the http record stored cooling with an expired cooldown reports unsupported/http_exit_not_verified (never bare unknown)"},
+		{"x-http-cooling-live", "unsupported", "http_exit_not_verified", "the http record stored cooling inside its cooldown reports unsupported/http_exit_not_verified (cooling does not survive)"},
+		{"x-http-healthy", "unsupported", "http_exit_not_verified", "the http record stored healthy reports unsupported/http_exit_not_verified (healthy does not survive)"},
+		{"x-http-invalid", "invalid", "invalid", "the http record stored invalid stays invalid"},
+		{"x-http-engine-rejected", "unsupported", "http_exit_not_verified", "the http record stored unsupported/engine_record_rejected reports the importer reason http_exit_not_verified"},
+		{"x-vless-engine-rejected", "unsupported", "engine_record_rejected", "the supported vless record stored unsupported/engine_record_rejected keeps engine_record_rejected"},
+	}
+	for _, want := range rowChecks {
+		row := findRow(rows, "id", want.id)
+		if row != nil && str(row["status"]) == want.status && str(row["status_reason"]) == want.reason {
+			r.pass("R5", "%s (row %s)", want.label, want.id)
+		} else {
+			r.fail("R5", "row %s=%+v, want %s/%s", want.id, row, want.status, want.reason)
+		}
+	}
+
+	// status and doctor count the same view.
+	status, _ := svc.statusNow()
+	wantWarning := fmt.Sprintf("%d record(s) are unsupported or quarantined", 5)
+	if status.poolTotal == 6 && status.poolUsable == 0 && status.poolCooling == 0 &&
+		containsString(status.warnings, wantWarning) {
+		r.pass("R5", "status reports total 6, usable 0, cooling 0 and the 5-record unsupported warning")
+	} else {
+		r.fail("R5", "status total=%d usable=%d cooling=%d warnings=%v", status.poolTotal, status.poolUsable, status.poolCooling, status.warnings)
+	}
+	doctor := svc.mustOK("doctor").mapData(t)
+	checks, _ := doctor["checks"].([]any)
+	quarantined := findCheck(checks, "quarantined_records")
+	poolCheck := findCheck(checks, "pool")
+	wantQuarantined := "5 unsupported and 1 invalid records are kept for reporting and never dialed"
+	if quarantined != nil && str(quarantined["detail"]) == wantQuarantined &&
+		poolCheck != nil && str(poolCheck["status"]) == "warn" && strings.Contains(str(poolCheck["detail"]), "cooling 0, unsupported 5, invalid 1") {
+		r.pass("R5", "doctor counts 5 unsupported, 1 invalid, 0 cooling and repeats the never-dialed wording")
+	} else {
+		r.fail("R5", "doctor quarantined=%+v pool=%+v", quarantined, poolCheck)
+	}
+
+	// The read-only surfaces above leave the stored statuses alone: the
+	// derivation is view-only for cooling and engine-rejected records too.
+	statuses := recordStatuses(t, dir)
+	if statuses["x-http-cooling-expired"] == "cooling" && statuses["x-http-cooling-live"] == "cooling" &&
+		statuses["x-http-healthy"] == "healthy" && statuses["x-http-invalid"] == "invalid" &&
+		statuses["x-http-engine-rejected"] == "unsupported" && statuses["x-vless-engine-rejected"] == "unsupported" {
+		r.pass("R5", "state still says cooling/cooling/healthy/invalid/unsupported/unsupported after pool list, status and doctor")
+	} else {
+		r.fail("R5", "state statuses changed: %v", statuses)
+	}
+
+	// No record can reach a dial: every explicit probe is rejected as
+	// unsupported before a TCP connection, whatever the stored status.
+	rejectedRows := 0
+	for _, want := range rowChecks {
+		results := svc.mustOK("pool", "test", "--exit", want.id).list(t, "results")
+		if len(results) == 1 && str(results[0]["outcome"]) == "rejected" && str(results[0]["failure"]) == "unsupported" {
+			rejectedRows++
+		} else {
+			r.fail("R5", "pool test --exit %s results=%+v", want.id, results)
+		}
+	}
+	if rejectedRows == len(rowChecks) && counter.hits.Load() == 0 {
+		r.pass("R5", "pool test rejects all six records and the endpoint saw 0 connections")
+	} else {
+		r.fail("R5", "rejected=%d/%d dials=%d", rejectedRows, len(rowChecks), counter.hits.Load())
+	}
+
+	// The probe batch is a mutation, so the documented cooldown normalization
+	// applies: the expired health entry turns the stored status unknown. The
+	// derivation itself never wrote unsupported, and the other statuses kept.
+	statuses = recordStatuses(t, dir)
+	if statuses["x-http-cooling-expired"] == "unknown" && statuses["x-http-cooling-live"] == "cooling" &&
+		statuses["x-http-healthy"] == "healthy" && statuses["x-http-invalid"] == "invalid" &&
+		statuses["x-http-engine-rejected"] == "unsupported" && statuses["x-vless-engine-rejected"] == "unsupported" {
+		r.pass("R5", "after the probe mutation only the expired cooldown normalized to unknown; no record was persisted as unsupported by the view")
+	} else {
+		r.fail("R5", "post-probe state statuses=%v", statuses)
 	}
 }

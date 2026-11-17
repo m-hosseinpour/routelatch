@@ -137,26 +137,27 @@ func (p *Pool) Counts() Counts {
 // destination-level failure never changes the record; only a transport-level
 // failure that reaches the exit sets cooling (docs/contracts.md §5.3, §6.2).
 //
-// A legacy or hand-edited state record can still say unknown for a protocol v1
+// A legacy or hand-edited state record can hold any status for a protocol v1
 // can never dial. The view derives the importer's verdict there — http becomes
 // unsupported/http_exit_not_verified and any other scheme outside the v1 set
 // becomes unsupported/protocol_unsupported — so counts, warnings and doctor
-// agree without rewriting state. The derived reason wins over a stale stored
-// one; every other stored status keeps its existing handling.
+// agree without rewriting state. The derived verdict wins over every stored
+// status except invalid, which is a stricter safety state: a legacy cooling or
+// healthy value, a stale reason, and an engine_record_rejected reason from a
+// pre-R5 start must not hide the record from the unsupported count. A supported
+// protocol keeps every stored status exactly as before.
 func EffectiveStatus(rec contract.Record, h contract.ExitHealth, now time.Time) (contract.RecordStatus, string) {
 	if rec.Status == contract.RecordInvalid {
 		return contract.RecordInvalid, nonEmpty(rec.StatusReason, "invalid")
 	}
+	if rec.Protocol == contract.ProtocolHTTP {
+		return contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified
+	}
+	if rec.Protocol != "" && !rec.Protocol.Supported() {
+		return contract.RecordUnsupported, contract.ReasonProtocolUnsupported
+	}
 	if rec.Status == contract.RecordUnsupported {
 		return contract.RecordUnsupported, nonEmpty(rec.StatusReason, "unsupported")
-	}
-	if rec.Status == contract.RecordUnknown || rec.Status == "" {
-		if rec.Protocol == contract.ProtocolHTTP {
-			return contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified
-		}
-		if rec.Protocol != "" && !rec.Protocol.Supported() {
-			return contract.RecordUnsupported, contract.ReasonProtocolUnsupported
-		}
 	}
 	if h.Exit == contract.ExitID(rec.ID) {
 		switch h.Status {
