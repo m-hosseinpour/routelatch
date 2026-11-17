@@ -60,7 +60,7 @@ func TestParseVLESSTrojanSocks5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if recs[0].Protocol != contract.ProtocolTrojan || recs[0].Credentials.UserID != "secret" || recs[0].Transport != contract.TransportWS {
+	if recs[0].Protocol != contract.ProtocolTrojan || recs[0].Credentials.Password != "secret" || recs[0].Credentials.UserID != "" || recs[0].Transport != contract.TransportWS {
 		t.Fatalf("trojan: %+v", recs[0])
 	}
 
@@ -71,6 +71,44 @@ func TestParseVLESSTrojanSocks5(t *testing.T) {
 	}
 	if recs[0].Protocol != contract.ProtocolSOCKS5 || recs[0].Credentials.UserID != "user" || recs[0].Credentials.Password != "p@ss" || recs[0].Server != "127.0.0.1" {
 		t.Fatalf("socks: %+v", recs[0])
+	}
+}
+
+func TestTrojanCredentialMappingAndDedupe(t *testing.T) {
+	im := newTestImporter()
+	linkA := "trojan://alpha@example.net:8443?security=tls&sni=example.net#T"
+	linkB := "trojan://beta@example.net:8443?security=tls&sni=example.net#T"
+	// File import uses the same link parser as a manual link.
+	recs, err := im.Import(context.Background(), testSource(contract.SourceFile, "trojan.txt"), []byte(linkA+"\n"+linkB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("records=%d", len(recs))
+	}
+	if recs[0].Protocol != contract.ProtocolTrojan || recs[0].Credentials.Password != "alpha" || recs[0].Credentials.UserID != "" {
+		t.Fatalf("trojan link canonical fields: %+v", recs[0])
+	}
+	if recs[0].DedupeKey == recs[1].DedupeKey || recs[0].ID == recs[1].ID {
+		t.Fatal("two Trojan links differing only by password must not dedupe together")
+	}
+
+	profile := `[{"configType":6,"address":"p.example.net","port":443,"id":"profilepw","streamSecurity":"tls"}]`
+	recs, err = im.Import(context.Background(), testSource(contract.SourceV2rayN, "p.json"), []byte(profile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recs[0].Credentials.Password != "profilepw" || recs[0].Credentials.UserID != "" {
+		t.Fatalf("v2rayN profile credentials: %+v", recs[0])
+	}
+
+	outbound := `[{"protocol":"trojan","settings":{"servers":[{"address":"o.example.net","port":443,"password":"outpw"}]},"streamSettings":{"network":"tcp","security":"tls"}}]`
+	recs, err = im.Import(context.Background(), testSource(contract.SourceV2rayN, "o.json"), []byte(outbound))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recs[0].Credentials.Password != "outpw" || recs[0].Credentials.UserID != "" {
+		t.Fatalf("v2rayN outbound credentials: %+v", recs[0])
 	}
 }
 
@@ -283,7 +321,7 @@ func TestV2rayNJSON(t *testing.T) {
 	if recs[0].Protocol != contract.ProtocolVLESS || recs[0].Transport != contract.TransportWS || recs[0].DisplayName != "One" {
 		t.Fatalf("vless profile: %+v", recs[0])
 	}
-	if recs[1].Protocol != contract.ProtocolTrojan || recs[1].Credentials.UserID != "trojanpass" {
+	if recs[1].Protocol != contract.ProtocolTrojan || recs[1].Credentials.Password != "trojanpass" || recs[1].Credentials.UserID != "" {
 		t.Fatalf("trojan profile: %+v", recs[1])
 	}
 	if recs[2].Protocol != contract.ProtocolSOCKS5 || recs[2].Credentials.UserID != "u" || recs[2].Credentials.Password != "p" {

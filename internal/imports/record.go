@@ -103,7 +103,7 @@ func validateNode(n node, rej *rejection) (contract.RecordStatus, string) {
 			return contract.RecordInvalid, ReasonInvalidCredential
 		}
 	case contract.ProtocolTrojan:
-		if strings.TrimSpace(n.creds.UserID) == "" || !noControl(n.creds.UserID) {
+		if strings.TrimSpace(n.creds.Password) == "" || !noControl(n.creds.Password) {
 			return contract.RecordInvalid, ReasonNoCredential
 		}
 	case contract.ProtocolSOCKS5:

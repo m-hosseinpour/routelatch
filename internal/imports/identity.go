@@ -116,7 +116,7 @@ func DedupeKey(r contract.Record) string {
 		case contract.ProtocolVLESS:
 			credentialBytes = r.Credentials.UserID
 		case contract.ProtocolTrojan:
-			credentialBytes = r.Credentials.UserID // Trojan password lives in UserID
+			credentialBytes = r.Credentials.Password
 		default:
 			credentialBytes = r.Credentials.UserID + "\x00" + r.Credentials.Password
 		}

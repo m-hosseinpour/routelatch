@@ -289,7 +289,7 @@ func profileCredentials(proto contract.Protocol, m map[string]any) contract.Cred
 	case contract.ProtocolVLESS:
 		return contract.Credentials{UserID: strings.ToLower(getString(m, "id", "Id", "userID", "uuid"))}
 	case contract.ProtocolTrojan:
-		return contract.Credentials{UserID: getString(m, "password", "Password", "id", "Id")}
+		return contract.Credentials{Password: getString(m, "password", "Password", "id", "Id")}
 	case contract.ProtocolSOCKS5:
 		return contract.Credentials{
 			UserID:   getString(m, "username", "user", "id", "Id"),
@@ -326,7 +326,7 @@ func outboundCredentials(proto contract.Protocol, user map[string]any) contract.
 	case contract.ProtocolVLESS:
 		return contract.Credentials{UserID: strings.ToLower(getString(user, "id", "userID"))}
 	case contract.ProtocolTrojan:
-		return contract.Credentials{UserID: getString(user, "password")}
+		return contract.Credentials{Password: getString(user, "password")}
 	case contract.ProtocolSOCKS5:
 		return contract.Credentials{UserID: getString(user, "user"), Password: getString(user, "pass", "password")}
 	default:

@@ -74,11 +74,14 @@ func parseVLESSStyle(u *url.URL, proto contract.Protocol, srcID contract.SourceI
 		n.port = port
 	}
 	if trojan {
+		// The engine builds Trojan auth from Credentials.Password; the URI's
+		// userinfo is the password (an optional user:password pair keeps the
+		// password part).
 		if u.User != nil {
 			if pw, ok := u.User.Password(); ok {
-				n.creds.UserID = pw
+				n.creds.Password = pw
 			} else {
-				n.creds.UserID = u.User.Username()
+				n.creds.Password = u.User.Username()
 			}
 		}
 	} else if u.User != nil {

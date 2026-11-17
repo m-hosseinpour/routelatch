@@ -43,6 +43,13 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		c.usage()
 		return int(contract.ExitUsage)
 	}
+	// Version reporting must work without a service, socket or data directory.
+	if rest[0] == "version" {
+		if len(rest) != 1 {
+			return c.localFailure("version", usageErr("version takes no arguments"))
+		}
+		return c.versionCommand()
+	}
 	paths, err := store.ResolvePaths(c.dataDir)
 	if err != nil {
 		return c.localFailure(rest[0], err)
@@ -564,6 +571,7 @@ func (c *cli) usage() {
 Usage: routelatch [--json] [--data-dir DIR] <command> [args]
 
   run                       start the service
+  version                   show build version, commit and date
   status                    show mode, listeners, pool and connections
   mode <mode>               targeted | all-proxy | all-direct | stopped
   rules list|add|remove     manage approved destinations
