@@ -121,5 +121,9 @@ proxy، firewall redirect و virtual interface را توضیح می‌دهد. پ
 - منابع زندهٔ main به‌عنوان سند release قطعی تلقی نشوند؛ در T1 نسخه pin و شواهد بسته شود.
 - آزمون‌های throughput/پایداری، handshake و error classification واقعی، license audit
   وابستگی‌ها، امنیت frontend و تازه‌بودن قالب دیتابیس v2rayN هنوز انجام نشده‌اند.
+  **[به‌روزرسانی ۲۰۲۶-۱۱-۱۷]** دروازهٔ handshake و طبقه‌بندی خطا در `T1` اجرا و
+  تصمیمش در [قراردادها](contracts.md) ثبت شد؛ شاهد در `spike/xray/FINDINGS.md`.
+  license audit (A14) و throughput همچنان انجام نشده‌اند. متن بالا snapshot همان
+  تاریخ است و بازنویسی نشده.
 - بررسی نام `RouteLatch` فقط یک جست‌وجوی اولیه بود؛ برخورد واضح پروژهٔ proxy در
   نتایج مشاهده نشد. تضمین یکتایی، availability رجیستری یا علامت تجاری نیست.
