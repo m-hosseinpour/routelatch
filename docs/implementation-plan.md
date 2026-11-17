@@ -242,6 +242,20 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   کرده است، پس مسیر رضایت در نسخهٔ اول وجود ندارد؛ رکورد insecure قرنطینه و `unsupported`
   با دلیل `insecure_tls_removed` می‌ماند و لینک دارای pin گواهی با verification روشن
   پذیرفته می‌شود (تصمیم واگذارشده به هماهنگ‌کننده، ۲۰۲۶-۱۱-۱۷).
+- **T3/T4/T5/T6 (پیاده‌سازی) پیش رفت و متوقف شد (۲۰۲۶-۱۱-۱۷، به درخواست کاربر).**
+  هفت پکیج پیاده و با آزمون واحد سبز شدند: `internal/{routing,engine,conns,frontend,
+  pool,imports,probes,diagnostics,proposals,platform,store,control}` و `cmd/routelatch`
+  (۱۶ فرمان / ۳۴ فرم برگ، JSON و exit code طبق §7). کل درخت با هم `go build`، `go vet` و
+  `go test` سبز است. اعداد اندازه‌گیری‌شده: close p99 120–442µs، cancel p99 62–98µs، پس از
+  Stop بدون باقیماندهٔ fd/goroutine؛ `core.Dial` همچنان ۳۲–۱۹۷µs پیش از تماس مقصد برمی‌گردد
+  و همین دلیل proof class `ProofAccepted` برای VLESS/Trojan است.
+  **مهم:** این وضعیت «پیاده‌شده و آزمون واحد» است، نه پذیرش. هیچ جریان کامل کاربر
+  (install → import → rule → use → proposal → mode switch → pool failure → all-direct →
+  stop) هنوز اجرا نشده و A01–A13 پذیرفته‌نشده‌اند.
+- **اصلاحیهٔ قرارداد (۱۲ شکاف موج اول)** پیاده شد و کل درخت سبز است؛ verdict بازبینی
+  مستقل هنوز برنگشته و این تغییرات commit نشده‌اند. اگر جلسه از این‌جا ادامه یافت، اول
+  همان verdict را بگیر، سپس اصلاحیهٔ قرارداد و پوستهٔ برنامه را در یک checkpoint
+  قابل‌ساخت commit کن.
 - **T2 بسته شد:** `docs/contracts.md` (مدل مقصد، proof class و ماتریس حالت، تاکسونومی خطا،
   state/مدیریت، pool/import/sanitization، probe/سلامت، CLI/menu، نگاشت A01–A14) و
   `internal/contract` یخ‌زده با ۲۰ kind خطا. بازبینی مستقل ۱۱ یافتهٔ مادی و ۲ رگرسیون
@@ -252,10 +266,10 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | --- | --- | --- |
 | T1 — آزمایش frontend/Xray | انجام‌شده؛ دروازهٔ handshake با تصمیم کاربر بسته شد | شاهد runtime و محدودیت‌های transportها در `spike/` ثبت شده است |
 | T2 — قراردادهای فنی | انجام‌شده؛ بازبینی مستقل بسته شد | `docs/contracts.md` و `internal/contract` مرجع‌اند؛ تغییر interface نیازمند هماهنگ‌کننده |
-| T3 — مسیر TCP و اتصال‌ها | در جریان (routing/engine/frontend موازی) | قراردادهای T2؛ آزمون فقط با peerهای loopback |
-| T4 — pool و import | شروع نشده؛ وابسته به T2/T3 | dispatch/probe معتبر و مرز sanitization |
-| T5 — پیشنهادها و مدیریت | شروع نشده؛ وابسته به T3/T4 | قرارداد feedback، مدیریت و حریم خصوصی |
-| T6 — نصب و سرویس | شروع نشده؛ وابسته به T2–T5 | ماتریس پلتفرم و مجوز checkهای سیستمی |
+| T3 — مسیر TCP و اتصال‌ها | پیاده و آزمون واحد؛ پذیرش یکپارچه نشده | مسیر routing/engine/frontend با peerهای loopback سبز است |
+| T4 — pool و import | پیاده و آزمون واحد؛ پذیرش یکپارچه نشده | fixture مخرب و refresh اتمیک آزموده شده؛ خروجی عمومی آزموده نشده |
+| T5 — پیشنهادها و مدیریت | پیاده (diagnostics/proposals/control/CLI/menu)؛ پذیرش یکپارچه نشده | must: no-rule-without-approval و no-replay |
+| T6 — نصب و سرویس | فایل‌های unit/launcher/desktop آماده؛ نصب واقعی انجام نشده (نیاز به مجوز جدا) | آزمون با runner جعلی، بدون تغییر تنظیم واقعی |
 | T7 — پذیرش و انتشار | شروع نشده؛ وابسته به T1–T6 | شواهد یکپارچه؛ انتشار مسدود تا D20 و اجازهٔ انتشار |
 | Windows / UDP / TUN / Android / GUI | شروع نشده؛ هنوز پلن اجرایی ندارند | تصمیم scope و دروازه‌های milestones بعدی |
 
@@ -267,10 +281,12 @@ mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP و رفتار با خروجی عموم�
 ### نقطهٔ شروع جلسهٔ بعد
 
 1. درخواست جاری کاربر و `AGENTS.md` را بخوان؛ `git status` و این رکورد را با وضعیت
-   موجود مقایسه کن. تغییرات یا دادهٔ کاربر را حفظ کن.
-2. اگر درخواست شروع کارهای باز است، **از اولین task رفع‌مانع‌شده شروع کن**: T2 تا وقتی
-   قراردادهای `docs/contracts.md` و `internal/contract` بازبینی نشده‌اند، و بعد T3–T6
-   طبق مالکیت فایل، نه نصب T6 یا انتشار.
+   موجود مقایسه کن. تغییرات یا دادهٔ کاربر را حفظ کن. اگر verdict بازبینی اصلاحیهٔ
+   قرارداد رسیده، آن را ببند و checkpoint قابل‌ساخت بساز.
+2. کار بعدی = **T7 (پذیرش)**: یک harness محلی که جریان کامل کاربر را روی peerهای loopback
+   اجرا کند (install/import/rule/use/proposal/mode switch/pool failure/all-direct/stop)،
+   سپس leak/counter checks، سقف منابع، crash/cancel و secret scan. نصب سرویس، تغییر
+   پروکسی دسکتاپ، خروجی عمومی و انتشار همچنان مجوز جدا می‌خواهند.
 3. شواهد T1 (`spike/*/FINDINGS.md`) و قراردادها مرجع‌اند؛ تعدادهای teardown/proof class را
    از آن‌جا بردار، نه از حافظه یا تحقیق قدیمی. هیچ تضمین D-item با «موقتاً» ضعیف نمی‌شود.
 4. اگر فقط یک سؤال وضعیتی مطرح شده، پاسخ بده و کاری را خودکار شروع نکن. مانع
