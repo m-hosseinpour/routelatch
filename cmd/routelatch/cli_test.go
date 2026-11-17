@@ -450,6 +450,47 @@ func TestRunJSONRoutesServiceLogToStderr(t *testing.T) {
 	}
 }
 
+func TestPoolRemoveDeletesUnbuildableRecord(t *testing.T) {
+	dir := startInProcess(t)
+	// allowInsecure without a pin is stored as unsupported and cannot be built
+	// by the engine; it must still be removable through the documented CLI.
+	insecure := "vless://11111111-1111-4111-8111-111111111111@127.0.0.1:443?encryption=none&security=tls&allowInsecure=1&type=tcp#insecure"
+	good := "trojan://pass-one@example.com:443?security=tls&type=raw#good"
+	path := filepath.Join(t.TempDir(), "pool.txt")
+	if err := os.WriteFile(path, []byte(insecure+"\n"+good+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := runCLI(t, dir, "import", "file", path); got.code != 0 {
+		t.Fatalf("import exit = %d: %+v", got.code, got.env)
+	}
+	list := runCLI(t, dir, "pool", "list")
+	data, _ := list.env.Data.(map[string]any)
+	records, _ := data["records"].([]any)
+	if len(records) != 2 {
+		t.Fatalf("pool records = %+v", data["records"])
+	}
+	var id string
+	for _, item := range records {
+		row, _ := item.(map[string]any)
+		if row["status"] == "unsupported" {
+			id, _ = row["id"].(string)
+		}
+	}
+	if id == "" {
+		t.Fatalf("no unsupported record in pool: %+v", records)
+	}
+	removed := runCLI(t, dir, "pool", "remove", id)
+	if removed.code != 0 || !removed.env.OK {
+		t.Fatalf("pool remove exit = %d: %+v", removed.code, removed.env)
+	}
+	list = runCLI(t, dir, "pool", "list")
+	data, _ = list.env.Data.(map[string]any)
+	counts, _ := data["counts"].(map[string]any)
+	if num, _ := counts["total"].(float64); num != 1 {
+		t.Fatalf("pool total after remove = %v", counts["total"])
+	}
+}
+
 func TestPoolRerankJSONShape(t *testing.T) {
 	dir := startInProcess(t)
 	for _, link := range []string{

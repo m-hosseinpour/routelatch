@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,6 +85,8 @@ type Engine struct {
 	version   contract.PolicyVersion
 	stopped   bool
 	rawConfig []byte
+	// excluded records could not be built and are reported, not fatal.
+	excluded []ExcludedExit
 	// handlers is the set of tags that already have a core outbound handler.
 	// It outlives RemoveExit because the pinned core's RemoveHandler does not
 	// close the handler and re-adding a tag is rejected; the stable tag must be
@@ -109,9 +110,43 @@ type exitSpec struct {
 	outbound *coreOutbound
 }
 
+// ReasonRecordRejected is the stable StatusReason for a record the engine could
+// not turn into an exit. The record is kept for reporting and never dialed.
+const ReasonRecordRejected = "engine_record_rejected"
+
+// ExcludedExit is one record Start (or AddExit) refused to build. Kind is the
+// contract classification; Reason is a stable, redacted token suitable for
+// status, while Detail is the actionable message for logs.
+type ExcludedExit struct {
+	ID     contract.ExitID    `json:"id"`
+	Kind   contract.ErrorKind `json:"kind"`
+	Reason string             `json:"reason"`
+	Detail string             `json:"detail,omitempty"`
+}
+
+// CheckRecord reports whether one record can become a dialable exit without
+// starting a core. It is the same validation and config build Start performs,
+// exposed so the import path can reject unbuildable records before committing.
+func CheckRecord(rec contract.Record) error {
+	_, ob, err := prepareExit(rec)
+	if err != nil {
+		return err
+	}
+	if ob != nil {
+		if _, err := singleOutboundConfig(*ob); err != nil {
+			return describeRecordError(err)
+		}
+	}
+	return nil
+}
+
 // Start validates the records, generates the configuration and starts the
 // pinned core once. It never reads a configuration from an imported source and
 // never starts a second instance while one is running.
+//
+// One unbuildable record never aborts the service: it is excluded and reported
+// in Excluded(), while the remaining records serve. Only a genuinely global
+// configuration or core failure aborts Start.
 func Start(opts Options) (*Engine, error) {
 	e := &Engine{
 		exits:    make(map[contract.ExitID]*exitSpec),
@@ -122,43 +157,91 @@ func Start(opts Options) (*Engine, error) {
 		version:  opts.PolicyVersion,
 	}
 
-	var outbounds []coreOutbound
+	accepted := make([]*exitSpec, 0, len(opts.Exits))
 	for _, rec := range opts.Exits {
 		spec, ob, err := prepareExit(rec)
 		if err != nil {
-			return nil, err
+			excluded, ok := exclusionFor(rec, err)
+			if !ok {
+				return nil, err
+			}
+			e.excluded = append(e.excluded, excluded)
+			continue
 		}
 		if _, taken := e.exits[spec.exit.ID]; taken {
-			return nil, &contract.Failure{
-				Kind:    contract.ImportInvalid,
-				Path:    contract.PathLocal,
-				Op:      "engine.start",
-				Exit:    spec.exit.ID,
-				Message: "duplicate exit id in the exit list",
+			e.excluded = append(e.excluded, ExcludedExit{
+				ID: spec.exit.ID, Kind: contract.ImportInvalid, Reason: ReasonRecordRejected,
+				Detail: "duplicate exit id in the exit list",
+			})
+			continue
+		}
+		if ob != nil {
+			if _, err := singleOutboundConfig(*ob); err != nil {
+				excluded, ok := exclusionFor(rec, describeRecordError(err))
+				if !ok {
+					return nil, err
+				}
+				e.excluded = append(e.excluded, excluded)
+				continue
 			}
 		}
 		e.exits[spec.exit.ID] = spec
-		if ob != nil {
-			outbounds = append(outbounds, *ob)
-			e.handlers[ob.Tag] = struct{}{}
+		accepted = append(accepted, spec)
+	}
+
+	var (
+		raw []byte
+		cfg *core.Config
+	)
+	for {
+		outbounds := make([]coreOutbound, 0, len(accepted))
+		for _, spec := range accepted {
+			if spec.outbound != nil {
+				outbounds = append(outbounds, *spec.outbound)
+			}
+		}
+		var err error
+		raw, err = generatedConfig(logLevelOrDefault(opts.LogLevel), outbounds)
+		if err != nil {
+			return nil, err
+		}
+		cfg, err = serial.LoadJSONConfig(bytes.NewReader(raw))
+		if err == nil {
+			break
+		}
+		// The pinned core rejects the whole document. Re-parse each remaining
+		// record alone so one bad record is excluded by id instead of taking
+		// the service down; only a failure with no attributable record is a
+		// genuinely global config error.
+		idx := -1
+		for i, spec := range accepted {
+			if spec.outbound == nil {
+				continue
+			}
+			if _, err := singleOutboundConfig(*spec.outbound); err != nil {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return nil, describeConfigError(err)
+		}
+		spec := accepted[idx]
+		excluded, ok := exclusionFor(spec.record, describeRecordError(err))
+		if !ok {
+			return nil, describeConfigError(err)
+		}
+		e.excluded = append(e.excluded, excluded)
+		delete(e.exits, spec.exit.ID)
+		accepted = append(accepted[:idx], accepted[idx+1:]...)
+	}
+
+	for _, spec := range accepted {
+		if spec.outbound != nil {
+			e.handlers[spec.outbound.Tag] = struct{}{}
 		}
 	}
 
-	raw, err := generatedConfig(logLevelOrDefault(opts.LogLevel), outbounds)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := serial.LoadJSONConfig(bytes.NewReader(raw))
-	if err != nil {
-		// The pinned core rejects the whole document, but the cause is usually
-		// one record (an unknown fingerprint, for example). Re-parse each
-		// record alone so the user gets the record's id and an actionable kind
-		// instead of "internal".
-		if recErr := e.attributeConfigError(); recErr != nil {
-			return nil, recErr
-		}
-		return nil, describeConfigError(err)
-	}
 	inst, err := core.New(cfg)
 	if err != nil {
 		return nil, describeConfigError(err)
@@ -171,6 +254,34 @@ func Start(opts Options) (*Engine, error) {
 	e.inst = inst
 	e.rawConfig = raw
 	return e, nil
+}
+
+// exclusionFor classifies a per-record build failure. Only record-specific
+// kinds are isolated; anything else is a global failure the caller must see.
+func exclusionFor(rec contract.Record, err error) (ExcludedExit, bool) {
+	var failure *contract.Failure
+	if errors.As(err, &failure) {
+		switch failure.Kind {
+		case contract.Unsupported, contract.ImportInvalid:
+			return ExcludedExit{
+				ID:     contract.ExitID(rec.ID),
+				Kind:   failure.Kind,
+				Reason: ReasonRecordRejected,
+				Detail: failure.Message,
+			}, true
+		}
+	}
+	return ExcludedExit{}, false
+}
+
+// Excluded reports the records Start refused to build, in input order. The
+// list is stable for the engine's lifetime.
+func (e *Engine) Excluded() []ExcludedExit {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]ExcludedExit, len(e.excluded))
+	copy(out, e.excluded)
+	return out
 }
 
 // Stop closes every pooled connection the engine returned, then the core. It is
@@ -505,27 +616,7 @@ func singleOutboundConfig(ob coreOutbound) (*core.Config, error) {
 	return serial.LoadJSONConfig(bytes.NewReader(raw))
 }
 
-// attributeConfigError names the record whose own configuration the core
-// rejected. It runs only on the failure path, in a stable order.
-func (e *Engine) attributeConfigError() error {
-	e.mu.RLock()
-	specs := make([]*exitSpec, 0, len(e.exits))
-	for _, spec := range e.exits {
-		if spec.outbound != nil {
-			specs = append(specs, spec)
-		}
-	}
-	e.mu.RUnlock()
-	sort.Slice(specs, func(i, j int) bool { return specs[i].exit.ID < specs[j].exit.ID })
-	for _, spec := range specs {
-		if _, err := singleOutboundConfig(*spec.outbound); err != nil {
-			failure := describeRecordError(err).(*contract.Failure)
-			failure.Exit = spec.exit.ID
-			return failure
-		}
-	}
-	return nil
-}
+// attributeConfigError was replaced by the per-record retry in Start.
 
 // track registers a live connection. It reports false when the engine is
 // stopping, in which case the caller must close the connection itself.

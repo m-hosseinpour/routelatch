@@ -5,10 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/engine"
 	"routelatch/internal/imports"
 	"routelatch/internal/pool"
 	"routelatch/internal/probes"
@@ -87,25 +89,17 @@ func (s *Service) poolAdd(ctx context.Context, req Request) (AddData, error) {
 		return AddData{}, usage("pool add needs a share link or a file path")
 	}
 	kind := strings.ToLower(strings.TrimSpace(req.Kind))
-	var (
-		result imports.AddResult
-		err    error
-	)
-	if kind == "file" || kind == "" && isRegularFile(input) {
-		result, err = s.refresher.AddFile(ctx, contract.SourceFile, filepath.Base(input), input)
-	} else {
-		result, err = s.refresher.AddLink(ctx, input)
-	}
+	data, err := s.addAndReload(ctx, func() (imports.AddResult, error) {
+		if kind == "file" || kind == "" && isRegularFile(input) {
+			return s.refresher.AddFile(ctx, contract.SourceFile, filepath.Base(input), input)
+		}
+		return s.refresher.AddLink(ctx, input)
+	})
 	if err != nil {
-		return AddData{}, mapImportError(err)
+		return data, err
 	}
-	s.opMu.Lock()
-	defer s.opMu.Unlock()
-	if err := s.reloadAfterImport(ctx); err != nil {
-		return addData(result), err
-	}
-	s.logger.Logf(levelInfo, "pool.add", "source=%s valid=%d invalid=%d unsupported=%d", result.SourceID, result.Valid, result.Invalid, result.Unsupported)
-	return addData(result), nil
+	s.logger.Logf(levelInfo, "pool.add", "source=%s valid=%d invalid=%d unsupported=%d", data.SourceID, data.Records.Valid, data.Records.Invalid, data.Records.Unsupported)
+	return data, nil
 }
 
 func (s *Service) importSource(ctx context.Context, req Request) (AddData, error) {
@@ -117,31 +111,139 @@ func (s *Service) importSource(ctx context.Context, req Request) (AddData, error
 		return AddData{}, usage("import needs a link, file path or subscription URL")
 	}
 	kind := strings.ToLower(strings.TrimSpace(req.Kind))
-	var (
-		result imports.AddResult
-		err    error
-	)
-	switch kind {
-	case "link":
-		result, err = s.refresher.AddLink(ctx, input)
-	case "file":
-		result, err = s.refresher.AddFile(ctx, contract.SourceFile, filepath.Base(input), input)
-	case "v2rayn", "v2rayN":
-		result, err = s.refresher.AddFile(ctx, contract.SourceV2rayN, filepath.Base(input), input)
-	case "subscription":
-		result, err = s.refresher.AddSubscription(ctx, "subscription", input)
-	default:
-		return AddData{}, usage("import kind must be link, file, subscription or v2rayn")
+	data, err := s.addAndReload(ctx, func() (imports.AddResult, error) {
+		switch kind {
+		case "link":
+			return s.refresher.AddLink(ctx, input)
+		case "file":
+			return s.refresher.AddFile(ctx, contract.SourceFile, filepath.Base(input), input)
+		case "v2rayn", "v2rayN":
+			return s.refresher.AddFile(ctx, contract.SourceV2rayN, filepath.Base(input), input)
+		case "subscription":
+			return s.refresher.AddSubscription(ctx, "subscription", input)
+		default:
+			return imports.AddResult{}, usage("import kind must be link, file, subscription or v2rayn")
+		}
+	})
+	if err != nil {
+		return data, err
 	}
+	s.logger.Logf(levelInfo, "pool.import", "source=%s valid=%d invalid=%d unsupported=%d", data.SourceID, data.Records.Valid, data.Records.Invalid, data.Records.Unsupported)
+	return data, nil
+}
+
+// buildCheck runs the engine's record validation before the import commit. A
+// record-specific rejection is downgraded to unsupported; an unexpected error
+// aborts the import before anything is written.
+func buildCheck(rec contract.Record) (string, error) {
+	err := engine.CheckRecord(rec)
+	if err == nil {
+		return "", nil
+	}
+	var failure *contract.Failure
+	if errors.As(err, &failure) {
+		switch failure.Kind {
+		case contract.Unsupported, contract.ImportInvalid:
+			return engine.ReasonRecordRejected, nil
+		}
+	}
+	return "", err
+}
+
+// markEngineExcludedLocked persists the engine's per-record exclusions so pool
+// list/status never claim a record is usable when the engine refused it. The
+// caller holds pubMu (startNetwork's exclusion path or restore).
+func (s *Service) markEngineExcludedLocked(ctx context.Context, excluded []engine.ExcludedExit) error {
+	after, err := s.store.Mutate(ctx, func(st *contract.State) error {
+		for _, ex := range excluded {
+			for i := range st.Records {
+				if contract.ExitID(st.Records[i].ID) != ex.ID {
+					continue
+				}
+				if st.Records[i].Status == contract.RecordInvalid {
+					continue
+				}
+				st.Records[i].Status = contract.RecordUnsupported
+				st.Records[i].StatusReason = ex.Reason
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	nextPolicy, err := s.rebuildPolicy(after)
+	if err != nil {
+		return err
+	}
+	s.commitSnapshotLocked(after, nextPolicy)
+	return nil
+}
+
+// rollbackImport restores the pre-import records, sources and selection after a
+// later reload step failed. The policy version is never allowed to move
+// backwards; a selection restore that changes the policy advances it.
+func (s *Service) rollbackImport(ctx context.Context, before contract.Snapshot) error {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	current := s.Snapshot()
+	after, err := s.store.Mutate(ctx, func(st *contract.State) error {
+		policyChanged := st.Mode != before.State.Mode ||
+			st.SelectedExit != before.State.SelectedExit ||
+			!reflect.DeepEqual(st.Rules, before.State.Rules)
+		currentVersion := st.PolicyVersion
+		st.Records = append([]contract.Record(nil), before.State.Records...)
+		st.Sources = append([]contract.Source(nil), before.State.Sources...)
+		st.Health = append([]contract.ExitHealth(nil), before.State.Health...)
+		st.SelectedExit = before.State.SelectedExit
+		if policyChanged && st.PolicyVersion <= currentVersion {
+			st.PolicyVersion = currentVersion + 1
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	nextPolicy, err := s.rebuildPolicy(after)
+	if err != nil {
+		return err
+	}
+	s.commitSnapshotLocked(after, nextPolicy)
+	// Undo exits that were already added to the live engine before the
+	// failure, so engine and persisted state agree.
+	return s.reconcileExits(ctx, current, after)
+}
+
+// addAndReload runs one import with a pre-import snapshot. If the post-commit
+// engine/policy reload fails, the imported state is rolled back so the command's
+// non-zero exit never leaves the record stored.
+func (s *Service) addAndReload(ctx context.Context, do func() (imports.AddResult, error)) (AddData, error) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	before, err := s.store.Load(ctx)
 	if err != nil {
 		return AddData{}, mapImportError(err)
 	}
-	s.opMu.Lock()
-	defer s.opMu.Unlock()
-	if err := s.reloadAfterImport(ctx); err != nil {
-		return addData(result), err
+	result, err := do()
+	if err != nil {
+		return AddData{}, mapImportError(err)
 	}
-	s.logger.Logf(levelInfo, "pool.import", "source=%s valid=%d invalid=%d unsupported=%d", result.SourceID, result.Valid, result.Invalid, result.Unsupported)
+	if err := s.reloadAfterImport(ctx); err != nil {
+		// The rollback must still run when the caller's request context is
+		// already canceled or expired; otherwise the failed import would be
+		// reported with a non-zero exit while its record stayed persisted.
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if rbErr := s.rollbackImport(rollbackCtx, before); rbErr != nil {
+			s.logger.Logf(levelError, "import.rollback", "the imported state could not be rolled back: %s", rbErr.Error())
+			return AddData{}, &contract.Failure{
+				Kind: contract.Internal, Path: contract.PathLocal, Op: "control.import",
+				Message: "the import failed and the pre-import state could not be restored",
+				Err:     errors.Join(err, rbErr),
+			}
+		}
+		return AddData{}, err
+	}
 	return addData(result), nil
 }
 

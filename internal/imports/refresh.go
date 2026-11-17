@@ -57,6 +57,11 @@ type Refresher struct {
 	Fetcher  contract.Fetcher
 	Importer *Importer
 	Now      func() time.Time
+	// BuildCheck, when set, runs once per new record before the single commit.
+	// A non-empty reason means the record cannot become a dialable exit; it is
+	// stored as unsupported with that reason instead of failing the whole
+	// source. A non-nil error aborts the import before anything is written.
+	BuildCheck func(contract.Record) (reason string, err error)
 }
 
 // NewRefresher wires the production fetcher and importer.
@@ -183,6 +188,10 @@ func (r *Refresher) prepare(ctx context.Context, src contract.Source, allowEmpty
 		p.err = redactError(importErr)
 		return p
 	}
+	if err := r.applyBuildCheck(records); err != nil {
+		p.err = redactError(err)
+		return p
+	}
 	p.audit = audit
 	valid, _, _ := DescribeCounts(records)
 	if valid == 0 && !allowEmpty {
@@ -191,6 +200,30 @@ func (r *Refresher) prepare(ctx context.Context, src contract.Source, allowEmpty
 	}
 	p.records = records
 	return p
+}
+
+// applyBuildCheck downgrades records the engine cannot build to unsupported
+// before they are committed. A check failure that is not record-specific
+// aborts the caller; it is never reported as a stored success.
+func (r *Refresher) applyBuildCheck(records []contract.Record) error {
+	if r.BuildCheck == nil {
+		return nil
+	}
+	for i := range records {
+		switch records[i].Status {
+		case contract.RecordInvalid, contract.RecordUnsupported:
+			continue
+		}
+		reason, err := r.BuildCheck(records[i])
+		if err != nil {
+			return err
+		}
+		if reason != "" {
+			records[i].Status = contract.RecordUnsupported
+			records[i].StatusReason = reason
+		}
+	}
+	return nil
 }
 
 func redactError(err error) string {
@@ -368,6 +401,9 @@ func (r *Refresher) AddSource(ctx context.Context, kind contract.SourceKind, lab
 	records, audit, importErr := r.Importer.ImportWithAudit(ctx, source, payload)
 	if importErr != nil {
 		return AddResult{}, importErr
+	}
+	if err := r.applyBuildCheck(records); err != nil {
+		return AddResult{}, err
 	}
 	valid, invalid, unsupported := DescribeCounts(records)
 	if valid == 0 {

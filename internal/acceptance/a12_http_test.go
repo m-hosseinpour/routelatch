@@ -137,7 +137,7 @@ func TestA12Forwarding(t *testing.T) {
 	}
 
 	// No HTTPS interception and no unsupported scheme handling in the proxy.
-	beforeHTTPS := origin.count()
+	acceptsBefore, bytesBefore := origin.acceptCount(), origin.bytesInCount()
 	httpsResp, _, _ := httpForwardMethod(t, svc.httpAddr,
 		"GET https://"+target+"/ HTTP/1.1\r\nHost: "+target+"\r\nConnection: close\r\n\r\n", "GET", 10*time.Second)
 	ftpResp, _, _ := httpForwardMethod(t, svc.httpAddr,
@@ -149,13 +149,12 @@ func TestA12Forwarding(t *testing.T) {
 	if ftpResp != nil {
 		ftpCode = ftpResp.StatusCode
 	}
-	if httpsCode >= 400 && httpsCode < 600 && origin.count() == beforeHTTPS && (ftpCode == 405 || ftpCode == 501) {
-		r.pass("A12", "absolute-form https is refused with no request reaching the origin (no MITM, HTTP %d) and an unsupported scheme is 405/501", httpsCode)
+	if httpsCode == 501 && origin.acceptCount() == acceptsBefore && origin.bytesInCount() == bytesBefore &&
+		(ftpCode == 405 || ftpCode == 501) {
+		r.pass("A12", "absolute-form https is refused with exactly 501 and zero upstream accepts/bytes (no MITM); an unsupported scheme is 405/501")
 	} else {
-		r.fail("A12", "https=%d origin-requests %d→%d ftp=%d", httpsCode, beforeHTTPS, origin.count(), ftpCode)
-	}
-	if httpsCode != 0 && httpsCode != 405 && httpsCode != 501 {
-		r.note("A12", "absolute-form https is refused with %d; §3.2 maps an operation outside v1 to unsupported (405/501), while policy_denied is reserved for self/local prohibition (taxonomy mismatch, minor)", httpsCode)
+		r.fail("A12", "https=%d (want 501) origin accepts %d→%d bytes %d→%d; ftp=%d",
+			httpsCode, acceptsBefore, origin.acceptCount(), bytesBefore, origin.bytesInCount(), ftpCode)
 	}
 }
 

@@ -70,7 +70,7 @@ func (im *Importer) ImportWithAudit(ctx context.Context, src contract.Source, pa
 	isJSON := strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
 	if src.Kind == contract.SourceV2rayN && isJSON {
 		var err error
-		records, err = parseV2rayNJSON(payload, src.ID, now)
+		records, err = parseV2rayNJSON(payload, src.ID, now, &audit)
 		if err != nil {
 			return nil, audit, sourceFailure("v2rayN payload is not a supported node export", err)
 		}
@@ -78,19 +78,17 @@ func (im *Importer) ImportWithAudit(ctx context.Context, src contract.Source, pa
 			return nil, audit, sourceFailure("source exceeds the record limit", nil)
 		}
 		audit.DroppedKeys += countJSONKeyFromRaw(payload, "mux")
-		addRecordAudit(&audit, records)
 		return records, audit, nil
 	}
 	if isJSON {
 		// A file or subscription carrying node JSON is accepted only through
 		// the same read-only projection; application configuration is not.
 		var err error
-		records, err = parseV2rayNJSON(payload, src.ID, now)
+		records, err = parseV2rayNJSON(payload, src.ID, now, &audit)
 		if err != nil {
 			return nil, audit, sourceFailure("payload is JSON but not a supported node export", err)
 		}
 		audit.DroppedKeys += countJSONKeyFromRaw(payload, "mux")
-		addRecordAudit(&audit, records)
 		return records, audit, nil
 	}
 	if strings.HasPrefix(trimmed, "<") {
@@ -126,10 +124,9 @@ func (im *Importer) ImportWithAudit(ctx context.Context, src contract.Source, pa
 			records = append(records, rawRecord(line, contract.RecordInvalid, ReasonRecordOversized, "", src.ID, i, now))
 			continue
 		}
-		records = append(records, parseLink(line, src.ID, i, now))
+		records = append(records, parseLink(line, src.ID, i, now, &audit))
 		audit.DroppedKeys += countDroppedQueryKeys(line)
 	}
-	addRecordAudit(&audit, records)
 	if len(records) == 0 {
 		if src.AllowEmpty {
 			return nil, audit, nil
@@ -312,13 +309,5 @@ func countJSONKey(v any, want string) int {
 		return n
 	default:
 		return 0
-	}
-}
-
-func addRecordAudit(audit *Audit, records []contract.Record) {
-	for _, rec := range records {
-		if rec.InsecureTLS && rec.PinnedPeerCertSHA256 != "" {
-			audit.Notices = append(audit.Notices, "allow_insecure_ignored: verification stays on and the certificate pin is applied")
-		}
 	}
 }

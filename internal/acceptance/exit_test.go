@@ -51,16 +51,29 @@ func TestHelperExit(t *testing.T) {
 }
 
 type exitSpec struct {
-	Protocol string            `json:"protocol"` // "vless" | "trojan"
-	Port     int               `json:"port"`
-	UUID     string            `json:"uuid,omitempty"`
-	Password string            `json:"password,omitempty"`
-	Hosts    map[string]string `json:"hosts,omitempty"`
+	Protocol    string            `json:"protocol"` // "vless" | "trojan"
+	Port        int               `json:"port"`
+	UUID        string            `json:"uuid,omitempty"`
+	Password    string            `json:"password,omitempty"`
+	Hosts       map[string]string `json:"hosts,omitempty"`
+	TLSCertFile string            `json:"tls_cert_file,omitempty"`
+	TLSKeyFile  string            `json:"tls_key_file,omitempty"`
 }
 
 func (s exitSpec) config() []byte {
 	var inbound map[string]any
 	stream := map[string]any{"network": "tcp"}
+	if s.TLSCertFile != "" {
+		// A TLS exit is only used by the D18 pin check: the client must present
+		// the pinned leaf, so the self-signed certificate is the fixture.
+		stream["security"] = "tls"
+		stream["tlsSettings"] = map[string]any{
+			"certificates": []any{map[string]any{
+				"certificateFile": s.TLSCertFile,
+				"keyFile":         s.TLSKeyFile,
+			}},
+		}
+	}
 	switch s.Protocol {
 	case "vless":
 		inbound = map[string]any{

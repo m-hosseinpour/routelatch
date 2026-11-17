@@ -500,6 +500,27 @@ func failureKind(t *testing.T, err error) contract.ErrorKind {
 	return f.Kind
 }
 
+// expectExcluded starts an engine with one record that cannot be built and
+// asserts the record was isolated, reported, and not registered as an exit.
+func expectExcluded(t *testing.T, rec contract.Record, kind contract.ErrorKind) {
+	t.Helper()
+	e, err := engine.Start(engine.Options{Exits: []contract.Record{rec}, LogLevel: "none"})
+	if err != nil {
+		t.Fatalf("start with unbuildable record %q: %v", rec.ID, err)
+	}
+	defer func() { _ = e.Stop(context.Background()) }()
+	excluded := e.Excluded()
+	if len(excluded) != 1 {
+		t.Fatalf("excluded = %+v, want one record", excluded)
+	}
+	if excluded[0].ID != contract.ExitID(rec.ID) || excluded[0].Kind != kind || excluded[0].Reason == "" {
+		t.Fatalf("excluded record = %+v, want id=%q kind=%q with a reason", excluded[0], rec.ID, kind)
+	}
+	if e.HasExit(contract.ExitID(rec.ID)) {
+		t.Fatalf("excluded record %q is still registered", rec.ID)
+	}
+}
+
 func waitGoroutines(t *testing.T, want int, d time.Duration) int {
 	t.Helper()
 	deadline := time.Now().Add(d)

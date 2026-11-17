@@ -7,6 +7,10 @@ import (
 	"routelatch/internal/contract"
 )
 
+// noticeInsecureIgnored is the visible import notice when a link asked to
+// skip verification but a pin/name kept verification on (D18 as amended).
+const noticeInsecureIgnored = "allow_insecure_ignored: verification stays on; the certificate pin or name constraint is applied"
+
 // node is the untrusted, already-projected intermediate between a share link
 // or v2rayN profile and a canonical record. Fields not listed here never leave
 // the parser.
@@ -41,10 +45,19 @@ type rejection struct {
 	reason string
 }
 
+// insecureIgnored reports whether the link asked to skip verification but a
+// pin or name constraint keeps verification on. D18 as amended: the pin wins
+// and the downgrade is ignored, never persisted as an insecure record.
+func insecureIgnored(n node) bool {
+	return n.insecure && (n.pin != "" || n.verify != "")
+}
+
 // buildRecord validates a node and produces the contract record. A node may
 // already carry a rejection from its parser (unsupported scheme, insecure TLS)
-// while still keeping the settings needed for its dedupe key.
-func buildRecord(n node, rej *rejection, srcID contract.SourceID, order int, now time.Time) contract.Record {
+// while still keeping the settings needed for its dedupe key. audit may be nil;
+// when present it receives the visible "allowInsecure ignored" notice.
+func buildRecord(n node, rej *rejection, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
+	ignored := insecureIgnored(n)
 	rec := contract.Record{
 		SourceIDs:            []contract.SourceID{srcID},
 		DisplayName:          SanitizeDisplay(n.name),
@@ -67,7 +80,7 @@ func buildRecord(n node, rej *rejection, srcID contract.SourceID, order int, now
 		SpiderX:              n.spiderX,
 		PinnedPeerCertSHA256: n.pin,
 		VerifyPeerCertByName: n.verify,
-		InsecureTLS:          n.insecure,
+		InsecureTLS:          n.insecure && !ignored,
 		Order:                order,
 		AddedAt:              now.UTC(),
 		ValidatedAt:          now.UTC(),
@@ -76,6 +89,9 @@ func buildRecord(n node, rej *rejection, srcID contract.SourceID, order int, now
 	status, reason := validateNode(n, rej)
 	rec.Status = status
 	rec.StatusReason = reason
+	if ignored && audit != nil && status != contract.RecordInvalid && status != contract.RecordUnsupported {
+		audit.Notices = append(audit.Notices, noticeInsecureIgnored)
+	}
 	if reason != "" && status == contract.RecordInvalid {
 		rec.LastError = reasonText(reason)
 	}
@@ -144,10 +160,10 @@ func validateNode(n node, rej *rejection) (contract.RecordStatus, string) {
 		}
 	}
 	if n.insecure {
-		// D18: no consent path exists in v1. A pin keeps verification on and
-		// makes the record acceptable; without one it is quarantined and never
-		// dialed.
-		if n.pin == "" {
+		// D18 as amended: a pin or name constraint keeps verification on and
+		// authenticates the peer, so the record is not insecure. Without one it
+		// is quarantined and never dialed.
+		if n.pin == "" && n.verify == "" {
 			return contract.RecordUnsupported, contract.ReasonInsecureTLSRemoved
 		}
 	}

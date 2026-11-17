@@ -314,6 +314,7 @@ func TestGeneratedConfigHasNoFallbackSurface(t *testing.T) {
 
 // TestUnsupportedExitsAreRefused keeps HTTP exits out of v1 and rejects the
 // gated REALITY and skip-verify shapes instead of building a config for them.
+// With per-record isolation Start succeeds and reports the record as excluded.
 func TestUnsupportedExitsAreRefused(t *testing.T) {
 	base := func() contract.Record {
 		return vlessRecord("x-1", "127.0.0.1", 443, randomUUID(t), nil)
@@ -321,40 +322,28 @@ func TestUnsupportedExitsAreRefused(t *testing.T) {
 
 	http := base()
 	http.Protocol = contract.ProtocolHTTP
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{http}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("http exit: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, http, contract.Unsupported)
 
 	reality := base()
 	reality.Security = contract.SecurityReality
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{reality}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("reality exit: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, reality, contract.Unsupported)
 
 	insecure := base()
 	insecure.InsecureTLS = true
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{insecure}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("insecure exit: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, insecure, contract.Unsupported)
 
 	quarantined := base()
 	quarantined.Status = contract.RecordUnsupported
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{quarantined}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("quarantined exit: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, quarantined, contract.Unsupported)
 
 	badTransport := base()
 	badTransport.Transport = "kcp"
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{badTransport}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("kcp exit: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, badTransport, contract.Unsupported)
 
 	extra := base()
 	extra.Transport = contract.TransportXHTTP
 	extra.XHTTPExtra = map[string]any{"downloadSettings": map[string]any{}}
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{extra}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("xhttp downloadSettings: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, extra, contract.Unsupported)
 
 	// A valid record with an empty engine is fine; a malformed destination is
 	// refused before any dial.
@@ -366,6 +355,34 @@ func TestUnsupportedExitsAreRefused(t *testing.T) {
 	_, err = e.Dial(context.Background(), dialRequest("x-1", contract.Destination{Kind: contract.DestDomain, Host: "example.test"}, 1))
 	if kind := failureKind(t, err); kind != contract.InvalidDestination {
 		t.Fatalf("port-less destination: kind = %q, want invalid_destination", kind)
+	}
+}
+
+// TestOneBadRecordDoesNotAbortStart proves the service-level guarantee: a pool
+// with one unbuildable record and one good record still starts, and only the bad
+// record is excluded.
+func TestOneBadRecordDoesNotAbortStart(t *testing.T) {
+	good := vlessRecord("x-good", "127.0.0.1", 443, randomUUID(t), nil)
+	bad := vlessRecord("x-bad", "127.0.0.1", 443, randomUUID(t), func(r *contract.Record) {
+		r.InsecureTLS = true
+	})
+	e, err := engine.Start(engine.Options{Exits: []contract.Record{bad, good}, LogLevel: "none"})
+	if err != nil {
+		t.Fatalf("start with one bad record: %v", err)
+	}
+	defer func() { _ = e.Stop(context.Background()) }()
+	if !e.HasExit("x-good") {
+		t.Fatal("the good record was not registered")
+	}
+	if e.HasExit("x-bad") {
+		t.Fatal("the bad record was registered")
+	}
+	excluded := e.Excluded()
+	if len(excluded) != 1 || excluded[0].ID != "x-bad" || excluded[0].Kind != contract.Unsupported || excluded[0].Reason != engine.ReasonRecordRejected {
+		t.Fatalf("excluded = %+v", excluded)
+	}
+	if tag, ok := e.TagFor("x-good"); !ok || tag == "" {
+		t.Fatalf("good record tag = %q, %v", tag, ok)
 	}
 }
 
@@ -629,14 +646,7 @@ func TestSocksRecordWithTransportIsRefused(t *testing.T) {
 	} {
 		rec := base()
 		tc.mutate(&rec)
-		e, err := engine.Start(engine.Options{Exits: []contract.Record{rec}, LogLevel: "none"})
-		if err == nil {
-			_ = e.Stop(context.Background())
-			t.Fatalf("%s: record was accepted, want unsupported", tc.name)
-		}
-		if kind := failureKind(t, err); kind != contract.Unsupported {
-			t.Fatalf("%s: kind = %q, want unsupported", tc.name, kind)
-		}
+		expectExcluded(t, rec, contract.Unsupported)
 	}
 	// The plain shape still starts.
 	plain, err := engine.Start(engine.Options{Exits: []contract.Record{base()}, LogLevel: "none"})
@@ -713,26 +723,14 @@ func TestInvalidRecordFieldsAreRejected(t *testing.T) {
 	}
 	for _, tc := range cases {
 		rec := vlessRecord("x-1", "127.0.0.1", 443, uuid, tc.mutate)
-		e, err := engine.Start(engine.Options{Exits: []contract.Record{rec}, LogLevel: "none"})
-		if err == nil {
-			_ = e.Stop(context.Background())
-			t.Fatalf("%s: record was accepted, want %s", tc.name, tc.kind)
-		}
-		if kind := failureKind(t, err); kind != tc.kind {
-			t.Fatalf("%s: kind = %q, want %q", tc.name, kind, tc.kind)
-		}
+		expectExcluded(t, rec, tc.kind)
 	}
 
 	// Plaintext VLESS/Trojan to a public exit is prohibited by the pinned core;
 	// it is a v1 limit, not a malformed record, so it must not be
 	// "import_invalid" (which would tell the user to fix a well-formed link).
 	for _, server := range []string{"example.com", "8.8.8.8"} {
-		if _, err := engine.Start(engine.Options{
-			Exits:    []contract.Record{vlessRecord("x-pub", server, 443, uuid, nil)},
-			LogLevel: "none",
-		}); failureKind(t, err) != contract.Unsupported {
-			t.Fatalf("plaintext public exit %q: kind = %q, want unsupported", server, failureKind(t, err))
-		}
+		expectExcluded(t, vlessRecord("x-pub", server, 443, uuid, nil), contract.Unsupported)
 	}
 	// A private domain with the same shape is still a valid loopback-style
 	// fixture and must start.
@@ -748,9 +746,7 @@ func TestInvalidRecordFieldsAreRejected(t *testing.T) {
 
 	// Trojan flow is a feature the pinned core removed, not a defect.
 	trojan := trojanRecord("x-trojan", "127.0.0.1", 443, "pw", func(r *contract.Record) { r.Flow = "xtls-rprx-vision" })
-	if _, err := engine.Start(engine.Options{Exits: []contract.Record{trojan}}); failureKind(t, err) != contract.Unsupported {
-		t.Fatalf("trojan flow: kind = %q, want unsupported", failureKind(t, err))
-	}
+	expectExcluded(t, trojan, contract.Unsupported)
 
 	// The pinned core also accepts a 32-hex id and a short legacy id; rejecting
 	// them here would block a whole subscription over one valid record.

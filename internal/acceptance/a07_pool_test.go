@@ -98,6 +98,18 @@ func TestA07PoolHealth(t *testing.T) {
 		r.fail("A07", "health after the egress probe: healthy=%d cooling=%d usable=%d", st.poolHealthy, st.poolCooling, st.poolUsable)
 	}
 
+	// An explicit rerank reports the selection before/after, keeps the policy
+	// version (contract §7.1), and chooses the healthy exit.
+	policyBefore := st.policy
+	rerank := svc.mustOK("pool", "rerank").mapData(t)
+	skipped, skippedOK := rerank["skipped"].([]any)
+	if str(rerank["selected_after"]) == socksID && skippedOK && num(rerank["policy_version"]) == policyBefore {
+		r.pass("A07", "pool rerank selects the healthy exit (%s), reports %d skipped exit(s) and does not advance policy_version (%d)", socksID, len(skipped), policyBefore)
+	} else {
+		r.fail("A07", "rerank: selected_after=%q (want %q) skipped=%v policy=%v (want %d)",
+			str(rerank["selected_after"]), socksID, rerank["skipped"], rerank["policy_version"], policyBefore)
+	}
+
 	// Without any manual selection, an approved destination uses the healthy
 	// exit; the cooling exit is skipped and the unknown live exit is not chosen.
 	dialsBefore := fx.socks.dialCount()
@@ -131,20 +143,21 @@ func TestA07PoolHealth(t *testing.T) {
 	svc.mustOK("pool", "test", "--exit", socksID)
 	svc.mustOK("pool", "select", socksID)
 	svc.mustOK("pool", "refresh", "--all")
+	svc.mustOK("pool", "rerank")
 	svc.mustOK("pool", "select", "auto")
 	if got, e := tunnelEcho(t, tunnel, tunnelBr, "after-pool-ops"); e != nil || got != "after-pool-ops" {
-		r.fail("A07", "live pool tunnel after pool test/select/refresh: got=%q err=%v", got, e)
+		r.fail("A07", "live pool tunnel after pool test/select/refresh/rerank: got=%q err=%v", got, e)
 	} else if procStartTime(t, pid) != identity {
-		r.fail("A07", "engine process identity changed across probe/select/refresh")
+		r.fail("A07", "engine process identity changed across probe/select/refresh/rerank")
 	} else {
-		r.pass("A07", "pool test, select and refresh keep the engine process and a live compatible pool tunnel intact (start time unchanged, echo preserved)")
+		r.pass("A07", "pool test, select, refresh and rerank keep the engine process and a live compatible pool tunnel intact (start time unchanged, echo preserved)")
 	}
 	if len(probeRows) == 1 && str(probeRows[0]["exit"]) == deadID {
 		r.pass("A07", "pool test --exit reported exactly the probed exit (%s, outcome %s)", deadID, str(probeRows[0]["outcome"]))
 	} else {
 		r.fail("A07", "pool test results=%+v", probeRows)
 	}
-	r.note("A07", "no 'rerank' command exists in docs/contracts.md §7.1 or the CLI; the explicit rerank slot is exercised through pool test (manual probe), pool select and pool refresh")
+	r.note("A07", "the explicit rerank path is exercised (shape, policy version, selection and live-tunnel survival); the 10-minute rotation, EWMA/hysteresis switching and latency thresholds are not")
 
 	// Last-good survives a failed subscription refresh.
 	sub := newFixedSubscription(t, []string{deadLink, fx.links[2]})

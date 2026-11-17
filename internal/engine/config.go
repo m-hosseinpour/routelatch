@@ -145,7 +145,7 @@ func validateRecord(rec contract.Record) error {
 	if rec.Port == 0 {
 		return invalidRecord("exit port is missing")
 	}
-	if rec.InsecureTLS {
+	if rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "" && rec.VerifyPeerCertByName == "" {
 		return &contract.Failure{
 			Kind:    contract.Unsupported,
 			Path:    contract.PathLocal,

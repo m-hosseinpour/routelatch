@@ -517,7 +517,7 @@ func (s *Service) restore(ctx context.Context, ref string) (RestoreData, error) 
 		// A fresh process that started in stopped mode has not opened the
 		// engine, so this restore may start it once.
 		s.stopped = false
-		if err := s.startNetworkLocked(ctx); err != nil {
+		if err := s.startNetworkLockedHeld(ctx); err != nil {
 			s.stopped = true
 			s.stoppedByThisProcess = true
 			if reverted, rerr := s.store.Mutate(ctx, func(st *contract.State) error {

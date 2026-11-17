@@ -692,9 +692,10 @@ func TestEndToEnd(t *testing.T) {
 	mode2Start := time.Now()
 	pendingMode := svc.cli("mode", "all-direct")
 	cliReturned := time.Now()
+	modeTook := cliReturned.Sub(mode2Start)
 	if pendingMode.code == 0 {
 		closed2 := pendingMode.mapData(t)["closed"].(map[string]any)
-		took := cliReturned.Sub(mode2Start)
+		took := modeTook
 		// §3.4 bounds the server-side pending cancel, which the command reports
 		// as duration_ms. The CLI round trip includes exec/socket overhead, so it
 		// is only loosely bounded here.
@@ -735,9 +736,14 @@ func TestEndToEnd(t *testing.T) {
 	closes := fx.socks.closeTimes()
 	if settled && len(closes) > 0 {
 		elapsed := closes[len(closes)-1].Sub(mode2Start)
-		// This close is the dial's own 10s deadline firing, not the sweep: it
-		// lands just before the late commit. Record it as such.
-		r.note("A04", "the exit socket closed at +%s (the dial deadline, not a sweep cancel); §3.4 requires a ≤50ms pending cancel and the request itself timed out", elapsed.Round(time.Millisecond))
+		// The dial had run for only ~150ms when the mode command started, so its
+		// 10s deadline cannot explain a close at +elapsed. A close this close to
+		// the commit is the pending-cancel sweep releasing the exit socket.
+		if pendingMode.code == 0 {
+			r.note("A04", "the mode change returned at +%s with pending=1 and the exit socket closed at +%s; the dial was ~150ms old, so this is the sweep canceling the pending dial, not its 10s deadline", modeTook.Round(time.Millisecond), elapsed.Round(time.Millisecond))
+		} else {
+			r.note("A04", "the timed-out mode change applied at +%s and the exit socket closed at +%s", modeTook.Round(time.Millisecond), elapsed.Round(time.Millisecond))
+		}
 	} else {
 		r.fail("A04", "the exit did not observe the pending dial teardown at all")
 	}

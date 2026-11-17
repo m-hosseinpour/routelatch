@@ -14,7 +14,7 @@ export PATH=$PWD/.toolchain/go/bin:$PATH GOTOOLCHAIN=local \
 go test -count=1 -v ./internal/acceptance/     # PASS/FAIL lines go to stdout
 ```
 
-Runtime is 105–120 s (117 s in the latest run). Two waits dominate: `proposals recheck` waits out the
+Runtime is 110–130 s (varies with the two fixed waits below). Two waits dominate: `proposals recheck` waits out the
 prober's hard-coded 60 s destination cooldown, and A07 waits one 30 s rotation
 tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
 `-v -run 'TestFailureAndLimits|TestResourceBaseline'` for the cheap checks.
@@ -61,13 +61,13 @@ setting is used.
 | A03 | A pool with only a quarantined record (usable 0) and a truly empty pool both give `502`, 0 destination contacts and 0 exit dials before and after the SOCKS5 attempt; the direct destination still works; `0x04` for an approved destination and `0x05` for a directly refused one. |
 | A04 | Local-exception tunnels survive mode changes (kept ≥ 1, still echo); all-proxy routes an unapproved public destination through the pool; all-direct serves without an exit; a live **pool** tunnel is closed by targeted→all-direct and by `rules remove` (both ends observe teardown, `closed ≥ 1`); `stopped` closes the live tunnel and both ports, reports 0 open/0 dialing immediately, keeps management answering, and leaving stopped is exit 6 with the restart hint; the pending-dial pass path enforces the reported `duration_ms` ≤ 50 ms (CLI round trip loosely ≤ 1 s). |
 | A05 | One client request reaches the origin exactly once; a refused direct request (path/query/header nonce) leaves no application request at the origin and no bytes in proposals, state, CLI or the service log; an eligible failure creates a proposal with no rule; `accept` adds exactly one rule for exactly that destination and the next request uses the pool; `reject` keeps the rule set unchanged and `recheck` does not revive it; disabling diagnostics leaves queue 0 and creates no new proposal. |
-| A06 | File import = 3 valid/0 invalid/0 unsupported; per-protocol `import link` (VLESS/Trojan/SOCKS5) each valid 1 and merged to 3 records; Trojan credentials drive a live tunnel; a v2rayN JSON export imports 3 profiles and keeps its source attribution; a skip-verify link is `unsupported`/`insecure_tls_removed`, unselectable, and `doctor` reports it with a certificate/pin remediation; a failed subscription refresh (exit 1, `source_fetch`) leaves every row's identity/status/settings unchanged. |
-| A07 | Cold start has no health; the first rotation cools the dead exit; an egress probe with byte evidence promotes the live exit to healthy; with no pin the approved destination uses the healthy exit, skips the cooling one and does not pick the unknown one; `pool test`, `select` and `refresh` keep the process start time and a live compatible **pool** tunnel; an all-cooling pool gives `502` with 0 contacts and a no-usable-exit warning; a failed refresh keeps last-good. |
+| A06 | File import = 3 valid/0 invalid/0 unsupported; per-protocol `import link` (VLESS/Trojan/SOCKS5) each valid 1 and merged to 3 records; Trojan credentials drive a live tunnel; a v2rayN JSON export imports 3 profiles and keeps its source attribution; a skip-verify link is `unsupported`/`insecure_tls_removed`, unselectable, and `doctor` reports it with a certificate/pin remediation; a certificate-pinned TLS exit imports and carries a real tunnel, a wrong pin fails on the first byte with 0 destination contacts, the same link with `allowInsecure` is accepted with an `allow_insecure_ignored` notice and stays usable, and a restart on the same state still starts and serves (D18); a failed subscription refresh (exit 1, `source_fetch`) leaves every row's identity/status/settings unchanged. |
+| A07 | Cold start has no health; the first rotation cools the dead exit; an egress probe with byte evidence promotes the live exit to healthy; `pool rerank` reports the healthy selection, the skip list and an unchanged policy version; with no pin the approved destination uses the healthy exit, skips the cooling one and does not pick the unknown one; `pool test`, `select`, `refresh` and `rerank` keep the process start time and a live compatible **pool** tunnel; an all-cooling pool gives `502` with 0 contacts and a no-usable-exit warning; a failed refresh keeps last-good. |
 | A08 | Fixture names do not resolve on the host; the VLESS exit logs its own DNS answer for `vless.rl.test`; the SOCKS exit receives the unresolved hostname. |
 | A09 | The process's own socket table has exactly two listening TCP sockets, both loopback, and management only as a Unix socket owned by the running uid with mode 0600; proxy-to-self is 403 `policy_denied`; directories 0700 and state/config/lock/`state.json.bak`/`log/routelatch.log` 0600; every captured CLI/log surface has no UUID/password/share link/subscription URL and no request nonce; a node title carrying ESC/CSI/OSC/BEL/CR appears sanitized in both pool tables, its printable text intact, and the service streams and log file carry no raw control byte; state carries secrets only in `records[].credentials`/`sources[].origin`. |
 | A10 | `env`, `exec` (proxy env + child exit code; with `--json` the child's streams stay on stderr and stdout is one parseable Envelope per §7.1), `doctor`, `backup`/`restore` (private ref + sha256, traffic and rules after restore), `desktop proxy status`, `config get|path|set` (values and private paths; wildcard and valid LAN listeners are both `unsupported`/7), and the non-interactive menu (exit 0). |
 | A11 | An inherited `NO_PROXY` naming an approved destination is replaced by the product's fixed list in the child; with listeners stopped, and with no service at all, `env`/`exec` exit 3 and the child never runs (no silent direct). |
-| A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` refusal with no request reaching the origin (no MITM; F7 notes the status mismatch), and an unsupported scheme 405/501. |
+| A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
@@ -84,27 +84,34 @@ setting is used.
   pool dial, so a mode change returned exit 8 after ~5 s and applied at ~9.8 s.
   The suite requires `duration_ms ≤ 50 ms` and the pending dial to be swept
   before success.
-* **F4 (found here, fixed after this review)** — `exec --json` glued its envelope
+* **F4 (found here, fixed in `659064f`)** — `exec --json` glued its envelope
   to unterminated child stdout, so stdout was not valid JSON. The fix routes the
   child's stdout/stderr to stderr in JSON mode and documents it in §7.1; the
   suite now asserts that separation and a parseable envelope.
-* **F5 (found here, fixed in the current worktree)** — the documented log file
-  was never created: §4.1 lists `$XDG_STATE_HOME/routelatch/log/routelatch.log`
-  with mode 0600 and T6 requires rotation/retention, but no code opened
-  `Paths.LogDir`. At the measured revision the log now exists with mode 0600 and
-  the suite asserts it (and scans it for control bytes). Not yet committed.
-* **F6 (found here, fixed in the current worktree)** — a valid but non-loopback
-  listener was classified as `invalid_destination`/exit 2 via `usage(...)`, while
-  §4.2 requires `unsupported`/exit 7. It is now `unsupported`/7 for both the
-  wildcard and a LAN address at `config set` (asserted), and the runtime listener
-  check (`platform.Targets.Validate`) returns the same kind (observed manually:
-  `run` with `http_listen=0.0.0.0:1000` exits 7 without binding). §7.1's
+* **F5 (found here, fixed in `659064f`)** — the documented log file was never
+  created: §4.1 lists `$XDG_STATE_HOME/routelatch/log/routelatch.log` with mode
+  0600 and T6 requires rotation/retention, but no code opened `Paths.LogDir`. The
+  suite now asserts the file, its mode and that it carries no control byte.
+* **F6 (found here, fixed in `659064f`)** — a valid but non-loopback listener was
+  classified as `invalid_destination`/exit 2 via `usage(...)`, while §4.2 requires
+  `unsupported`/exit 7. It is now `unsupported`/7 for both the wildcard and a LAN
+  address at `config set` (asserted), and the runtime listener check
+  (`platform.Targets.Validate`) returns the same kind (`run` with
+  `http_listen=0.0.0.0:1000` exits 7 without binding, observed manually). §7.1's
   `config get|set|path` row still lists only 0/2/3/6 and should gain 7.
-* **F7 (open, minor, reported by this pass)** — absolute-form `https` is refused
-  with `policy_denied`/403 (`internal/frontend/http.go:177-183`). The security
-  property (no TLS interception, origin never contacted) holds, but §3.1 reserves
-  `policy_denied` for self/local prohibition and an operation outside v1 maps to
-  `unsupported`/405–501.
+* **F7 (found here, fixed in `659064f`)** — absolute-form `https` was refused
+  with `policy_denied`/403, while §3.1 reserves that kind for self/local
+  prohibition and an operation outside v1 maps to `unsupported`/405–501. It is
+  now `unsupported`/501 with no origin accept or byte (asserted).
+* **F8 (found here, fixed in the uncommitted worktree)** — a `pinSHA256` link
+  that also carries `allowInsecure=1` was rejected as `unsupported`/exit 7
+  ("skip-verify TLS is not dialable in v1") although §5.5 requires acceptance
+  with the pin keeping verification on; the rejected import had already written a
+  record with `insecure_tls: true`, so the next `run` on that data dir failed with
+  exit 7 (the service was bricked until the record was removed). The current
+  worktree stores the pin without the insecure flag, reports
+  `allow_insecure_ignored`, and the D18 check now asserts import, usability, the
+  wrong-pin failure and restart. Not yet committed.
 
 Shape assertions that follow implementation names rather than a §7.1 field list
 (doctor check names and `ok|warn|error`, the `<data-dir>/run/control.sock` layout,
@@ -129,11 +136,11 @@ them until the suite is updated.
   or diagnosis, not a negative at the origin. Cancelling an already-running slow
   probe on disable is not reproducible loopback-only.
 * **A06:** v2rayN SQLite/`guiNConfig` rejection and `pool export --with-secrets`
-  are not exercised.
-* **A07:** no `rerank` command exists in §7.1 or the CLI (the explicit
-  test/select/refresh paths stand in); the 10-minute rotation, EWMA/hysteresis
-  switching, latency thresholds, and the plan's staging/rollback are not
-  exercised.
+  are not exercised; the pin checks use a self-signed fixture certificate, not a
+  public CA chain or a pinned CA.
+* **A07:** the explicit `pool rerank` path is exercised, but the 10-minute
+  rotation, EWMA/hysteresis switching, latency thresholds and the plan's
+  staging/rollback are not.
 * **A09:** second-uid `SO_PEERCRED` rejection needs privileges the suite does
   not have (running as the same uid); the interactive menu's TUI rendering is not
   driven (CLI human output, the service streams and the log file are).

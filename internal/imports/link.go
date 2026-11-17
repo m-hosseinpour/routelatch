@@ -13,14 +13,14 @@ import (
 // Unsupported schemes are rejected by name, never fetched or executed. Query
 // parameters outside the allow-list are dropped; nothing from the link is
 // stored except projected connection settings and a sanitized label.
-func parseLink(raw string, srcID contract.SourceID, order int, now time.Time) contract.Record {
+func parseLink(raw string, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return buildRecord(node{}, &rejection{contract.RecordInvalid, ReasonInvalidJSON}, srcID, order, now)
+		return buildRecord(node{}, &rejection{contract.RecordInvalid, ReasonInvalidJSON}, srcID, order, now, audit)
 	}
 	u, err := url.Parse(trimmed)
 	if err != nil || u.Scheme == "" {
-		rec := buildRecord(node{name: fragmentName(trimmed)}, &rejection{contract.RecordInvalid, ReasonInvalidJSON}, srcID, order, now)
+		rec := buildRecord(node{name: fragmentName(trimmed)}, &rejection{contract.RecordInvalid, ReasonInvalidJSON}, srcID, order, now, audit)
 		rec.DedupeKey = dedupeKeyForRaw([]byte(trimmed))
 		rec.ID = RecordIDForKey(rec.DedupeKey)
 		return rec
@@ -28,19 +28,19 @@ func parseLink(raw string, srcID contract.SourceID, order int, now time.Time) co
 	scheme := strings.ToLower(u.Scheme)
 	switch scheme {
 	case "vless":
-		return parseVLESSStyle(u, contract.ProtocolVLESS, srcID, order, now, false)
+		return parseVLESSStyle(u, contract.ProtocolVLESS, srcID, order, now, false, audit)
 	case "trojan":
-		return parseVLESSStyle(u, contract.ProtocolTrojan, srcID, order, now, true)
+		return parseVLESSStyle(u, contract.ProtocolTrojan, srcID, order, now, true, audit)
 	case "socks5", "socks":
-		return parseSOCKS5(u, srcID, order, now)
+		return parseSOCKS5(u, srcID, order, now, audit)
 	case "http", "https":
 		// An HTTP(S) URL is not a share link. Import must not fetch it.
 		rec := buildRecord(node{protocol: contract.ProtocolHTTP, name: u.Fragment},
-			&rejection{contract.RecordUnsupported, ReasonHTTPExitUnverified}, srcID, order, now)
+			&rejection{contract.RecordUnsupported, ReasonHTTPExitUnverified}, srcID, order, now, audit)
 		return rawKeyed(rec, trimmed)
 	default:
 		rec := buildRecord(node{name: u.Fragment},
-			&rejection{contract.RecordUnsupported, ReasonUnsupportedProtocol}, srcID, order, now)
+			&rejection{contract.RecordUnsupported, ReasonUnsupportedProtocol}, srcID, order, now, audit)
 		rec.Protocol = contract.Protocol(scheme)
 		return rawKeyed(rec, trimmed)
 	}
@@ -62,7 +62,7 @@ func fragmentName(raw string) string {
 	return ""
 }
 
-func parseVLESSStyle(u *url.URL, proto contract.Protocol, srcID contract.SourceID, order int, now time.Time, trojan bool) contract.Record {
+func parseVLESSStyle(u *url.URL, proto contract.Protocol, srcID contract.SourceID, order int, now time.Time, trojan bool, audit *Audit) contract.Record {
 	q := u.Query()
 	n := node{
 		protocol: proto,
@@ -202,10 +202,10 @@ func parseVLESSStyle(u *url.URL, proto contract.Protocol, srcID contract.SourceI
 		}
 	}
 
-	return buildRecord(n, rej, srcID, order, now)
+	return buildRecord(n, rej, srcID, order, now, audit)
 }
 
-func parseSOCKS5(u *url.URL, srcID contract.SourceID, order int, now time.Time) contract.Record {
+func parseSOCKS5(u *url.URL, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
 	n := node{
 		protocol:  contract.ProtocolSOCKS5,
 		name:      u.Fragment,
@@ -236,7 +236,7 @@ func parseSOCKS5(u *url.URL, srcID contract.SourceID, order int, now time.Time) 
 			rej = &rejection{contract.RecordInvalid, ReasonInvalidCredential}
 		}
 	}
-	return buildRecord(n, rej, srcID, order, now)
+	return buildRecord(n, rej, srcID, order, now, audit)
 }
 
 func first(q url.Values, names ...string) string {

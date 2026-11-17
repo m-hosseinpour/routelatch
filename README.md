@@ -10,11 +10,19 @@ that traffic direct.
 It is a Go program that links the official Xray core into the binary. Users do
 not install Go or Xray separately.
 
-**Status:** the Linux v1 implementation is unit-tested, but the end-to-end
-acceptance pass on a clean machine has not been run. Distribution is not
-authorized: the project license is undecided and the release audit is open (see
-[License and publication](#license-and-publication)). Treat this as a working
-build to evaluate, not a supported release.
+**Status:** the Linux v1 is implemented, unit-tested, and covered by an
+end-to-end acceptance suite ([`internal/acceptance/`](internal/acceptance/README.md))
+that drives the built binary against loopback-only fixture exits and peers. A
+local run on 2026-11-17 passed with 157 PASS assertions and no failures
+(~106 s) over the documented CLI surface, the four routing modes,
+pool/import/health, diagnostics, the launcher and crash/shutdown recovery. What
+it does **not** prove: a clean-machine install with no manual runtime (A01),
+real GNOME/KDE desktop-proxy changes, a real systemd service lifecycle, public
+egress through real exits, and the license/dependency audit (A14).
+
+Distribution is not authorized: the project license is undecided and the release
+audit is open (see [License and publication](#license-and-publication)). Treat
+this as a build that passes its local checks, not a supported release.
 
 ## What the Linux v1 does
 
@@ -175,8 +183,9 @@ Other useful commands: `version`, `mode targeted|all-proxy|all-direct|stopped`,
 `desktop proxy status|set|restore`, `backup`, `restore <ref>`, and `menu`.
 `routelatch version` prints the build's version, commit and build date, also as
 `--json`; the same values plus the Go version are in `dist/BUILD-INFO`.
-`routelatch help` prints the command list. Secrets, share links, source URLs,
-request bodies and headers are not printed by these commands.
+`routelatch help` prints the command list. Exit codes and the JSON envelope are
+specified in [`docs/contracts.md`](docs/contracts.md) §7. Secrets, share links,
+source URLs, request bodies and headers are not printed by these commands.
 
 ## Security model and limits
 
@@ -204,18 +213,23 @@ request bodies and headers are not printed by these commands.
   cannot fix a program that resolves a name itself, and ECH makes hostname
   inspection unreliable, so no name-based guarantee is possible in those cases.
 - **No MITM.** TLS verification stays on. RouteLatch does not install a root CA
-  or intercept HTTPS. Links with verification disabled are quarantined as
-  `unsupported` (`insecure_tls_removed`) and are never dialed; a pinned
-  certificate (`pinnedPeerCertSha256`) is accepted with verification still on.
+  or intercept HTTPS. The supported path for an exit whose certificate is not in
+  the trust store is a certificate pin: `pinnedPeerCertSha256` (or
+  `verifyPeerCertByName`) is accepted with verification still on and narrows
+  acceptance to that certificate or name. Links that only disable verification
+  (`allowInsecure`) are quarantined as `unsupported`
+  (`insecure_tls_removed`) and are never dialed.
 - **No silent bypass.** If the pool cannot serve an approved destination, the
   connection fails with an error. Pool failure never turns into a direct
   connection for approved traffic.
 - **Diagnostics propose, never apply.** Only eligible direct failures create
   proposals, the failed request is not replayed, and no rule changes without
   your confirmation.
-- Files holding config, state and logs are `0600` in `0700` directories, and
-  `doctor` reports permission problems; a state directory others can read makes
-  the service refuse to start rather than expose credentials.
+- Files holding config, state and logs are `0600` in `0700` directories. The
+  service log is `$XDG_STATE_HOME/routelatch/log/routelatch.log`, rotated at
+  4 MiB into `routelatch.log.1`–`.3`. `doctor` reports permission problems; a
+  state directory others can read makes the service refuse to start rather than
+  expose credentials.
 
 ## Platform support
 
@@ -233,11 +247,6 @@ restored by `routelatch desktop proxy restore`, which reverts only the keys
 RouteLatch wrote. Starting or stopping the service does not touch desktop or
 network settings.
 
-## Known gaps in this build
-
-- End-to-end acceptance (install → import → approve → use → mode switch → pool
-  failure → recovery) has not been run, so expect rough edges.
-
 ## Documentation
 
 The design documents are in Persian:
@@ -247,6 +256,7 @@ The design documents are in Persian:
 - [Technical and security contracts](docs/contracts.md)
 - [Research and evidence](docs/research.md)
 - [Implementation plan and open work](docs/implementation-plan.md#open-work)
+- [Acceptance suite notes](internal/acceptance/README.md)
 - [Documentation index](docs/README.md)
 - [Contributor guidance](AGENTS.md)
 

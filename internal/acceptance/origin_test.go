@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,6 +37,9 @@ type recordingOrigin struct {
 	start time.Time // streaming handler started
 	end   time.Time // streaming handler finished
 	once  sync.Once
+
+	accepts atomic.Int64 // TCP accepts, so a refused request cannot hide
+	bytesIn atomic.Int64 // bytes read from the proxy
 }
 
 func newRecordingOrigin(t *testing.T) *recordingOrigin {
@@ -123,7 +127,7 @@ func newRecordingOrigin(t *testing.T) *recordingOrigin {
 		mux.ServeHTTP(w, r)
 	})
 	o.srv = &http.Server{Handler: recordAll}
-	go func() { _ = o.srv.Serve(ln) }()
+	go func() { _ = o.srv.Serve(countingListener{Listener: ln, o: o}) }()
 	t.Cleanup(o.close)
 	return o
 }
@@ -133,6 +137,38 @@ func (o *recordingOrigin) close() {
 }
 
 func (o *recordingOrigin) port() uint16 { return uint16(o.ln.Addr().(*net.TCPAddr).Port) }
+
+// countingListener counts every accept; countingConn counts every byte read, so
+// an assertion can require that the proxy did not even open a socket.
+type countingListener struct {
+	net.Listener
+	o *recordingOrigin
+}
+
+func (l countingListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return c, err
+	}
+	l.o.accepts.Add(1)
+	return countingConn{Conn: c, o: l.o}, nil
+}
+
+type countingConn struct {
+	net.Conn
+	o *recordingOrigin
+}
+
+func (c countingConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	if n > 0 {
+		c.o.bytesIn.Add(int64(n))
+	}
+	return n, err
+}
+
+func (o *recordingOrigin) acceptCount() int64  { return o.accepts.Load() }
+func (o *recordingOrigin) bytesInCount() int64 { return o.bytesIn.Load() }
 
 func (o *recordingOrigin) requests() []recordedRequest {
 	o.mu.Lock()

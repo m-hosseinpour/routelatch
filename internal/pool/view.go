@@ -79,7 +79,7 @@ func (p *Pool) Usable(exit contract.ExitID) bool {
 // a skip-verify record without a pin and a REALITY record are never dialable in
 // v1 even if their cached status says unknown.
 func Dialable(rec contract.Record) bool {
-	if rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "" {
+	if rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "" && rec.VerifyPeerCertByName == "" {
 		return false
 	}
 	if rec.Security == contract.SecurityReality {

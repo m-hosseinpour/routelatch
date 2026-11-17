@@ -368,8 +368,10 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
   direct) رسید. `PolicyVersion` در هر درخواست dial به‌عنوان fence بررسی می‌شود: نسخهٔ
   قدیمی یا exit حذف/unsupportedشده پیش از هر ارسال رد می‌شود (tag غایب →
   `pool_unavailable`، نسخهٔ کهنه → `canceled`).
-- direct یک outbound جدا (`rl-direct`) دارد و هیچ dial مسیر pool به default handler
-  نمی‌رسد؛ outbound پیش‌فرض کانفیگ هرگز direct نیست.
+- مسیر direct یک dialer مستقل Go از نوع `contract.Dialer` است، نه outbound/tag هسته:
+  `net.Dialer` با `DirectDialDeadline` و بررسی loopback/self-port پس از resolve. هیچ dial
+  مسیر pool به default handler نمی‌رسد و outbound پیش‌فرض کانفیگ هرگز direct نیست؛
+  بنابراین egress مستقیم از سلامت pool و کانفیگ موتور مستقل می‌ماند.
 - حالت متوقف engine را می‌بندد و **خروج از حالت متوقف نیازمند process جدید است**؛
   `mode targeted` در حالت متوقف پیام «restart لازم است» می‌دهد. سرویس‌های supervisor
   این را در `T6` مدیریت می‌کنند.
@@ -530,8 +532,8 @@ timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreacha
 
 اگر پوشهٔ state مجوز گروه/دیگران داشته باشد یا فایل `0600` نباشد، سرویس **fail closed**
 می‌کند (`state_corrupt`/`policy_denied` با راهنمای `chmod`) و `doctor` وضعیت را نشان
-می‌دهد؛ نوشتن credential در فایل عمومی مجاز نیست. `doctor --fix` فقط با فرمان صریح
-مجوزها را اصلاح می‌کند.
+می‌دهد؛ نوشتن credential در فایل عمومی مجاز نیست. `doctor` دستور fix پیشنهادی را نشان
+می‌دهد، ولی اصلاح مجوز فقط با فرمان صریح کاربر (مثلاً `chmod`) انجام می‌شود.
 
 ### ۴.۲ `config.json`
 
@@ -631,9 +633,13 @@ persist/load می‌گذرند؛ پیشنهاد unroute هم فقط با تأی�
 - برای هر اتصال `SO_PEERCRED` خوانده می‌شود؛ `uid` باید برابر `os.Getuid()` باشد،
   وگرنه بستن + `peer_rejected` (فقط uid لاگ می‌شود، نه دادهٔ درخواست). root و
   هم‌uid خارج از مرز امنیتی ما هستند و همین‌طور مستند می‌شود.
-- deadline هر درخواست ۵s؛ `pool test` استثناست: `۳۰s + ۲۰s × تعداد exit انتخاب‌شده`
-  (سقف ۱۰ دقیقه) و در صورت رسیدن به deadline، نتایج partial با `truncated=true`
-  برمی‌گردد. درخواست بدون پاسخ هرگز state را نیمه‌کاره رها نمی‌کند (mutation اتمیک است).
+- deadline هر درخواست ۵s است و هر فرمان بودجهٔ ثابت خودش را دارد: `pool test` ۱۰ دقیقه
+  (بدون فرمول وابسته به تعداد exit؛ فهرست با `MaxPoolTestExits = 20` بریده می‌شود)،
+  `diagnose` و `proposals recheck` ۶۰s، `pool refresh` ۹۰s، `import`/`pool add` ۶۰s، و
+  `desktop set|restore`/`backup`/`restore` ۳۰s. بیشترین بودجه همان ۱۰ دقیقه است و
+  deadline سوکت برابر timeout + ۲s؛ در `pool test` اگر probe خطا بدهد یا deadline برسد،
+  نتایج partial با `truncated=true` برمی‌گردد. درخواست بدون پاسخ هرگز state را نیمه‌کاره
+  رها نمی‌کند (mutation اتمیک است).
 - پاسخ هیچ secret، URL منبع یا share link ندارد.
 
 ### ۴.۷ singleton و تصادم
@@ -945,7 +951,7 @@ state.
 | `pool rerank` | `selected_before, selected_after, skipped[{exit,reason: pinned\|cooling\|unsupported\|invalid\|unknown\|dwell\|samples\|improvement\|no_target}], policy_version` | 0، 3، 11 | «رتبه‌بندی دوباره» |
 | `import link\|file\|subscription\|v2rayn` | `source_id, records{valid,invalid,unsupported}` | 0، 2، 6، 7، 8 | «واردکردن» |
 | `diagnose <host:port> [--direct\|--pool]` | `destination, kind, attempts[{outcome,duration_ms}], eligible, proposal_id?` | 0، 2، 3، 8، 11 | «تشخیص» |
-| `proposals list\|accept\|reject\|recheck` | `proposals[{id,kind,rule_id,destination,status,expires_at}]` / `rule_id` | 0، 3، 5، 6 | «پیشنهادها» |
+| `proposals list\|accept\|reject\|recheck\|clear` | `proposals[{id,kind,rule_id,destination,status,expires_at}]` / `rule_id` / `cleared` | 0، 3، 5، 6 | «پیشنهادها» |
 | `config get\|set\|path` | `path, values` | 0، 2، 3، 6، 7 | «تنظیمات» |
 | `doctor` | `checks[{name,status,detail,fix}]` | 0، 3، 10 | «بررسی سلامت» |
 | `env` / `exec -- <cmd>` | `HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,NO_PROXY` / child exit code | 0، 3، 7 + کد فرزند | «اجرای برنامه» |
@@ -980,7 +986,8 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 ### ۷.۴ امنیت خروجی
 
 - هیچ فرمانی credential، share link، URL منبع با query/token، بدنهٔ درخواست، هدر یا
-  کوکی چاپ نمی‌کند. `doctor` فقط نام فایل/مسیر نسبی و وضعیت مجوز را نشان می‌دهد.
+  کوکی چاپ نمی‌کند. `doctor` مسیر/نام فایل و وضعیت مجوز را نشان می‌دهد (برای لاگ، مسیر
+  resolved) و محتوای فایل را نمی‌خواند.
 - هر رشتهٔ پویا (نام node، label منبع، note قانون، متن خطای engine/exit) پیش از نمایش
   از `text.SanitizeTerminal` می‌گذرد: حذف C0/C1 control، ESC sequence، CR/LF/TAB
   (تبدیل به فاصله)، کاراکترهای جهت‌دهی یونیکد (`U+202A–202E`, `U+2066–2069`)،

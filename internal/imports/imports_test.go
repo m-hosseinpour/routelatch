@@ -169,17 +169,32 @@ func TestInsecureTLSQuarantineAndPin(t *testing.T) {
 
 	pin := strings.Repeat("ab", 32)
 	pinned := "vless://" + testUUID + "@example.com:443?security=tls&allowInsecure=1&pinSHA256=" + pin + "#pinned"
-	recs, err = im.Import(context.Background(), testSource(contract.SourceManual, pinned), []byte(pinned))
+	recs, audit, err := im.ImportWithAudit(context.Background(), testSource(contract.SourceManual, pinned), []byte(pinned))
 	if err != nil {
 		t.Fatal(err)
 	}
 	r = recs[0]
-	if r.Status != contract.RecordUnknown || r.PinnedPeerCertSHA256 != pin || !r.InsecureTLS {
+	if r.Status != contract.RecordUnknown || r.PinnedPeerCertSHA256 != pin || r.InsecureTLS {
 		t.Fatalf("pinned record: %+v", r)
+	}
+	pinnedKey := r.DedupeKey
+	if len(audit.Notices) == 0 || !strings.Contains(strings.Join(audit.Notices, " "), "allow_insecure_ignored") {
+		t.Fatalf("pinned record notice: %+v", audit.Notices)
+	}
+	verified := "vless://" + testUUID + "@example.com:443?security=tls&allowInsecure=1&verifyPeerCertByName=example.com#named"
+	recs, audit, err = im.ImportWithAudit(context.Background(), testSource(contract.SourceManual, verified), []byte(verified))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r = recs[0]; r.Status != contract.RecordUnknown || r.InsecureTLS || r.VerifyPeerCertByName != "example.com" {
+		t.Fatalf("verified-name record: %+v", r)
+	}
+	if len(audit.Notices) == 0 {
+		t.Fatal("verified-name record has no ignored-insecure notice")
 	}
 	other := strings.Replace(pinned, pin, strings.Repeat("cd", 32), 1)
 	recs2, _ := im.Import(context.Background(), testSource(contract.SourceManual, other), []byte(other))
-	if recs2[0].DedupeKey == r.DedupeKey {
+	if recs2[0].DedupeKey == pinnedKey {
 		t.Fatal("pin must be part of the identity")
 	}
 	bad := "vless://" + testUUID + "@example.com:443?security=tls&pinSHA256=nothex"
@@ -731,6 +746,38 @@ func TestRedirectDropsCredentialsAndRejectsScheme(t *testing.T) {
 	src.Origin = bad.URL
 	if _, err := NewFetcher().FetchSource(context.Background(), src); err == nil {
 		t.Fatal("redirect to ftp must fail")
+	}
+}
+
+func TestAddSourceBuildCheckRunsBeforeCommit(t *testing.T) {
+	link := "vless://" + testUUID + "@example.com:443?security=tls#n"
+	store := newFakeStore(contract.State{Mode: contract.ModeTargeted})
+	r := NewRefresher(store, staticFetcher{})
+	r.BuildCheck = func(contract.Record) (string, error) {
+		return "engine_record_rejected", nil
+	}
+	if _, err := r.AddLink(context.Background(), link); err == nil {
+		t.Fatal("a source whose only record is unbuildable must fail before the commit")
+	}
+	after, _ := store.Load(context.Background())
+	if len(after.State.Records) != 0 || len(after.State.Sources) != 0 {
+		t.Fatalf("unbuildable import persisted state: records=%d sources=%d", len(after.State.Records), len(after.State.Sources))
+	}
+}
+
+func TestAddSourceBuildCheckErrorAbortsBeforeCommit(t *testing.T) {
+	link := "vless://" + testUUID + "@example.com:443?security=tls#n"
+	store := newFakeStore(contract.State{Mode: contract.ModeTargeted})
+	r := NewRefresher(store, staticFetcher{})
+	r.BuildCheck = func(contract.Record) (string, error) {
+		return "", errors.New("checker failed")
+	}
+	if _, err := r.AddLink(context.Background(), link); err == nil {
+		t.Fatal("a failing build check must abort the import")
+	}
+	after, _ := store.Load(context.Background())
+	if len(after.State.Records) != 0 || len(after.State.Sources) != 0 {
+		t.Fatalf("failed check persisted state: records=%d sources=%d", len(after.State.Records), len(after.State.Sources))
 	}
 }
 

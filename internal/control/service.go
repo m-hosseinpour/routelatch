@@ -133,10 +133,12 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	}
 	reg := conns.New()
 	reg.SetPolicyVersion(snap.State.PolicyVersion)
+	refresher := imports.NewRefresher(opts.Store, nil)
+	refresher.BuildCheck = buildCheck
 	s := &Service{
 		store: opts.Store, paths: opts.Paths, now: opts.Now,
 		reg: reg, props: props,
-		refresher:  imports.NewRefresher(opts.Store, nil),
+		refresher:  refresher,
 		direct:     opts.Direct,
 		httpListen: snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,
 		stopped: snap.State.Mode == contract.ModeStopped,
@@ -200,6 +202,15 @@ func (s *Service) StartNetwork(ctx context.Context) error {
 }
 
 func (s *Service) startNetworkLocked(ctx context.Context) error {
+	return s.startNetwork(ctx, false)
+}
+
+// startNetworkLockedHeld is for callers that already hold pubMu (restore).
+func (s *Service) startNetworkLockedHeld(ctx context.Context) error {
+	return s.startNetwork(ctx, true)
+}
+
+func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	if s.stopped {
 		return nil
 	}
@@ -215,6 +226,26 @@ func (s *Service) startNetworkLocked(ctx context.Context) error {
 		return err
 	}
 	s.engine = eng
+	if excluded := eng.Excluded(); len(excluded) > 0 {
+		for _, ex := range excluded {
+			s.logger.Logf(levelWarning, "engine.excluded", "exit=%s kind=%s detail=%s", ex.ID, ex.Kind, ex.Detail)
+		}
+		// Make pool list/status agree with what the engine actually built: an
+		// excluded record is unsupported, not a usable unknown exit.
+		var markErr error
+		if pubHeld {
+			markErr = s.markEngineExcludedLocked(ctx, excluded)
+		} else {
+			s.pubMu.Lock()
+			markErr = s.markEngineExcludedLocked(ctx, excluded)
+			s.pubMu.Unlock()
+		}
+		if markErr != nil {
+			s.logger.Logf(levelWarning, "engine.excluded.persist", "could not record the exclusion: %s", markErr.Error())
+		} else {
+			snap = s.Snapshot()
+		}
+	}
 	innerPool := pool.NewDialer(
 		func() (contract.Snapshot, bool) { v := s.Snapshot(); return v, true },
 		func(ctx context.Context, exit contract.ExitID, dst contract.Destination) (net.Conn, contract.ProofClass, string, error) {

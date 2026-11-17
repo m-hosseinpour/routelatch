@@ -16,9 +16,12 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/engine"
 	"routelatch/internal/frontend"
+	"routelatch/internal/imports"
 	"routelatch/internal/pool"
 	"routelatch/internal/probes"
 	"routelatch/internal/store"
@@ -423,6 +426,235 @@ func TestStartNetworkWithEmptyPoolServesDirectOnly(t *testing.T) {
 	}
 	if direct.calls.Load() != before {
 		t.Fatal("an approved destination was dialed directly instead of failing with pool_unavailable")
+	}
+}
+
+// TestPinnedLinkWithAllowInsecureRunsEndToEnd reproduces the review defect: a
+// link carrying both allowInsecure and a pin must import as a verified pinned
+// record, pool list/status must agree, and a real service start must register
+// the exit instead of aborting on the insecure flag.
+func TestPinnedLinkWithAllowInsecureRunsEndToEnd(t *testing.T) {
+	st, paths := newServiceStore(t)
+	httpAddr := freeLoopbackAddr(t)
+	socksAddr := freeLoopbackAddr(t)
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen = httpAddr
+		cfg.SOCKSListen = socksAddr
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := strings.Repeat("ab", 32)
+	link := "vless://11111111-1111-4111-8111-111111111111@127.0.0.1:443?encryption=none&security=tls&allowInsecure=1&type=tcp&pinSHA256=" + pin + "#pinned"
+	data, err := svc.importSource(context.Background(), Request{Op: OpImport, Kind: "link", Input: link})
+	if err != nil {
+		t.Fatalf("import pinned link: %v", err)
+	}
+	if data.Records.Valid != 1 || data.Records.Unsupported != 0 || len(data.Notices) == 0 {
+		t.Fatalf("import result = %+v, want one valid record and a notice", data)
+	}
+	rows, err := svc.listPool(context.Background(), 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows.Counts.Total != 1 || rows.Counts.Usable != 1 || rows.Counts.Unsupported != 0 || len(rows.Records) != 1 {
+		t.Fatalf("pool list counts = %+v", rows.Counts)
+	}
+	if rows.Records[0].InsecureTLS {
+		t.Fatalf("pinned record kept insecure_tls: %+v", rows.Records[0])
+	}
+	status, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Pool.Total != 1 || status.Pool.Usable != 1 {
+		t.Fatalf("status pool = %+v", status.Pool)
+	}
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("run with the pinned record: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close(context.Background()) })
+	if !svc.engine.HasExit(contract.ExitID(rows.Records[0].ID)) {
+		t.Fatalf("engine did not register the pinned exit; excluded=%+v", svc.engine.Excluded())
+	}
+	if ex := svc.engine.Excluded(); len(ex) != 0 {
+		t.Fatalf("pinned record was excluded: %+v", ex)
+	}
+}
+
+// TestImportRollbackLeavesNoRecord forces the post-commit reload to fail and
+// asserts the import reports an error while the record is not left stored.
+func TestImportRollbackLeavesNoRecord(t *testing.T) {
+	st, paths := newServiceStore(t)
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A stopped engine makes the post-commit reconcile fail deterministically.
+	eng, err := engine.Start(engine.Options{LogLevel: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := eng.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	svc.engine = eng
+
+	link := "vless://11111111-1111-4111-8111-111111111111@127.0.0.1:443?encryption=none&security=tls&type=tcp#rollback"
+	if _, err := svc.importSource(context.Background(), Request{Op: OpImport, Kind: "link", Input: link}); err == nil {
+		t.Fatal("import succeeded although the reload failed")
+	}
+	after, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.State.Records) != 0 || len(after.State.Sources) != 0 {
+		t.Fatalf("failed import persisted state: records=%+v sources=%+v", after.State.Records, after.State.Sources)
+	}
+}
+
+// TestStartNetworkIsolatesOneBadRecord proves the service starts with a pool
+// holding one unbuildable record and one good record, registers only the good
+// exit, and makes pool/status report the excluded record as unsupported.
+func TestStartNetworkIsolatesOneBadRecord(t *testing.T) {
+	st, paths := newServiceStore(t)
+	httpAddr := freeLoopbackAddr(t)
+	socksAddr := freeLoopbackAddr(t)
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen = httpAddr
+		cfg.SOCKSListen = socksAddr
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	good := contract.Record{
+		ID: "x-good", DedupeKey: "sha256:good", Protocol: contract.ProtocolVLESS,
+		Server: "127.0.0.1", Port: 443, Credentials: contract.Credentials{UserID: "11111111-1111-4111-8111-111111111111"},
+		Transport: contract.TransportRaw, Security: contract.SecurityNone, Status: contract.RecordUnknown,
+	}
+	bad := contract.Record{
+		ID: "x-bad", DedupeKey: "sha256:bad", Protocol: contract.ProtocolVLESS,
+		Server: "127.0.0.1", Port: 443, Credentials: contract.Credentials{UserID: strings.Repeat("z", 31)},
+		Transport: contract.TransportRaw, Security: contract.SecurityNone, Status: contract.RecordUnknown,
+	}
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{bad, good}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("start with one bad record: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close(context.Background()) })
+	if !svc.engine.HasExit("x-good") || svc.engine.HasExit("x-bad") {
+		t.Fatalf("engine exits: good=%v bad=%v", svc.engine.HasExit("x-good"), svc.engine.HasExit("x-bad"))
+	}
+	snap := svc.Snapshot()
+	for _, rec := range snap.State.Records {
+		if rec.ID == "x-bad" && (rec.Status != contract.RecordUnsupported || rec.StatusReason != engine.ReasonRecordRejected) {
+			t.Fatalf("excluded record status = %q/%q", rec.Status, rec.StatusReason)
+		}
+	}
+	p := pool.Build(snap.State, svc.now().UTC())
+	if counts := p.Counts(); counts.Total != 2 || counts.Usable != 1 || counts.Unsupported != 1 {
+		t.Fatalf("pool counts = %+v", counts)
+	}
+}
+
+// TestRestoreWithExcludedRecordDoesNotDeadlock is the regression for the
+// restore path that holds pubMu while starting the network: persisting an
+// engine exclusion must not re-acquire pubMu.
+func TestRestoreWithExcludedRecordDoesNotDeadlock(t *testing.T) {
+	st, paths := newServiceStore(t)
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen = freeLoopbackAddr(t)
+		cfg.SOCKSListen = freeLoopbackAddr(t)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bad := contract.Record{
+		ID: "x-bad", DedupeKey: "sha256:bad", Protocol: contract.ProtocolVLESS,
+		Server: "127.0.0.1", Port: 443, Credentials: contract.Credentials{UserID: strings.Repeat("z", 31)},
+		Transport: contract.TransportRaw, Security: contract.SecurityNone, Status: contract.RecordUnknown,
+	}
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Mode = contract.ModeTargeted
+		state.PolicyVersion++
+		state.Records = []contract.Record{bad}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ref, err := st.Backup(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Mode = contract.ModeStopped
+		state.PolicyVersion++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Close(context.Background()) })
+	done := make(chan error, 1)
+	go func() {
+		_, restoreErr := svc.restore(context.Background(), ref.Path)
+		done <- restoreErr
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("restore with an excluded record: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("restore deadlocked while persisting the engine exclusion")
+	}
+	snap := svc.Snapshot()
+	if len(snap.State.Records) != 1 || snap.State.Records[0].Status != contract.RecordUnsupported {
+		t.Fatalf("restored records = %+v", snap.State.Records)
+	}
+}
+
+// TestImportRollbackSurvivesCanceledRequest: the commit can succeed and the
+// request context can end before the reload; the rollback must still remove the
+// record so the non-zero exit never persists it.
+func TestImportRollbackSurvivesCanceledRequest(t *testing.T) {
+	st, paths := newServiceStore(t)
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := "vless://11111111-1111-4111-8111-111111111111@127.0.0.1:443?encryption=none&security=tls&type=tcp#canceled"
+	ctx, cancel := context.WithCancel(context.Background())
+	do := func() (imports.AddResult, error) {
+		result, addErr := svc.refresher.AddLink(context.Background(), link)
+		cancel()
+		return result, addErr
+	}
+	if _, err := svc.addAndReload(ctx, do); err == nil {
+		t.Fatal("import succeeded even though the request was canceled before the reload")
+	}
+	after, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.State.Records) != 0 || len(after.State.Sources) != 0 {
+		t.Fatalf("canceled import persisted state: records=%+v sources=%+v", after.State.Records, after.State.Sources)
 	}
 }
 

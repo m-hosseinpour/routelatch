@@ -14,7 +14,7 @@ import (
 // outbound object. It never opens a SQLite database or a v2rayN application
 // config: those carry inbound/routing/TUN state and need a driver v1 does not
 // ship (docs/contracts.md §5.8).
-func parseV2rayNJSON(payload []byte, srcID contract.SourceID, now time.Time) ([]contract.Record, error) {
+func parseV2rayNJSON(payload []byte, srcID contract.SourceID, now time.Time, audit *Audit) ([]contract.Record, error) {
 	dec := json.NewDecoder(strings.NewReader(string(payload)))
 	dec.UseNumber()
 	var root any
@@ -53,12 +53,12 @@ func parseV2rayNJSON(payload []byte, srcID contract.SourceID, now time.Time) ([]
 
 	records := make([]contract.Record, 0, len(items))
 	for i, item := range items {
-		records = append(records, v2rayNItem(item, srcID, i, now))
+		records = append(records, v2rayNItem(item, srcID, i, now, audit))
 	}
 	return records, nil
 }
 
-func v2rayNItem(item any, srcID contract.SourceID, order int, now time.Time) contract.Record {
+func v2rayNItem(item any, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
 	m, ok := item.(map[string]any)
 	if !ok {
 		return rawRecord(item, contract.RecordInvalid, ReasonInvalidJSON, "", srcID, order, now)
@@ -72,15 +72,15 @@ func v2rayNItem(item any, srcID contract.SourceID, order int, now time.Time) con
 	}
 
 	if _, hasAddr := lookup(m, "address", "Address", "server"); hasAddr {
-		return v2rayNProfile(m, srcID, order, now, name)
+		return v2rayNProfile(m, srcID, order, now, name, audit)
 	}
 	if _, isOutbound := lookup(m, "settings", "streamSettings", "protocol"); isOutbound {
-		return v2rayNOutbound(m, srcID, order, now, name)
+		return v2rayNOutbound(m, srcID, order, now, name, audit)
 	}
 	return rawRecord(item, contract.RecordInvalid, ReasonInvalidJSON, name, srcID, order, now)
 }
 
-func v2rayNProfile(m map[string]any, srcID contract.SourceID, order int, now time.Time, name string) contract.Record {
+func v2rayNProfile(m map[string]any, srcID contract.SourceID, order int, now time.Time, name string, audit *Audit) contract.Record {
 	n := node{name: name}
 	proto, rej := profileProtocol(m)
 	n.protocol = proto
@@ -176,10 +176,10 @@ func v2rayNProfile(m map[string]any, srcID contract.SourceID, order int, now tim
 	} else if rej == nil {
 		rej = &rejection{contract.RecordInvalid, ReasonInvalidALPN}
 	}
-	return buildRecord(n, rej, srcID, order, now)
+	return buildRecord(n, rej, srcID, order, now, audit)
 }
 
-func v2rayNOutbound(m map[string]any, srcID contract.SourceID, order int, now time.Time, name string) contract.Record {
+func v2rayNOutbound(m map[string]any, srcID contract.SourceID, order int, now time.Time, name string, audit *Audit) contract.Record {
 	n := node{name: name}
 	rawProto := getString(m, "protocol")
 	n.protocol = normalizeProtocol(rawProto)
@@ -226,7 +226,7 @@ func v2rayNOutbound(m map[string]any, srcID contract.SourceID, order int, now ti
 	} else if rej == nil {
 		rej = &rejection{contract.RecordInvalid, ReasonInvalidALPN}
 	}
-	return buildRecord(n, rej, srcID, order, now)
+	return buildRecord(n, rej, srcID, order, now, audit)
 }
 
 func profileProtocol(m map[string]any) (contract.Protocol, *rejection) {
@@ -413,7 +413,7 @@ func mergeExtra(dst, src map[string]any) map[string]any {
 
 func rawRecord(item any, status contract.RecordStatus, reason, name string, srcID contract.SourceID, order int, now time.Time) contract.Record {
 	raw, _ := json.Marshal(item)
-	rec := buildRecord(node{name: name}, &rejection{status, reason}, srcID, order, now)
+	rec := buildRecord(node{name: name}, &rejection{status, reason}, srcID, order, now, nil)
 	rec.DedupeKey = dedupeKeyForRaw(raw)
 	rec.ID = RecordIDForKey(rec.DedupeKey)
 	return rec
