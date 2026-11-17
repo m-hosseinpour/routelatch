@@ -70,6 +70,7 @@ func (s *Service) diagnose(ctx context.Context, req Request) (DiagnoseData, erro
 	if err != nil {
 		return DiagnoseData{}, mapDiagnosticsError(err)
 	}
+	s.logger.Logf(levelInfo, "diagnose", "kind=direct eligible=%t attempts=%d", res.Eligible, len(res.Attempts))
 	return DiagnoseData{
 		Destination: res.Destination, Kind: "direct", Attempts: attemptViews(res.Attempts),
 		Eligible: res.Eligible, ProposalID: res.ProposalID, Scope: res.Scope,

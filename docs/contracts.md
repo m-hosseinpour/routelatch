@@ -516,7 +516,14 @@ timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreacha
 | backupها | `$XDG_STATE_HOME/routelatch/backup/state-<UTC>.json` | `0600` |
 | lock | `$XDG_RUNTIME_DIR/routelatch/state.lock` (fallback: پوشهٔ state) | `0600` |
 | management socket | `$XDG_RUNTIME_DIR/routelatch/control.sock` (fallback: `.../run/control.sock`) | پوشه `0700`، socket `0600` |
-| log | `$XDG_STATE_HOME/routelatch/log/routelatch.log` | `0600` |
+| log | `$XDG_STATE_HOME/routelatch/log/routelatch.log` | پوشه `0700`، فایل `0600` (append-only) |
+
+**لاگ.** فایل فقط append می‌شود، در پوشهٔ `0700` با فایل `0600` ساخته می‌شود، از
+`log_level` پیروی می‌کند و در ۴ MiB می‌چرخد و سه فایل چرخیده (`routelatch.log.1`–`.3`)
+را نگه می‌دارد. هیچ URL، credential، بدنهٔ درخواست یا query string در آن نوشته نمی‌شود.
+اگر مسیر لاگ قابل نوشتن نباشد، سرویس با یک warning غیرکشنده ادامه می‌دهد و `doctor`
+مسیر resolved و وضعیتش را نشان می‌دهد؛ چون یک تسهیلات تشخیصی نباید به denial of service
+تبدیل شود.
 
 `--data-dir <abs>` همه را زیر یک ریشه می‌چیند (برای تست‌های ایزوله). مسیر socket اگر از
 سقف طول Unix (~۱۰۸ بایت) بگذرد، خطای روشن با پیشنهاد `XDG_RUNTIME_DIR` کوتاه‌تر.
@@ -539,8 +546,9 @@ timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreacha
 }
 ```
 
-هر دو آدرس باید loopback باشند (`127.0.0.1` یا `::1`)؛ هر چیز دیگر `unsupported` است،
-نه «حالت LAN». تغییر آدرس listener فقط با restart؛ سرویس درجا rebind نمی‌کند.
+هر دو آدرس باید loopback باشند (`127.0.0.1` یا `::1`)؛ هر چیز دیگر `unsupported` با
+exit `7` است (D14)، نه usage/exit `2` و نه `policy_denied`. تغییر آدرس listener فقط با
+restart؛ سرویس درجا rebind نمی‌کند.
 
 listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه نباید «امن» یا «فقط برای من» توصیف
 شوند: هر فرایند هم‌کاربر می‌تواند از pool استفاده کند (D14). حفاظت management کاملاً
@@ -934,15 +942,20 @@ state.
 | `pool refresh [--source\|--all] [--allow-empty]` | `sources[{id,ok,records,error}], kept_last_good` | 0، 3، 5، 6، 8 | «به‌روزرسانی pool» |
 | `pool test [--exit\|--target]` | `results[{exit,kind,outcome,duration_ms,bytes_down}]` | 0، 3، 8، 11 | «آزمون pool» |
 | `pool select <id\|auto>` | `selected, policy_version` | 0، 3، 5، 6 | «انتخاب خروجی» |
+| `pool rerank` | `selected_before, selected_after, skipped[{exit,reason: pinned\|cooling\|unsupported\|invalid\|unknown\|dwell\|samples\|improvement\|no_target}], policy_version` | 0، 3، 11 | «رتبه‌بندی دوباره» |
 | `import link\|file\|subscription\|v2rayn` | `source_id, records{valid,invalid,unsupported}` | 0، 2، 6، 7، 8 | «واردکردن» |
 | `diagnose <host:port> [--direct\|--pool]` | `destination, kind, attempts[{outcome,duration_ms}], eligible, proposal_id?` | 0، 2، 3، 8، 11 | «تشخیص» |
 | `proposals list\|accept\|reject\|recheck` | `proposals[{id,kind,rule_id,destination,status,expires_at}]` / `rule_id` | 0، 3، 5، 6 | «پیشنهادها» |
-| `config get\|set\|path` | `path, values` | 0، 2، 3، 6 | «تنظیمات» |
+| `config get\|set\|path` | `path, values` | 0، 2، 3، 6، 7 | «تنظیمات» |
 | `doctor` | `checks[{name,status,detail,fix}]` | 0، 3، 10 | «بررسی سلامت» |
 | `env` / `exec -- <cmd>` | `HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,NO_PROXY` / child exit code | 0، 3، 7 + کد فرزند | «اجرای برنامه» |
 | `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
 | `backup` / `restore <ref>` | `ref{path,schema_version,created_at}` | 0، 3، 6، 10 | «پشتیبان» |
 | `menu` | — | 0، 2، 3 | خودش |
+
+`exec` در حالت `--json` دقیقاً یک `Envelope` روی stdout می‌نویسد و stdout و stderr
+فرزند را به stderr هدایت می‌کند؛ exit code فرمان همان exit code فرزند است. در حالت
+انسانی، جریان‌های فرزند روی descriptorهای اصلی خودشان می‌مانند.
 
 `status` در v1 هیچ شمارندهٔ بایتی برای اتصال‌ها ندارد و `ConnInfo` فیلد byte ندارد؛ برای
 اندازه/اثر یک تغییر mode یا rule از `CloseReport` استفاده کن (فیلدهای `Closed`،

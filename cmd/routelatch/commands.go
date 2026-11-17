@@ -106,6 +106,11 @@ func (c *cli) pool(ctx context.Context, args []string) int {
 			return c.localFailure("pool select", usageErr("pool select needs one exit id or 'auto'"))
 		}
 		return c.call(ctx, control.Request{Op: control.OpPoolSelect, ID: args[1]})
+	case "rerank":
+		if len(args) != 1 {
+			return c.localFailure("pool rerank", usageErr("pool rerank takes no arguments"))
+		}
+		return c.call(ctx, control.Request{Op: control.OpPoolRerank})
 	default:
 		return c.localFailure("pool", usageErr("unknown pool subcommand"))
 	}

@@ -248,6 +248,9 @@ func (s *service) ExitErr() error {
 
 // waitExit waits for the process to terminate and returns its error.
 func (s *service) waitExit(d time.Duration) error {
+	if s.Exited() {
+		return s.ExitErr()
+	}
 	select {
 	case err := <-s.done:
 		return err
@@ -409,6 +412,164 @@ func num(v any) int {
 func str(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// cliEnv runs one JSON command with extra environment entries (A11's inherited
+// NO_PROXY) and a custom timeout (the menu must not hang a test).
+func (s *service) cliEnv(extraEnv []string, timeout time.Duration, args ...string) cliResult {
+	s.t.Helper()
+	full := append([]string{"--json", "--data-dir", s.dir}, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, productBin, full...)
+	cmd.Env = append(append([]string{}, s.env.vars...), extraEnv...)
+	cmd.Dir = s.env.tmp
+	var out, errb strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	res := cliResult{stdout: out.String(), stderr: errb.String()}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			res.code = exitErr.ExitCode()
+		} else {
+			s.t.Fatalf("cli %v: %v", args, err)
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSpace(res.stdout), "\n") {
+		if line == "" {
+			continue
+		}
+		var env envelope
+		if json.Unmarshal([]byte(line), &env) == nil {
+			res.env = env
+		}
+	}
+	s.mu.Lock()
+	s.outputs = append(s.outputs, res.stdout, res.stderr)
+	s.mu.Unlock()
+	return res
+}
+
+// cliEnvHuman runs one command without --json with extra environment entries
+// and a custom timeout.
+func (s *service) cliEnvHuman(extraEnv []string, timeout time.Duration, args ...string) cliResult {
+	s.t.Helper()
+	full := append([]string{"--data-dir", s.dir}, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, productBin, full...)
+	cmd.Env = append(append([]string{}, s.env.vars...), extraEnv...)
+	cmd.Dir = s.env.tmp
+	var out, errb strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	res := cliResult{stdout: out.String(), stderr: errb.String()}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			res.code = exitErr.ExitCode()
+		} else {
+			s.t.Fatalf("cli %v: %v", args, err)
+		}
+	}
+	s.mu.Lock()
+	s.outputs = append(s.outputs, res.stdout, res.stderr)
+	s.mu.Unlock()
+	return res
+}
+
+// cliHuman runs one command without --json and returns the raw human output.
+// It is used where the contract's human surface is part of the assertion (node
+// titles, menu).
+func (s *service) cliHuman(args ...string) cliResult {
+	s.t.Helper()
+	full := append([]string{"--data-dir", s.dir}, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, productBin, full...)
+	cmd.Env = s.env.vars
+	cmd.Dir = s.env.tmp
+	var out, errb strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	res := cliResult{stdout: out.String(), stderr: errb.String()}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			res.code = exitErr.ExitCode()
+		} else {
+			s.t.Fatalf("cli %v: %v", args, err)
+		}
+	}
+	s.mu.Lock()
+	s.outputs = append(s.outputs, res.stdout, res.stderr)
+	s.mu.Unlock()
+	return res
+}
+
+// statusData is a nil-safe status snapshot for polling.
+type statusData struct {
+	mode        string
+	policy      int
+	poolTotal   int
+	poolUsable  int
+	poolHealthy int
+	poolCooling int
+	open        int
+	dialing     int
+	queued      int
+	warnings    []string
+}
+
+func (s *service) statusNow() (statusData, bool) {
+	res := s.cli("status")
+	if res.code != 0 || !res.env.OK {
+		return statusData{}, false
+	}
+	var data map[string]any
+	if err := json.Unmarshal(res.env.Data, &data); err != nil {
+		return statusData{}, false
+	}
+	out := statusData{mode: str(data["mode"]), policy: num(data["policy_version"])}
+	if pool, ok := data["pool"].(map[string]any); ok {
+		out.poolTotal, out.poolUsable = num(pool["total"]), num(pool["usable"])
+		out.poolHealthy, out.poolCooling = num(pool["healthy"]), num(pool["cooling"])
+	}
+	if conns, ok := data["connections"].(map[string]any); ok {
+		out.open, out.dialing = num(conns["open"]), num(conns["dialing"])
+	}
+	if diag, ok := data["diagnostics"].(map[string]any); ok {
+		out.queued = num(diag["queued"])
+	}
+	if warnings, ok := data["warnings"].([]any); ok {
+		for _, w := range warnings {
+			out.warnings = append(out.warnings, str(w))
+		}
+	}
+	return out, true
+}
+
+// procStartTime is field 22 of /proc/<pid>/stat. It changes only if the process
+// is restarted, so it is the engine-identity check for A07.
+func procStartTime(t *testing.T, pid int) string {
+	t.Helper()
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		t.Fatalf("read stat: %v", err)
+	}
+	i := strings.LastIndex(string(raw), ")")
+	if i < 0 {
+		t.Fatalf("malformed stat")
+	}
+	fields := strings.Fields(string(raw)[i+1:])
+	if len(fields) < 20 {
+		t.Fatalf("short stat: %d fields", len(fields))
+	}
+	return fields[19]
 }
 
 // ---------------------------------------------------------------------------

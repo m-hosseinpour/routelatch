@@ -38,6 +38,20 @@ func NewDialer(snapshot SnapshotSource, dial ExitDialFunc, now func() time.Time)
 	return &Dialer{snapshot: snapshot, selector: NewSelector(), dial: dial, now: now}
 }
 
+// Rerank recomputes the automatic exit selection without dialing or touching
+// the engine. It is the `pool rerank` entry point; a pinned SelectedExit is
+// reported as unchanged, and the policy version is never advanced.
+func (d *Dialer) Rerank(now time.Time) (RerankResult, error) {
+	if d.snapshot == nil {
+		return RerankResult{}, &contract.Failure{Kind: contract.Internal, Path: contract.PathPool, Op: "pool.rerank", Message: "pool reranker is not configured"}
+	}
+	snap, ok := d.snapshot()
+	if !ok {
+		return RerankResult{}, selectFailure("pool state is not available")
+	}
+	return d.selector.Rerank(snap.State, now)
+}
+
 // DialPool implements contract.PoolDialer.
 func (d *Dialer) DialPool(ctx context.Context, req contract.PoolDialRequest) (contract.PoolDialResult, error) {
 	if d.snapshot == nil || d.dial == nil {

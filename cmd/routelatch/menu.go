@@ -30,6 +30,7 @@ func menuChoices() []menuChoice {
 		{"pool.refresh", "Refresh the pool"},
 		{"pool.test", "Test the pool"},
 		{"pool.select", "Select an exit"},
+		{"pool.rerank", "Re-rank exits now"},
 		{"import", "Import a source"},
 		{"diagnose", "Diagnose a destination"},
 		{"proposals.list", "Proposals"},
@@ -86,6 +87,8 @@ func menuCommand(key, operand, kind, note string) ([]string, bool) {
 		return []string{"pool", "test"}, true
 	case "pool.select":
 		return []string{"pool", "select", operand}, true
+	case "pool.rerank":
+		return []string{"pool", "rerank"}, true
 	case "import":
 		return []string{"import", kind, operand}, true
 	case "diagnose":

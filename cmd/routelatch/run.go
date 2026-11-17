@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -27,7 +28,7 @@ func (c *cli) run(ctx context.Context) int {
 	}
 	defer lock.Release()
 
-	svc, err := control.NewService(ctx, control.Options{Store: st, Paths: c.paths})
+	svc, err := control.NewService(ctx, control.Options{Store: st, Paths: c.paths, LogOutput: c.serviceLogOutput()})
 	if err != nil {
 		return c.runFailure(err, false)
 	}
@@ -79,6 +80,15 @@ func (c *cli) run(ctx context.Context) int {
 		return int(contract.ExitError)
 	}
 	return int(contract.ExitOK)
+}
+
+// serviceLogOutput keeps --json stdout reserved for the single envelope; in
+// human mode the operational log mirrors to stdout for foreground use.
+func (c *cli) serviceLogOutput() io.Writer {
+	if c.jsonOut {
+		return c.stderr
+	}
+	return c.stdout
 }
 
 func (c *cli) runFailure(err error, afterNetworkStart bool) int {
@@ -134,8 +144,17 @@ func (c *cli) exec(ctx context.Context, args []string) int {
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = childEnv
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = c.stdout
-	cmd.Stderr = c.stderr
+	childOut := io.Writer(c.stdout)
+	childErr := io.Writer(c.stderr)
+	if c.jsonOut {
+		// stdout is reserved for the single machine-readable envelope. The
+		// child's own stdout and stderr both stay on stderr so they are never
+		// interleaved into (or glued to) that JSON.
+		childOut = c.stderr
+		childErr = c.stderr
+	}
+	cmd.Stdout = childOut
+	cmd.Stderr = childErr
 	runErr := cmd.Run()
 	if notice, _ := data["notice"].(string); notice != "" {
 		fmt.Fprintln(c.stderr, notice)

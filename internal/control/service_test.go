@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 
 	"routelatch/internal/contract"
 	"routelatch/internal/frontend"
+	"routelatch/internal/pool"
 	"routelatch/internal/probes"
 	"routelatch/internal/store"
 )
@@ -40,9 +42,17 @@ func newServiceStore(t *testing.T) (*store.Store, store.Paths) {
 	return st, paths
 }
 
+func resolveTestPaths(dir string) (store.Paths, error) {
+	return store.ResolvePathsFor(dir, "", "", "", "")
+}
+
+func openTestStore(paths store.Paths) (*store.Store, error) {
+	return store.Open(store.Options{Paths: paths})
+}
+
 func newTestService(t *testing.T, st *store.Store, paths store.Paths) *Service {
 	t.Helper()
-	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths})
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,6 +360,8 @@ func TestSecretFixtureNeverAppearsInOutput(t *testing.T) {
 	}
 }
 
+func errorsAs(err error, target any) bool { return errors.As(err, target) }
+
 func TestNotFoundUsesContractKind(t *testing.T) {
 	_, err := NewService(context.Background(), Options{})
 	if err == nil {
@@ -384,7 +396,7 @@ func TestStartNetworkWithEmptyPoolServesDirectOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	direct := &countingDirect{inner: newDirectDialer([]uint16{portOf(t, httpAddr), portOf(t, socksAddr)})}
-	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, Direct: direct})
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, Direct: direct, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +465,7 @@ func TestListenerPortCollisionIsAClearFailure(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths})
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +501,7 @@ func TestFreshProcessMayLeavePersistedStoppedMode(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths})
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,5 +626,194 @@ func TestStoppedServiceRejectsNetworkWork(t *testing.T) {
 	}
 	if _, err := svc.Handle(context.Background(), Request{Op: OpImport, Kind: "subscription", Input: "https://example.com/sub"}); err == nil {
 		t.Fatal("subscription import ran while stopped")
+	}
+}
+
+func rerankRecord(id string, order int) contract.Record {
+	return contract.Record{
+		ID: contract.RecordID(id), DedupeKey: "sha256:" + id, Status: contract.RecordUnknown, Order: order,
+		Protocol: contract.ProtocolSOCKS5, Server: "127.0.0.1", Port: 1080,
+		Transport: contract.TransportRaw, Security: contract.SecurityNone,
+	}
+}
+
+func attachReranker(s *Service) *pool.Dialer {
+	d := pool.NewDialer(func() (contract.Snapshot, bool) { return s.Snapshot(), true }, nil, s.now)
+	s.reranker = d
+	return d
+}
+
+func TestRerankAllUnknownPicksRankedExit(t *testing.T) {
+	st, paths := newServiceStore(t)
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{rerankRecord("x-a", 0), rerankRecord("x-b", 1)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, st, paths)
+	attachReranker(svc)
+	raw, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := raw.(RerankData)
+	if data.SelectedBefore != "" || data.SelectedAfter != "x-a" {
+		t.Fatalf("before=%q after=%q", data.SelectedBefore, data.SelectedAfter)
+	}
+	if data.PolicyVersion != svc.Snapshot().State.PolicyVersion {
+		t.Fatalf("policy version = %d", data.PolicyVersion)
+	}
+	found := false
+	for _, skip := range data.Skipped {
+		if skip.Exit == "x-b" && skip.Reason == pool.RerankSkipUnknown {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("skipped = %+v, want x-b/unknown", data.Skipped)
+	}
+}
+
+func TestRerankPromotesHealthyExit(t *testing.T) {
+	st, paths := newServiceStore(t)
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{rerankRecord("x-a", 0), rerankRecord("x-b", 1)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, st, paths)
+	attachReranker(svc)
+	if _, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		for i := range state.Records {
+			if state.Records[i].ID == "x-b" {
+				state.Records[i].Status = contract.RecordHealthy
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.reloadAfterImport(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := raw.(RerankData)
+	if data.SelectedBefore != "x-a" || data.SelectedAfter != "x-b" {
+		t.Fatalf("before=%q after=%q, want x-a -> x-b", data.SelectedBefore, data.SelectedAfter)
+	}
+}
+
+func TestRerankPinnedSelectionIsReportedUnchanged(t *testing.T) {
+	st, paths := newServiceStore(t)
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{rerankRecord("x-a", 0), rerankRecord("x-b", 1)}
+		state.SelectedExit = "x-b"
+		state.PolicyVersion++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, st, paths)
+	before, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := raw.(RerankData)
+	if data.SelectedBefore != "x-b" || data.SelectedAfter != "x-b" {
+		t.Fatalf("pinned rerank = %+v", data)
+	}
+	if len(data.Skipped) != 1 || data.Skipped[0].Reason != pool.RerankSkipPinned {
+		t.Fatalf("skipped = %+v", data.Skipped)
+	}
+	after, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.State.SelectedExit != before.State.SelectedExit ||
+		after.State.PolicyVersion != before.State.PolicyVersion ||
+		!reflect.DeepEqual(after.State.Rules, before.State.Rules) {
+		t.Fatal("rerank mutated the pinned selection, policy version or rules")
+	}
+}
+
+func TestRerankNoUsableExitIsPoolUnavailable(t *testing.T) {
+	st, paths := newServiceStore(t)
+	svc := newTestService(t, st, paths)
+	_, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank})
+	if err == nil {
+		t.Fatal("rerank accepted an empty pool")
+	}
+	var opErr *OpError
+	if !errors.As(err, &opErr) || opErr.Kind != contract.PoolUnavailable || opErr.Exit != contract.ExitPoolUnavailable {
+		t.Fatalf("err = %v, want pool_unavailable/11", err)
+	}
+}
+
+func TestRerankLeavesLiveTunnelAndEngineUntouched(t *testing.T) {
+	st, paths := newServiceStore(t)
+	httpAddr := freeLoopbackAddr(t)
+	socksAddr := freeLoopbackAddr(t)
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen = httpAddr
+		cfg.SOCKSListen = socksAddr
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{rerankRecord("x-a", 0), rerankRecord("x-b", 1)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, st, paths)
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("StartNetwork: %v", err)
+	}
+	defer svc.Close(context.Background())
+	eng := svc.engine
+	snap := svc.Snapshot()
+	dst := contract.Destination{Kind: contract.DestDomain, Host: "approved.example", Port: 443}
+	h, err := svc.reg.Register(contract.ConnSpec{
+		ID: "c-live", Kind: contract.ConnSOCKS5Connect, Destination: dst,
+		Decision: contract.Decision{
+			Mode: contract.ModeTargeted, Class: contract.ClassApproved, Route: contract.RoutePool,
+			Reason: contract.ReasonApprovedRule, PolicyVersion: snap.State.PolicyVersion,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, server := net.Pipe()
+	defer server.Close()
+	if err := h.SetUpstream(client); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Handle(context.Background(), Request{Op: OpPoolRerank}); err != nil {
+		t.Fatal(err)
+	}
+	if svc.engine != eng {
+		t.Fatal("rerank replaced the engine instance")
+	}
+	if h.Context().Err() != nil {
+		t.Fatal("rerank closed a live tunnel")
+	}
+	if len(svc.reg.Snapshot()) != 1 {
+		t.Fatal("rerank removed a registered connection")
+	}
+	if svc.Snapshot().State.PolicyVersion != snap.State.PolicyVersion {
+		t.Fatal("rerank advanced the policy version")
 	}
 }

@@ -492,9 +492,9 @@ func TestPreReplyErrorMapping(t *testing.T) {
 			want: "HTTP/1.1 502 ",
 		},
 		{
-			name:    "absolute https has no MITM path",
+			name:    "absolute https is unsupported, not policy denied",
 			request: "GET https://example.com/ HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n",
-			want:    "HTTP/1.1 403 ",
+			want:    "HTTP/1.1 501 ",
 		},
 		{
 			name:    "unknown scheme",
@@ -1222,5 +1222,27 @@ func TestForward101SwitchesToBidirectionalTunnel(t *testing.T) {
 	case <-originClosed:
 	case <-time.After(2 * time.Second):
 		t.Fatal("origin did not observe tunnel teardown")
+	}
+}
+
+func TestAbsoluteHTTPSIsUnsupportedAndNotForwarded(t *testing.T) {
+	var accepted, bytesRead atomic.Int64
+	origin := startRawServer(t, func(c net.Conn) {
+		accepted.Add(1)
+		n, _ := io.Copy(io.Discard, c)
+		bytesRead.Add(n)
+	})
+	s := newStack(t, nil)
+	dialsBefore := s.direct.count()
+	c := dialProxy(t, s.f.HTTPAddr().String())
+	mustWrite(t, c, "GET https://"+origin+"/ HTTP/1.1\r\nHost: "+origin+"\r\nConnection: close\r\n\r\n")
+	got := string(readAllWithDeadline(t, c, 3*time.Second))
+	if !strings.HasPrefix(got, "HTTP/1.1 501 ") {
+		t.Fatalf("response = %q, want unsupported 501", got)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if accepted.Load() != 0 || bytesRead.Load() != 0 || s.direct.count() != dialsBefore {
+		t.Fatalf("absolute https was forwarded: accepted=%d bytes=%d dials=%d",
+			accepted.Load(), bytesRead.Load(), s.direct.count())
 	}
 }

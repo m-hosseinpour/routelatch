@@ -443,3 +443,175 @@ func TestSyncStatusesExpiresCooldown(t *testing.T) {
 		t.Fatalf("state=%+v", state)
 	}
 }
+
+func rerankDialer(state *contract.State) (*Dialer, *int) {
+	calls := 0
+	d := NewDialer(
+		func() (contract.Snapshot, bool) { return contract.Snapshot{State: *state}, true },
+		func(context.Context, contract.ExitID, contract.Destination) (net.Conn, contract.ProofClass, string, error) {
+			calls++
+			return nil, contract.ProofAccepted, "", errors.New("rerank must not dial")
+		},
+		func() time.Time { return t0() },
+	)
+	return d, &calls
+}
+
+func hasSkip(skips []RerankSkip, exit contract.ExitID, reason RerankSkipReason) bool {
+	for _, s := range skips {
+		if s.Exit == exit && s.Reason == reason {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRerankAllUnknownSelectsByOrderWithoutDialing(t *testing.T) {
+	now := t0()
+	state := contract.State{PolicyVersion: 3, Records: []contract.Record{
+		record("x-a", 0, contract.RecordUnknown),
+		record("x-b", 1, contract.RecordUnknown),
+	}}
+	d, calls := rerankDialer(&state)
+	res, err := d.Rerank(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Before != "" || res.After != "x-a" || res.Version != 3 {
+		t.Fatalf("rerank=%+v", res)
+	}
+	if !hasSkip(res.Skipped, "x-b", RerankSkipUnknown) {
+		t.Fatalf("missing unknown skip: %+v", res.Skipped)
+	}
+	if *calls != 0 {
+		t.Fatalf("rerank dialed %d times", *calls)
+	}
+	// A second rerank keeps the established exit and reuses no dialer.
+	res, _ = d.Rerank(now.Add(time.Minute))
+	if res.Before != "x-a" || res.After != "x-a" || *calls != 0 {
+		t.Fatalf("second rerank=%+v calls=%d", res, *calls)
+	}
+}
+
+func TestRerankPromotesHealthyExit(t *testing.T) {
+	now := t0()
+	state := contract.State{PolicyVersion: 4, Records: []contract.Record{
+		record("x-a", 0, contract.RecordUnknown),
+		record("x-b", 1, contract.RecordUnknown),
+	}}
+	d, calls := rerankDialer(&state)
+	if _, err := d.Rerank(now); err != nil {
+		t.Fatal(err)
+	}
+	// x-b gains positive evidence; the healthy exit wins immediately over the
+	// established unknown exit.
+	state.Records[1].Status = contract.RecordHealthy
+	state.Health = []contract.ExitHealth{health("x-b", contract.HealthHealthy, 40, 3)}
+	res, err := d.Rerank(now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Before != "x-a" || res.After != "x-b" || res.Version != 4 {
+		t.Fatalf("rerank=%+v", res)
+	}
+	if !hasSkip(res.Skipped, "x-a", RerankSkipUnknown) || *calls != 0 {
+		t.Fatalf("skips=%+v calls=%d", res.Skipped, *calls)
+	}
+}
+
+func TestRerankPinnedSelectionUntouched(t *testing.T) {
+	state := contract.State{PolicyVersion: 5, SelectedExit: "x-b", Records: []contract.Record{
+		record("x-a", 0, contract.RecordHealthy),
+		record("x-b", 1, contract.RecordUnknown),
+	}, Health: []contract.ExitHealth{health("x-a", contract.HealthHealthy, 10, 5)}}
+	d, calls := rerankDialer(&state)
+	res, err := d.Rerank(t0())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Before != "x-b" || res.After != "x-b" || res.Version != 5 {
+		t.Fatalf("pinned rerank=%+v", res)
+	}
+	if !hasSkip(res.Skipped, "x-b", RerankSkipPinned) || *calls != 0 {
+		t.Fatalf("skips=%+v calls=%d", res.Skipped, *calls)
+	}
+	if d.selector.Current() != "" {
+		t.Fatal("pinned rerank must not replace the automatic current")
+	}
+	if state.PolicyVersion != 5 {
+		t.Fatal("rerank advanced the policy version")
+	}
+}
+
+func TestRerankRespectsDwellAndSamples(t *testing.T) {
+	now := t0()
+	state := contract.State{PolicyVersion: 6, Records: []contract.Record{
+		record("x-a", 0, contract.RecordHealthy),
+		record("x-b", 1, contract.RecordHealthy),
+	}, Health: []contract.ExitHealth{
+		health("x-a", contract.HealthHealthy, 100, 5),
+		health("x-b", contract.HealthHealthy, 130, 5),
+	}}
+	d, _ := rerankDialer(&state)
+	if res, _ := d.Rerank(now); res.After != "x-a" {
+		t.Fatalf("first=%+v", res)
+	}
+	state.Health[1].EWMALatencyMS = 70
+	res, _ := d.Rerank(now.Add(2 * time.Minute))
+	if res.After != "x-a" || !hasSkip(res.Skipped, "x-b", RerankSkipDwell) {
+		t.Fatalf("dwell rerank=%+v", res)
+	}
+	res, _ = d.Rerank(now.Add(contract.SwitchMinDwell))
+	if res.Before != "x-a" || res.After != "x-b" {
+		t.Fatalf("post-dwell rerank=%+v", res)
+	}
+
+	// A single successful sample cannot promote a candidate.
+	state.Health[1] = health("x-b", contract.HealthHealthy, 130, 1)
+	state.Health[0] = health("x-a", contract.HealthHealthy, 100, 5)
+	d2, _ := rerankDialer(&state)
+	if res, _ := d2.Rerank(now); res.After != "x-a" {
+		t.Fatalf("initial=%+v", res)
+	}
+	state.Health[1].EWMALatencyMS = 5
+	res, _ = d2.Rerank(now.Add(10 * time.Minute))
+	if res.After != "x-a" || !hasSkip(res.Skipped, "x-b", RerankSkipSamples) {
+		t.Fatalf("samples rerank=%+v", res)
+	}
+}
+
+func TestRerankNoTargetSkips(t *testing.T) {
+	state := contract.State{PolicyVersion: 7, Records: []contract.Record{
+		record("x-cool", 0, contract.RecordCooling),
+		record("x-unsup", 1, contract.RecordUnsupported),
+		record("x-invalid", 2, contract.RecordInvalid),
+	}, Health: []contract.ExitHealth{
+		{Exit: "x-cool", Status: contract.HealthCooling, CooldownUntil: t0().Add(time.Minute)},
+	}}
+	d, calls := rerankDialer(&state)
+	res, err := d.Rerank(t0())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.After != "" || res.Version != 7 {
+		t.Fatalf("no-target rerank=%+v", res)
+	}
+	for exit, reason := range map[contract.ExitID]RerankSkipReason{
+		"x-cool": RerankSkipCooling, "x-unsup": RerankSkipUnsupported,
+		"x-invalid": RerankSkipInvalid, "": RerankSkipNoTarget,
+	} {
+		if !hasSkip(res.Skipped, exit, reason) {
+			t.Fatalf("missing %s/%s in %+v", exit, reason, res.Skipped)
+		}
+	}
+	if *calls != 0 {
+		t.Fatalf("no-target rerank dialed %d times", *calls)
+	}
+
+	empty := contract.State{PolicyVersion: 8}
+	d2, _ := rerankDialer(&empty)
+	res, _ = d2.Rerank(t0())
+	if res.After != "" || !hasSkip(res.Skipped, "", RerankSkipNoTarget) {
+		t.Fatalf("empty rerank=%+v", res)
+	}
+}

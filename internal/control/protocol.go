@@ -49,6 +49,7 @@ const (
 	OpPoolRefresh      = "pool.refresh"
 	OpPoolTest         = "pool.test"
 	OpPoolSelect       = "pool.select"
+	OpPoolRerank       = "pool.rerank"
 	OpImport           = "import"
 	OpDiagnose         = "diagnose"
 	OpProposalsList    = "proposals.list"
@@ -89,6 +90,8 @@ func CommandName(op string) string {
 		return "pool test"
 	case OpPoolSelect:
 		return "pool select"
+	case OpPoolRerank:
+		return "pool rerank"
 	case OpProposalsList:
 		return "proposals list"
 	case OpProposalsAccept:

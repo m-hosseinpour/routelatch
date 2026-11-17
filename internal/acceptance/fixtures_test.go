@@ -36,6 +36,7 @@ func newFixtureSet(t *testing.T) *fixtureSet {
 		"vless.rl.test":       "127.0.0.1",
 		"trojan.rl.test":      "127.0.0.1",
 		"stall.rl.test":       "127.0.0.1",
+		"origin.rl.test":      "127.0.0.1",
 	}
 	vless := startExit(t, exitSpec{Protocol: "vless", Port: int(vlessPort), UUID: uuid, Hosts: hosts})
 	trojan := startExit(t, exitSpec{Protocol: "trojan", Port: int(trojanPort), Password: password, Hosts: hosts})

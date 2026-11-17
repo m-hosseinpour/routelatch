@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -65,14 +66,27 @@ func checkPermissions(t *testing.T, r report, dir string) {
 		r.pass("A09", "state.json, state.json.bak, config.json and state.lock are 0600")
 	}
 
+	logPath := filepath.Join(dir, "log", "routelatch.log")
+	if info, err := os.Stat(logPath); err == nil {
+		if info.Mode().Perm() == 0o600 {
+			r.pass("A09", "the documented log file exists with mode 0600")
+		} else {
+			r.fail("A09", "log/routelatch.log mode is %04o, want 0600", info.Mode().Perm())
+		}
+	} else {
+		r.fail("A09", "the documented log file log/routelatch.log does not exist after the full flow; §4.1 mandates the path/mode and there is no log stream to redact or rotate")
+	}
+
 	sock := filepath.Join(dir, "run", "control.sock")
 	if info, err := os.Stat(sock); err == nil {
 		if info.Mode()&os.ModeSocket == 0 {
 			r.fail("A09", "management path is not a Unix socket")
 		} else if info.Mode().Perm() != 0o600 {
 			r.fail("A09", "management socket mode is %04o, want 0600", info.Mode().Perm())
+		} else if st, ok := info.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Getuid() {
+			r.fail("A09", "management socket is not owned by the running uid")
 		} else {
-			r.pass("A09", "management socket is a Unix socket with mode 0600 (no TCP management surface)")
+			r.pass("A09", "management socket is a 0600 Unix socket owned by uid %d (no TCP management surface)", os.Getuid())
 		}
 	} else {
 		r.fail("A09", "management socket missing while the service runs: %v", err)

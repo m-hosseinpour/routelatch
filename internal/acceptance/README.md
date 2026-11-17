@@ -1,10 +1,10 @@
 # Acceptance suite (T7)
 
 This package drives the **shipped binary** as a real process against
-loopback-only fixtures and checks the acceptance items it can prove in this
-environment. It is a client of the product: it imports no product runtime
-package and reaches the service only through the CLI/management surface and the
-two loopback traffic listeners.
+loopback-only fixtures and records what each acceptance item can prove, what
+fails, and what cannot be proven in this environment. It is a client of the
+product: it imports no product runtime package and reaches the service only
+through the CLI/management surface and the two loopback traffic listeners.
 
 ## Command
 
@@ -14,30 +14,31 @@ export PATH=$PWD/.toolchain/go/bin:$PATH GOTOOLCHAIN=local \
 go test -count=1 -v ./internal/acceptance/     # PASS/FAIL lines go to stdout
 ```
 
-Runtime is about 75 s: one subtest deliberately waits out the probe engine's
-hard-coded 60 s destination cooldown to exercise `proposals recheck`. Run
-`-v -run TestEndToEnd` for the main flow, or `-v -run 'TestFailureAndLimits|TestResourceBaseline'`
-for the cheap failure/leak checks.
+Runtime is 105–120 s (117 s in the latest run). Two waits dominate: `proposals recheck` waits out the
+prober's hard-coded 60 s destination cooldown, and A07 waits one 30 s rotation
+tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
+`-v -run 'TestFailureAndLimits|TestResourceBaseline'` for the cheap checks.
 
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
   `run --data-dir <tmp>`; each test has its own temp `HOME`, `XDG_CONFIG_HOME`,
   `XDG_STATE_HOME`, `XDG_RUNTIME_DIR` and data dir.
-* A local fixture file is imported with three links: a VLESS node, a Trojan node
-  and a SOCKS5 node. The VLESS/Trojan exits are **child processes** of this test
-  binary running the pinned core (the T1 technique), each with a static DNS host
-  entry so the *exit* resolves `vless.rl.test` / `trojan.rl.test` to `127.0.0.1`.
-  The host resolver cannot resolve those names, so a successful tunnel proves the
-  hostname reached the exit unresolved.
-* The SOCKS5 exit is a small server owned by the test. It records each CONNECT
-  authority, dials `127.0.0.1:<requested port>` (the loopback destination peer),
-  and records when the product closes the exit-side socket. A "stall" host makes
-  it hold the handshake so a **pending pool dial** can be observed.
-* Destinations are loopback TCP echo/HTTP peers that count contacts and record
-  teardown. Public-looking destinations use documentation addresses
-  (`2001:db8::/32`); this host has no IPv6 route, so a direct dial fails with
-  `ENETUNREACH` and no packet leaves the machine.
+* A local fixture file carries a VLESS node, a Trojan node and a SOCKS5 node.
+  The VLESS/Trojan exits are **child processes** of this test binary running the
+  pinned core (the T1 technique), each with static DNS entries so the *exit*
+  resolves the fixture names to `127.0.0.1`. The host resolver cannot resolve
+  those names, so a successful tunnel proves the hostname reached the exit
+  unresolved.
+* The SOCKS5 exits are small servers owned by the test. They record each CONNECT
+  authority, dial `127.0.0.1:<requested port>` (the destination peer) and record
+  when the product closes the exit-side socket. A "stall" host holds the
+  handshake so a **pending pool dial** is observable; a second exit stays
+  unknown so health-based selection is testable.
+* Destinations are loopback TCP echo/HTTP/streaming peers that count contacts
+  and record teardown. Public-looking destinations use documentation IPv6
+  addresses (`2001:db8::/32`); this host has no IPv6 route, so a direct dial
+  fails with `ENETUNREACH` and no packet leaves the machine.
 
 No public exit, credential, service installation, desktop proxy change or system
 setting is used.
@@ -45,96 +46,107 @@ setting is used.
 ## Commands exercised
 
 `run`, `status`, `mode targeted|all-proxy|all-direct|stopped`,
-`rules list|add`, `pool list|remove|select|test|refresh|add --file`,
-`import file|subscription`, `diagnose`, `proposals list|accept|reject|recheck`,
-`config set` — each with `--json --data-dir <tmp>`; assertions include the exit
-codes 0/1/2/3/4/6/8/10 and, where the contract names one, the envelope `kind`.
+`rules list|add|remove`, `pool list|remove|select|test|refresh|add --file`,
+`import file|link|subscription|v2rayn`, `diagnose`,
+`proposals list|accept|reject|recheck`, `config get|path|set`, `doctor`, `env`,
+`exec`, `backup`, `restore`, `desktop proxy status`, `menu` — each with
+`--json --data-dir <tmp>`; assertions include the exit codes
+0/1/2/3/4/6/8/10 and, where the contract names one, the envelope `kind`.
 
-## What the suite proves (PASS lines carry the counts)
+## Proven (PASS lines carry the counts)
 
 | Item | Assertions |
 | --- | --- |
-| A02 | Exact-domain, domain-suffix, IP and CIDR rules accepted; each routes through the exit (exit dial count +1 per case, untouched authority recorded by the exit); a port-bearing rule operand and a loopback rule operand are refused with a documented code (2/6/7) and store nothing; an unapproved public destination stays direct (0 pool dials, 0 destination contacts); the plain loopback destination works and uses no exit. |
-| A03 | A pool holding only a quarantined record (total 1, usable 0) and a truly empty pool both give `502` for an approved destination, 0 destination contacts and 0 exit dials (no direct fallback) — checked before and after the SOCKS5 attempt; the direct destination still works; `0x04` on SOCKS5 and `0x05` for a directly refused destination. |
-| A05 | A refused direct destination produces a proposal for exactly that destination and no rule; request path/query/header/cookie nonce absent from proposal output and state; manual `diagnose` is eligible; `accept` adds exactly one rule and the next request to that destination uses the pool (exit dial +1, destination contact +1); `reject` keeps it rejected; `recheck` re-probes after the cooldown and a rejected proposal stays rejected; disabling diagnostics leaves queue 0 and creates no new proposal. |
-| A06 | File import = 3 valid / 0 invalid / 0 unsupported; the same links over a local subscription merge to 3 records (dedupe); a skip-verify link is quarantined as `unsupported` with reason `insecure_tls_removed`, cannot be selected as an exit (exit 6) and shows the TLS-verification warning; a failed subscription refresh reports `source_fetch` exit 1 and leaves every row's identity, status and settings unchanged. |
-| A08 | Fixture names do not resolve on the host; the VLESS egress probe succeeds and the exit log shows its own DNS answer (`vless.rl.test -> 127.0.0.1`); the SOCKS exit receives the unresolved hostname and reaches the destination. |
-| A09 | The product process's own socket table shows exactly two listening TCP sockets, both loopback, and management only as a Unix socket; CONNECT to our own listener is refused with 403 `policy_denied` (the matrix routes it as `self_loop`, but that reason is not on the wire by design, so it is not asserted); the socket is 0600; every created data/runtime directory is 0700; state/config/lock/state.json.bak files 0600; every CLI/log surface captured up to that pre-shutdown scan contains no UUID, password, share link or subscription URL, and none contains the user request nonce (path/query/header/cookie), checked again after the proposal decisions; state files carry secrets only in `records[].credentials` / `sources[].origin`. |
-| A12 | A plain HTTP forward preserves status 207, a destination header and the body byte for byte. |
-| A04 | `targeted→all-proxy` and `all-proxy→targeted` keep a live local-exception tunnel (kept ≥ 1, still echoes); all-proxy routes an unapproved public destination through the pool; all-direct keeps serving and uses no exit; `stopped` closes the live tunnel (both ends observe teardown), reports 0 open/0 dialing connections immediately after success, closes both proxy ports, keeps management answering, and leaving stopped is exit 6 with the documented restart hint. The pending-dial pass path also enforces the command's reported `duration_ms` ≤50 ms (the CLI round trip is only loosely bounded at 1 s); F3 fails it. |
-| A13 | Corrupt state and corrupt config each exit 10 with the file byte-identical (state still 0600); a newer schema is rejected the same way; a second instance exits 4 and leaves the first serving; an occupied port exits 6, names the listener, and leaves no fallback listener; SIGINT exits 0 and leaves the committed state byte-identical. |
-| A10 | JSON envelopes and exit codes are asserted on every command used (0/1/2/3/4/6/8/10); `status` after shutdown exits 3. |
-| Resources | After ten tunnels the product's descriptor count returns to its idle baseline (observed 9 → 9 or 9 → 10 depending on the run, tolerance +2); after the service and every fixture stop, the test process's goroutine count returns exactly to baseline (observed 3 → 3, tolerance +2). |
+| A02 | Exact-domain, domain-suffix, IP and CIDR rules accepted; each routes through the exit (exit dial +1 per case, untouched authority recorded by the exit); the suffix rule does not match `xsuffix.rl.test`; port-bearing and loopback rule operands are refused (2/6/7) and store nothing; an unapproved public destination stays direct (0 pool dials/0 contacts); a loopback direct destination works with no exit. |
+| A03 | A pool with only a quarantined record (usable 0) and a truly empty pool both give `502`, 0 destination contacts and 0 exit dials before and after the SOCKS5 attempt; the direct destination still works; `0x04` for an approved destination and `0x05` for a directly refused one. |
+| A04 | Local-exception tunnels survive mode changes (kept ≥ 1, still echo); all-proxy routes an unapproved public destination through the pool; all-direct serves without an exit; a live **pool** tunnel is closed by targeted→all-direct and by `rules remove` (both ends observe teardown, `closed ≥ 1`); `stopped` closes the live tunnel and both ports, reports 0 open/0 dialing immediately, keeps management answering, and leaving stopped is exit 6 with the restart hint; the pending-dial pass path enforces the reported `duration_ms` ≤ 50 ms (CLI round trip loosely ≤ 1 s). |
+| A05 | One client request reaches the origin exactly once; a refused direct request (path/query/header nonce) leaves no application request at the origin and no bytes in proposals, state, CLI or the service log; an eligible failure creates a proposal with no rule; `accept` adds exactly one rule for exactly that destination and the next request uses the pool; `reject` keeps the rule set unchanged and `recheck` does not revive it; disabling diagnostics leaves queue 0 and creates no new proposal. |
+| A06 | File import = 3 valid/0 invalid/0 unsupported; per-protocol `import link` (VLESS/Trojan/SOCKS5) each valid 1 and merged to 3 records; Trojan credentials drive a live tunnel; a v2rayN JSON export imports 3 profiles and keeps its source attribution; a skip-verify link is `unsupported`/`insecure_tls_removed`, unselectable, and `doctor` reports it with a certificate/pin remediation; a failed subscription refresh (exit 1, `source_fetch`) leaves every row's identity/status/settings unchanged. |
+| A07 | Cold start has no health; the first rotation cools the dead exit; an egress probe with byte evidence promotes the live exit to healthy; with no pin the approved destination uses the healthy exit, skips the cooling one and does not pick the unknown one; `pool test`, `select` and `refresh` keep the process start time and a live compatible **pool** tunnel; an all-cooling pool gives `502` with 0 contacts and a no-usable-exit warning; a failed refresh keeps last-good. |
+| A08 | Fixture names do not resolve on the host; the VLESS exit logs its own DNS answer for `vless.rl.test`; the SOCKS exit receives the unresolved hostname. |
+| A09 | The process's own socket table has exactly two listening TCP sockets, both loopback, and management only as a Unix socket owned by the running uid with mode 0600; proxy-to-self is 403 `policy_denied`; directories 0700 and state/config/lock/`state.json.bak`/`log/routelatch.log` 0600; every captured CLI/log surface has no UUID/password/share link/subscription URL and no request nonce; a node title carrying ESC/CSI/OSC/BEL/CR appears sanitized in both pool tables, its printable text intact, and the service streams and log file carry no raw control byte; state carries secrets only in `records[].credentials`/`sources[].origin`. |
+| A10 | `env`, `exec` (proxy env + child exit code; with `--json` the child's streams stay on stderr and stdout is one parseable Envelope per §7.1), `doctor`, `backup`/`restore` (private ref + sha256, traffic and rules after restore), `desktop proxy status`, `config get|path|set` (values and private paths; wildcard and valid LAN listeners are both `unsupported`/7), and the non-interactive menu (exit 0). |
+| A11 | An inherited `NO_PROXY` naming an approved destination is replaced by the product's fixed list in the child; with listeners stopped, and with no service at all, `env`/`exec` exit 3 and the child never runs (no silent direct). |
+| A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` refusal with no request reaching the origin (no MITM; F7 notes the status mismatch), and an unsupported scheme 405/501. |
+| A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
+| Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
-## Findings in the product (reported, not fixed)
+## Findings in the product
 
-* **F1 — every pool tunnel dies immediately after the reply (blocks usable pool
-  traffic).** `internal/frontend/frontend.go` creates the pool dial with
-  `context.WithTimeout(ctx, PoolDialDeadline)` + `defer cancel()` and passes it
-  to `DialPool`; `internal/control/service.go` forwards that same context to
-  `engine.Dial`; `internal/engine/dial.go` builds the core session from it and
-  `internal/engine/socks.go` arms `adapterConn` on it. The returned session is
-  therefore owned by a dial-scoped context: the deferred cancel tears it down at
-  return, and even without the defer the 10 s dial deadline would kill the
-  tunnel later (forbidden by §3.4). Observed on **all three client-visible
-  paths**: HTTP CONNECT via the SOCKS5 exit (`200`, exit CONNECT accepted,
-  destination contacted once, then the exit socket closes and the client reads
-  `EOF` with 0 payload bytes), HTTP CONNECT via the VLESS core exit (`200`, no
-  payload byte), and the SOCKS5 frontend (`0x00`, no payload byte). `pool test
-  --target` (no frontend dial context) succeeds, which isolates the cause.
-* **F2 — probe cooldown surfaces as an internal error.** After a `diagnose`,
-  `proposals recheck` between the diagnostics cooldown and the prober's fixed
-  60 s destination cooldown returns `kind="internal"`, exit 1, message
-  `destination probe cooldown has not elapsed`. `mapDiagnosticsError` maps only
-  `diagnostics.ErrCooldown`; `probes.ErrProbeCooldown` escapes. Exit 1 is not in
-  the documented `proposals` exit set (0/3/5/6).
-* **F3 — a pending pool dial makes a mode change exceed the management
-  deadline.** With one stalled pool dial, `mode all-direct` returned exit 8
-  (`timeout`) after 5.03 s and applied the change at +9.84 s. `Service.fenceMu`
-  is read-held for the whole dial, so the policy commit waits for
-  `PoolDialDeadline` (10 s); §3.4 requires a pending dial to be canceled in
-  ~50 ms and the sweep to finish before success is reported. The exit-side
-  socket close observed at +9.83 s is the dial's own deadline firing, not a
-  sweep cancel.
+* **F1 (found here, fixed in `3c2817e`, regression check)** — every pool tunnel
+  died right after the reply because the returned session was owned by a
+  dial-scoped context (10 s deadline + deferred cancel). The suite now asserts a
+  working byte stream on HTTP-via-SOCKS5, HTTP-via-VLESS and the SOCKS5 frontend.
+* **F2 (found here, fixed in `3c2817e`)** — `probes.ErrProbeCooldown` escaped the
+  diagnostic error mapping as `kind=internal`, exit 1. The suite now requires the
+  documented conflict (exit 6) for a recheck inside the probe cooldown.
+* **F3 (found here, fixed in `3c2817e`)** — the policy fence was held across the
+  pool dial, so a mode change returned exit 8 after ~5 s and applied at ~9.8 s.
+  The suite requires `duration_ms ≤ 50 ms` and the pending dial to be swept
+  before success.
+* **F4 (found here, fixed after this review)** — `exec --json` glued its envelope
+  to unterminated child stdout, so stdout was not valid JSON. The fix routes the
+  child's stdout/stderr to stderr in JSON mode and documents it in §7.1; the
+  suite now asserts that separation and a parseable envelope.
+* **F5 (found here, fixed in the current worktree)** — the documented log file
+  was never created: §4.1 lists `$XDG_STATE_HOME/routelatch/log/routelatch.log`
+  with mode 0600 and T6 requires rotation/retention, but no code opened
+  `Paths.LogDir`. At the measured revision the log now exists with mode 0600 and
+  the suite asserts it (and scans it for control bytes). Not yet committed.
+* **F6 (found here, fixed in the current worktree)** — a valid but non-loopback
+  listener was classified as `invalid_destination`/exit 2 via `usage(...)`, while
+  §4.2 requires `unsupported`/exit 7. It is now `unsupported`/7 for both the
+  wildcard and a LAN address at `config set` (asserted), and the runtime listener
+  check (`platform.Targets.Validate`) returns the same kind (observed manually:
+  `run` with `http_listen=0.0.0.0:1000` exits 7 without binding). §7.1's
+  `config get|set|path` row still lists only 0/2/3/6 and should gain 7.
+* **F7 (open, minor, reported by this pass)** — absolute-form `https` is refused
+  with `policy_denied`/403 (`internal/frontend/http.go:177-183`). The security
+  property (no TLS interception, origin never contacted) holds, but §3.1 reserves
+  `policy_denied` for self/local prohibition and an operation outside v1 maps to
+  `unsupported`/405–501.
 
-## Not verified here
+Shape assertions that follow implementation names rather than a §7.1 field list
+(doctor check names and `ok|warn|error`, the `<data-dir>/run/control.sock` layout,
+`ref.checksum`) are stability assertions: a contract-compliant rename would fail
+them until the suite is updated.
 
-* **A01/A11/A14:** clean-machine install without a manual runtime, desktop proxy
-  set/restore, and the licensing/dependency audit are outside this environment.
-* **A02:** the rest of the §1.5/§2.5 matrix is not enumerated (only one negative
-  suffix boundary plus the unapproved public/IP cases); IPv4 public egress is
-  deliberately never attempted.
-* **A03:** a dead exit and a missing engine tag are not exercised (the empty and
-  zero-usable pools are).
-* **A04:** §2.6 rows that need a live **pool** connection (mode switch, rule
-  add/remove) are blocked by F1; the direct-public rows need local DNS control
-  and are blocked by the no-public-egress fixture; the ≤50 ms pending-cancel
-  bound is measured only as a failure (F3), and `stopped` repeats neither a
-  pending dial nor a pool connection.
-* **A05:** "disable cancels an already-running probe" is not reproducible
-  loopback-only (only queue 0 and no-new-proposal are checked); wire-level "no
-  request replay" is not observable here — the suite shows the failure and the
-  absence of request material, and the product's probe is a bare TCP dial.
-* **A06:** `import link` and the v2rayN path are not exercised; `doctor`
-  visibility of the quarantined record is not checked (pool list and status are).
-* **A07:** ranking, cooldown growth, hysteresis and last-good rotation are not
+## Cannot be proven in this environment
+
+* **A01 / A14:** a clean machine with no manual runtime, and the license,
+  notice and dependency audit, need a fresh install and release build.
+* **A02 matrix:** the rest of §1.5/§2.5 is not enumerated (one negative suffix
+  boundary plus unapproved public/IP cases); public IPv4 egress is deliberately
+  never attempted (it would leave the machine).
+* **A03:** a missing engine tag and the §2.7 stale-version fence are not
+  exercised (empty, zero-usable and all-cooling pools are).
+* **A04 direct-public rows:** closing a live *direct* connection to a public
+  destination when it becomes approved needs local DNS control; the pool rows,
+  rule removal and stopped are covered.
+* **A05 wire replay:** an eligible direct failure is pre-reply by definition, so
+  no origin can receive that request; the suite proves one forward on success,
+  no request material in evidence/state/output and no pool dial from the failure
+  or diagnosis, not a negative at the origin. Cancelling an already-running slow
+  probe on disable is not reproducible loopback-only.
+* **A06:** v2rayN SQLite/`guiNConfig` rejection and `pool export --with-secrets`
+  are not exercised.
+* **A07:** no `rerank` command exists in §7.1 or the CLI (the explicit
+  test/select/refresh paths stand in); the 10-minute rotation, EWMA/hysteresis
+  switching, latency thresholds, and the plan's staging/rollback are not
   exercised.
-* **A09:** the same-uid `SO_PEERCRED` check, terminal-control-sequence
-  sanitization, log-file creation/mode, and request *body* bytes in logs are not
-  observed; only the socket mode and the captured surfaces are.
-* **A10:** the menu, and the §7.1 commands `env`, `exec`, `doctor`, `backup`,
-  `restore`, `desktop`, `config get`, `rules remove` and the 5/7/9/11/12 exit
-  codes are not exercised.
-* **A12:** only one GET (status/header/body); HEAD/POST, streaming bodies,
-  redirects and UDP are not.
-* **A13:** systemd/launcher, crash recovery, a foreign listener's *behaviour*
-  after the collision (only "no fallback listener" is checked) and restart
-  persistence are not.
-* The product's own goroutine count is not externally observable, so only its
-  descriptors are compared to baseline.
-
-The suite intentionally fails while F1–F3 are open: the FAIL lines (F1 on three
-client-visible paths, F2, F3) are product findings, not harness errors. Traffic
-ports are chosen with a bind-close-rebind probe, so a concurrent process grabbing
-the port between the probe and the product's bind would show up as a startup
-failure rather than a flaky assertion.
+* **A09:** second-uid `SO_PEERCRED` rejection needs privileges the suite does
+  not have (running as the same uid); the interactive menu's TUI rendering is not
+  driven (CLI human output, the service streams and the log file are).
+* **A10:** menu item prompts/mappings, `desktop proxy set|restore` (real desktop)
+  and the 5/9/11/12 exit codes are not exercised (exit 7 is asserted by F6).
+* **A11 desktop:** real GNOME/KDE set/restore/ownership needs a real desktop and
+  would change user settings; only the launcher environment and unhealthy-service
+  refusal are asserted.
+* **A12:** redirects, `101` upgrades, slowloris/size limits and real IPv6 egress
+  are not exercised; UDP is asserted only as an explicit refusal.
+* **A13 / platform:** systemd lifecycle/crash-loop supervision, Windows, Android
+  and TUN are out of scope.
+* The product's own goroutine count is not externally observable; descriptors are
+  the proxy. Traffic ports are chosen with a bind-close-rebind probe, so a
+  concurrent process taking a port between probe and bind surfaces as a startup
+  failure rather than a flaky assertion.

@@ -275,6 +275,16 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		add("schema_version", "ok", fmt.Sprintf("state schema %d", snap.State.SchemaVersion), "")
 	}
 
+	logPath := s.logPath
+	if logPath == "" {
+		logPath = filepath.Join(paths.LogDir, "routelatch.log")
+	}
+	if err := logFileWritable(logPath); err != nil {
+		add("log_file", "warn", "log file "+logPath+" is not writable: "+err.Error(), "check the log directory permissions; the service keeps serving without a file log")
+	} else {
+		add("log_file", "ok", "log file "+logPath+" is writable", "")
+	}
+
 	var conflicts []string
 	if snap.State.Desktop.Applied && !s.listenersOpen {
 		conflicts = append(conflicts, "desktop proxy is applied while no listener is running")
@@ -381,6 +391,7 @@ func (s *Service) configSet(ctx context.Context, key, value string) (ConfigData,
 		return ConfigData{}, err
 	}
 	s.snap.Store(&snap)
+	s.logger.SetLevel(snap.Config.LogLevel)
 	notice := ""
 	switch key {
 	case "log_level", "probes.targets", "probes.timeout_ms", "probes.cooldown_base", "probes.cooldown_max":
@@ -400,7 +411,12 @@ func applyConfigValue(cfg *contract.Config, key, value string) error {
 	switch key {
 	case "http_listen", "socks_listen":
 		if !isLoopbackListen(value) {
-			return usage("listener must be a literal loopback host:port address (127.0.0.1 or ::1)")
+			// D14 / §4.2: a listener that is not literal loopback is outside
+			// v1, not a malformed command line.
+			return &contract.Failure{
+				Kind: contract.Unsupported, Path: contract.PathLocal, Op: "config.set",
+				Message: "listener must be a literal loopback host:port address (127.0.0.1 or ::1); non-loopback traffic listeners are not supported",
+			}
 		}
 		if key == "http_listen" {
 			cfg.HTTPListen = value

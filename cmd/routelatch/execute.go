@@ -240,7 +240,7 @@ func (c *cli) doctor(ctx context.Context) int {
 		return c.localFailure("doctor", lockErr)
 	}
 	defer lock.Release()
-	svc, svcErr := control.NewService(ctx, control.Options{Store: st, Paths: c.paths})
+	svc, svcErr := control.NewService(ctx, control.Options{Store: st, Paths: c.paths, LogOutput: io.Discard})
 	if svcErr != nil {
 		return c.localFailure("doctor", svcErr)
 	}
@@ -387,6 +387,34 @@ func (c *cli) human(env contract.Envelope) {
 	case "pool select":
 		if d, ok := env.Data.(map[string]any); ok {
 			fmt.Fprintf(c.stdout, "selected: %v (policy %v)\n", firstNonEmpty(d["selected"]), d["policy_version"])
+			return
+		}
+	case "pool rerank":
+		if d, ok := env.Data.(map[string]any); ok {
+			before, _ := d["selected_before"].(string)
+			after, _ := d["selected_after"].(string)
+			fmt.Fprintf(c.stdout, "selected before: %v\nselected after: %v\n", displayExit(before), displayExit(after))
+			if before == after && before != "" {
+				fmt.Fprintln(c.stdout, "selection unchanged")
+			}
+			if skipped, ok := d["skipped"].([]any); ok {
+				pinned := false
+				for _, item := range skipped {
+					if s, ok := item.(map[string]any); ok {
+						if s["reason"] == "pinned" {
+							pinned = true
+						}
+						fmt.Fprintf(c.stdout, "skipped: %v (%v)\n", s["exit"], s["reason"])
+					}
+				}
+				if pinned {
+					fmt.Fprintln(c.stdout, "selection is pinned; the manual selection is unchanged")
+				}
+				if len(skipped) == 0 {
+					fmt.Fprintln(c.stdout, "skipped: none")
+				}
+			}
+			fmt.Fprintf(c.stdout, "policy version: %v\n", d["policy_version"])
 			return
 		}
 	case "diagnose":
@@ -543,6 +571,13 @@ func ruleOperandFromJSON(r map[string]any) any {
 	return ""
 }
 
+func displayExit(id string) string {
+	if id == "" {
+		return "(none)"
+	}
+	return id
+}
+
 func firstNonEmpty(v any) any {
 	if s, ok := v.(string); ok && s == "" {
 		return "auto"
@@ -575,7 +610,7 @@ Usage: routelatch [--json] [--data-dir DIR] <command> [args]
   status                    show mode, listeners, pool and connections
   mode <mode>               targeted | all-proxy | all-direct | stopped
   rules list|add|remove     manage approved destinations
-  pool list|add|remove|refresh|test|select
+  pool list|add|remove|refresh|test|select|rerank
   import link|file|subscription|v2rayn <input>
   diagnose <host:port>      bounded direct diagnosis
   proposals list|accept|reject|recheck|clear

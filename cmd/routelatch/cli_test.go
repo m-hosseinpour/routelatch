@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func startInProcess(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := control.NewService(context.Background(), control.Options{Store: st, Paths: paths})
+	svc, err := control.NewService(context.Background(), control.Options{Store: st, Paths: paths, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,5 +361,121 @@ func TestOfflineRestoreFromCorruptState(t *testing.T) {
 	}
 	if snap.State.Mode != contract.ModeDirectAll {
 		t.Fatalf("mode = %s", snap.State.Mode)
+	}
+}
+
+type envStubHandler struct{}
+
+func (envStubHandler) Handle(ctx context.Context, req control.Request) (any, error) {
+	if req.Op != control.OpEnv {
+		return nil, &contract.Failure{Kind: contract.Unsupported, Path: contract.PathLocal, Message: "unexpected op"}
+	}
+	return map[string]any{
+		"HTTP_PROXY": "http://127.0.0.1:8317", "HTTPS_PROXY": "http://127.0.0.1:8317",
+		"ALL_PROXY": "http://127.0.0.1:8317", "NO_PROXY": "localhost", "notice": "",
+	}, nil
+}
+
+func TestExecJSONKeepsEnvelopeAndChildOutputSeparate(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "rlcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	paths, err := store.ResolvePathsFor(dir, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: envStubHandler{}, AllowStale: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	var out, errOut bytes.Buffer
+	args := []string{"--json", "--data-dir", dir, "exec", "--", "sh", "-c", "echo child-out; echo child-err >&2; exit 7"}
+	code := Execute(context.Background(), args, &out, &errOut)
+	if code != 7 {
+		t.Fatalf("exit = %d, want child 7 (stderr %s)", code, errOut.String())
+	}
+	dec := json.NewDecoder(bytes.NewReader(out.Bytes()))
+	var env contract.Envelope
+	if err := dec.Decode(&env); err != nil {
+		t.Fatalf("stdout is not one parseable envelope: %v (%q)", err, out.String())
+	}
+	var extra any
+	if err := dec.Decode(&extra); err == nil {
+		t.Fatalf("stdout contains more than one JSON value: %q", out.String())
+	}
+	if !env.OK || env.Command != "exec" {
+		t.Fatalf("envelope = %+v", env)
+	}
+	data, _ := env.Data.(map[string]any)
+	if data["exit_code"] != float64(7) {
+		t.Fatalf("exit_code = %v", data["exit_code"])
+	}
+	if strings.Contains(out.String(), "child-out") || strings.Contains(out.String(), "child-err") {
+		t.Fatalf("child output leaked into JSON stdout: %q", out.String())
+	}
+	for _, want := range []string{"child-out", "child-err"} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Fatalf("child %q missing from stderr: %q", want, errOut.String())
+		}
+	}
+}
+
+func TestCLINonLoopbackListenerExitIsUnsupported(t *testing.T) {
+	dir := startInProcess(t)
+	got := runCLI(t, dir, "config", "set", "http_listen", "0.0.0.0:8317")
+	if got.code != 7 {
+		t.Fatalf("exit = %d, want 7 (%+v)", got.code, got.env)
+	}
+	if got.env.Error == nil || got.env.Error.Kind != contract.Unsupported {
+		t.Fatalf("kind = %+v, want unsupported", got.env.Error)
+	}
+}
+
+func TestRunJSONRoutesServiceLogToStderr(t *testing.T) {
+	var out, errOut bytes.Buffer
+	c := &cli{jsonOut: true, stdout: &out, stderr: &errOut}
+	if c.serviceLogOutput() != &errOut {
+		t.Fatal("--json run log output is not stderr")
+	}
+	c.jsonOut = false
+	if c.serviceLogOutput() != &out {
+		t.Fatal("human run log output is not stdout")
+	}
+}
+
+func TestPoolRerankJSONShape(t *testing.T) {
+	dir := startInProcess(t)
+	for _, link := range []string{
+		"trojan://pass-one@example.com:443?security=tls&type=raw#one",
+		"trojan://pass-two@example.net:443?security=tls&type=raw#two",
+	} {
+		if got := runCLI(t, dir, "pool", "add", link); got.code != 0 {
+			t.Fatalf("pool add exit = %d: %+v", got.code, got.env)
+		}
+	}
+	got := runCLI(t, dir, "pool", "rerank")
+	if got.code != 0 || !got.env.OK || got.env.Command != "pool rerank" {
+		t.Fatalf("rerank = %+v (code %d, stderr %s)", got.env, got.code, got.stderr)
+	}
+	data, _ := got.env.Data.(map[string]any)
+	if _, ok := data["selected_before"].(string); !ok {
+		t.Fatalf("selected_before missing/not a string: %+v", data)
+	}
+	after, ok := data["selected_after"].(string)
+	if !ok || after == "" {
+		t.Fatalf("selected_after = %v", data["selected_after"])
+	}
+	if _, ok := data["skipped"].([]any); !ok {
+		t.Fatalf("skipped is not an array: %+v", data["skipped"])
+	}
+	if _, ok := data["policy_version"].(float64); !ok {
+		t.Fatalf("policy_version = %v", data["policy_version"])
 	}
 }

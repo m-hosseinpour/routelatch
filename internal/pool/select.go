@@ -9,6 +9,37 @@ import (
 	"routelatch/internal/contract"
 )
 
+// RerankSkipReason is a stable, machine-readable explanation for an exit the
+// automatic selection did not choose.
+type RerankSkipReason string
+
+const (
+	RerankSkipPinned      RerankSkipReason = "pinned"
+	RerankSkipCooling     RerankSkipReason = "cooling"
+	RerankSkipUnsupported RerankSkipReason = "unsupported"
+	RerankSkipInvalid     RerankSkipReason = "invalid"
+	RerankSkipUnknown     RerankSkipReason = "unknown"
+	RerankSkipDwell       RerankSkipReason = "dwell"
+	RerankSkipSamples     RerankSkipReason = "samples"
+	RerankSkipImprovement RerankSkipReason = "improvement"
+	RerankSkipNoTarget    RerankSkipReason = "no_target"
+)
+
+// RerankSkip names one exit that was not selected and why.
+type RerankSkip struct {
+	Exit   contract.ExitID  `json:"exit"`
+	Reason RerankSkipReason `json:"reason"`
+}
+
+// RerankResult is the outcome of a re-selection. Version is read from the
+// snapshot and is never advanced by re-selection.
+type RerankResult struct {
+	Before  contract.ExitID        `json:"before,omitempty"`
+	After   contract.ExitID        `json:"after,omitempty"`
+	Skipped []RerankSkip           `json:"skipped,omitempty"`
+	Version contract.PolicyVersion `json:"version"`
+}
+
 // Selector adds the D16 hysteresis to pool ranking. Its only mutable state is
 // the auto-selected exit and the last switch time; it never writes the store,
 // restarts the engine or changes a policy version.
@@ -45,10 +76,39 @@ func (s *Selector) SelectFor(state contract.State, requested contract.ExitID, no
 		}
 		return rec, nil
 	}
+	rec, _, fail := s.auto(p, now)
+	return rec, fail
+}
 
+// Rerank recomputes the automatic selection without dialing. It honours a
+// pinned state.SelectedExit, reports the previous and new exit with skip
+// reasons, and never changes rules, mode, connections or policy version.
+func (s *Selector) Rerank(state contract.State, now time.Time) (RerankResult, error) {
+	version := state.PolicyVersion
+	if pinned := state.SelectedExit; pinned != "" {
+		return RerankResult{
+			Before: pinned, After: pinned, Version: version,
+			Skipped: []RerankSkip{{Exit: pinned, Reason: RerankSkipPinned}},
+		}, nil
+	}
+	before := s.Current()
+	after, skips, fail := s.auto(Build(state, now), now)
+	if fail != nil {
+		// No usable exit is not an execution error: the CLI needs the skip
+		// reasons (including no_target) to explain it.
+		return RerankResult{Before: before, Skipped: skips, Version: version}, nil
+	}
+	return RerankResult{
+		Before: before, After: contract.ExitID(after.ID), Skipped: skips, Version: version,
+	}, nil
+}
+
+// auto applies the ranking and hysteresis and updates the selector's in-memory
+// current exit. It returns skip reasons for every exit that was not chosen.
+func (s *Selector) auto(p *Pool, now time.Time) (contract.Record, []RerankSkip, *contract.Failure) {
 	ranked := rank(p)
 	if len(ranked) == 0 {
-		return contract.Record{}, selectFailure("no usable exit: the pool is empty, cooling or unsupported")
+		return contract.Record{}, unusableSkips(p), selectFailure("no usable exit: the pool is empty, cooling or unsupported")
 	}
 	best := ranked[0]
 
@@ -57,7 +117,7 @@ func (s *Selector) SelectFor(state contract.State, requested contract.ExitID, no
 	if s.current == "" {
 		s.current = contract.ExitID(best.ID)
 		s.switchedAt = now
-		return best, nil
+		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
 	}
 	current, ok := p.Record(s.current)
 	if !ok || !p.Usable(s.current) {
@@ -66,17 +126,79 @@ func (s *Selector) SelectFor(state contract.State, requested contract.ExitID, no
 		// usable exit.
 		s.current = contract.ExitID(best.ID)
 		s.switchedAt = now
-		return best, nil
+		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
 	}
 	if contract.ExitID(best.ID) == s.current {
-		return current, nil
+		return current, skipOthers(p, s.current, s.current, ""), nil
 	}
 	if s.shouldSwitch(p, current, best, now) {
 		s.current = contract.ExitID(best.ID)
 		s.switchedAt = now
-		return best, nil
+		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
 	}
-	return current, nil
+	return current, skipOthers(p, s.current, contract.ExitID(best.ID), s.gateReason(p, current, best, now)), nil
+}
+
+func (s *Selector) gateReason(p *Pool, current, best contract.Record, now time.Time) RerankSkipReason {
+	bh, ok := p.Health(contract.ExitID(best.ID))
+	if !ok || bh.Samples < contract.SwitchMinSamples {
+		return RerankSkipSamples
+	}
+	if !s.switchedAt.IsZero() && now.Sub(s.switchedAt) < contract.SwitchMinDwell {
+		return RerankSkipDwell
+	}
+	return RerankSkipImprovement
+}
+
+func skipOthers(p *Pool, selected, bestExit contract.ExitID, bestGate RerankSkipReason) []RerankSkip {
+	var skips []RerankSkip
+	for _, rec := range p.records {
+		exit := contract.ExitID(rec.ID)
+		if exit == selected {
+			continue
+		}
+		reason := RerankSkipReason("")
+		switch rec.Status {
+		case contract.RecordInvalid:
+			reason = RerankSkipInvalid
+		case contract.RecordUnsupported:
+			reason = RerankSkipUnsupported
+		case contract.RecordCooling:
+			reason = RerankSkipCooling
+		case contract.RecordUnknown:
+			reason = RerankSkipUnknown
+		case contract.RecordHealthy:
+			if bestGate != "" && exit == bestExit {
+				reason = bestGate
+			} else {
+				reason = RerankSkipImprovement
+			}
+		default:
+			reason = RerankSkipUnknown
+		}
+		skips = append(skips, RerankSkip{Exit: exit, Reason: reason})
+	}
+	return skips
+}
+
+func unusableSkips(p *Pool) []RerankSkip {
+	var skips []RerankSkip
+	for _, rec := range p.records {
+		var reason RerankSkipReason
+		switch rec.Status {
+		case contract.RecordInvalid:
+			reason = RerankSkipInvalid
+		case contract.RecordUnsupported:
+			reason = RerankSkipUnsupported
+		case contract.RecordCooling:
+			reason = RerankSkipCooling
+		default:
+			reason = RerankSkipUnsupported
+		}
+		skips = append(skips, RerankSkip{Exit: contract.ExitID(rec.ID), Reason: reason})
+	}
+	skips = append(skips, RerankSkip{Reason: RerankSkipNoTarget})
+	return skips
 }
 
 func (s *Selector) shouldSwitch(p *Pool, current, best contract.Record, now time.Time) bool {

@@ -12,8 +12,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -41,6 +44,9 @@ type Options struct {
 	Paths  store.Paths
 	Now    func() time.Time
 	Direct contract.Dialer
+	// LogOutput is the foreground log stream. Production passes stdout; tests
+	// pass io.Discard. The file log is always at Paths.LogDir/routelatch.log.
+	LogOutput io.Writer
 }
 
 // Service implements Handler and owns the in-process runtime.
@@ -53,12 +59,13 @@ type Service struct {
 	props     *proposals.Registry
 	refresher *imports.Refresher
 
-	engine *engine.Engine
-	fe     *frontend.Frontend
-	prober *probes.Engine
-	diag   *diagnostics.Manager
-	pool   contract.PoolDialer
-	direct contract.Dialer
+	engine   *engine.Engine
+	fe       *frontend.Frontend
+	prober   *probes.Engine
+	diag     *diagnostics.Manager
+	pool     contract.PoolDialer
+	reranker *pool.Dialer
+	direct   contract.Dialer
 
 	snap   atomic.Pointer[contract.Snapshot]
 	policy atomic.Pointer[routing.Policy]
@@ -77,6 +84,10 @@ type Service struct {
 	// its deadline (docs/contracts.md §2.6, §3.4). A dial that still finishes
 	// against a superseded version is rejected and closed by fencedPool.
 	fenceMu sync.RWMutex
+
+	logger  *serviceLogger
+	logPath string
+	logErr  error
 
 	httpListen    string
 	socksListen   string
@@ -134,6 +145,22 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	s.policy.Store(policy)
 	s.httpAddr = snap.Config.HTTPListen
 	s.socksAddr = snap.Config.SOCKSListen
+	paths := opts.Paths
+	if paths.LogDir == "" {
+		paths = opts.Store.Paths()
+	}
+	s.logPath = filepath.Join(paths.LogDir, "routelatch.log")
+	out := opts.LogOutput
+	if out == nil {
+		out = os.Stdout
+	}
+	logger, logErr := newServiceLogger(s.logPath, snap.Config.LogLevel, out)
+	s.logger = logger
+	s.logErr = logErr
+	if logErr != nil {
+		s.logger.Logf(levelWarning, "log.open", "operational log is unavailable at %s: %s; the service continues", s.logPath, logErr.Error())
+	}
+	s.logger.Logf(levelInfo, "service.init", "mode=%s policy=%d", snap.State.Mode, snap.State.PolicyVersion)
 	return s, nil
 }
 
@@ -201,6 +228,7 @@ func (s *Service) startNetworkLocked(ctx context.Context) error {
 		},
 		s.now,
 	)
+	s.reranker = innerPool
 	s.pool = &fencedPool{svc: s, inner: innerPool}
 
 	direct := s.direct
@@ -229,6 +257,7 @@ func (s *Service) startNetworkLocked(ctx context.Context) error {
 	s.httpAddr = fe.HTTPAddr().String()
 	s.socksAddr = fe.SOCKSAddr().String()
 	s.listenersOpen = true
+	s.logger.Logf(levelInfo, "listeners.start", "http=%s socks=%s mode=%s", s.httpAddr, s.socksAddr, snap.State.Mode)
 
 	prober := probes.NewEngine(probes.Options{
 		Pool: s.pool,
@@ -268,6 +297,8 @@ func (s *Service) startNetworkLocked(ctx context.Context) error {
 // Close stops the network stack in the documented order: listeners and
 // registry first (so copy loops see Canceled), then probe work, then the engine.
 func (s *Service) Close(ctx context.Context) error {
+	s.logger.Logf(levelInfo, "service.close", "shutting down")
+	defer s.logger.Close()
 	s.stopProbeLoop()
 	if s.diag != nil {
 		s.diag.Close(ctx)
@@ -363,6 +394,8 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 		return s.poolTest(ctx, req)
 	case OpPoolSelect:
 		return s.poolSelect(ctx, req.ID)
+	case OpPoolRerank:
+		return s.rerank(ctx)
 	case OpImport:
 		return s.importSource(ctx, req)
 	case OpDiagnose:

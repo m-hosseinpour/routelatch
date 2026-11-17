@@ -104,6 +104,7 @@ func (s *Service) poolAdd(ctx context.Context, req Request) (AddData, error) {
 	if err := s.reloadAfterImport(ctx); err != nil {
 		return addData(result), err
 	}
+	s.logger.Logf(levelInfo, "pool.add", "source=%s valid=%d invalid=%d unsupported=%d", result.SourceID, result.Valid, result.Invalid, result.Unsupported)
 	return addData(result), nil
 }
 
@@ -140,6 +141,7 @@ func (s *Service) importSource(ctx context.Context, req Request) (AddData, error
 	if err := s.reloadAfterImport(ctx); err != nil {
 		return addData(result), err
 	}
+	s.logger.Logf(levelInfo, "pool.import", "source=%s valid=%d invalid=%d unsupported=%d", result.SourceID, result.Valid, result.Invalid, result.Unsupported)
 	return addData(result), nil
 }
 
@@ -261,6 +263,7 @@ func (s *Service) poolRemove(ctx context.Context, rawID string) (PoolRemoveData,
 	if err != nil {
 		return PoolRemoveData{Removed: id, Closed: report.Closed}, err
 	}
+	s.logger.Logf(levelInfo, "pool.remove", "record=%s closed=%d", id, report.Closed)
 	return PoolRemoveData{Removed: id, Closed: report.Closed}, nil
 }
 
@@ -336,6 +339,7 @@ func (s *Service) poolRefresh(ctx context.Context, req Request) (imports.Refresh
 	if _, err := s.sweep(ctx, contract.CloseExitGone, nextPolicy.PolicyVersion(), keep); err != nil {
 		return result, err
 	}
+	s.logger.Logf(levelInfo, "pool.refresh", "sources=%d kept_last_good=%t", len(result.Sources), result.KeptLastGood)
 	return result, nil
 }
 
@@ -389,6 +393,7 @@ func (s *Service) poolSelect(ctx context.Context, rawID string) (PoolSelectData,
 			return PoolSelectData{Selected: after.State.SelectedExit, PolicyVersion: nextPolicy.PolicyVersion()}, err
 		}
 	}
+	s.logger.Logf(levelInfo, "pool.select", "selected=%s policy=%d", after.State.SelectedExit, nextPolicy.PolicyVersion())
 	return PoolSelectData{Selected: after.State.SelectedExit, PolicyVersion: nextPolicy.PolicyVersion()}, nil
 }
 
@@ -493,6 +498,7 @@ func (s *Service) poolTest(ctx context.Context, req Request) (PoolTestData, erro
 		return PoolTestData{Results: results, Truncated: truncated}, err
 	}
 	s.snap.Store(&after)
+	s.logger.Logf(levelInfo, "pool.test", "results=%d truncated=%t", len(results), truncated)
 	return PoolTestData{Results: results, Truncated: truncated}, nil
 }
 
@@ -514,4 +520,68 @@ func mapImportError(err error) error {
 		return failure
 	}
 	return err
+}
+
+// RerankData is the `pool rerank` payload. It reports the automatic selection
+// before and after a re-rank, why every other exit was skipped, and the policy
+// version (which rerank never advances).
+type RerankData struct {
+	SelectedBefore contract.ExitID        `json:"selected_before"`
+	SelectedAfter  contract.ExitID        `json:"selected_after"`
+	Skipped        []pool.RerankSkip      `json:"skipped"`
+	PolicyVersion  contract.PolicyVersion `json:"policy_version"`
+}
+
+func (s *Service) rerank(ctx context.Context) (RerankData, error) {
+	if err := ctx.Err(); err != nil {
+		return RerankData{}, &contract.Failure{Kind: contract.Canceled, Path: contract.PathLocal, Op: "pool.rerank", Message: "rerank canceled"}
+	}
+	s.opMu.Lock()
+	stopped := s.stopped
+	reranker := s.reranker
+	snap := s.Snapshot()
+	s.opMu.Unlock()
+	if stopped {
+		return RerankData{}, &contract.Failure{Kind: contract.Stopped, Path: contract.PathLocal, Op: "pool.rerank", Message: "service is stopped; no exit can be selected"}
+	}
+	var (
+		result pool.RerankResult
+		err    error
+	)
+	if reranker != nil {
+		// Production: re-rank the selector that future pool dials actually use.
+		result, err = reranker.Rerank(s.now().UTC())
+	} else {
+		// A management-only service has no dialer to affect; use a throwaway
+		// selector so the command can still report the same ranking decision.
+		result, err = pool.NewSelector().Rerank(snap.State, s.now().UTC())
+	}
+	if err != nil {
+		return RerankData{}, err
+	}
+	data := RerankData{
+		SelectedBefore: result.Before,
+		SelectedAfter:  result.After,
+		Skipped:        result.Skipped,
+		PolicyVersion:  result.Version,
+	}
+	if data.Skipped == nil {
+		data.Skipped = []pool.RerankSkip{}
+	}
+	if data.PolicyVersion == 0 {
+		data.PolicyVersion = snap.State.PolicyVersion
+	}
+	if data.SelectedAfter == "" {
+		return RerankData{}, &OpError{
+			Kind: contract.PoolUnavailable, Exit: contract.ExitPoolUnavailable,
+			Message: "no usable exit: the pool is empty, cooling, unsupported or has no target",
+			Detail: map[string]any{
+				"selected_before": data.SelectedBefore,
+				"skipped":         data.Skipped,
+				"policy_version":  data.PolicyVersion,
+			},
+		}
+	}
+	s.logger.Logf(levelInfo, "pool.rerank", "before=%s after=%s skipped=%d policy=%d", data.SelectedBefore, data.SelectedAfter, len(data.Skipped), data.PolicyVersion)
+	return data, nil
 }

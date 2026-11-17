@@ -179,8 +179,10 @@ func (p *httpProxy) serveForward(c net.Conn, br *bufio.Reader, req *http.Request
 	case "http":
 	case "https":
 		// Forwarding an absolute https URI would require terminating TLS at
-		// the proxy. That path does not exist in this product (no MITM).
-		p.writeHTTPError(c, contract.PolicyDenied)
+		// the proxy. No such path exists (no MITM); the request is outside
+		// what the proxy can serve, so §3.2's unsupported kind (405/501)
+		// applies, not policy_denied.
+		p.writeHTTPError(c, contract.Unsupported)
 		return false, nil
 	default:
 		p.writeHTTPError(c, contract.Unsupported)

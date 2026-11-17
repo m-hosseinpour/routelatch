@@ -77,6 +77,7 @@ func (s *Service) setMode(ctx context.Context, raw string) (ModeData, error) {
 			})
 			return ModeData{}, err
 		}
+		s.logger.Logf(levelInfo, "mode.change", "mode=%s policy=%d fresh-start", mode, nextVersion)
 		return modeResult(mode, nextVersion, contract.CloseReport{}), nil
 	}
 	if mode == cur {
@@ -118,6 +119,7 @@ func (s *Service) setMode(ctx context.Context, raw string) (ModeData, error) {
 		s.listenersOpen = false
 		s.stopped = true
 		s.stoppedByThisProcess = true
+		s.logger.Logf(levelInfo, "mode.change", "mode=stopped policy=%d closed=%d pending=%d kept=%d", nextVersion, report.Closed, report.PendingCancel, report.Kept)
 		return modeResult(mode, nextVersion, report), nil
 	}
 
@@ -139,6 +141,7 @@ func (s *Service) setMode(ctx context.Context, raw string) (ModeData, error) {
 	if s.prober != nil {
 		_, _ = s.prober.CancelQueued(ctx)
 	}
+	s.logger.Logf(levelInfo, "mode.change", "mode=%s policy=%d closed=%d pending=%d kept=%d", mode, nextVersion, report.Closed, report.PendingCancel, report.Kept)
 	return modeResult(mode, nextVersion, report), nil
 }
 
@@ -274,6 +277,7 @@ func (s *Service) addRule(ctx context.Context, req Request) (RuleAddData, error)
 	if err != nil {
 		return RuleAddData{Rule: ruleView(parsed), Normalized: ruleOperand(parsed), Notice: notice}, err
 	}
+	s.logger.Logf(levelInfo, "rules.add", "rule=%s kind=%s", parsed.ID, parsed.Kind)
 	return RuleAddData{Rule: ruleView(parsed), Normalized: ruleOperand(parsed), Notice: notice}, nil
 }
 
@@ -336,5 +340,6 @@ func (s *Service) removeRule(ctx context.Context, rawID string) (RuleRemoveData,
 	if err != nil {
 		return RuleRemoveData{Removed: id, Closed: report.Closed}, err
 	}
+	s.logger.Logf(levelInfo, "rules.remove", "rule=%s closed=%d", id, report.Closed)
 	return RuleRemoveData{Removed: id, Closed: report.Closed}, nil
 }
