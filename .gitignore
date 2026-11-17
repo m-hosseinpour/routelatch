@@ -1,0 +1,8 @@
+# Local build toolchain and module cache (downloaded, not part of the repo)
+.toolchain/
+
+# Spike binaries and build output
+/spike/**/bin/
+/spike/**/*.test
+/routelatch
+/dist/

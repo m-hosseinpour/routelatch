@@ -1,0 +1,445 @@
+RouteLatch T1 spike — embedded Xray core boundary and handshake gate
+build: go=go1.27.4
+build: main=routelatch/spike/xray@(devel)
+build: github.com/refraction-networking/utls@v1.8.3-0.20261108164504-a13c59ffe98b
+build: github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
+    ephemeral identity:    fresh per run, not written to repo (uuid, password, TLS key)
+    tls material:          /tmp/rl-spike-tls-3108218458 (self-signed, leaf-pinned; no verification disabled)
+    transport matrix:      [vless-raw vless-tls vless-ws-tls vless-grpc-tls vless-xhttp-tls trojan-raw socks5-xray-exit socks5-conforming-exit]
+
+=== A. core.Dial vs an actual destination connection (VLESS/RAW)
+2026/11/17 04:02:33.935140 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-vless-raw: silent on 127.0.0.1:37963
+2026/11/17 04:02:33.954802 [Warning] core: Xray 26.11.9 started
+    forwarder transport-front: 127.0.0.1:33025 -> exit 127.0.0.1:35929
+    peer dest-echo:        echo on 127.0.0.1:44415
+    peer dest-close-on-accept: close-after-accept on 127.0.0.1:40487
+2026/11/17 04:02:33.957054 [Warning] core: Xray 26.11.9 started
+    peer dest-close-on-data: close-after-data on 127.0.0.1:40109
+    peer dest-reset-on-data: reset-after-data on 127.0.0.1:39683
+    resources client core up: goroutines=11 fds=18
+    refused destination:   127.0.0.1:38517 (no listener)
+
+=== A1. healthy pool tag -> destination echo
+    A1 dial error:         <nil>
+    A1 dial return:        22.7µs
+    A1 forwarder accepts:  0
+    A1 destination accepted: true
+    A1 dial returned before accept: true
+    A1 dial -> accept gap: 502.05ms
+    A1 write:              n=4 err=<nil> after 502.15ms
+    A1 read:               "ping" after 502.89ms
+    A1 tracked error:      none
+    A1 close -> destination EOF: 1.003s
+    A1 peer:               accepts=1 bytes=4 eofs=1
+
+=== A2. dead pool tag -> fake exit accepts TCP and never completes the handshake
+    A2 dial error:         <nil>
+    A2 dial return:        33.8µs
+    A2 read:               caller-side read timeout (no data) after 800.99ms
+    A2 tracked error:      none
+    A2 destination contacts: 0
+    A2 fake exit TCP accepts: 1
+    A2 fake exit saw close: yes
+
+=== A3. pool tag -> exit TCP refused
+    A3 dial error:         <nil>
+    A3 dial return:        25.5µs
+    A3 tracked[0] @2.006s: app/proxyman/outbound: failed to process outbound traffic > proxy/vless/outbound: failed to find an available destination > common/retry: [transport/internet/tcp: failed to dial to dest > dial tcp 127.0.0.1:45905: connect: connection refused] > common/retry: all retry attempts failed
+    A3 read:               io: read/write on closed pipe after 2.007s
+
+=== A4. pool tag -> exit with a different UUID (server-side rejection)
+    A4 dial error:         <nil>
+    A4 dial return:        19.1µs
+    A4 read:               EOF after 503.54ms
+    A4 tracked error:      none
+    A4 destination contacts: 0
+
+=== A5. selected outbound tag missing
+    A5 dial error:         <nil>
+    A5 dial return:        35.2µs
+    A5 read:               EOF after 151.4µs
+2026/11/17 04:02:39.029425 [Error] app/dispatcher: non existing tag for platform initialized detour: ghost
+    A5 tracked error:      none
+    A5 destination contacts: 0
+
+=== A5b. selected outbound tag is a blackhole
+    A5b dial error:        <nil>
+    A5b dial return:       28.3µs
+    A5b read:              io: read/write on closed pipe after 197.1µs
+    A5b tracked error:     none
+    A5b destination contacts: 0
+
+=== A6. explicit direct tag (independent of pool health)
+    A6 dial error:         <nil>
+    A6 dial return:        27.1µs
+    A6 write:              n=4 err=<nil>
+    A6 read:               "ping" after 1.53ms
+    A6 peer:               accepts=1 bytes=4 eofs=0
+
+=== A7. caller deadline while the exit never answers
+    A7 dial error:         <nil>
+    A7 dial return:        17.8µs
+    A7 read:               io: read/write on closed pipe after 401.51ms
+    A7 tracked[0] @401.47ms: app/proxyman/outbound: failed to process outbound traffic > proxy/vless/outbound: connection ends > context deadline exceeded
+    A7 fake exit close observed: yes
+
+=== C. routing-selected missing tag and default-handler boundary
+    route-missing-tag dial error: <nil>
+    route-missing-tag dial return: 46.8µs
+2026/11/17 04:02:40.036128 [Warning] core: Xray 26.11.9 started
+    route-missing-tag read: EOF after 191.4µs
+2026/11/17 04:02:40.036271 [Warning] app/dispatcher: non existing outTag: ghost
+    route-missing-tag tracked error: none
+    route-missing-tag destination contacts: 0
+    route-no-match dial error: <nil>
+    route-no-match dial return: 9.9µs
+2026/11/17 04:02:40.294590 [Warning] core: Xray 26.11.9 started
+    route-no-match destination contacts: 1
+    route-no-match read:   "ping" after 2.91ms
+    route-empty-balancer dial error: <nil>
+    route-empty-balancer dial return: 10.8µs
+2026/11/17 04:02:40.298340 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:02:40.298397 [Error] app/dispatcher: failed to pick route for tcp:127.0.0.1:44415 > app/router: balancing strategy returns empty tag
+    route-empty-balancer destination contacts: 1
+    route-empty-balancer read: "ping" after 3.17ms
+    route-empty-balancer tracked error: none
+
+=== B. outbound error causes visible to the caller (VLESS/RAW)
+
+=== B1 destination refused
+    B1 destination refused dial error: <nil>
+    B1 destination refused dial return: 32.2µs
+    B1 destination refused read: EOF after 1.510s
+    B1 destination refused tracked error: none
+
+=== B2 destination DNS failure
+    B2 destination DNS failure dial error: <nil>
+    B2 destination DNS failure dial return: 209.5µs
+    B2 destination DNS failure read: EOF after 1.523s
+    B2 destination DNS failure tracked error: none
+
+=== B3 destination accepts then FIN
+    B3 destination accepts then FIN dial error: <nil>
+    B3 destination accepts then FIN dial return: 36.1µs
+    B3 destination accepts then FIN read: EOF after 1.525s
+    B3 destination accepts then FIN tracked error: none
+
+=== B4 destination accepts, then FIN after data
+    B4 destination accepts, then FIN after data dial error: <nil>
+    B4 destination accepts, then FIN after data dial return: 45.5µs
+    B4 destination accepts, then FIN after data write: n=4 err=<nil>
+    B4 destination accepts, then FIN after data read: EOF after 1.025s
+    B4 destination accepts, then FIN after data tracked error: none
+
+=== B5 destination resets after data
+    B5 destination resets after data dial error: <nil>
+    B5 destination resets after data dial return: 24.8µs
+    B5 destination resets after data first write: n=4 err=<nil>
+    B5 destination resets after data second write: n=10 err=<nil>
+    B5 destination resets after data tracked error: none
+    B5 destination resets after data read: EOF after 621.34ms
+
+=== B6. caller cancel (ctx) after a working connection
+    B6 dial error:         <nil>
+    B6 dial return:        35.3µs
+    B6 after cancel read:  EOF after 2.98ms
+    B6 cancel -> destination EOF: yes
+    B6 after explicit close: destination EOF observed
+    B6 tracked error:      none
+    resources client core still up: goroutines=11 fds=28
+RouteLatch T1 spike — embedded Xray core boundary and handshake gate
+build: go=go1.27.4
+build: main=routelatch/spike/xray@(devel)
+build: github.com/refraction-networking/utls@v1.8.3-0.20261108164504-a13c59ffe98b
+build: github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
+    ephemeral identity:    fresh per run, not written to repo (uuid, password, TLS key)
+    tls material:          /tmp/rl-spike-tls-752146989 (self-signed, leaf-pinned; no verification disabled)
+    transport matrix:      [vless-raw vless-tls vless-ws-tls vless-grpc-tls vless-xhttp-tls trojan-raw socks5-xray-exit socks5-conforming-exit]
+
+=== E. transport matrix
+
+=== E. transport vless-raw
+2026/11/17 04:02:48.816074 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-vless-raw: silent on 127.0.0.1:34183
+2026/11/17 04:02:48.836955 [Warning] core: Xray 26.11.9 started
+    forwarder transport-front: 127.0.0.1:37417 -> exit 127.0.0.1:36269
+    resources before vless-raw: goroutines=2 fds=6
+    resources after vless-raw core start: goroutines=7 fds=14
+2026/11/17 04:02:48.838788 [Warning] core: Xray 26.11.9 started
+    peer dest-vless-raw:   echo on 127.0.0.1:44443
+    ready dial error:      <nil>
+    ready dial return:     22.4µs
+    ready destination accepted: true
+    ready dial -> accept gap: 502.08ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 505.99ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.004s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 34.3µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.500s
+    reuse user dials:      3
+    reuse transport active before test: 1
+    reuse transport accepts at forwarder: 3
+    reuse transport still open (500ms after close): 0
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 0
+    reuse transport closes at forwarder: 4
+    resources after vless-raw stop: goroutines=2 fds=16
+
+=== E. transport vless-tls
+2026/11/17 04:02:56.702479 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-vless-tls: silent on 127.0.0.1:43121
+    forwarder transport-front: 127.0.0.1:43715 -> exit 127.0.0.1:38341
+2026/11/17 04:02:56.724232 [Warning] core: Xray 26.11.9 started
+    resources before vless-tls: goroutines=2 fds=16
+    resources after vless-tls core start: goroutines=7 fds=24
+2026/11/17 04:02:56.725825 [Warning] core: Xray 26.11.9 started
+    peer dest-vless-tls:   echo on 127.0.0.1:45039
+    ready dial error:      <nil>
+    ready dial return:     18.0µs
+    ready destination accepted: true
+    ready dial -> accept gap: 505.95ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 506.88ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.002s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 32.1µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.501s
+    reuse user dials:      3
+    reuse transport active before test: 1
+    reuse transport accepts at forwarder: 3
+    reuse transport still open (500ms after close): 0
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 0
+    reuse transport closes at forwarder: 4
+    resources after vless-tls stop: goroutines=2 fds=18
+
+=== E. transport vless-ws-tls
+2026/11/17 04:03:04.591918 [Warning] common/errors: The feature WebSocket transport (with ALPN http/1.1, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP H2 & H3 as soon as possible.
+2026/11/17 04:03:04.598893 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:03:04.612703 [Warning] common/errors: The feature WebSocket transport (with ALPN http/1.1, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP H2 & H3 as soon as possible.
+    peer fake-exit-vless-ws-tls: silent on 127.0.0.1:43335
+2026/11/17 04:03:04.618865 [Warning] core: Xray 26.11.9 started
+    forwarder transport-front: 127.0.0.1:35397 -> exit 127.0.0.1:45889
+2026/11/17 04:03:04.619835 [Warning] core: Xray 26.11.9 started
+    resources before vless-ws-tls: goroutines=2 fds=18
+    resources after vless-ws-tls core start: goroutines=7 fds=26
+    peer dest-vless-ws-tls: echo on 127.0.0.1:42625
+    ready dial error:      <nil>
+    ready dial return:     14.2µs
+    ready destination accepted: true
+    ready dial -> accept gap: 505.23ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 507.55ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.002s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 32.0µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.501s
+    reuse user dials:      3
+    reuse transport active before test: 1
+    reuse transport accepts at forwarder: 3
+    reuse transport still open (500ms after close): 0
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 0
+    reuse transport closes at forwarder: 4
+    resources after vless-ws-tls stop: goroutines=2 fds=10
+
+=== E. transport vless-grpc-tls
+2026/11/17 04:03:12.481536 [Warning] common/errors: The feature gRPC transport (with unnecessary costs, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP stream-up H2 as soon as possible.
+2026/11/17 04:03:12.487982 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:03:12.505355 [Warning] common/errors: The feature gRPC transport (with unnecessary costs, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP stream-up H2 as soon as possible.
+    peer fake-exit-vless-grpc-tls: silent on 127.0.0.1:42745
+    forwarder transport-front: 127.0.0.1:37773 -> exit 127.0.0.1:37575
+2026/11/17 04:03:12.513025 [Warning] core: Xray 26.11.9 started
+    resources before vless-grpc-tls: goroutines=2 fds=10
+    resources after vless-grpc-tls core start: goroutines=7 fds=18
+    peer dest-vless-grpc-tls: echo on 127.0.0.1:45077
+    ready dial error:      <nil>
+    ready dial return:     8.9µs
+2026/11/17 04:03:12.514407 [Warning] core: Xray 26.11.9 started
+    ready destination accepted: true
+    ready dial -> accept gap: 505.34ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 509.74ms
+    ready tracked error:   none
+    ready close -> destination EOF: 3.04ms
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 16.7µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.500s
+    reuse user dials:      3
+    reuse transport active before test: 1
+    reuse transport accepts at forwarder: 0
+    reuse transport still open (500ms after close): 1
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 1
+    reuse transport closes at forwarder: 0
+    resources after vless-grpc-tls stop: goroutines=5 fds=14
+
+=== E. transport vless-xhttp-tls
+2026/11/17 04:03:19.375307 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-vless-xhttp-tls: silent on 127.0.0.1:45519
+    forwarder transport-front: 127.0.0.1:44883 -> exit 127.0.0.1:43271
+2026/11/17 04:03:19.400571 [Warning] core: Xray 26.11.9 started
+    resources before vless-xhttp-tls: goroutines=5 fds=14
+2026/11/17 04:03:19.401783 [Warning] core: Xray 26.11.9 started
+    resources after vless-xhttp-tls core start: goroutines=10 fds=22
+    peer dest-vless-xhttp-tls: echo on 127.0.0.1:35453
+    ready dial error:      <nil>
+    ready dial return:     7.4µs
+    ready destination accepted: true
+    ready dial -> accept gap: 506.45ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 537.50ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.003s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 29.4µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.501s
+    reuse user dials:      3
+    reuse transport active before test: 2
+    reuse transport accepts at forwarder: 1
+    reuse transport still open (500ms after close): 3
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 3
+    reuse transport closes at forwarder: 0
+    resources after vless-xhttp-tls stop: goroutines=5 fds=20
+
+=== E. transport trojan-raw
+2026/11/17 04:03:27.292653 [Warning] common/errors: The feature Trojan (with no Flow, etc.) is deprecated, not recommended for using and might be removed. Please migrate to VLESS with Flow & Seed as soon as possible.
+2026/11/17 04:03:27.297104 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:03:27.313811 [Warning] common/errors: The feature Trojan (with no Flow, etc.) is deprecated, not recommended for using and might be removed. Please migrate to VLESS with Flow & Seed as soon as possible.
+2026/11/17 04:03:27.317440 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-trojan-raw: silent on 127.0.0.1:33079
+    forwarder transport-front: 127.0.0.1:44821 -> exit 127.0.0.1:44413
+    resources before trojan-raw: goroutines=5 fds=20
+    resources after trojan-raw core start: goroutines=10 fds=28
+    peer dest-trojan-raw:  echo on 127.0.0.1:44665
+2026/11/17 04:03:27.318370 [Warning] core: Xray 26.11.9 started
+    ready dial error:      <nil>
+    ready dial return:     8.0µs
+    ready destination accepted: true
+    ready dial -> accept gap: 101.74ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 103.86ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.003s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 26.5µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.501s
+    reuse user dials:      3
+    reuse transport active before test: 0
+    reuse transport accepts at forwarder: 3
+    reuse transport still open (500ms after close): 0
+    reuse destination accepts: 3
+    reuse destination EOFs: 3
+    reuse transport still open (2.5s after close): 0
+    reuse transport closes at forwarder: 3
+    resources after trojan-raw stop: goroutines=5 fds=20
+
+=== E. transport socks5-xray-exit
+2026/11/17 04:03:34.770669 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:03:34.790455 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-socks5-xray-exit: silent on 127.0.0.1:43585
+    resources before socks5-xray-exit: goroutines=5 fds=20
+    resources after socks5-xray-exit core start: goroutines=9 fds=27
+2026/11/17 04:03:34.791114 [Warning] core: Xray 26.11.9 started
+    peer dest-socks5-xray-exit: echo on 127.0.0.1:44253
+    ready dial error:      <nil>
+    ready dial return:     6.5µs
+    ready destination accepted: true
+    ready dial -> accept gap: 777.1µs
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 3.24ms
+    ready tracked error:   none
+    ready close -> destination EOF: 1.002s
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 26.5µs
+    refused-dest tracked error: none
+    refused-dest read:     EOF after 2.501s
+    reuse:                 not measured for socks (no transport pool expected)
+    resources after socks5-xray-exit stop: goroutines=5 fds=20
+
+=== E. transport socks5-conforming-exit
+    conforming socks exit: 127.0.0.1:46833
+    peer fake-exit-socks5-conforming-exit: silent on 127.0.0.1:41463
+    resources before socks5-conforming-exit: goroutines=5 fds=20
+    resources after socks5-conforming-exit core start: goroutines=8 fds=22
+2026/11/17 04:03:38.608085 [Warning] core: Xray 26.11.9 started
+    peer dest-socks5-conforming-exit: echo on 127.0.0.1:33287
+    ready dial error:      <nil>
+    ready dial return:     799.9µs
+    ready destination accepted: true
+    ready dial -> accept gap: 1.28ms
+    ready write:           n=4 err=<nil>
+    ready read:            "ping" after 3.77ms
+    ready tracked error:   none
+    ready close -> destination EOF: 2.75ms
+    ready peer:            accepts=1 bytes=4 eofs=1
+    refused-dest dial error: <nil>
+    refused-dest dial return: 32.0µs
+    refused-dest tracked[0] @1.43ms: app/proxyman/outbound: failed to process outbound traffic > proxy/socks: failed to establish connection to server > proxy/socks: server rejects request: 5
+    refused-dest read:     io: read/write on closed pipe after 1.53ms
+    socks exit accepts:    2
+    socks exit destination connects: 1
+    socks exit failures:   [dial tcp 127.0.0.1:41321: connect: connection refused]
+    reuse:                 not measured for socks (no transport pool expected)
+    resources after socks5-conforming-exit stop: goroutines=5 fds=18
+    transports final fds: map[anon_inode:2 dev:1 pipe:14] (sockets=0)
+RouteLatch T1 spike — embedded Xray core boundary and handshake gate
+build: go=go1.27.4
+build: main=routelatch/spike/xray@(devel)
+build: github.com/refraction-networking/utls@v1.8.3-0.20261108164504-a13c59ffe98b
+build: github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
+    ephemeral identity:    fresh per run, not written to repo (uuid, password, TLS key)
+    tls material:          /tmp/rl-spike-tls-734578748 (self-signed, leaf-pinned; no verification disabled)
+    transport matrix:      [vless-raw vless-tls vless-ws-tls vless-grpc-tls vless-xhttp-tls trojan-raw socks5-xray-exit socks5-conforming-exit]
+
+=== D. teardown and residue
+    resources process baseline before a core: goroutines=2 fds=6
+2026/11/17 04:03:38.965370 [Warning] core: Xray 26.11.9 started
+2026/11/17 04:03:38.981596 [Warning] core: Xray 26.11.9 started
+    peer fake-exit-vless-raw: silent on 127.0.0.1:42973
+    forwarder transport-front: 127.0.0.1:36129 -> exit 127.0.0.1:39389
+    peer dest-teardown:    echo on 127.0.0.1:34655
+    resources after client core start: goroutines=8 fds=15
+2026/11/17 04:03:38.983526 [Warning] core: Xray 26.11.9 started
+    close -> destination EOF samples: 10
+    close -> destination EOF: min=1.001s mean=1.002s max=1.003s
+    resources after 10 closed pool connections: goroutines=8 fds=23
+    resources after 2s settle: goroutines=8 fds=23
+    fd breakdown after settle: map[anon_inode:4 dev:1 pipe:14 socket:3] (sockets=3)
+    transport conns still open after settle: 0
+    transport conns closed at forwarder: 10
+    pending dial error:    <nil>
+    pending dial return:   54.8µs
+    pending fake exit accepted: true
+    pending close -> fake exit EOF: 2.41ms
+    resources after pending close: goroutines=8 fds=23
+    cancel-only -> destination EOF: 1.003s
+    close after cancel -> destination EOF: yes
+    resources after cancel + close: goroutines=8 fds=23
+    resources after exits stopped, client core up: goroutines=3 fds=14
+    resources after client core stop: goroutines=2 fds=14
+    fd breakdown after stop:  map[anon_inode:2 dev:1 pipe:10] (sockets=0)

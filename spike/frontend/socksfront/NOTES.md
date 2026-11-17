@@ -1,0 +1,39 @@
+# SOCKS5 frontend spike (RouteLatch T1)
+
+Scope: `github.com/things-go/go-socks5 v0.1.4` (MIT) vs `minimal.go`, an experiment-only CONNECT frontend. Loopback sockets only; no service, DNS, proxy or network setting was changed. The default-resolver probe deliberately asks the machine resolver for `.invalid`/`localhost` (no destination outside 127.0.0.1 is dialed); see FINDINGS.md scope. Reproduce: `cd spike/frontend && go test -count=1 -race ./socksfront/...` (2.3-2.6s; three consecutive green runs; `go vet` clean). Tags: **runtime-observed**, **source-inspected**, **implemented** (code+test here). Test names below are the exact `-run` commands.
+
+## 1. Library behaviour
+
+- **1a. Library resolves domains before any custom dialer** [source-inspected `handle.go:54-65`; runtime-observed `TestLibResolvesDomainBeforeDial`]. Default `DNSResolver` turned `socks-target.invalid:443` into a local lookup: reply `05 04 00 01 00 00 00 00 00 00` (host unreachable) after 2ms, dialer calls = 0. `localhost:443` reached the dialer as `127.0.0.1:443`, never as a name. `RawDestAddr.IP` is mutated in place (`dest := req.RawDestAddr`).
+- **1b. Workaround preserves the hostname** [runtime-observed `TestLibHostnamePreservedWithResolverHack`]. `WithResolver` returning `(ctx, nil, nil)` + `WithDialAndRequest` gives dial addr `socks-target.invalid:443`, `RawDestAddr.FQDN == "socks-target.invalid"`, `DestAddr.IP == nil`, and a working tunnel. `AddrSpec.String()` with nil IP returns `host:port` (`statute/addr.go:19-26`, documented fallback). Greeting+request+11 early bytes in one write were buffered by `bufio` (`server.go:135`; `handle.go:32,47`) and arrived upstream intact (`handle.go:158`).
+- **1c. Success reply only after the dial returns** [runtime-observed `TestLibReplyOnlyAfterDial`]. With a blocked dialer, no reply byte in a 250ms window; `0x00` after release. Dial errors map to replies by **substring matching** (`handle.go:136-147`): "refused"→`05 05 00 01 …`, "network is unreachable"→`05 03 …`, else→`05 04 …`; the dialer cannot choose. No upstream bytes exist before the reply (there is no upstream conn yet). After `0x00`, later failure only closes the stream; no second reply (subtest `failure_after_success…`).
+
+## 2. Minimal own frontend (`minimal.go`, implemented)
+
+- CONNECT only, method `0x00` (`TestMinimalNoAuthOnly`); unresolved host passed verbatim to `DialFunc` (`TestMinimalHostnameUnresolved`); early data from one write preserved (`TestMinimalEarlyDataInOneWrite`); success only after `DialFunc` returns (`TestMinimalNoReplyBeforeDialReturns`).
+- Dial failure → `05 01 00 01 00 00 00 00 00 00`, exactly one dial attempt, connection closed, no fallback (`TestMinimalDialFailure`). `Cancel(id)` unblocks a blocked dial in ~0s and removes the session (`TestMinimalCancelInFlightDial`); `CloseClient(id)` from another goroutine gives client EOF and upstream peer EOF (`TestMinimalCloseClientFromAnotherGoroutine`).
+- BIND and UDP ASSOCIATE get `05 07 00 01 00 00 00 00 00 00`; unknown ATYP gets `05 08 00 01 …`; no UDP socket appears (`TestMinimalRefusesUDPAndBind`, measured by intersecting socket inodes from `/proc/self/fd` with `/proc/self/net/udp`).
+- 5 connect/echo/close rounds: goroutines 4→4, socket fds 2→2. Total fd entries can rise by a few because `io.Copy` between TCP sockets uses `splice(2)` and Go keeps a process-wide pipe pool, so socket fds are the leak metric and `/proc/self/fd` is reported only for context.
+- Size: `wc -l minimal.go` = 390 (301 non-comment lines); 1333 test lines across `socksfront/*_test.go`. go-socks5 would have supplied negotiation, IPv4/IPv6/domain request parsing, reply encoding, the 32 KiB buffer pool, rules, and accept/goroutine plumbing; this experiment wrote those plus the registry, contexts and teardown it needs.
+
+## 3. UDP ASSOCIATE / BIND on go-socks5
+
+- Default `PermitAll` allows all three commands (`ruleset.go:28-33`). UDP ASSOCIATE succeeds and opens a listener (`handle.go:180-224`): exact reply `05 00 00 01 7f 00 00 01 <port>`, process UDP sockets 1→2, a datagram to BND was relayed to a loopback UDP echo and back; closing the TCP control connection released the listener and stopped relaying <=300ms (`TestLibUDPAssociateDefaultOpensListener`).
+- BIND always answers `05 07 00 01 00 00 00 00 00 00` (`handle.go:171-178`). `WithAssociateHandle` (`option.go:122-127`; dispatch `handle.go:101-109`) refuses UDP with the same `0x07` and opens no socket (`TestLibUDPAssociateRefusedWithHandler`, `TestLibBindRefused`).
+- **Ordering gap with the default resolver** [runtime-observed `TestLibRefusalAfterResolutionOrder`]: `handle.go:57-65` resolves a domain before command dispatch, so with `DNSResolver` a domain-form BIND/UDP request performs a local DNS lookup and returns `0x04`, not the explicit `0x07`; `WithRule` and command handlers run later. IP-form requests correctly get `0x07`. The recommended no-lookup resolver closes this (next section and `TestLibStubResolverRefusesBindAndUDPWithoutLookup`).
+
+## 4. Cancellation / teardown with go-socks5
+
+- The dial context is `context.Background()` (`handle.go:54`) and there is no connection registry. 300ms after the client closed, a blocked dial was still blocked, the accepted conn was still open, and `ctx.Err()` was nil; after release the handler exited promptly (`TestLibBlockedDialNotCancelledByClientClose`). A client disconnect alone cannot cancel an in-flight dial.
+- Closing the client side of a live tunnel from another goroutine (own accept loop around `ServeConn`, `server.go:130-179`) produced client EOF and upstream peer EOF (`TestLibCloseLiveTunnelFromAnotherGoroutine`).
+- 5 rounds: goroutines 4→4, socket fds 2→2 (`TestLibFiveConnectCloseRounds`); total fds again include GC-reclaimed splice pipes.
+
+## Assessment and recommendation
+
+Pin **`github.com/things-go/go-socks5 v0.1.4`**. It can serve v1 if RouteLatch owns: (1) no-op resolver + `WithDialAndRequest` using `RawDestAddr` (hostname preservation); (2) its own per-connection context inside the dial closure (the library's is `Background`); (3) an own accept loop + registry around `ServeConn` (cancel, live-tunnel close); (4) `WithAssociateHandle` + `WithBindHandle` returning `0x07`; (5) the readiness gate before the dial returns (reply timing is already correct).
+
+Exact guarantee gaps of a ready-made server: hostname preservation (resolver workaround), cancellable dial/teardown (no context/registry), and chosen error reply code (substring heuristic). With the no-lookup resolver the earlier domain-form BIND/UDP ordering gap is closed: both get explicit `0x07`, the resolver hook does no I/O, no dial occurs and no UDP socket opens (`TestLibStubResolverRefusesBindAndUDPWithoutLookup`). Glue for the library path is roughly **120-160 LOC** (resolver ~5, dial adapter ~15, refusal handlers ~10, accept/registry/context/close ~90-130) plus policy/readiness code that exists either way. Owning dispatch (`minimal.go`) is **~300 non-comment lines** and meets all listed guarantees; reusing `statute` (source-inspected, not used here) would remove ~60-80.
+
+Recommendation: use the library + adapters for v1. The no-lookup resolver makes hostname preservation and explicit `0x07` refusal consistent (no local lookup at all); the remaining pinned-version dependencies are the nil-IP fallback in `AddrSpec.String` and the substring-based reply-code map. Own dispatch only if a chosen reply code (e.g. `0x01`) is required. Neither choice weakens the CONNECT guarantees observed above.
+
+Limitations: loopback binding is caller-enforced (tests bind 127.0.0.1; code rejects nothing); no IPv6 listener, real internet destination, TLS readiness gate, or authenticated client was exercised; 100-300ms negative windows are bounded heuristics; the workaround relies on public `AddrSpec.String` fallback and therefore on pinning the version.
