@@ -14,7 +14,8 @@ export PATH=$PWD/.toolchain/go/bin:$PATH GOTOOLCHAIN=local \
 go test -count=1 -v ./internal/acceptance/     # PASS/FAIL lines go to stdout
 ```
 
-Runtime is 110–130 s (varies with the two fixed waits below). Two waits dominate: `proposals recheck` waits out the
+Runtime was 114–144 s across two R6 full runs (pre-R6: 110–130 s); the three
+transport cells add about 5 s. Two waits dominate: `proposals recheck` waits out the
 prober's hard-coded 60 s destination cooldown, and A07 waits one 30 s rotation
 tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
 `-v -run 'TestFailureAndLimits|TestResourceBaseline'` for the cheap checks.
@@ -30,6 +31,12 @@ tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
   resolves the fixture names to `127.0.0.1`. The host resolver cannot resolve
   those names, so a successful tunnel proves the hostname reached the exit
   unresolved.
+* The optional R6 matrix starts a separate pinned-core exit child per transport
+  (WS, gRPC, XHTTP), each on TLS with a per-run self-signed leaf, an explicit
+  ALPN (`http/1.1` for WS, `h2` for gRPC/XHTTP) and a local destination peer.
+  Client and exit never share a process: gRPC/XHTTP keep process-global dialer
+  state across `core.Stop`. The imported links pin the leaf; verification is
+  never disabled.
 * The SOCKS5 exits are small servers owned by the test. They record each CONNECT
   authority, dial `127.0.0.1:<requested port>` (the destination peer) and record
   when the product closes the exit-side socket. A "stall" host holds the
@@ -69,6 +76,7 @@ setting is used.
 | A11 | An inherited `NO_PROXY` naming an approved destination is replaced by the product's fixed list in the child; with listeners stopped, and with no service at all, `env`/`exec` exit 3 and the child never runs (no silent direct). |
 | A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
+| R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
 ## Findings in the product
@@ -153,6 +161,12 @@ them until the suite is updated.
   are not exercised; UDP is asserted only as an explicit refusal.
 * **A13 / platform:** systemd lifecycle/crash-loop supervision, Windows, Android
   and TUN are out of scope.
+* **Transport limits:** WS/gRPC/XHTTP are runtime-verified only over TLS against a
+  local pinned exit, with the ALPN above and one VLESS stream per test
+  request. REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP are
+  not exercised. One core per process is kept throughout, so these cells do not
+  test multiple embedded cores, transport reuse counts, or long-lived gRPC/XHTTP
+  session behavior.
 * The product's own goroutine count is not externally observable; descriptors are
   the proxy. Traffic ports are chosen with a bind-close-rebind probe, so a
   concurrent process taking a port between probe and bind surfaces as a startup

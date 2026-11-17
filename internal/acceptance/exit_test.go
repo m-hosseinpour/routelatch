@@ -58,21 +58,58 @@ type exitSpec struct {
 	Hosts       map[string]string `json:"hosts,omitempty"`
 	TLSCertFile string            `json:"tls_cert_file,omitempty"`
 	TLSKeyFile  string            `json:"tls_key_file,omitempty"`
+	// Transport is the inbound network. Empty means "tcp"; the R6 matrix adds
+	// "ws", "grpc" and "xhttp", each of which needs its own settings block.
+	Transport   string   `json:"transport,omitempty"`
+	Host        string   `json:"host,omitempty"`         // wsSettings.host
+	Path        string   `json:"path,omitempty"`         // wsSettings/xhttpSettings.path
+	GRPCService string   `json:"grpc_service,omitempty"` // grpcSettings.serviceName
+	ALPN        []string `json:"alpn,omitempty"`         // tlsSettings.alpn
 }
 
 func (s exitSpec) config() []byte {
 	var inbound map[string]any
 	stream := map[string]any{"network": "tcp"}
+	switch s.Transport {
+	case "", "tcp", "raw":
+	case "ws":
+		stream["network"] = "ws"
+		ws := map[string]any{}
+		if s.Host != "" {
+			ws["host"] = s.Host
+		}
+		if s.Path != "" {
+			ws["path"] = s.Path
+		}
+		stream["wsSettings"] = ws
+	case "grpc":
+		stream["network"] = "grpc"
+		stream["grpcSettings"] = map[string]any{"serviceName": s.GRPCService}
+	case "xhttp":
+		stream["network"] = "xhttp"
+		xhttp := map[string]any{"mode": "auto"}
+		if s.Path != "" {
+			xhttp["path"] = s.Path
+		}
+		stream["xhttpSettings"] = xhttp
+	default:
+		panic("exitSpec: unknown transport " + s.Transport)
+	}
 	if s.TLSCertFile != "" {
-		// A TLS exit is only used by the D18 pin check: the client must present
-		// the pinned leaf, so the self-signed certificate is the fixture.
-		stream["security"] = "tls"
-		stream["tlsSettings"] = map[string]any{
+		// TLS exits are used by the pin checks: the client must present the
+		// pinned self-signed leaf, and the transport's ALPN is explicit so a
+		// gRPC/XHTTP (h2) exit cannot accidentally negotiate HTTP/1.1.
+		tls := map[string]any{
 			"certificates": []any{map[string]any{
 				"certificateFile": s.TLSCertFile,
 				"keyFile":         s.TLSKeyFile,
 			}},
 		}
+		if len(s.ALPN) > 0 {
+			tls["alpn"] = s.ALPN
+		}
+		stream["security"] = "tls"
+		stream["tlsSettings"] = tls
 	}
 	switch s.Protocol {
 	case "vless":
