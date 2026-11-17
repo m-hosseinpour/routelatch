@@ -8,7 +8,9 @@ import (
 )
 
 // Sample is one retained measurement. It keeps only destination, port, kind,
-// timing and outcome; never a URL, header, body, cookie or request byte.
+// timing and outcome; never a URL, header, body, cookie or request byte. The
+// retention ring is process memory only: samples are displayed live and are
+// never written to state, a backup or a log (D21).
 type Sample struct {
 	Exit        contract.ExitID       `json:"exit"`
 	Kind        contract.ProbeKind    `json:"kind"`

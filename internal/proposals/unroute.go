@@ -11,15 +11,16 @@ import (
 )
 
 // UnrouteID identifies one unroute suggestion. It is the ProposalID of the
-// contract.Proposal stored in State.Proposals with Kind ProposalUnroute, so an
-// unroute suggestion persists and expires exactly like a route proposal. It
-// follows the same pending/accepted/rejected/expired lifecycle; accepting it
-// returns the rule ID for the caller to remove after explicit confirmation, and
-// the registry itself removes nothing.
+// contract.Proposal kept in the in-memory registry with Kind ProposalUnroute,
+// so an unroute suggestion expires exactly like a route proposal. It follows
+// the same pending/accepted/rejected/expired lifecycle; accepting it returns
+// the rule ID for the caller to remove after explicit confirmation, and the
+// registry itself removes nothing. Like every proposal it is lost at restart
+// and never written to disk (D21).
 type UnrouteID string
 
 // UnrouteSuggestion is the command-facing view of one unroute proposal. The
-// persisted form is contract.Proposal{Kind: ProposalUnroute, RuleID: ...}.
+// in-memory form is contract.Proposal{Kind: ProposalUnroute, RuleID: ...}.
 type UnrouteSuggestion struct {
 	ID          UnrouteID               `json:"id"`
 	RuleID      contract.RuleID         `json:"rule_id"`

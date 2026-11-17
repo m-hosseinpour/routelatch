@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/netip"
@@ -71,7 +72,7 @@ type Service struct {
 	policy atomic.Pointer[routing.Policy]
 
 	opMu    sync.Mutex // serializes command-level mutations and their sweeps
-	propsMu sync.Mutex // serializes proposal decisions and their persistence
+	propsMu sync.Mutex // serializes proposal decisions and the rule they confirm
 	// pubMu orders every "store result -> s.snap" publication. Without one
 	// publisher, a health or proposal write could publish an older snapshot
 	// after a mode commit and make the in-memory mode regress (§4.4).
@@ -104,9 +105,11 @@ type Service struct {
 	probeOnce sync.Once
 }
 
-// NewService loads the snapshot, builds the initial policy and restores the
-// in-memory proposal registry. It does not start the engine or listeners;
-// StartNetwork does that.
+// NewService loads the snapshot, builds the initial policy and creates an
+// empty in-memory proposal registry. It does not start the engine or listeners;
+// StartNetwork does that. Proposals are deliberately not restored from the
+// snapshot: a destination is never persisted, so a restart starts with no
+// proposal history (D21).
 func NewService(ctx context.Context, opts Options) (*Service, error) {
 	if opts.Store == nil {
 		return nil, &contract.Failure{Kind: contract.Internal, Path: contract.PathLocal, Op: "control.new", Message: "service has no store"}
@@ -116,7 +119,7 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	}
 	snap, err := opts.Store.Load(ctx)
 	if err != nil {
-		return nil, err
+		return nil, withResidueNote(err, opts.Store.Residue())
 	}
 	if !validMode(snap.State.Mode) {
 		return nil, &contract.Failure{Kind: contract.StateCorrupt, Path: contract.PathLocal, Op: "control.new", Message: "state has an unknown routing mode"}
@@ -128,9 +131,6 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		return nil, err
 	}
 	props := proposals.New(opts.Now)
-	if err := props.Load(snap.State.Proposals); err != nil {
-		return nil, &contract.Failure{Kind: contract.StateCorrupt, Path: contract.PathLocal, Op: "control.new", Message: "persisted proposals are invalid", Err: err}
-	}
 	reg := conns.New()
 	reg.SetPolicyVersion(snap.State.PolicyVersion)
 	refresher := imports.NewRefresher(opts.Store, nil)
@@ -163,7 +163,33 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		s.logger.Logf(levelWarning, "log.open", "operational log is unavailable at %s: %s; the service continues", s.logPath, logErr.Error())
 	}
 	s.logger.Logf(levelInfo, "service.init", "mode=%s policy=%d", snap.State.Mode, snap.State.PolicyVersion)
+	if residue := s.store.Residue(); residue.Rewritten > 0 || len(residue.Warnings) > 0 {
+		// Only counts reach the log; doctor carries the destination-free detail.
+		if residue.Rewritten > 0 {
+			s.logger.Logf(levelInfo, "residue.scrub", "legacy proposal history removed from %d file(s)", residue.Rewritten)
+		}
+		if len(residue.Warnings) > 0 {
+			s.logger.Logf(levelWarning, "residue.warning", "%d legacy file(s) were left untouched; run 'doctor' for details", len(residue.Warnings))
+		}
+	}
 	return s, nil
+}
+
+// withResidueNote appends the destination-free residue warnings Open recorded
+// to a load failure, so doctor can still name an unreadable legacy file whose
+// corrupt live state prevents the normal checks from running.
+func withResidueNote(err error, residue store.Residue) error {
+	note := residue.Note()
+	if note == "" {
+		return err
+	}
+	var failure *contract.Failure
+	if errors.As(err, &failure) {
+		copy := *failure
+		copy.Message = failure.Message + "; legacy proposal residue: " + note
+		return &copy
+	}
+	return fmt.Errorf("%w (legacy proposal residue: %s)", err, note)
 }
 
 // stoppedFailure rejects operations that would touch the network while the

@@ -1,13 +1,17 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"routelatch/internal/contract"
 )
@@ -177,8 +181,11 @@ func TestDeprecatedStateMigratesAndBacksUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pre-migration backup missing: %v", err)
 	}
-	if string(backup) != string(legacy) {
-		t.Fatal("pre-migration backup does not contain the old document")
+	// D21: the pre-migration copy keeps the old document but drops proposal
+	// history, so an empty proposals array is removed too.
+	wantBackup := `{"mode":"all-proxy","policy_version":3,"rules":[],"sources":[],"records":[],"health":[]}`
+	if string(backup) != wantBackup {
+		t.Fatalf("pre-migration backup = %s", backup)
 	}
 	var onDisk contract.State
 	raw := readStateFile(t, s)
@@ -258,5 +265,425 @@ func TestRestoreRejectsPathOutsideBackupDir(t *testing.T) {
 	var failure *contract.Failure
 	if !errors.As(err, &failure) || failure.Kind != contract.StateLocked {
 		t.Fatalf("RestorePath err = %v, want conflict/state_locked", err)
+	}
+}
+
+// legacyStateDocument is the pre-D21 state shape: it names one visited
+// destination in its proposal history.
+type legacyStateDocument struct {
+	contract.State
+	Proposals []contract.Proposal `json:"proposals"`
+}
+
+// legacyProposalState is a state document an older build could have written.
+func legacyProposalState(canary string) legacyStateDocument {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	return legacyStateDocument{
+		State: contract.State{
+			SchemaVersion: contract.SchemaVersionCurrent,
+			PolicyVersion: 1,
+			Mode:          contract.ModeTargeted,
+			Rules:         []contract.Rule{},
+			Sources:       []contract.Source{},
+			Records:       []contract.Record{},
+			Health:        []contract.ExitHealth{},
+			UpdatedAt:     now,
+		},
+		Proposals: []contract.Proposal{{
+			ID:   "p-legacy",
+			Kind: contract.ProposalRoute,
+			Destination: contract.Destination{
+				Kind: contract.DestDomain, Host: canary, Port: 443,
+			},
+			Evidence: []contract.Evidence{{
+				Kind: contract.EvidenceDirectRefused, At: now,
+				Address: canary + ":443", ProbeKind: contract.ProbeDirectTCP,
+				Outcome: contract.OutcomeRefused,
+			}},
+			Status:    contract.ProposalPending,
+			CreatedAt: now,
+			ExpiresAt: now.Add(contract.ProposalRetention),
+		}},
+	}
+}
+
+func assertFileLacks(t *testing.T, path, canary string) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if strings.Contains(string(raw), canary) {
+		t.Fatalf("%s contains the visited destination", filepath.Base(path))
+	}
+}
+
+func TestProposalHistoryIsNeverPersisted(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	canary := "rl-canary-store.invalid"
+	raw, err := json.MarshalIndent(legacyProposalState(canary), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Paths().State, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	snap, err := s.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State.SchemaVersion != contract.SchemaVersionCurrent {
+		t.Fatalf("loaded schema = %d", snap.State.SchemaVersion)
+	}
+
+	// The next write drops the history from the live file and from its backup.
+	if _, err := s.Mutate(ctx, func(st *contract.State) error {
+		st.Mode = contract.ModeDirectAll
+		st.PolicyVersion++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assertFileLacks(t, s.Paths().State, canary)
+	assertFileLacks(t, s.Paths().State+".bak", canary)
+
+	ref, err := s.Backup(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFileLacks(t, ref.Path, canary)
+}
+
+// legacyBackupChecksum is the pre-D21 checksum for the legacyProposalState
+// fixture, computed from HEAD's State struct (which still had Proposals
+// between Health and Desktop). Keeping it literal makes the test fail if the
+// legacy canonical field order drifts.
+const legacyBackupChecksum = "sha256:6807d967443db94d4ac7f386d95cb952bf622193bc9b61d1e0492dfbec65557e"
+
+func TestLegacyBackupProposalHistoryIsNotRestored(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	canary := "rl-canary-backup.invalid"
+	st := legacyProposalState(canary)
+	payload, err := json.Marshal(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An old backup's checksum covers the proposal payload too; the reader
+	// verifies that shape and then discards the proposals (D21).
+	canonical, err := legacyCanonicalState(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(canonical)
+	if got := "sha256:" + hex.EncodeToString(sum[:]); got != legacyBackupChecksum {
+		t.Fatalf("legacy canonical shape drifted: %s", got)
+	}
+	path := writeLegacyBackup(t, s, canonical, legacyBackupChecksum)
+
+	_, _, err = s.InspectBackup(path)
+	if err != nil {
+		t.Fatalf("legacy backup was rejected: %v", err)
+	}
+	if _, err := s.RestorePath(ctx, path); err != nil {
+		t.Fatalf("legacy backup could not be restored: %v", err)
+	}
+	assertFileLacks(t, s.Paths().State, canary)
+}
+
+func TestLegacyBackupTamperRejected(t *testing.T) {
+	canary := "rl-canary-backup.invalid"
+	payload, err := json.Marshal(legacyProposalState(canary))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string][]byte{
+		"proposal destination": bytes.Replace(payload, []byte(canary), []byte("tampered.invalid"), 1),
+		"state field":          bytes.Replace(payload, []byte(`"policy_version":1`), []byte(`"policy_version":2`), 1),
+	}
+	for name, tampered := range cases {
+		t.Run(name, func(t *testing.T) {
+			if bytes.Equal(tampered, payload) {
+				t.Fatal("fixture did not change")
+			}
+			s := newTestStore(t)
+			path := writeLegacyBackup(t, s, tampered, legacyBackupChecksum)
+			_, _, err := s.InspectBackup(path)
+			var failure *contract.Failure
+			if !errors.As(err, &failure) || failure.Kind != contract.StateCorrupt {
+				t.Fatalf("tampered legacy backup err = %v, want state_corrupt", err)
+			}
+		})
+	}
+}
+
+func writeLegacyBackup(t *testing.T, s *Store, state []byte, checksum string) string {
+	t.Helper()
+	env := backupEnvelope{
+		SchemaVersion: contract.SchemaVersionCurrent,
+		CreatedAt:     time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC),
+		Checksum:      checksum,
+		State:         state,
+	}
+	raw, err := json.MarshalIndent(env, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureBackupDir(s.Paths().Backup); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Paths().Backup, "state-legacy.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestDeprecatedStateDropsProposalHistory(t *testing.T) {
+	s := newTestStore(t)
+	canary := "rl-canary-migrate.invalid"
+	st := legacyProposalState(canary)
+	st.SchemaVersion = 0
+	raw, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Paths().State, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State.SchemaVersion != contract.SchemaVersionCurrent {
+		t.Fatalf("migrated schema = %d", snap.State.SchemaVersion)
+	}
+	// The pre-migration backup keeps the recovered state but not the history.
+	assertFileLacks(t, s.Paths().State+".bak", canary)
+	assertFileLacks(t, s.Paths().State, canary)
+}
+
+// openScrubState is a legacy state document in the real pre-D21 field order:
+// proposals sits between health and desktop. The exact-bytes assertion proves
+// the middle-member removal keeps every other field in place.
+func openScrubState(canary string) (legacy, scrubbed string) {
+	legacy = `{
+  "schema_version": 1,
+  "policy_version": 9,
+  "mode": "all-proxy",
+  "rules": [],
+  "sources": [],
+  "records": [],
+  "health": [],
+  "proposals": [
+    {
+      "id": "p-legacy",
+      "destination": {"kind": "domain", "host": "` + canary + `", "port": 443}
+    }
+  ],
+  "desktop": {"applied": false},
+  "updated_at": "2026-11-17T12:00:00Z"
+}`
+	scrubbed = `{
+  "schema_version": 1,
+  "policy_version": 9,
+  "mode": "all-proxy",
+  "rules": [],
+  "sources": [],
+  "records": [],
+  "health": [],
+
+  "desktop": {"applied": false},
+  "updated_at": "2026-11-17T12:00:00Z"
+}`
+	return legacy, scrubbed
+}
+
+func TestRemoveTopLevelMemberPositions(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"first", `{"proposals":[1],"keep":2}`, `{"keep":2}`},
+		{"middle", `{"a":1,"proposals":[1],"b":2}`, `{"a":1,"b":2}`},
+		{"last", `{"a":1,"proposals":[1]}`, `{"a":1}`},
+		{"only", `{"proposals":[1]}`, `{}`},
+		{"indented middle", "{\n  \"a\": 1,\n  \"proposals\": [\n    {\"x\": \"}\"}\n  ],\n  \"b\": 2\n}", "{\n  \"a\": 1,\n\n  \"b\": 2\n}"},
+		{"nested untouched", `{"a":{"proposals":[1]},"b":2}`, `{"a":{"proposals":[1]},"b":2}`},
+		{"duplicate keys", `{"proposals":[1],"a":1,"proposals":[2]}`, `{"a":1}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, err := removeAllTopLevelMembers([]byte(tc.in), "proposals")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+			if !json.Valid(got) {
+				t.Fatalf("result is not valid JSON: %q", got)
+			}
+		})
+	}
+}
+
+func TestOpenScrubsLegacyProposalResidue(t *testing.T) {
+	s := newTestStore(t)
+	paths := s.Paths()
+	canary := "rl-canary-residue.invalid"
+	legacy, scrubbed := openScrubState(canary)
+	if err := os.WriteFile(paths.State, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.State+".bak", []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(legacyProposalState(canary))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := legacyCanonicalState(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(canonical)
+	backupPath := writeLegacyBackup(t, s, payload, "sha256:"+hex.EncodeToString(sum[:]))
+	beforeEntries, err := os.ReadDir(paths.Backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(Options{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Residue().Rewritten; got != 3 {
+		t.Fatalf("scrubbed %d file(s), want 3 (%+v)", got, reopened.Residue())
+	}
+	if got, _ := os.ReadFile(paths.State); string(got) != scrubbed {
+		t.Fatalf("state bytes changed beyond the proposals member:\n%s", got)
+	}
+	if got, _ := os.ReadFile(paths.State + ".bak"); string(got) != scrubbed {
+		t.Fatalf(".bak bytes changed beyond the proposals member:\n%s", got)
+	}
+	assertFileLacks(t, backupPath, canary)
+	if raw, err := os.ReadFile(backupPath); err != nil || strings.Contains(string(raw), `"proposals"`) {
+		t.Fatalf("backup still carries the proposals key: %v", err)
+	}
+	if _, _, err := readBackup(backupPath); err != nil {
+		t.Fatalf("scrubbed backup no longer verifies: %v", err)
+	}
+	var env backupEnvelope
+	raw, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.SchemaVersion != contract.SchemaVersionCurrent || env.CreatedAt.IsZero() {
+		t.Fatalf("backup envelope fields changed: %+v", env)
+	}
+	afterEntries, err := os.ReadDir(paths.Backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(afterEntries) != len(beforeEntries) {
+		t.Fatalf("scrub changed the backup file count: %d -> %d", len(beforeEntries), len(afterEntries))
+	}
+
+	// A second open finds nothing to rewrite.
+	again, err := Open(Options{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Residue().Rewritten; got != 0 {
+		t.Fatalf("second open rewrote %d file(s)", got)
+	}
+	if len(again.Residue().Warnings) != 0 {
+		t.Fatalf("second open reported warnings: %v", again.Residue().Warnings)
+	}
+	if got, _ := os.ReadFile(paths.State); string(got) != scrubbed {
+		t.Fatalf("second open changed state bytes")
+	}
+	if got, _ := os.ReadFile(backupPath); strings.Contains(string(got), `"proposals"`) {
+		t.Fatalf("second open reintroduced the proposals key")
+	}
+}
+
+func TestOpenLeavesUnparseableResidueUntouched(t *testing.T) {
+	s := newTestStore(t)
+	paths := s.Paths()
+	badStateBak := []byte("{not json")
+	if err := os.WriteFile(paths.State+".bak", badStateBak, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureBackupDir(paths.Backup); err != nil {
+		t.Fatal(err)
+	}
+	badBackup := filepath.Join(paths.Backup, "state-bad.json")
+	if err := os.WriteFile(badBackup, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(Options{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Residue().Rewritten; got != 0 {
+		t.Fatalf("rewrote %d unparseable file(s)", got)
+	}
+	if got := len(reopened.Residue().Warnings); got < 2 {
+		t.Fatalf("warnings = %v, want at least the two unparseable files", reopened.Residue().Warnings)
+	}
+	if got, _ := os.ReadFile(paths.State + ".bak"); !strings.EqualFold(string(got), string(badStateBak)) {
+		t.Fatalf(".bak was changed: %q", got)
+	}
+	if got, _ := os.ReadFile(badBackup); string(got) != "not json" {
+		t.Fatalf("backup was changed: %q", got)
+	}
+}
+
+func TestOpenScrubsLegacyTempResidue(t *testing.T) {
+	s := newTestStore(t)
+	paths := s.Paths()
+	stateCanary := "rl-canary-state-temp.invalid"
+	backupCanary := "rl-canary-backup-temp.invalid"
+	legacy, scrubbed := openScrubState(stateCanary)
+	stateTemp := filepath.Join(paths.StateDir, "state.json.tmp-999999")
+	if err := os.WriteFile(stateTemp, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(legacyProposalState(backupCanary))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := legacyCanonicalState(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(canonical)
+	origin := writeLegacyBackup(t, s, payload, "sha256:"+hex.EncodeToString(sum[:]))
+	backupTemp := filepath.Join(paths.Backup, "state-20260101T000000.000000000Z.json.tmp-999999")
+	if err := os.Rename(origin, backupTemp); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(Options{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Residue().Rewritten; got != 2 {
+		t.Fatalf("scrubbed %d temp file(s), want 2 (%+v)", got, reopened.Residue())
+	}
+	if got, _ := os.ReadFile(stateTemp); string(got) != scrubbed {
+		t.Fatalf("state temp not scrubbed: %s", got)
+	}
+	assertFileLacks(t, backupTemp, backupCanary)
+	if _, err := os.Stat(stateTemp); err != nil {
+		t.Fatal("the scrub deleted the state temp instead of rewriting it")
+	}
+	if _, err := os.Stat(backupTemp); err != nil {
+		t.Fatal("the scrub deleted the backup temp instead of rewriting it")
 	}
 }

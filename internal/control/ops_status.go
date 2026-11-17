@@ -72,11 +72,9 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 		st := s.diag.Stats()
 		out.Diagnostics.Queued = st.Queued
 	} else {
-		for _, prop := range snap.State.Proposals {
-			if prop.Status == contract.ProposalPending {
-				out.Diagnostics.Queued++
-			}
-		}
+		// Proposals are memory only (D21); report pending in-process entries
+		// instead of reading a persisted list that no longer exists.
+		out.Diagnostics.Queued = len(s.props.Pending())
 	}
 	for _, ci := range s.reg.Snapshot() {
 		switch ci.State {
@@ -172,7 +170,7 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 	defer s.opMu.Unlock()
 	snap, err := s.store.Load(ctx)
 	if err != nil {
-		return DoctorData{}, err
+		return DoctorData{}, withResidueNote(err, s.store.Residue())
 	}
 	paths := s.paths
 	if paths.State == "" {
@@ -273,6 +271,17 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		add("schema_version", "error", fmt.Sprintf("state schema %d, expected %d", snap.State.SchemaVersion, contract.SchemaVersionCurrent), "restore a compatible backup")
 	} else {
 		add("schema_version", "ok", fmt.Sprintf("state schema %d", snap.State.SchemaVersion), "")
+	}
+
+	residue := s.store.Residue()
+	switch {
+	case len(residue.Warnings) > 0:
+		add("proposal_residue", "warn", strings.Join(residue.Warnings, "; "),
+			"inspect the named file; RouteLatch leaves a file it cannot parse or verify untouched")
+	case residue.Rewritten > 0:
+		add("proposal_residue", "ok", fmt.Sprintf("legacy proposal history was removed from %d file(s) on open", residue.Rewritten), "")
+	default:
+		add("proposal_residue", "ok", "no legacy proposal history in state or backups", "")
 	}
 
 	logPath := s.logPath

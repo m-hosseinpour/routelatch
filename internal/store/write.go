@@ -74,14 +74,16 @@ func writeFileAtomic(path string, data []byte) error {
 
 // writeStateLocked writes a new state document and keeps the previous, still
 // valid document as state.json.bak. The backup is best effort; its failure does
-// not block a commit the user already requested.
+// not block a commit the user already requested. Proposal history is stripped
+// from the backup as well, so an older file cannot carry a destination forward
+// through state.json.bak (D21).
 func (s *Store) writeStateLocked(previous, next interface{}) error {
 	raw, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return internalFailure("cannot encode state", err)
 	}
 	if old, err := os.ReadFile(s.paths.State); err == nil && json.Valid(old) {
-		_ = writeFileAtomic(s.paths.State+".bak", old)
+		_ = writeFileAtomic(s.paths.State+".bak", scrubProposalHistory(old))
 	}
 	return writeFileAtomic(s.paths.State, raw)
 }
@@ -97,7 +99,7 @@ func (s *Store) writeConfigLocked(previous, next interface{}) error {
 // copyBackupLocked is the mandatory pre-migration backup. Unlike the routine
 // best-effort .bak in writeStateLocked, a failure here aborts the migration.
 func (s *Store) copyBackupLocked(raw []byte) error {
-	if err := writeFileAtomic(s.paths.State+".bak", raw); err != nil {
+	if err := writeFileAtomic(s.paths.State+".bak", scrubProposalHistory(raw)); err != nil {
 		return &contract.Failure{
 			Kind: contract.StateCorrupt, Path: contract.PathLocal, Op: "store.migrate",
 			Message: "cannot back up the old state before migration; the file was not changed",
@@ -105,6 +107,19 @@ func (s *Store) copyBackupLocked(raw []byte) error {
 		}
 	}
 	return nil
+}
+
+// scrubProposalHistory drops a non-empty proposals array from a state document
+// that an older build may have written. It preserves every other byte, so an
+// ordinary backup stays byte-for-byte identical. A document that does not
+// decode as state is left as-is; RouteLatch never reads .bak back. Destinations
+// must never be copied into a backup, log or state file (D21).
+func scrubProposalHistory(raw []byte) []byte {
+	out, found, err := removeAllTopLevelMembers(raw, "proposals")
+	if err != nil || !found {
+		return raw
+	}
+	return out
 }
 
 // ensureBackupDir creates the backup directory with 0700 permissions.

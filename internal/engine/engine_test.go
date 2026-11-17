@@ -281,6 +281,12 @@ func TestGeneratedConfigHasNoFallbackSurface(t *testing.T) {
 			t.Fatalf("generated config has unexpected root key %q", key)
 		}
 	}
+	logBlock, _ := doc["log"].(map[string]any)
+	if logBlock["access"] != "none" || logBlock["error"] != "none" {
+		// D21: a core error line can name the destination of a dial, so both
+		// sinks stay disabled.
+		t.Fatalf("generated log block does not disable core output: %v", logBlock)
+	}
 	lower := string(raw)
 	for _, forbidden := range []string{`"freedom"`, `"routing"`, `"balancer"`, `"dns"`, `"api"`, `"env"`, `"inbounds"`, `"stats"`, `"policy"`, `"proxySettings"`, `"sockopt"`, `"mux"`, `"allowInsecure"`} {
 		if strings.Contains(lower, forbidden) {

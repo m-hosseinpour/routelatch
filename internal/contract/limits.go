@@ -67,7 +67,8 @@ const (
 	// summary that survives a restart (docs/contracts.md §6.4).
 	HealthSamplesPerExit = 200
 	HealthRetention      = 7 * 24 * time.Hour
-	// ProposalRetention bounds how long an unanswered proposal stays visible.
+	// ProposalRetention bounds how long an unanswered proposal stays visible
+	// in the in-memory registry; proposals are never persisted (D21).
 	ProposalRetention = 30 * 24 * time.Hour
 	// SwitchMinDwell prevents flapping between near-equal exits (D16).
 	SwitchMinDwell = 5 * time.Minute

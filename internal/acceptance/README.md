@@ -60,7 +60,7 @@ setting is used.
 | A02 | Exact-domain, domain-suffix, IP and CIDR rules accepted; each routes through the exit (exit dial +1 per case, untouched authority recorded by the exit); the suffix rule does not match `xsuffix.rl.test`; port-bearing and loopback rule operands are refused (2/6/7) and store nothing; an unapproved public destination stays direct (0 pool dials/0 contacts); a loopback direct destination works with no exit. |
 | A03 | A pool with only a quarantined record (usable 0) and a truly empty pool both give `502`, 0 destination contacts and 0 exit dials before and after the SOCKS5 attempt; the direct destination still works; `0x04` for an approved destination and `0x05` for a directly refused one. |
 | A04 | Local-exception tunnels survive mode changes (kept ≥ 1, still echo); all-proxy routes an unapproved public destination through the pool; all-direct serves without an exit; a live **pool** tunnel is closed by targeted→all-direct and by `rules remove` (both ends observe teardown, `closed ≥ 1`); `stopped` closes the live tunnel and both ports, reports 0 open/0 dialing immediately, keeps management answering, and leaving stopped is exit 6 with the restart hint; the pending-dial pass path enforces the reported `duration_ms` ≤ 50 ms (CLI round trip loosely ≤ 1 s). |
-| A05 | One client request reaches the origin exactly once; a refused direct request (path/query/header nonce) leaves no application request at the origin and no bytes in proposals, state, CLI or the service log; an eligible failure creates a proposal with no rule; `accept` adds exactly one rule for exactly that destination and the next request uses the pool; `reject` keeps the rule set unchanged and `recheck` does not revive it; disabling diagnostics leaves queue 0 and creates no new proposal. |
+| A05 | One client request reaches the origin exactly once; a refused direct request (path/query/header nonce) leaves no application request at the origin and no bytes in proposals, state, CLI or the service log; an eligible failure creates a proposal with no rule; `accept` adds exactly one rule for exactly that destination and the next request uses the pool; `reject` keeps the rule set unchanged and `recheck` does not revive it; disabling diagnostics leaves queue 0 and creates no new proposal. **D21 canary:** one unique unapproved destination goes through a failed direct request, the automatic probe, the live `proposals list`, reject/recheck, a mode switch and a backup, then a restart; it appears in no file under the temp HOME/XDG tree (state, config, backups, log and rotations, locks) and in no captured service stdout/stderr, and `proposals list` is empty after the restart (proposals are process memory only). A second canary that the user approves appears only in the approved rule set. |
 | A06 | File import = 3 valid/0 invalid/0 unsupported; per-protocol `import link` (VLESS/Trojan/SOCKS5) each valid 1 and merged to 3 records; Trojan credentials drive a live tunnel; a v2rayN JSON export imports 3 profiles and keeps its source attribution; a skip-verify link is `unsupported`/`insecure_tls_removed`, unselectable, and `doctor` reports it with a certificate/pin remediation; a certificate-pinned TLS exit imports and carries a real tunnel, a wrong pin fails on the first byte with 0 destination contacts, the same link with `allowInsecure` is accepted with an `allow_insecure_ignored` notice and stays usable, and a restart on the same state still starts and serves (D18); a failed subscription refresh (exit 1, `source_fetch`) leaves every row's identity/status/settings unchanged. |
 | A07 | Cold start has no health; the first rotation cools the dead exit; an egress probe with byte evidence promotes the live exit to healthy; `pool rerank` reports the healthy selection, the skip list and an unchanged policy version; with no pin the approved destination uses the healthy exit, skips the cooling one and does not pick the unknown one; `pool test`, `select`, `refresh` and `rerank` keep the process start time and a live compatible **pool** tunnel; an all-cooling pool gives `502` with 0 contacts and a no-usable-exit warning; a failed refresh keeps last-good. |
 | A08 | Fixture names do not resolve on the host; the VLESS exit logs its own DNS answer for `vless.rl.test`; the SOCKS exit receives the unresolved hostname. |
@@ -103,15 +103,15 @@ setting is used.
   with `policy_denied`/403, while §3.1 reserves that kind for self/local
   prohibition and an operation outside v1 maps to `unsupported`/405–501. It is
   now `unsupported`/501 with no origin accept or byte (asserted).
-* **F8 (found here, fixed in the uncommitted worktree)** — a `pinSHA256` link
+* **F8 (found here, fixed in `087879d`)** — a `pinSHA256` link
   that also carries `allowInsecure=1` was rejected as `unsupported`/exit 7
   ("skip-verify TLS is not dialable in v1") although §5.5 requires acceptance
   with the pin keeping verification on; the rejected import had already written a
   record with `insecure_tls: true`, so the next `run` on that data dir failed with
   exit 7 (the service was bricked until the record was removed). The current
-  worktree stores the pin without the insecure flag, reports
-  `allow_insecure_ignored`, and the D18 check now asserts import, usability, the
-  wrong-pin failure and restart. Not yet committed.
+  fix stores the pin without the insecure flag, reports
+  `allow_insecure_ignored`, and the D18 check asserts import, usability, the
+  wrong-pin failure and restart.
 
 Shape assertions that follow implementation names rather than a §7.1 field list
 (doctor check names and `ok|warn|error`, the `<data-dir>/run/control.sock` layout,

@@ -168,10 +168,6 @@ func (s *Service) acceptProposal(ctx context.Context, rawID string) (ProposalAcc
 		// Accepting an unroute suggestion is the user's confirmation to remove
 		// the rule; removal still runs through the normal sweep.
 		if _, err := s.removeRule(ctx, string(ruleID)); err != nil {
-			_ = s.persistProposals(ctx)
-			return ProposalAcceptData{}, err
-		}
-		if err := s.persistProposals(ctx); err != nil {
 			return ProposalAcceptData{}, err
 		}
 		return ProposalAcceptData{RuleID: ruleID}, nil
@@ -187,11 +183,6 @@ func (s *Service) acceptProposal(ctx context.Context, rawID string) (ProposalAcc
 		operand = dest.Addr.Unmap().String()
 	}
 	if _, err := s.addRule(ctx, Request{Input: operand, RuleKind: string(kind), Note: "accepted from diagnostic proposal " + string(id)}); err != nil {
-		// Keep memory and disk consistent even when rule creation fails.
-		_ = s.persistProposals(ctx)
-		return ProposalAcceptData{}, err
-	}
-	if err := s.persistProposals(ctx); err != nil {
 		return ProposalAcceptData{}, err
 	}
 	snap := s.Snapshot()
@@ -226,9 +217,6 @@ func (s *Service) rejectProposal(ctx context.Context, rawID, note string) (Propo
 	} else if err := s.diag.Reject(id, SanitizeTerminal(note)); err != nil {
 		return ProposalStatusData{}, mapProposalError(err)
 	}
-	if err := s.persistProposals(ctx); err != nil {
-		return ProposalStatusData{}, err
-	}
 	return ProposalStatusData{Status: contract.ProposalRejected}, nil
 }
 
@@ -257,9 +245,6 @@ func (s *Service) recheckProposal(ctx context.Context, rawID string) (ProposalRe
 	if err != nil {
 		return ProposalRecheckData{}, mapDiagnosticsError(err)
 	}
-	if err := s.persistProposals(ctx); err != nil {
-		return ProposalRecheckData{}, err
-	}
 	return ProposalRecheckData{
 		Proposal: proposalView(res.Proposal), Attempts: attemptViews(res.Attempts),
 		Eligible: res.Eligible, EvidenceAdded: res.EvidenceAdded,
@@ -270,9 +255,6 @@ func (s *Service) clearProposals(ctx context.Context) (ProposalStatusData, error
 	s.propsMu.Lock()
 	defer s.propsMu.Unlock()
 	n := s.props.Clear()
-	if err := s.persistProposals(ctx); err != nil {
-		return ProposalStatusData{}, err
-	}
 	return ProposalStatusData{Cleared: n}, nil
 }
 
@@ -287,23 +269,6 @@ func mapProposalError(err error) error {
 	default:
 		return err
 	}
-}
-
-// persistProposals writes the in-memory registry through the single writer.
-// Proposals never change a route, so the policy version is untouched.
-func (s *Service) persistProposals(ctx context.Context) error {
-	s.pubMu.Lock()
-	defer s.pubMu.Unlock()
-	list := s.props.Snapshot()
-	after, err := s.store.Mutate(ctx, func(st *contract.State) error {
-		st.Proposals = list
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	s.snap.Store(&after)
-	return nil
 }
 
 // ---------- desktop ----------

@@ -125,7 +125,7 @@ func (s *Store) restoreState(ctx context.Context, st contract.State) (contract.S
 	defer unlock()
 
 	if old, err := os.ReadFile(s.paths.State); err == nil && json.Valid(old) {
-		_ = writeFileAtomic(s.paths.State+".bak", old)
+		_ = writeFileAtomic(s.paths.State+".bak", scrubProposalHistory(old))
 	}
 	st.SchemaVersion = contract.SchemaVersionCurrent
 	if st.Mode == "" {
@@ -216,17 +216,55 @@ func readBackup(path string) (contract.State, backupEnvelope, error) {
 	}
 	sum := sha256.Sum256(canonical)
 	want := "sha256:" + hex.EncodeToString(sum[:])
-	if env.Checksum != want {
+	verified := env.Checksum == want
+	if !verified {
+		// A pre-D21 backup hashed a payload that still carried proposal
+		// history. Verify that shape too, then keep using the decoded state,
+		// so the proposals are checked but never restored (D21).
+		if legacy, legacyErr := legacyCanonicalState(env.State); legacyErr == nil {
+			legacySum := sha256.Sum256(legacy)
+			verified = env.Checksum == "sha256:"+hex.EncodeToString(legacySum[:])
+		}
+	}
+	if !verified {
 		return contract.State{}, backupEnvelope{}, corruptFailure("backup checksum does not match its payload; nothing was changed", nil)
 	}
 	migrated, err := migrateState(st.SchemaVersion, st)
 	if err != nil {
 		return contract.State{}, backupEnvelope{}, err
 	}
+	// An older backup may still name destinations in its proposal history; the
+	// state type no longer has that field, so it is dropped on decode (D21).
 	return migrated, env, nil
 }
 
 func canonicalState(st contract.State) ([]byte, error) {
+	st.SchemaVersion = contract.SchemaVersionCurrent
+	return json.Marshal(st)
+}
+
+// legacyBackupState is the pre-D21 state field order. A backup written before
+// proposals became memory-only hashed a payload that included them; this shape
+// reproduces that payload for checksum verification only (D21).
+type legacyBackupState struct {
+	SchemaVersion contract.SchemaVersion     `json:"schema_version"`
+	PolicyVersion contract.PolicyVersion     `json:"policy_version"`
+	Mode          contract.Mode              `json:"mode"`
+	SelectedExit  contract.ExitID            `json:"selected_exit,omitempty"`
+	Rules         []contract.Rule            `json:"rules"`
+	Sources       []contract.Source          `json:"sources"`
+	Records       []contract.Record          `json:"records"`
+	Health        []contract.ExitHealth      `json:"health"`
+	Proposals     []contract.Proposal        `json:"proposals"`
+	Desktop       contract.DesktopProxyState `json:"desktop"`
+	UpdatedAt     time.Time                  `json:"updated_at"`
+}
+
+func legacyCanonicalState(raw []byte) ([]byte, error) {
+	var st legacyBackupState
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return nil, err
+	}
 	st.SchemaVersion = contract.SchemaVersionCurrent
 	return json.Marshal(st)
 }

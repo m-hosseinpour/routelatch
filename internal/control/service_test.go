@@ -766,7 +766,6 @@ func TestHealthPublicationCannotRegressTheCommittedMode(t *testing.T) {
 			svc.applyMeasurement(probes.Measurement{Result: contract.ProbeResult{
 				Kind: contract.ProbeTransport, Exit: "x-health", Outcome: contract.OutcomeSuccess,
 			}})
-			_ = svc.persistProposals(context.Background())
 		}
 	}()
 	for i := 0; i < 20; i++ {

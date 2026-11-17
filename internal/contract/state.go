@@ -45,7 +45,8 @@ type ProbeConfig struct {
 }
 
 // State is the mutable file (state.json). It is written only through
-// Store.Mutate and read only through Store.Load.
+// Store.Mutate and read only through Store.Load. It contains no destination
+// history, proposals or evidence (D21).
 type State struct {
 	SchemaVersion SchemaVersion `json:"schema_version"`
 	PolicyVersion PolicyVersion `json:"policy_version"`
@@ -57,7 +58,6 @@ type State struct {
 	Sources      []Source          `json:"sources"`
 	Records      []Record          `json:"records"`
 	Health       []ExitHealth      `json:"health"`
-	Proposals    []Proposal        `json:"proposals"`
 	Desktop      DesktopProxyState `json:"desktop"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }

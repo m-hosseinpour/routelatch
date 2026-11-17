@@ -40,7 +40,11 @@ type coreConfig struct {
 
 type coreLog struct {
 	LogLevel string `json:"loglevel"`
-	Access   string `json:"access"`
+	// Error is "none": the pinned core's error lines can name the destination
+	// of a dial, and D21 forbids recording a visited destination anywhere.
+	// Dial failures are reported through typed Exit/kind values instead.
+	Error  string `json:"error"`
+	Access string `json:"access"`
 }
 
 type coreOutbound struct {
@@ -476,7 +480,7 @@ func xhttpBlock(rec contract.Record) (map[string]any, error) {
 
 func generatedConfig(logLevel string, outbounds []coreOutbound) ([]byte, error) {
 	doc := coreConfig{
-		Log:       &coreLog{LogLevel: logLevel, Access: "none"},
+		Log:       &coreLog{LogLevel: logLevel, Error: "none", Access: "none"},
 		Outbounds: append([]coreOutbound{{Protocol: "blackhole", Tag: BlockedTag}}, outbounds...),
 	}
 	raw, err := json.MarshalIndent(doc, "", "  ")
@@ -620,8 +624,9 @@ func validHeaderName(name string) bool {
 }
 
 // logLevelOrDefault maps an empty or unknown level to the engine default. The
-// warning level keeps startup problems visible without logging per-request
-// traffic (access is disabled in the generated config).
+// level is kept for the generated document, but both the error and the access
+// sink are disabled, so the core never writes a per-request line or a
+// destination (D21).
 func logLevelOrDefault(level string) string {
 	switch level {
 	case "debug", "info", "warning", "error", "none":

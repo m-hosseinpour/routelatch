@@ -220,9 +220,10 @@ func (c *cli) openOffline(ctx context.Context, command string) (*store.Store, *s
 	return st, lock, -1
 }
 
-// doctor falls back to an offline, read-only check when no service is running.
-// A corrupt state still produces the documented exit 10 instead of "not
-// running", and the offline path never touches the network.
+// doctor falls back to an offline check when no service is running. A corrupt
+// state still produces the documented exit 10 instead of "not running", and
+// the offline path never touches the network. Opening the store may rewrite
+// legacy proposal residue (D21), so this command is not strictly read-only.
 func (c *cli) doctor(ctx context.Context) int {
 	env, err := c.client().Call(ctx, control.Request{Op: control.OpDoctor})
 	if err == nil {

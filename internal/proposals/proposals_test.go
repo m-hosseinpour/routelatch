@@ -162,30 +162,6 @@ func TestEvidenceValidationRejectsRequestMaterial(t *testing.T) {
 	}
 }
 
-func TestSnapshotLoadRoundTrip(t *testing.T) {
-	r, c := newTestRegistry()
-	p, _, _ := r.Upsert(domain("example.com", 443), refused("example.com:443", c.t), "note")
-	snap := r.Snapshot()
-
-	other, _ := newTestRegistry()
-	if err := other.Load(snap); err != nil {
-		t.Fatal(err)
-	}
-	got, ok := other.Get(p.ID)
-	if !ok || got.Status != contract.ProposalPending || len(got.Evidence) != 1 {
-		t.Fatalf("round trip lost proposal: %#v ok=%v", got, ok)
-	}
-
-	broken := append([]contract.Proposal(nil), snap...)
-	broken[0].ID = "p-wrong"
-	if err := other.Load(broken); !errors.Is(err, ErrInvalidProposal) {
-		t.Fatalf("bad id load error = %v", err)
-	}
-	if _, ok := other.Get(p.ID); !ok {
-		t.Fatal("failed load changed the registry")
-	}
-}
-
 func TestSerializedProposalHasNoRequestMaterial(t *testing.T) {
 	r, c := newTestRegistry()
 	dst := domain("example.com", 443)
@@ -227,38 +203,6 @@ func TestUnrouteSuggestionRequiresConfirmation(t *testing.T) {
 	// caller's confirmed removal.
 	if got := len(r.ListUnroutes()); got != 1 {
 		t.Fatalf("unroute list = %d", got)
-	}
-}
-
-func TestUnroutePersistsInStateProposals(t *testing.T) {
-	r, _ := newTestRegistry()
-	dst := domain("example.com", 443)
-	s, _, err := r.SuggestUnroute("rule-1", dst, "repeated pool failures")
-	if err != nil {
-		t.Fatal(err)
-	}
-	snap := r.Snapshot()
-	if len(snap) != 1 {
-		t.Fatalf("snapshot len = %d, want 1", len(snap))
-	}
-	if snap[0].Kind != contract.ProposalUnroute || snap[0].RuleID != "rule-1" {
-		t.Fatalf("unroute snapshot = %#v", snap[0])
-	}
-
-	other, _ := newTestRegistry()
-	if err := other.Load(snap); err != nil {
-		t.Fatalf("load unroute proposal: %v", err)
-	}
-	if got := len(other.List()); got != 0 {
-		t.Fatalf("unroute leaked into the route list: %d", got)
-	}
-	list := other.ListUnroutes()
-	if len(list) != 1 || list[0].ID != s.ID {
-		t.Fatalf("loaded unroutes = %#v", list)
-	}
-	ruleID, err := other.AcceptUnroute(s.ID)
-	if err != nil || ruleID != "rule-1" {
-		t.Fatalf("accept loaded unroute = %q, %v", ruleID, err)
 	}
 }
 

@@ -4,13 +4,16 @@
 // rule (D09, docs/contracts.md §3.5, §4.3). The registry stores no request
 // material: route evidence keeps only destination, port, probe kind, outcome
 // and time.
+//
+// The registry is process memory only (D21). A destination that passed through
+// RouteLatch is never written to state, config, a backup or a log; a proposal
+// and its evidence live for the running service and disappear at restart.
 package proposals
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net"
 	"sort"
 	"strconv"
@@ -42,10 +45,10 @@ func notFoundFailure(op string) *contract.Failure {
 	}
 }
 
-// Registry is a bounded in-memory proposal store. The control layer persists
-// Snapshot and restores it with Load through the single state owner; the
-// registry itself never touches disk. Route and unroute suggestions share one
-// map and are distinguished by contract.Proposal.Kind.
+// Registry is a bounded in-memory proposal store. It never touches disk: the
+// control layer lists, decides and clears proposals in this process only, so a
+// restart starts empty (D21). Route and unroute suggestions share one map and
+// are distinguished by contract.Proposal.Kind.
 type Registry struct {
 	mu     sync.Mutex
 	byID   map[contract.ProposalID]contract.Proposal
@@ -396,89 +399,6 @@ func (r *Registry) Clear() int {
 		n++
 	}
 	return n
-}
-
-// Snapshot returns a deep copy of both proposal kinds for persistence by the
-// state owner. Unroute suggestions are contract.Proposal values with
-// Kind ProposalUnroute and RuleID set, so State.Proposals holds them too.
-func (r *Registry) Snapshot() []contract.Proposal {
-	return r.listAll()
-}
-
-// Load replaces the registry with persisted route and unroute proposals. IDs
-// must match the stable derivation and each entry must pass the same validation
-// as new input; a corrupt entry refuses the whole load rather than
-// half-restoring state. An empty Kind is read as ProposalRoute for state
-// written before the kind field existed.
-func (r *Registry) Load(list []contract.Proposal) error {
-	next := make(map[contract.ProposalID]contract.Proposal, len(list))
-	for _, p := range list {
-		if p.Kind == "" {
-			p.Kind = contract.ProposalRoute
-		}
-		if !validDestination(p.Destination) {
-			return fmt.Errorf("%w: %s", ErrInvalidProposal, p.ID)
-		}
-		switch p.Kind {
-		case contract.ProposalRoute:
-			if p.RuleID != "" {
-				return fmt.Errorf("%w: route proposal %s carries a rule id", ErrInvalidProposal, p.ID)
-			}
-			want := StableID(p.Destination)
-			if p.ID == "" {
-				p.ID = want
-			} else if p.ID != want {
-				return fmt.Errorf("%w: id %s does not match destination", ErrInvalidProposal, p.ID)
-			}
-			for _, ev := range p.Evidence {
-				if !validEvidence(ev) {
-					return fmt.Errorf("%w: bad evidence for %s", ErrInvalidProposal, p.ID)
-				}
-			}
-			if len(p.Evidence) > maxEvidence {
-				p.Evidence = append([]contract.Evidence(nil), p.Evidence[len(p.Evidence)-maxEvidence:]...)
-			}
-		case contract.ProposalUnroute:
-			if p.RuleID == "" {
-				return fmt.Errorf("%w: unroute proposal %s has no rule id", ErrInvalidProposal, p.ID)
-			}
-			if len(p.Evidence) != 0 {
-				return fmt.Errorf("%w: unroute proposal %s carries evidence", ErrInvalidProposal, p.ID)
-			}
-			want := contract.ProposalID(StableUnrouteID(p.RuleID))
-			if p.ID == "" {
-				p.ID = want
-			} else if p.ID != want {
-				return fmt.Errorf("%w: id %s does not match rule id", ErrInvalidProposal, p.ID)
-			}
-		default:
-			return fmt.Errorf("%w: unknown kind %q", ErrInvalidProposal, p.Kind)
-		}
-		switch p.Status {
-		case contract.ProposalPending, contract.ProposalAccepted,
-			contract.ProposalRejected, contract.ProposalExpired:
-		default:
-			return fmt.Errorf("%w: unknown status %q", ErrInvalidProposal, p.Status)
-		}
-		if p.CreatedAt.IsZero() {
-			p.CreatedAt = r.now().UTC()
-		}
-		if p.ExpiresAt.IsZero() {
-			p.ExpiresAt = p.CreatedAt.Add(r.retain)
-		}
-		p.CreatedAt = p.CreatedAt.UTC()
-		p.ExpiresAt = p.ExpiresAt.UTC()
-		p.DecidedAt = p.DecidedAt.UTC()
-		if _, dup := next[p.ID]; dup {
-			return fmt.Errorf("%w: duplicate id %s", ErrInvalidProposal, p.ID)
-		}
-		next[p.ID] = copyProposal(p)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.byID = next
-	r.expireLocked(r.now().UTC())
-	return nil
 }
 
 // EntryAddress renders destination:port for evidence. It keeps a hostname

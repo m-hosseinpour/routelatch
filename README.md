@@ -13,12 +13,13 @@ not install Go or Xray separately.
 **Status:** the Linux v1 is implemented, unit-tested, and covered by an
 end-to-end acceptance suite ([`internal/acceptance/`](internal/acceptance/README.md))
 that drives the built binary against loopback-only fixture exits and peers. A
-local run on 2026-11-17 passed with 157 PASS assertions and no failures
-(~106 s) over the documented CLI surface, the four routing modes,
-pool/import/health, diagnostics, the launcher and crash/shutdown recovery. What
-it does **not** prove: a clean-machine install with no manual runtime (A01),
-real GNOME/KDE desktop-proxy changes, a real systemd service lifecycle, public
-egress through real exits, and the license/dependency audit (A14).
+run in this environment prints 176 assertion lines and no failures in roughly
+two minutes on this machine, over
+the documented CLI surface, the four routing modes, pool/import/health,
+diagnostics, the launcher and crash/shutdown recovery. What it does **not**
+prove: a clean-machine install with no manual runtime (A01), real GNOME/KDE
+desktop-proxy changes, a real systemd service lifecycle, public egress through
+real exits, and the license/dependency audit (A14).
 
 Distribution is not authorized: the project license is undecided and the release
 audit is open (see [License and publication](#license-and-publication)). Treat
@@ -142,10 +143,10 @@ package layout, the unit's place in it, and how to assemble local packages with
    ```
 
    `import subscription <url>` fetches a subscription you name and
-   `import v2rayn <file>` reads a v2rayN text export. Records that fail
-   validation stay in the pool as `invalid` or `unsupported` (for example
-   skip-verify TLS is quarantined as `insecure_tls_removed`) and are never
-   dialed.
+   `import v2rayn <file>` reads a v2rayN export (a link list or its JSON
+   profiles). Records that fail validation stay in the pool as `invalid` or
+   `unsupported` (for example skip-verify TLS is quarantined as
+   `insecure_tls_removed`) and are never dialed.
 
 3. Approve the destination you want to route through the pool:
 
@@ -178,9 +179,12 @@ package layout, the unit's place in it, and how to assemble local packages with
    SOCKS5 proxy as `127.0.0.1:8318` yourself.
 
 Other useful commands: `version`, `mode targeted|all-proxy|all-direct|stopped`,
-`pool list|add|remove|refresh|test|select`, `diagnose <host:port>`,
+`pool list|add|remove|refresh|test|select|rerank`, `diagnose <host:port>`,
 `proposals list|accept|reject|recheck`, `config get|set|path`,
 `desktop proxy status|set|restore`, `backup`, `restore <ref>`, and `menu`.
+`pool rerank` re-ranks the exits now and reports the automatic selection before
+and after with the reason each other exit was skipped; it does not advance the
+policy version or close live connections.
 `routelatch version` prints the build's version, commit and build date, also as
 `--json`; the same values plus the Go version are in `dist/BUILD-INFO`.
 `routelatch help` prints the command list. Exit codes and the JSON envelope are
@@ -213,12 +217,15 @@ source URLs, request bodies and headers are not printed by these commands.
   cannot fix a program that resolves a name itself, and ECH makes hostname
   inspection unreliable, so no name-based guarantee is possible in those cases.
 - **No MITM.** TLS verification stays on. RouteLatch does not install a root CA
-  or intercept HTTPS. The supported path for an exit whose certificate is not in
-  the trust store is a certificate pin: `pinnedPeerCertSha256` (or
-  `verifyPeerCertByName`) is accepted with verification still on and narrows
-  acceptance to that certificate or name. Links that only disable verification
-  (`allowInsecure`) are quarantined as `unsupported`
-  (`insecure_tls_removed`) and are never dialed.
+  or intercept HTTPS; an absolute-form `https://` request is refused as
+  `unsupported` (HTTP 501) instead of being forwarded or decrypted. The
+  supported path for an exit whose certificate is not in the trust store is a
+  certificate pin: `pinnedPeerCertSha256` (or `verifyPeerCertByName`) is
+  accepted with verification still on and narrows acceptance to that
+  certificate or name. Links that only disable verification (`allowInsecure`)
+  are quarantined as `unsupported` (`insecure_tls_removed`) and are never
+  dialed; a link that carries both a pin and `allowInsecure` keeps the pin,
+  stays usable, and reports that `allowInsecure` was ignored.
 - **No silent bypass.** If the pool cannot serve an approved destination, the
   connection fails with an error. Pool failure never turns into a direct
   connection for approved traffic.
@@ -230,6 +237,32 @@ source URLs, request bodies and headers are not printed by these commands.
   4 MiB into `routelatch.log.1`–`.3`. `doctor` reports permission problems; a
   state directory others can read makes the service refuse to start rather than
   expose credentials.
+
+## Privacy
+
+RouteLatch keeps no access log. A destination that passes through the app is
+never written to the log file, state, config, backups or a proposal history; the
+approved-destination list is the only destination data stored, and backups copy
+that list. Operational log lines record failure kinds and counts, not the
+destination of a carried connection.
+
+What is stored: the approved rules, pool records (server, port, protocol and
+credentials), health summaries (status, latency average, counters, cooldown and
+last success/failure times) and configuration, in private `0600` state/config
+files. Proposals and their evidence live only in the memory of the running
+service: `proposals list` works only while that service runs, and a restart
+discards them. This is deliberate; there is no proposal history to recover.
+
+Probe targets you configure are your own choice and are stored as configuration.
+`pool test --target` sends one probe to the target you name for that invocation
+and is not recorded; neither is a record of the traffic RouteLatch carried.
+
+Limits: the loopback proxy and the management socket are reachable by any
+process running as you, so a local process can use the pool or ask the service
+for status. The exit you choose sees the destination it carries, and DNS for a
+proxied hostname is resolved at the exit (the exit server's own name is resolved
+here). Your OS, resolver, firewall or other software may log traffic regardless
+of RouteLatch, and RouteLatch cannot make you anonymous.
 
 ## Platform support
 

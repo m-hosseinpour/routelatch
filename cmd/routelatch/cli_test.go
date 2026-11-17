@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -519,4 +521,174 @@ func TestPoolRerankJSONShape(t *testing.T) {
 	if _, ok := data["policy_version"].(float64); !ok {
 		t.Fatalf("policy_version = %v", data["policy_version"])
 	}
+}
+
+func TestCLIProposalsListWithoutServiceExplainsMemoryOnlyHistory(t *testing.T) {
+	dir := t.TempDir()
+	got := runCLI(t, dir, "proposals", "list")
+	if got.code != 3 {
+		t.Fatalf("exit = %d, want 3 (%+v)", got.code, got.env)
+	}
+	if got.env.Error == nil || got.env.Error.Kind != contract.Stopped {
+		t.Fatalf("envelope = %+v", got.env)
+	}
+	msg := got.env.Error.Message
+	if !strings.Contains(msg, "memory") || !strings.Contains(msg, "lost on restart") {
+		t.Fatalf("proposals list does not explain that history is memory-only: %q", msg)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("offline proposals list created files: %v", entries)
+	}
+}
+
+// startNetworkService builds a service whose real listeners and probes run, so
+// a diagnose command produces genuine evidence. Ports are free loopback ports;
+// the engine starts with an empty pool, which is enough for direct probes.
+func startNetworkService(t *testing.T, dir string) (*control.Service, *control.Server) {
+	t.Helper()
+	paths, err := store.ResolvePathsFor(dir, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(store.Options{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen, cfg.SOCKSListen = freeLoopbackPair(t)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := control.NewService(context.Background(), control.Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("start network: %v", err)
+	}
+	srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: svc, AllowStale: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return svc, srv
+}
+
+func freeLoopback(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	return addr
+}
+
+// freeLoopbackPair holds both listeners at once so the two chosen addresses
+// cannot be the same port.
+func freeLoopbackPair(t *testing.T) (string, string) {
+	t.Helper()
+	first, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	return first.Addr().String(), second.Addr().String()
+}
+
+func closedLoopbackPort(t *testing.T) uint16 {
+	t.Helper()
+	addr := freeLoopback(t)
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return uint16(n)
+}
+
+func TestCLIProposalIsMemoryOnlyAcrossCallsAndDiesAtRestart(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "rlcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	svc, srv := startNetworkService(t, dir)
+	target := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(closedLoopbackPort(t))))
+
+	diag := runCLI(t, dir, "diagnose", target)
+	if diag.code != 0 || !diag.env.OK {
+		t.Fatalf("diagnose exit = %d: %+v", diag.code, diag.env)
+	}
+	data, _ := diag.env.Data.(map[string]any)
+	proposalID, _ := data["proposal_id"].(string)
+	if proposalID == "" {
+		t.Fatalf("diagnose did not create a proposal: %+v", data)
+	}
+
+	for i := 0; i < 2; i++ {
+		list := runCLI(t, dir, "proposals", "list")
+		if list.code != 0 || !list.env.OK {
+			t.Fatalf("proposals list #%d exit = %d: %+v", i+1, list.code, list.env)
+		}
+		raw, _ := json.Marshal(list.env.Data)
+		if !strings.Contains(string(raw), proposalID) {
+			t.Fatalf("proposal missing from call #%d: %s", i+1, raw)
+		}
+	}
+
+	// The destination was in the reply above, but its port must not be in any
+	// stored file (the listener and socket addresses use unrelated ports).
+	_, port, _ := net.SplitHostPort(target)
+	needles := []string{":" + port, `"port":` + port}
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, needle := range needles {
+			if strings.Contains(string(raw), needle) {
+				t.Errorf("%s contains the diagnosed destination port", path)
+			}
+		}
+		return nil
+	})
+
+	_ = srv.Close()
+	_ = svc.Close(context.Background())
+
+	// A restart must not resurrect the proposal from any file.
+	svc2, srv2 := startNetworkService(t, dir)
+	defer func() {
+		_ = srv2.Close()
+		_ = svc2.Close(context.Background())
+	}()
+	list := runCLI(t, dir, "proposals", "list")
+	if list.code != 0 || !list.env.OK {
+		t.Fatalf("post-restart proposals list = %+v", list.env)
+	}
+	data, _ = list.env.Data.(map[string]any)
+	if proposals, _ := data["proposals"].([]any); len(proposals) != 0 {
+		t.Fatalf("restart resurrected proposals: %+v", proposals)
+	}
+
 }

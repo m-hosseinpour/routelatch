@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"routelatch/internal/contract"
 	"routelatch/internal/control"
 )
 
@@ -146,7 +147,7 @@ func (c *cli) proposals(ctx context.Context, args []string) int {
 	}
 	switch args[0] {
 	case "list":
-		return c.call(ctx, control.Request{Op: control.OpProposalsList})
+		return c.proposalsList(ctx)
 	case "accept":
 		if len(args) != 2 {
 			return c.localFailure("proposals accept", usageErr("proposals accept needs one proposal id"))
@@ -169,6 +170,24 @@ func (c *cli) proposals(ctx context.Context, args []string) int {
 	default:
 		return c.localFailure("proposals", usageErr("unknown proposals subcommand"))
 	}
+}
+
+// proposalsList is the one proposals verb that would otherwise look like a
+// persisted history. The registry lives in the running service's memory and is
+// lost on restart (D21), so with no service there is no history to read and the
+// command says so instead of inventing a file.
+func (c *cli) proposalsList(ctx context.Context) int {
+	env, err := c.client().Call(ctx, control.Request{Op: control.OpProposalsList})
+	if err != nil {
+		if errors.Is(err, control.ErrNotRunning) {
+			return c.localFailure("proposals list", &contract.Failure{
+				Kind: contract.Stopped, Path: contract.PathLocal, Op: "cli",
+				Message: "proposals are kept only in the running service's memory and are lost on restart; no proposal history is stored, so nothing can be listed while RouteLatch is not running",
+			})
+		}
+		return c.localFailure("proposals list", err)
+	}
+	return c.print(env)
 }
 
 func (c *cli) config(ctx context.Context, args []string) int {

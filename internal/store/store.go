@@ -32,6 +32,9 @@ type Store struct {
 	mu    sync.Mutex
 
 	lock *processLock
+	// residue is fixed by Open's legacy proposal-history scrub and read by the
+	// service log and doctor afterwards.
+	residue Residue
 }
 
 var _ contract.Store = (*Store)(nil)
@@ -68,6 +71,10 @@ func Open(opts Options) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Older builds wrote visited destinations into proposal history. Remove
+	// that residue from files this application owns before the store is used;
+	// the pass is atomic, idempotent and reports counts only (D21).
+	s.scrubLegacyProposals()
 	return s, nil
 }
 
@@ -289,6 +296,8 @@ func (s *Store) readStateLocked(ctx context.Context) (contract.State, error) {
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return contract.State{}, corruptFailure("state file could not be decoded; it was not changed", err)
 	}
+	// D21: proposal history written by an older build is ignored on decode;
+	// the next write drops it from the file.
 	if probe.SchemaVersion < contract.SchemaVersionCurrent {
 		migrated, err := migrateState(probe.SchemaVersion, st)
 		if err != nil {
@@ -406,8 +415,8 @@ func defaultState(now time.Time) contract.State {
 		Sources:       []contract.Source{},
 		Records:       []contract.Record{},
 		Health:        []contract.ExitHealth{},
-		Proposals:     []contract.Proposal{},
-		UpdatedAt:     now.UTC(),
+		// Proposals stay nil: they are process memory only (D21).
+		UpdatedAt: now.UTC(),
 	}
 }
 

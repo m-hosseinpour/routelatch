@@ -150,10 +150,10 @@ const (
 )
 
 // ProposalKind selects what a proposal suggests changing: approving one
-// destination, or removing one approved rule. Both kinds share status,
-// retention and State.Proposals; accepting either still requires an explicit
-// user confirmation and the registry itself changes no routing
-// (docs/contracts.md §4.3, §7.1).
+// destination, or removing one approved rule. Both kinds share status and
+// retention in the in-memory registry only; accepting either still requires an
+// explicit user confirmation and the registry itself changes no routing
+// (docs/contracts.md §3.5, §7.1, D21). Nothing here is persisted.
 type ProposalKind string
 
 const (
@@ -164,10 +164,10 @@ const (
 	ProposalUnroute ProposalKind = "unroute"
 )
 
-// Proposal is a suggestion to add one destination to the approved list or to
-// remove one approved rule. It is not a rule and never changes routing by
-// itself. An empty Kind is read as ProposalRoute for state written before the
-// kind field existed.
+// Proposal is a memory-only suggestion to add one destination to the approved
+// list or to remove one approved rule. It is not a rule and never changes
+// routing by itself. The registry always sets Kind; nothing is read back from
+// state and all proposals disappear on restart (D21).
 type Proposal struct {
 	ID          ProposalID     `json:"id"`
 	Kind        ProposalKind   `json:"kind"`
@@ -186,8 +186,9 @@ type Proposal struct {
 // unroute proposal derives it from the rule ID.
 type ProposalID string
 
-// Evidence is one stored failure with its provenance. It keeps the address
-// and port that were tried, the probe kind, and the time; nothing else.
+// Evidence is one in-memory failure with its provenance for a live proposal.
+// It keeps the address and port that were tried, the probe kind, and the time;
+// nothing else. It is never written to state, config, a backup or a log (D21).
 type Evidence struct {
 	Kind      EvidenceKind `json:"kind"`
 	At        time.Time    `json:"at"`

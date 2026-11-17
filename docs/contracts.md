@@ -501,10 +501,10 @@ timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreacha
 | `canceled`، تغییر mode، `stopped`، EOF عادی | نه |
 | `internal`، و هر kind محلی/عملیاتی (`invalid_destination`، `policy_denied`، `source_fetch`، `import_invalid`، `state_*`، `peer_rejected`) | نه |
 
-پیشنهاد فقط از `ProbeResult.Eligible == true` ساخته می‌شود؛ پرچم در `prober` از همین
-جدول محاسبه می‌شود. پذیرش یک پیشنهاد `route` یک `Rule` با `Origin=user` می‌سازد و
-پذیرش یک پیشنهاد `unroute` همان قانون نام‌برده‌شده را پس از تأیید صریح حذف می‌کند؛
-هیچ‌کدام بدون تصمیم کاربر رخ نمی‌دهد.
+پیشنهاد فقط از `ProbeResult.Eligible == true` ساخته می‌شود و فقط در حافظهٔ registry
+سرویس زنده می‌ماند؛ پرچم در `prober` از همین جدول محاسبه می‌شود. پذیرش یک پیشنهاد
+`route` یک `Rule` با `Origin=user` می‌سازد و پذیرش یک پیشنهاد `unroute` همان قانون
+نام‌برده‌شده را پس از تأیید صریح حذف می‌کند؛ هیچ‌کدام بدون تصمیم کاربر رخ نمی‌دهد.
 
 ## ۴. state و config
 
@@ -568,10 +568,6 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
   "sources": [{ "id": "s-...", "kind": "subscription", "label": "...", "order": 0, "refreshed_at": "..." }],
   "records": [{ "id": "x-...", "dedupe_key": "sha256:...", "source_ids": ["s-..."], "protocol": "vless", "server": "...", "port": 443, "transport": "xhttp", "security": "tls", "status": "unknown" }],
   "health": [{ "exit": "x-...", "status": "healthy", "ewma_latency_ms": 210, "samples": 4 }],
-  "proposals": [
-    { "id": "p-...", "kind": "route", "destination": { "kind": "domain", "host": "api.example.com", "port": 443 }, "status": "pending", "expires_at": "..." },
-    { "id": "u-...", "kind": "unroute", "rule_id": "r-...", "destination": { "kind": "domain", "host": "old.example.com", "port": 443 }, "status": "pending", "expires_at": "..." }
-  ],
   "desktop": { "applied": false, "environment": "", "instance_id": "", "keys": [] },
   "updated_at": "..."
 }
@@ -581,11 +577,12 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
 CLI/JSON/لاگ بازتولید نمی‌شوند. `status` فهرست همیشه `dedupe_key` را کوتاه (۸ کاراکتر
 اول) یا حذف می‌کند.
 
-`proposals` هر دو نوع پیشنهاد را در یک آرایه نگه می‌دارد: `kind=route` برای افزودن یک
-مقصد، و `kind=unroute` برای حذف یک قانون تأییدشده با `rule_id`. هر دو همان چرخهٔ
-`pending`/`accepted`/`rejected`/`expired` و همان retention را دارند و از یک مسیر
-persist/load می‌گذرند؛ پیشنهاد unroute هم فقط با تأیید صریح کاربر به حذف قانون تبدیل
-می‌شود. `kind` خالی در state قدیمی‌تر `route` خوانده می‌شود.
+`state.json` هیچ فیلد `proposals` ندارد: پیشنهادها و شواهدشان فقط در حافظهٔ registry
+سرویس زنده‌اند و با restart از بین می‌روند (D21). `proposals list` نمای همان حافظه است،
+نه تاریخ، و TTL ۳۰ روزه فقط یک سقف حافظه است. نوشتن‌های این build در
+state/config/backup/log هیچ مقصد دیده‌شده‌ای را نگه نمی‌دارند. state قدیمی‌تر که فیلد
+`proposals` دارد تا اولین write روی دیسک می‌ماند؛ در decode نادیده گرفته می‌شود، نوشتن
+بعدی حذفش می‌کند و `.bak` هنگام کپی از آن پاک می‌شود.
 
 ### ۴.۴ نوشتن اتمیک و یک writer
 
@@ -596,7 +593,8 @@ persist/load می‌گذرند؛ پیشنهاد unroute هم فقط با تأی�
 3. اگر mode/rules عوض شده و `policy_version` بزرگ نشده → خطا (بدون نوشتن).
 4. نوشتن `state.json.tmp-<pid>` با `O_CREATE|O_EXCL`، مجوز `0600`.
 5. `f.Sync()`، `f.Close()`.
-6. کپی محتوای قبلی به `state.json.bak` (best-effort، فقط اگر نسخهٔ قبلی سالم بود).
+6. کپی محتوای قبلی به `state.json.bak` (best-effort، فقط اگر نسخهٔ قبلی سالم بود؛
+   پیشنهادهای legacy در صورت قابل decode بودن حذف می‌شوند).
 7. `os.Rename(tmp, state.json)`، سپس `fsync` روی پوشه.
 8. آزادکردن lock؛ بازگشت snapshot جدید.
 
@@ -621,6 +619,11 @@ persist/load می‌گذرند؛ پیشنهاد unroute هم فقط با تأی�
   که checksum روی بایت‌های canonical `state` است. `restore` checksum، schema و اینکه
   مسیر داخل پوشهٔ backup بماند (بدون `..`) را بررسی می‌کند؛ سپس از فایل فعلی backup
   می‌گیرد و جایگزین می‌کند. backup ناقص یا دستکاری‌شده رد می‌شود.
+- backup ساخته‌شده با build قدیمی‌تر ممکن است در payload خود تاریخچهٔ پیشنهاد داشته
+  باشد؛ checksum آن با همان شکل قدیمی بررسی می‌شود، اما پیشنهادها و شواهد در restore
+  نادیده گرفته می‌شوند و وارد state زنده نمی‌شوند (D21). backupهای جدید هیچ فیلد
+  `proposals` ندارند. فایل‌های backup قدیمی روی دیسک تا حذف دستی همان تاریخچه را
+  نگه می‌دارند؛ RouteLatch آن‌ها را بازنویسی نمی‌کند.
 
 ### ۴.۶ management socket
 
@@ -713,6 +716,7 @@ exit جدا هستند. `RecordID` از `DedupeKey` مشتق می‌شود و ب
 | --- | --- | --- |
 | جدید | `unknown` | معتبر، بدون سنجش |
 | جدید | `unsupported` | دادهٔ ناقص/ممنوع، پروتکل/transport خارج v1، `security` پشتیبانی‌نشده، یا `insecure_tls_removed` |
+| هر (به‌جز `invalid`) | `unsupported` | engine نتوانست رکورد را به exit بسازد؛ `StatusReason = engine_record_rejected` |
 | جدید | `invalid` | دادهٔ اتصال قابل نرمال‌سازی/اعتبارسنجی نیست |
 | `unknown` | `healthy` | شاهد مثبت egress: بایت برگشتی در استفادهٔ واقعی یا probe هدف‌دار |
 | `unknown`/`healthy` | `cooling` | خطای transport قابل انتساب؛ `cooldown_until` تنظیم می‌شود |
@@ -724,6 +728,25 @@ exit جدا هستند. `RecordID` از `DedupeKey` مشتق می‌شود و ب
 
 `invalid`/`unsupported` برای همان نسخهٔ رکورد نهایی‌اند؛ refresh با دادهٔ درست یک
 `DedupeKey` جدید می‌سازد. `destination_unconfirmed` هیچ‌گاه رکورد را cooling نمی‌کند.
+
+**رکوردی که engine نمی‌تواند بسازد startup را متوقف نمی‌کند.** اگر یک رکورد از
+validate/config engine رد شود، از فهرست dial خارج می‌شود، حذف نمی‌شود و (اگر از قبل
+`invalid` نباشد) در state به `unsupported` با `StatusReason = engine_record_rejected`
+تغییر می‌کند؛ فقط خطای سراسری config/هسته startup را متوقف می‌کند. `pool list` (JSON)
+این رکورد را با `status` و `status_reason` نشان می‌دهد و `status` آن را در شمار
+unsupported/quarantined هشدار می‌دهد. حذف آن فقط با فرمان معمول `pool remove <id>` از
+طریق management socket است؛ v1 هیچ فرمان حذف آفلاین ندارد، چون startup دیگر به یک
+رکورد خراب وابسته نیست.
+
+**VLESS/Trojan بدون TLS به exit عمومی.** `validateRecord` هستهٔ pin‌شده این حالت را رد
+می‌کند: اگر protocol غیر از SOCKS5 باشد، `security` برابر `tls` نباشد و `publicServer`
+سرور را عمومی بداند (IP غیر `private`/`loopback`/`link-local`، یا دامنه‌ای که در
+private-domain list هسته نیست)، رکورد ساخته نمی‌شود. این قاعدهٔ خود هستهٔ pin‌شده است، نه
+سیاست مسیریابی RouteLatch؛ SOCKS5 معاف است چون adapter خودمان آن را dial می‌کند و
+loopback/private/غیرعمومی مجاز می‌مانند. نتیجه در state `unsupported` با
+`StatusReason = engine_record_rejected` است: `pool list` (JSON) دلیل را در
+`status_reason` نشان می‌دهد و `doctor` رکورد را در شمار unsupported/quarantined هشدار
+می‌دهد و به `pool list` ارجاع می‌دهد.
 
 ### ۵.۴ sanitization ورودی
 
@@ -886,7 +909,7 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 | فاصلهٔ transport probe خودکار | ۱۰ دقیقه | فقط در targeted/all-proxy؛ بدون ترافیک مقصد |
 | هم‌زمانی probe | health ۲، diagnostic ۱، صف ۳۲ | سقف منابع |
 | نمونه/نگهداری | ۲۰۰ نمونه، ۷ روز (ring حافظه‌ای) | — |
-| پیشنهاد | ۳۰ روز | — |
+| پیشنهاد | ۳۰ روز (TTL حافظه؛ persist نمی‌شود) | — |
 
 **نگهداری نمونه.** تاریخ نمونه‌ها (۲۰۰ نمونه و ۷ روز برای هر exit) یک ring حافظه‌ای
 محدود در prober است و هرگز در `state.json` نوشته نمی‌شود. آنچه persist می‌شود خلاصهٔ
@@ -894,7 +917,8 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 خلاصه بارگذاری می‌شود و نمونه‌های خام از دست می‌روند. سلامت پس از restart از probeهای
 transport و شواهد واقعی egress دوباره یاد گرفته می‌شود و هیچ healthyای از ring قدیمی
 ادعا نمی‌شود. `HealthSamplesPerExit` و `HealthRetention` همین ring را می‌بندند، نه فایل
-state.
+state. پیشنهادها و شواهدشان هم فقط در حافظه‌اند: TTL ۳۰ روزه یک سقف حافظه برای سرویس
+زنده است و restart هیچ پیشنهاد یا شاهدی را بازنمی‌گرداند (D21).
 
 رتبه: `healthy` پیش از `unknown`؛ درون هر bucket، EWMA صعودی، سپس ترتیب کاربر. انتخاب
 دستی تا `pool select auto` پین می‌ماند و با شکست به exit دیگری سوییچ نمی‌کند.
@@ -942,7 +966,7 @@ state.
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
 | `rules remove <id>` | `removed, closed` | 0، 3، 5، 6 | «حذف مقصد» |
-| `pool list [--limit] [--offset]` | `records[{id,status,protocol,server,port,transport,security,sources,health{...}}], counts, truncated` | 0، 3 | «pool» |
+| `pool list [--limit] [--offset]` | `records[{id,status,status_reason,protocol,server,port,transport,security,sources,health{...}}], counts, truncated` | 0، 3 | «pool» |
 | `pool add <link\|file>` | `source_id, records{valid,invalid,unsupported}` | 0، 2، 6 | «افزودن خروجی» |
 | `pool remove <id>` | `removed, closed` | 0، 3، 5، 6 | «حذف خروجی» |
 | `pool refresh [--source\|--all] [--allow-empty]` | `sources[{id,ok,records,error}], kept_last_good` | 0، 3، 5، 6، 8 | «به‌روزرسانی pool» |
@@ -958,6 +982,9 @@ state.
 | `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
 | `backup` / `restore <ref>` | `ref{path,schema_version,created_at}` | 0، 3، 6، 10 | «پشتیبان» |
 | `menu` | — | 0، 2، 3 | خودش |
+
+`pool remove <id>` تنها مسیر حذف رکورد است (از جمله رکورد `unsupported` با دلیل
+`engine_record_rejected`)؛ v1 هیچ فرمان حذف آفلاین ندارد.
 
 `exec` در حالت `--json` دقیقاً یک `Envelope` روی stdout می‌نویسد و stdout و stderr
 فرزند را به stderr هدایت می‌کند؛ exit code فرمان همان exit code فرزند است. در حالت
