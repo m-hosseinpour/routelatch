@@ -63,8 +63,17 @@ type Destination struct {
 ```
 
 قانون‌ها (`Rule`) یکی از `RuleDomain`، `RuleDomainSuffix`، `RuleIP`، `RuleCIDR` هستند.
-قانون در v1 **بدون پورت** است: یک قانون دامنه همهٔ پورت‌ها را پوشش می‌دهد و ورودی
-دارای پورت رد می‌شود تا دامنهٔ قانون پنهانی گسترده نشود.
+قانون در v1 **هیچ‌گاه پورت ندارد**: یک قانون دامنه همهٔ پورت‌ها را پوشش می‌دهد و
+`Rule` هیچ فیلد پورتی ندارد. تفکیک ورودی عمدی است:
+
+- operand مستقیمِ دارای پورت (`example.com:443`، `[2001:db8::1]:443`) رد می‌شود، چون
+  کاربر با نوشتن پورت انتظار یک قانون باریک‌تر دارد؛ پذیرش بی‌صدا دامنهٔ قانون را
+  گسترده می‌کند.
+- ورودی URL یک «مقصد» است، نه یک قانون با دامنهٔ پورت‌دار: پورت آن سرویس مقصد را نام
+  می‌برد، پس در یکسان‌سازی قانون **حذف** می‌شود و notice فرمان باید همین را بگوید (§۱.۳).
+  برای `import` پورت بخشی از رکورد است.
+
+در هر دو حالت خروجی `Rule` بدون پورت است و تطبیق §۱.۵ هر پورتی را پوشش می‌دهد.
 
 ### ۱.۲ خط لولهٔ یکسان‌سازی
 
@@ -98,13 +107,21 @@ hostname را دستکاری کند.
 loopback یا آدرس دیگری تبدیل نمی‌شوند، تا ورودی نتواند از قانون فرار کند. CIDR قبل از
 قاعدهٔ کاراکترهای ممنوع بررسی می‌شود، وگرنه `/` آن را رد می‌کرد.
 
+**انتخاب صریح نوع قانون.** `NormalizeRule` فقط استنتاج می‌کند: IP → `RuleIP`، CIDR →
+`RuleCIDR`، hostname → `RuleDomain` دقیق؛ هیچ‌گاه suffix استنتاج نمی‌شود. مسیر
+پشتیبانی‌شدهٔ ساخت قانون با نوع صریح (از جمله `RuleDomainSuffix`) تابع
+`routing.NormalizeRuleAs(kind, raw)` است؛ همان خط لولهٔ یکسان‌سازی را اجرا می‌کند و
+ناسازگاری kind با operand یا وجود پورت را رد می‌کند. `*.example.com` همچنان invalid
+است و کاربر باید suffix را صریح انتخاب کند.
+
 ### ۱.۳ URL → hostname
 
 - فقط `http://` و `https://` (بدون حساسیت به حروف scheme) پذیرفته می‌شوند (`url.Parse` +
   `u.Hostname()`).
 - مسیر، query، fragment و userinfo دور ریخته می‌شوند و **ذخیره یا لاگ نمی‌شوند**.
-- پورت URL برای قانون نادیده گرفته می‌شود و خروجی فرمان این را می‌گوید؛ برای
-  `import` پورت بخشی از رکورد است.
+- پورت URL برای قانون **حذف** می‌شود (نه رد)، چون URL یک مقصد است و پورت آن سرویس را
+  نام می‌برد، نه دامنهٔ قانون؛ notice فرمان باید این را بگوید. برای `import` پورت بخشی از
+  رکورد است. operand مستقیم `host:port` همچنان به‌عنوان قانون رد می‌شود (§۱.۱).
 - `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://` در `rules add` →
   `unsupported` با پیام «از import استفاده کن».
 - `ftp://`, `file://` و scheme ناشناس → `unsupported` (هیچ fetch یا خواندن فایل).
@@ -124,6 +141,17 @@ loopback یا آدرس دیگری تبدیل نمی‌شوند، تا ورودی
 
 `0.0.0.0` و `::` به‌عنوان مقصد **invalid** هستند، نه Local: در بسیاری از سیستم‌ها
 dial به `0.0.0.0` عملاً loopback است و نباید راه دسترسی به سرویس محلی شود.
+
+**Self پورت listenerهای پیکربندی‌شده را لازم دارد.** router فقط از روی loopback بودن
+تصمیم نمی‌گیرد: `routing.Config.SelfPorts` باید پورت‌های listener ترافیک ما (HTTP و
+SOCKS) را داشته باشد. loopback روی هر پورت دیگری `ClassLocal` است و مستقیم می‌ماند؛
+پس نبودِ یک پورت در این فهرست یعنی «مقصد محلی دیگر»، نه «Self». management در v1 یک
+Unix socket است و مقصد TCP نیست؛ اگر در آینده سطحی از management روی TCP بیاید، پورت
+آن هم باید در `SelfPorts` باشد. تصمیم Self همیشه `Route=refuse` با
+`Reason=self_loop` است و frontend آن را `policy_denied` (HTTP `403` / SOCKS `0x04`)
+می‌کند. پیام redacted خطا شامل `self_loop` است و `ConnInfo.Reason` همین را نگه
+می‌دارد؛ هر سطحی که جزئیات اتصال یا خطا را نشان می‌دهد (CLI/لاگ/status) باید آن را
+حفظ کند. پاسخ روی سیم عمداً فقط `policy_denied` عمومی است و جزئیات مسیر را لو نمی‌دهد.
 
 **حلقه از طریق DNS مستقیم:** مسیر مستقیم hostname را با resolver سیستم حل می‌کند، پس
 `NormalizeDestination` به‌تنهایی برای Self کافی نیست. `dialDirect` پس از resolve،
@@ -228,6 +256,14 @@ status/log باید همین جمله را بگویند؛ اگر کاربر به
 حذف رکورد است، نه تغییر برچسب. اگر یک رکورد `socks5` به inbound خود Xray اشاره کند،
 adapter همان `0x00` را می‌بیند و `ProofConfirmed` برمی‌گرداند؛ R-11 همین را پوشش
 می‌دهد و ادعای «مقصد در دسترس است» ممنوع می‌ماند.
+
+**`PoolDialDeadline` دقیقاً چه چیزی را می‌بندد.** این مقدار bound فراخوانی dial مسدود
+است و فقط برای adapter SOCKS5 خودمان یک bound واقعی handshake است: greeting، احراز
+هویت و CONNECT باید پیش از برگشت تمام شوند. مسیر core هیچ فاز dial قابل مشاهده‌ای
+ندارد؛ `core.Dial` پیش از تماس با خروجی برمی‌گردد، پس این deadline نمی‌تواند یک dial
+گیرکردهٔ core را در فاز dial تشخیص دهد. اگر session core بعد از برگشت گیر کند، خطا در
+مرحلهٔ تونل به‌صورت `timeout` یا `destination_unconfirmed` دیده می‌شود، نه به‌عنوان
+expired dial deadline. `DirectDialDeadline` فقط dial مستقیم را می‌بندد.
 
 ### ۲.۲ زمان reply به کلاینت
 
@@ -373,7 +409,19 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 | `state_corrupt` | local | فایل خوانده/مهاجرت نشد؛ fail closed |
 | `state_locked` | local | writer دیگر مالک lock است |
 | `peer_rejected` | local | SO_PEERCRED پذیرفته نشد |
+| `not_found` | local | شیء نام‌برده‌شده (قانون، exit، منبع یا پیشنهاد) وجود ندارد؛ فقط نتیجهٔ فرمان، هرگز نتیجهٔ ترافیک |
+| `external_tool_failed` | local | ابزار خارجی دسکتاپ/سرویس (`gsettings`، `kwriteconfig`/`kreadconfig`، `systemctl`) شکست خورد؛ هیچ نتیجه‌ای دربارهٔ اعمال/restore فرض نمی‌شود |
 | `internal` | local | نقص نرم‌افزار؛ هرگز مبنای پیشنهاد نیست |
+
+**پس از dial موفق و پیش از اولین بایت پاسخ.** اگر یک pool dial با proof
+(`confirmed`/`accepted`) برگردد و سپس پیش از رسیدن اولین بایت پاسخ، **بدون خطای
+transport قابل انتساب** شکست بخورد، kind همان `destination_unconfirmed` است؛ kind
+جدیدی وجود ندارد. engine این حالت را از EOF/سکوت بدون tracked error می‌سازد و forwarder
+HTTP نیز برای خطای stream بدون kind همین fallback را ثبت می‌کند. اگر tracked error،
+timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreachable`/`timeout`/`canceled`)
+حفظ می‌شود و به unconfirmed تبدیل نمی‌شود. نگاشت §۳.۲ عوض نمی‌شود: تونلی که reply
+گرفته است فقط بسته می‌شود؛ forwarder که هنوز پاسخی به کلاینت نداده، status خانوادهٔ
+پیش از reply را می‌نویسد (`502`، یا `504` برای timeout).
 
 ### ۳.۲ نگاشت HTTP و SOCKS5
 
@@ -387,13 +435,14 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 | `exit_unreachable` | `502` | `0x04` | — |
 | `handshake_rejected` | `502` | `0x04` | — |
 | `destination_refused` | `502` | `0x04` (کد `0x05` فقط از refused واقعی لایهٔ مستقیم) | — |
-| `destination_unconfirmed` | — | — | بستن؛ ثبت kind |
+| `destination_unconfirmed` | `502` فقط در forwarder پس از dial موفق و پیش از اولین بایت پاسخ؛ در CONNECT — | — | بستن؛ ثبت kind |
 | `timeout` | `504` | `0x04` | بستن |
 | `canceled` | `502` best-effort یا بدون reply | بدون reply | بستن |
 | `connect_refused` | `502` | `0x05` | — |
 | `dns_failure` | `502` | `0x04` | — |
 | `tls_failure` | فقط در probe/فرمان‌ها | — | — |
 | `source_fetch`، `import_invalid`، `state_corrupt`، `state_locked`، `peer_rejected`، `internal` | `500` با پیام redacted | `0x04` | — |
+| `not_found`، `external_tool_failed` | `500` (فقط fallback؛ این kindها در ترافیک ساخته نمی‌شوند) | `0x04` | — |
 
 **محدودیت ثبت‌شده (R-1):** `go-socks5 v0.1.4` کد reply را با substring از متن خطا
 انتخاب می‌کند (`0x03` برای «network is unreachable»، `0x05` برای «refused»، بقیه
@@ -406,7 +455,8 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 
 1. تصمیم گرفته شد؛ اتصال در registry با `PolicyVersion` ثبت شد (اگر version قدیمی
    باشد `canceled`).
-2. dial (direct یا pool) با deadline §۳.۴.
+2. dial (direct یا pool adapter) با deadline مربوطه؛ مسیر core فاز dial قابل مشاهده ندارد
+   و deadline آن در §۲.۱ توضیح داده شده است.
 3. پیش از هر بایت reply: خطا → نگاشت جدول §۳.۲، سپس بستن.
 4. `ProofConfirmed`/`ProofAccepted` → نوشتن `2xx`/`0x00` → replay بایت‌های buffered →
    copy دوطرفه.
@@ -417,7 +467,7 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 
 | مورد | مقدار | مبنا |
 | --- | --- | --- |
-| `PoolDialDeadline` | ۱۰s | retry ~۱s خروجی + TLS؛ حاشیهٔ زیاد |
+| `PoolDialDeadline` | ۱۰s | فقط handshake مسدود adapter SOCKS5؛ مسیر core فاز dial قابل مشاهده ندارد (§۲.۱) |
 | `DirectDialDeadline` | ۱۰s | — |
 | `ProbeTimeout` | ۲۰s | dial از exit ≤۱۰s + انتظار اولین بایت ≤۸s |
 | `ProbeFirstByte` | ۸s | فقط برای egress probe |
@@ -450,7 +500,9 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 | `internal`، و هر kind محلی/عملیاتی (`invalid_destination`، `policy_denied`، `source_fetch`، `import_invalid`، `state_*`، `peer_rejected`) | نه |
 
 پیشنهاد فقط از `ProbeResult.Eligible == true` ساخته می‌شود؛ پرچم در `prober` از همین
-جدول محاسبه می‌شود و پذیرش پیشنهاد یک `Rule` با `Origin=user` می‌سازد، نه بیشتر.
+جدول محاسبه می‌شود. پذیرش یک پیشنهاد `route` یک `Rule` با `Origin=user` می‌سازد و
+پذیرش یک پیشنهاد `unroute` همان قانون نام‌برده‌شده را پس از تأیید صریح حذف می‌کند؛
+هیچ‌کدام بدون تصمیم کاربر رخ نمی‌دهد.
 
 ## ۴. state و config
 
@@ -506,7 +558,10 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
   "sources": [{ "id": "s-...", "kind": "subscription", "label": "...", "order": 0, "refreshed_at": "..." }],
   "records": [{ "id": "x-...", "dedupe_key": "sha256:...", "source_ids": ["s-..."], "protocol": "vless", "server": "...", "port": 443, "transport": "xhttp", "security": "tls", "status": "unknown" }],
   "health": [{ "exit": "x-...", "status": "healthy", "ewma_latency_ms": 210, "samples": 4 }],
-  "proposals": [{ "id": "p-...", "destination": { "kind": "domain", "host": "api.example.com", "port": 443 }, "status": "pending", "expires_at": "..." }],
+  "proposals": [
+    { "id": "p-...", "kind": "route", "destination": { "kind": "domain", "host": "api.example.com", "port": 443 }, "status": "pending", "expires_at": "..." },
+    { "id": "u-...", "kind": "unroute", "rule_id": "r-...", "destination": { "kind": "domain", "host": "old.example.com", "port": 443 }, "status": "pending", "expires_at": "..." }
+  ],
   "desktop": { "applied": false, "environment": "", "instance_id": "", "keys": [] },
   "updated_at": "..."
 }
@@ -515,6 +570,12 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
 فیلدهای secret (UUID/password، URL منبع) در همین فایل `0600` هستند و در هیچ خروجی
 CLI/JSON/لاگ بازتولید نمی‌شوند. `status` فهرست همیشه `dedupe_key` را کوتاه (۸ کاراکتر
 اول) یا حذف می‌کند.
+
+`proposals` هر دو نوع پیشنهاد را در یک آرایه نگه می‌دارد: `kind=route` برای افزودن یک
+مقصد، و `kind=unroute` برای حذف یک قانون تأییدشده با `rule_id`. هر دو همان چرخهٔ
+`pending`/`accepted`/`rejected`/`expired` و همان retention را دارند و از یک مسیر
+persist/load می‌گذرند؛ پیشنهاد unroute هم فقط با تأیید صریح کاربر به حذف قانون تبدیل
+می‌شود. `kind` خالی در state قدیمی‌تر `route` خوانده می‌شود.
 
 ### ۴.۴ نوشتن اتمیک و یک writer
 
@@ -585,6 +646,13 @@ CLI/JSON/لاگ بازتولید نمی‌شوند. `status` فهرست همیش
 | GNOME | بله | `gsettings` (`org.gnome.system.proxy`، `ignore-hosts`) | set/restore با ownership check |
 | KDE | بله | `kwriteconfig6`/`kwriteconfig5` (`kioslaverc`) | set/restore با ownership check |
 | سایر | نه | — | exit `7` و پیام صریح «این محیط پشتیبانی نمی‌شود»؛ هرگز ادعای «پروکسی کل سیستم» |
+
+شکست خود ابزار با `external_tool_failed` (exit `1`) گزارش می‌شود، نه با «محیط پشتیبانی
+نمی‌شود»: `gsettings`/`kwriteconfig`/`kreadconfig` (و در T6 `systemctl`) اگر خطا بدهند
+هیچ نتیجه‌ای دربارهٔ اعمال یا restore فرض نمی‌شود و rollback همان مسیر `Apply` اجرا
+می‌شود. نبود ابزار یا محیط پشتیبانی‌نشده `unsupported` (exit `7`)، سرویس ناسالم
+`stopped` (exit `3`)، marker ناسازگار/خراب `state_corrupt` (exit `10`)، timeout `8`،
+لغو `12` و تعارض/قفل state `6` است.
 
 restore **کلید‌به‌کلید** است: `DesktopProxyState.Keys` برای هر کلید مقدار نوشته‌شده و
 مقدار قبلی را نگه می‌دارد و فقط کلیدی برگردانده می‌شود که مقدار فعلی‌اش هنوز همان مقدار
@@ -771,6 +839,11 @@ process به‌خاطر وضعیت سراسری مجاز نیست.
   غلط یا خروجی کاملاً مرده هم در همین دسته می‌ماند و ممکن است تا اولین شاهد مثبت
   «healthy» نشود ولی cooling هم نشود؛ `pool test --target` ابزار کاربر برای جداکردن
   این حالت است.
+- انتساب در `ProbeResult.Attribution` حمل می‌شود: فقط `exit` اجازهٔ cooling می‌دهد،
+  `local_outage` هرگز exit را مقصر نمی‌کند و `none` یعنی هیچ شاهد سطح exit وجود ندارد
+  (probe مستقیم مقصد، stream تأییدنشده، توقف پس از dial). این فیلد جای پارامتر خارج از
+  قرارداد را گرفته و تنها دروازهٔ انتساب است؛ تصمیم سلامت همچنان outcome و failure kind
+  را هم می‌بیند.
 - probe مستقیم فقط برای تشخیص است و هرگز مبنای انتخاب exit نیست.
 
 ### ۶.۳ رفتار در حالت‌ها
@@ -798,8 +871,16 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 | سقف `pool test` | ۲۰ exit در هر فراخوانی | deadline سوکت متناسب با تعداد؛ partial مجاز |
 | فاصلهٔ transport probe خودکار | ۱۰ دقیقه | فقط در targeted/all-proxy؛ بدون ترافیک مقصد |
 | هم‌زمانی probe | health ۲، diagnostic ۱، صف ۳۲ | سقف منابع |
-| نمونه/نگهداری | ۲۰۰ نمونه، ۷ روز | — |
+| نمونه/نگهداری | ۲۰۰ نمونه، ۷ روز (ring حافظه‌ای) | — |
 | پیشنهاد | ۳۰ روز | — |
+
+**نگهداری نمونه.** تاریخ نمونه‌ها (۲۰۰ نمونه و ۷ روز برای هر exit) یک ring حافظه‌ای
+محدود در prober است و هرگز در `state.json` نوشته نمی‌شود. آنچه persist می‌شود خلاصهٔ
+`ExitHealth` است (وضعیت، EWMA، شمارنده‌ها، cooldown و آخرین kind)؛ پس از restart همان
+خلاصه بارگذاری می‌شود و نمونه‌های خام از دست می‌روند. سلامت پس از restart از probeهای
+transport و شواهد واقعی egress دوباره یاد گرفته می‌شود و هیچ healthyای از ring قدیمی
+ادعا نمی‌شود. `HealthSamplesPerExit` و `HealthRetention` همین ring را می‌بندند، نه فایل
+state.
 
 رتبه: `healthy` پیش از `unknown`؛ درون هر bucket، EWMA صعودی، سپس ترتیب کاربر. انتخاب
 دستی تا `pool select auto` پین می‌ماند و با شکست به exit دیگری سوییچ نمی‌کند.
@@ -815,6 +896,8 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 
 همهٔ فرمان‌ها `--json` دارند و `Envelope` (`internal/contract/cli.go`) را با
 `schema_version: 1` چاپ می‌کنند. خروجی انسانی هم به stdout می‌رود؛ هشدارها به stderr.
+فرمان foreground **`run`** است و همان `ExecStart` واحد systemd؛ تا SIGINT/پایان سرویس
+بلاک می‌ماند. `run` هیچ listener جایگزین یا proxy دسکتاپ خودکار نمی‌سازد.
 
 ```json
 { "schema_version": 1, "ok": true, "command": "status", "data": { "...": "..." } }
@@ -847,18 +930,22 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 | `pool list [--limit] [--offset]` | `records[{id,status,protocol,server,port,transport,security,sources,health{...}}], counts, truncated` | 0، 3 | «pool» |
 | `pool add <link\|file>` | `source_id, records{valid,invalid,unsupported}` | 0، 2، 6 | «افزودن خروجی» |
 | `pool remove <id>` | `removed, closed` | 0، 3، 5، 6 | «حذف خروجی» |
-| `pool refresh [--source\|--all] [--allow-empty]` | `sources[{id,ok,records,error}], kept_last_good` | 0، 3، 6، 8 | «به‌روزرسانی pool» |
+| `pool refresh [--source\|--all] [--allow-empty]` | `sources[{id,ok,records,error}], kept_last_good` | 0، 3، 5، 6، 8 | «به‌روزرسانی pool» |
 | `pool test [--exit\|--target]` | `results[{exit,kind,outcome,duration_ms,bytes_down}]` | 0، 3، 8، 11 | «آزمون pool» |
-| `pool select <id\|auto>` | `selected, policy_version` | 0، 3، 5 | «انتخاب خروجی» |
+| `pool select <id\|auto>` | `selected, policy_version` | 0، 3، 5، 6 | «انتخاب خروجی» |
 | `import link\|file\|subscription\|v2rayn` | `source_id, records{valid,invalid,unsupported}` | 0، 2، 6، 7، 8 | «واردکردن» |
 | `diagnose <host:port> [--direct\|--pool]` | `destination, kind, attempts[{outcome,duration_ms}], eligible, proposal_id?` | 0، 2، 3، 8، 11 | «تشخیص» |
-| `proposals list\|accept\|reject\|recheck` | `proposals[{id,destination,status,expires_at}]` / `rule_id` | 0، 3، 5، 6 | «پیشنهادها» |
+| `proposals list\|accept\|reject\|recheck` | `proposals[{id,kind,rule_id,destination,status,expires_at}]` / `rule_id` | 0، 3، 5، 6 | «پیشنهادها» |
 | `config get\|set\|path` | `path, values` | 0، 2، 3، 6 | «تنظیمات» |
 | `doctor` | `checks[{name,status,detail,fix}]` | 0، 3، 10 | «بررسی سلامت» |
 | `env` / `exec -- <cmd>` | `HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,NO_PROXY` / child exit code | 0، 3، 7 + کد فرزند | «اجرای برنامه» |
-| `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set` | 0، 3، 6، 7 | «پروکسی دسکتاپ» |
+| `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
 | `backup` / `restore <ref>` | `ref{path,schema_version,created_at}` | 0، 3، 6، 10 | «پشتیبان» |
 | `menu` | — | 0، 2، 3 | خودش |
+
+`status` در v1 هیچ شمارندهٔ بایتی برای اتصال‌ها ندارد و `ConnInfo` فیلد byte ندارد؛ برای
+اندازه/اثر یک تغییر mode یا rule از `CloseReport` استفاده کن (فیلدهای `Closed`،
+`PendingCancel`، `Kept`، `Duration`)، نه از تخمین ترافیک.
 
 ### ۷.۲ exit codeها
 
@@ -866,7 +953,9 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 `4` نمونهٔ دیگر فعال است، `5` شناسه پیدا نشد، `6` تعارض/تغییر رد شد (lock، version،
 restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9` peer/مجوز رد شد،
 `10` state خراب/نسخهٔ جدیدتر، `11` pool در دسترس نیست، `12` لغو شد. نگاشت kind→exit
-دقیقاً `contract.ExitCodeFor` است و تست هر ۲۰ kind را پوشش می‌دهد.
+دقیقاً `contract.ExitCodeFor` است و تست هر ۲۲ kind و بسته‌بودن مجموعه را پوشش می‌دهد.
+`not_found` → `5` (lookup فرمان) و `external_tool_failed` → `1` (شکست
+`gsettings`/`kwriteconfig`/`systemctl`؛ نتیجهٔ تنظیم نامعلوم اعلام می‌شود).
 
 ### ۷.۳ منو
 

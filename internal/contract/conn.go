@@ -55,8 +55,6 @@ type ConnInfo struct {
 	PolicyVersion PolicyVersion  `json:"policy_version"`
 	Exit          ExitID         `json:"exit,omitempty"`
 	StartedAt     time.Time      `json:"started_at"`
-	BytesUp       int64          `json:"bytes_up"`
-	BytesDown     int64          `json:"bytes_down"`
 }
 
 // ConnHandle is the frontend's ownership token for one connection. The
@@ -113,6 +111,9 @@ type CloseReport struct {
 // Registry is the single owner of live and in-progress user connections.
 //
 // Invariants:
+//   - SetPolicyVersion seeds the fence with the persisted PolicyVersion before
+//     the service accepts traffic. It never moves backwards and closes nothing;
+//     a later Register with an older Decision.PolicyVersion is rejected.
 //   - Register atomically fences the policy version: after a new version is
 //     committed, no spec whose Decision.PolicyVersion is older may enter. A
 //     rejected spec returns a *Failure with Kind Canceled.
@@ -131,6 +132,7 @@ type CloseReport struct {
 //   - Snapshot never blocks a dial and never exposes a conn's secret-bearing
 //     upstream address in CLI output.
 type Registry interface {
+	SetPolicyVersion(v PolicyVersion)
 	Register(spec ConnSpec) (ConnHandle, error)
 	CloseConflicting(ctx context.Context, cause CloseCause, next PolicyVersion, keep func(ConnInfo) bool) (CloseReport, error)
 	CloseAll(ctx context.Context, cause CloseCause) (CloseReport, error)

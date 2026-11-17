@@ -127,14 +127,14 @@ func TestRegisterFencesStalePolicyVersion(t *testing.T) {
 	}
 }
 
-func TestSetVersionSeedsTheFence(t *testing.T) {
+func TestSetPolicyVersionSeedsTheFence(t *testing.T) {
 	r := conns.New()
-	r.SetVersion(5)
+	r.SetPolicyVersion(5)
 	if _, err := r.Register(spec("old", contract.RouteDirect, 4)); failureKindOf(err) != contract.Canceled {
 		t.Fatalf("stale register after seed = %v, want canceled", err)
 	}
 	mustRegister(t, r, spec("current", contract.RouteDirect, 5))
-	r.SetVersion(3) // must not move backwards
+	r.SetPolicyVersion(3) // must not move backwards
 	if got := r.Version(); got != 5 {
 		t.Fatalf("version moved backwards to %d", got)
 	}
@@ -339,11 +339,6 @@ func TestSnapshotReportsStateWithoutUpstreamAddress(t *testing.T) {
 	}
 	h.SetExit("x-1")
 	h.SetProof(contract.ProofConfirmed)
-	if bc, ok := h.(conns.ByteCounter); ok {
-		bc.AddBytes(12, 34)
-	} else {
-		t.Fatalf("handle does not implement ByteCounter")
-	}
 
 	snap := r.Snapshot()
 	if len(snap) != 1 {
@@ -353,8 +348,8 @@ func TestSnapshotReportsStateWithoutUpstreamAddress(t *testing.T) {
 	if info.State != contract.ConnOpen || info.Proof != contract.ProofConfirmed {
 		t.Fatalf("unexpected state/proof: %+v", info)
 	}
-	if info.Exit != "x-1" || info.BytesUp != 12 || info.BytesDown != 34 {
-		t.Fatalf("unexpected exit/counters: %+v", info)
+	if info.Exit != "x-1" {
+		t.Fatalf("unexpected exit: %+v", info)
 	}
 	if info.Route != contract.RoutePool || info.PolicyVersion != 1 {
 		t.Fatalf("unexpected decision fields: %+v", info)

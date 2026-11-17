@@ -41,8 +41,10 @@ type DestClass string
 
 const (
 	// ClassSelf is one of RouteLatch's own traffic or management endpoints.
-	// It is refused in every mode to prevent a proxy-to-self loop, and no
-	// user rule can make it routable.
+	// The router recognizes it only from the configured listener ports
+	// (routing.Config.SelfPorts); loopback on any other port is ClassLocal. It
+	// is refused in every mode to prevent a proxy-to-self loop, no user rule
+	// can make it routable, and callers report the Decision as PolicyDenied.
 	ClassSelf DestClass = "self"
 	// ClassLocal is loopback, link-local, multicast, broadcast, or a
 	// *.localhost name. It is always direct (D17), never pooled. The

@@ -401,8 +401,14 @@ func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract
 		if dec.Reason == contract.ReasonModeStopped {
 			kind = contract.Stopped
 		}
+		message := httpReasonText(kind)
+		if dec.Reason == contract.ReasonSelfLoop {
+			// The wire reply stays generic policy_denied, but callers, logs and
+			// ConnInfo.Reason keep the matrix reason (docs/contracts.md §1.4).
+			message = "denied by local policy: self_loop"
+		}
 		return nil, "", "", newFailure(kind, contract.PathLocal,
-			"frontend.refuse", httpReasonText(kind))
+			"frontend.refuse", message)
 	default:
 		return nil, "", "", newFailure(contract.Internal, contract.PathLocal,
 			"frontend.route", "unknown route")

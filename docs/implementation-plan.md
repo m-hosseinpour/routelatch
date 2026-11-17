@@ -252,13 +252,19 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   **مهم:** این وضعیت «پیاده‌شده و آزمون واحد» است، نه پذیرش. هیچ جریان کامل کاربر
   (install → import → rule → use → proposal → mode switch → pool failure → all-direct →
   stop) هنوز اجرا نشده و A01–A13 پذیرفته‌نشده‌اند.
-- **اصلاحیهٔ قرارداد (۱۲ شکاف موج اول)** پیاده شد و کل درخت سبز است؛ verdict بازبینی
-  مستقل هنوز برنگشته و این تغییرات commit نشده‌اند. اگر جلسه از این‌جا ادامه یافت، اول
-  همان verdict را بگیر، سپس اصلاحیهٔ قرارداد و پوستهٔ برنامه را در یک checkpoint
-  قابل‌ساخت commit کن.
+- **اصلاحیهٔ قرارداد (۱۲ شکاف موج اول) بسته شد:** کد `NotFound`/`ExternalToolFailed`,
+  `Proposal.Kind`/`RuleID` با ماندگاری پیشنهاد unroute، انتساب نتیجهٔ probe،
+  `Registry.SetPolicyVersion` و حذف شمارنده‌های بی‌نویسنده؛ شش اصلاح متنی در
+  `docs/contracts.md`. بازبینی مستقل approve داد (چهار یافته رفع شد).
+- **پوستهٔ برنامه پیاده شد:** `internal/store` (اتمیک، lock تک‌نویسنده، migration،
+  backup/restore، corrupt → fail-closed)، `internal/control` (socket 0600 با SO_PEERCRED،
+  سقف درخواست/پاسخ، exit code از contract) و `cmd/routelatch` (۱۶ فرمان/۳۴ فرم، JSON،
+  منو، `run`، doctor). بازبینی مستقل بدون یافتهٔ مسدودکننده.
+  گپ باقی‌مانده: مسیر accept/reject پیشنهاد unroute فقط source-traced است، چون تولیدکنندهٔ
+  آن در جریان عادی وجود ندارد؛ در T7 آزموده شود.
 - **T2 بسته شد:** `docs/contracts.md` (مدل مقصد، proof class و ماتریس حالت، تاکسونومی خطا،
   state/مدیریت، pool/import/sanitization، probe/سلامت، CLI/menu، نگاشت A01–A14) و
-  `internal/contract` یخ‌زده با ۲۰ kind خطا. بازبینی مستقل ۱۱ یافتهٔ مادی و ۲ رگرسیون
+  `internal/contract` یخ‌زده با ۲۲ kind خطا (پس از اصلاحیه). بازبینی مستقل ۱۱ یافتهٔ مادی و ۲ رگرسیون
   را یافت و همه بسته شدند. تست‌های دورانداختنی مسیر مقصد (شامل `[::]:80` و PSL) پاک
   شدند؛ آزمون دائمی این رفتار در T3 است.
 

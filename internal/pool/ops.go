@@ -6,12 +6,21 @@ import (
 	"routelatch/internal/contract"
 )
 
-// ErrExitNotFound and ErrExitUnusable let the CLI map command failures without
-// inventing an ErrorKind. The frozen contract has no not-found kind.
+// ErrExitNotFound and ErrExitUnusable remain as wrapped causes so existing
+// callers can use errors.Is. Miss is a typed *contract.Failure with Kind
+// NotFound (exit code 5); an exit that exists but cannot be selected stays a
+// value-level command outcome for the CLI to map.
 var (
 	ErrExitNotFound = errors.New("exit not found")
 	ErrExitUnusable = errors.New("exit is not usable")
 )
+
+func exitNotFoundFailure(exit contract.ExitID) *contract.Failure {
+	return &contract.Failure{
+		Kind: contract.NotFound, Path: contract.PathLocal, Op: "pool.select",
+		Exit: exit, Message: ErrExitNotFound.Error(), Err: ErrExitNotFound,
+	}
+}
 
 // RemoveRecord removes one record and its health entry. The caller closes live
 // connections for the returned exit with CloseExitGone; this package only owns
@@ -95,7 +104,7 @@ func SetSelected(st *contract.State, exit contract.ExitID) error {
 		}
 	}
 	if found == nil {
-		return ErrExitNotFound
+		return exitNotFoundFailure(exit)
 	}
 	if found.Status == contract.RecordInvalid || found.Status == contract.RecordUnsupported || !Dialable(*found) {
 		return ErrExitUnusable

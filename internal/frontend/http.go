@@ -253,7 +253,7 @@ func (p *httpProxy) serveForward(c net.Conn, br *bufio.Reader, req *http.Request
 		return false, nil
 	}
 	if err := writeAll(upstream, upstreamHead); err != nil {
-		p.writeHTTPSendFailure(c, dec.Route)
+		p.writeHTTPSendFailure(c, dec.Route, err)
 		_ = h.Close()
 		return false, nil
 	}
@@ -267,7 +267,7 @@ func (p *httpProxy) serveForward(c net.Conn, br *bufio.Reader, req *http.Request
 		respHead, err := readHead(upbr)
 		if err != nil {
 			if !wroteResponse {
-				p.writeHTTPSendFailure(c, dec.Route)
+				p.writeHTTPSendFailure(c, dec.Route, err)
 			}
 			_ = h.Close()
 			<-bodyCh
@@ -276,7 +276,7 @@ func (p *httpProxy) serveForward(c net.Conn, br *bufio.Reader, req *http.Request
 		resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(respHead)), req)
 		if err != nil {
 			if !wroteResponse {
-				p.writeHTTPSendFailure(c, dec.Route)
+				p.writeHTTPSendFailure(c, dec.Route, err)
 			}
 			_ = h.Close()
 			<-bodyCh
@@ -452,14 +452,25 @@ func hostHasPort(host string) bool {
 }
 
 // writeHTTPSendFailure maps a failure that happened after a successful dial but
-// before any origin byte reached the client. Direct and pool paths share the
-// 502 status; the kind keeps the path distinguishable in a report.
-func (p *httpProxy) writeHTTPSendFailure(c net.Conn, route contract.Route) {
-	kind := contract.ExitUnreachable
-	if route == contract.RouteDirect {
-		kind = contract.ConnectRefused
+// before any origin response byte reached the client. A typed failure from the
+// pool conn keeps its kind (ExitUnreachable for a tracked transport error,
+// Timeout for a deadline, and so on); only an untyped stream failure falls back
+// to DestinationUnconfirmed, because the dial's proof said nothing about the
+// destination and no attributable transport error exists. The direct path
+// keeps ConnectRefused for an untyped failure (docs/contracts.md §3).
+func (p *httpProxy) writeHTTPSendFailure(c net.Conn, route contract.Route, err error) {
+	p.writeHTTPError(c, sendFailureKind(route, err))
+}
+
+func sendFailureKind(route contract.Route, err error) contract.ErrorKind {
+	var failure *contract.Failure
+	if errors.As(err, &failure) && failure.Kind != "" {
+		return failure.Kind
 	}
-	p.writeHTTPError(c, kind)
+	if route == contract.RouteDirect {
+		return contract.ConnectRefused
+	}
+	return contract.DestinationUnconfirmed
 }
 
 func (p *httpProxy) writeHTTPError(c net.Conn, kind contract.ErrorKind) {

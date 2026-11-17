@@ -17,7 +17,7 @@ func localFailure(kind contract.ErrorKind, op, message string) *contract.Failure
 }
 
 func commandFailure(op string, err error) *contract.Failure {
-	f := localFailure(contract.Internal, op, "a desktop settings command failed; nothing was assumed about the result")
+	f := localFailure(contract.ExternalToolFailed, op, "an external desktop settings command failed; nothing was assumed about the result")
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		f.Kind = contract.Timeout

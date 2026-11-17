@@ -67,20 +67,40 @@ type ProbeRequest struct {
 	PolicyVersion PolicyVersion
 }
 
+// ProbeAttribution says what a probe result is evidence about. It is the only
+// gate pool health may use: a failure may cool an exit only when this field is
+// ProbeAttributionExit (docs/contracts.md §6.2).
+type ProbeAttribution string
+
+const (
+	// ProbeAttributionNone means there is no exit-level evidence: a direct
+	// destination probe, an unconfirmed stream, a first-byte stall, or any
+	// result that was not evaluated. It never changes exit health.
+	ProbeAttributionNone ProbeAttribution = ""
+	// ProbeAttributionExit means the observed success or failure belongs to
+	// the exit's own transport.
+	ProbeAttributionExit ProbeAttribution = "exit"
+	// ProbeAttributionLocalOutage means the machine's own network failed, so
+	// the exit is not blamed and must not be cooled.
+	ProbeAttributionLocalOutage ProbeAttribution = "local_outage"
+)
+
 // ProbeResult is what the prober reports. Eligible is computed from the
 // evidence rules in docs/contracts.md §3.5 and is the only gate a proposal
-// may use: a probe with Eligible false can never create a Proposal.
+// may use: a probe with Eligible false can never create a Proposal. Attribution
+// is the only gate pool health may use.
 type ProbeResult struct {
-	Kind        ProbeKind     `json:"kind"`
-	Trigger     ProbeTrigger  `json:"trigger"`
-	Exit        ExitID        `json:"exit,omitempty"`
-	Destination Destination   `json:"destination"`
-	StartedAt   time.Time     `json:"started_at"`
-	Duration    time.Duration `json:"duration_ns"`
-	Outcome     ProbeOutcome  `json:"outcome"`
-	Failure     ErrorKind     `json:"failure,omitempty"` // zero when Outcome is success
-	Eligible    bool          `json:"eligible"`
-	BytesDown   int64         `json:"bytes_down"` // >0 proves the egress path carried data
+	Kind        ProbeKind        `json:"kind"`
+	Trigger     ProbeTrigger     `json:"trigger"`
+	Exit        ExitID           `json:"exit,omitempty"`
+	Destination Destination      `json:"destination"`
+	StartedAt   time.Time        `json:"started_at"`
+	Duration    time.Duration    `json:"duration_ns"`
+	Outcome     ProbeOutcome     `json:"outcome"`
+	Failure     ErrorKind        `json:"failure,omitempty"` // zero when Outcome is success
+	Attribution ProbeAttribution `json:"attribution,omitempty"`
+	Eligible    bool             `json:"eligible"`
+	BytesDown   int64            `json:"bytes_down"` // >0 proves the egress path carried data
 }
 
 // Prober owns probe concurrency, cooldowns and retention. It is the only
@@ -129,10 +149,29 @@ const (
 	EvidenceDirectDNS     EvidenceKind = "direct_dns_failure"
 )
 
-// Proposal is a suggestion to add one destination to the approved list. It
-// is not a rule and never changes routing by itself.
+// ProposalKind selects what a proposal suggests changing: approving one
+// destination, or removing one approved rule. Both kinds share status,
+// retention and State.Proposals; accepting either still requires an explicit
+// user confirmation and the registry itself changes no routing
+// (docs/contracts.md §4.3, §7.1).
+type ProposalKind string
+
+const (
+	// ProposalRoute suggests adding one destination to the approved list.
+	ProposalRoute ProposalKind = "route"
+	// ProposalUnroute suggests removing one approved rule. RuleID names it;
+	// Destination is what the suggestion is about and Evidence is empty.
+	ProposalUnroute ProposalKind = "unroute"
+)
+
+// Proposal is a suggestion to add one destination to the approved list or to
+// remove one approved rule. It is not a rule and never changes routing by
+// itself. An empty Kind is read as ProposalRoute for state written before the
+// kind field existed.
 type Proposal struct {
 	ID          ProposalID     `json:"id"`
+	Kind        ProposalKind   `json:"kind"`
+	RuleID      RuleID         `json:"rule_id,omitempty"` // ProposalUnroute only
 	Destination Destination    `json:"destination"`
 	Evidence    []Evidence     `json:"evidence"`
 	Status      ProposalStatus `json:"status"`
@@ -142,8 +181,9 @@ type Proposal struct {
 	Note        string         `json:"note,omitempty"`
 }
 
-// ProposalID is stable and derived from the destination, so repeated failures
-// update one proposal instead of piling up duplicates.
+// ProposalID is stable: a route proposal derives it from the destination, so
+// repeated failures update one proposal instead of piling up duplicates; an
+// unroute proposal derives it from the rule ID.
 type ProposalID string
 
 // Evidence is one stored failure with its provenance. It keeps the address

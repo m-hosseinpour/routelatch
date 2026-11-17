@@ -8,6 +8,29 @@ import (
 	"routelatch/internal/contract"
 )
 
+func TestSendFailureKindPreservesTypedKinds(t *testing.T) {
+	cases := []struct {
+		name  string
+		route contract.Route
+		err   error
+		want  contract.ErrorKind
+	}{
+		{"tracked pool transport error", contract.RoutePool,
+			&contract.Failure{Kind: contract.ExitUnreachable, Path: contract.PathPool}, contract.ExitUnreachable},
+		{"pool deadline", contract.RoutePool,
+			&contract.Failure{Kind: contract.Timeout, Path: contract.PathPool}, contract.Timeout},
+		{"untyped pool stream failure", contract.RoutePool, errors.New("eof"), contract.DestinationUnconfirmed},
+		{"untyped direct failure", contract.RouteDirect, errors.New("write failed"), contract.ConnectRefused},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sendFailureKind(tc.route, tc.err); got != tc.want {
+				t.Fatalf("kind = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDialFailureAttribution(t *testing.T) {
 	poolFailure := &contract.Failure{Kind: contract.PoolUnavailable, Path: contract.PathPool, Message: "pool unavailable"}
 	cases := []struct {

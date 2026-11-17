@@ -19,8 +19,12 @@ import "time"
 //     refused at 2.006s, caller deadline at 401ms); destination failures on
 //     VLESS/Trojan collapse to EOF and are not attributable.
 const (
-	// PoolDialDeadline bounds one pool dial, including exit transport setup.
-	// It exceeds the measured ~1s Xray retry on a refused exit plus TLS setup.
+	// PoolDialDeadline bounds one blocking pool dial. It is a real handshake
+	// bound only for the owned SOCKS5 adapter, which must finish greeting,
+	// authentication and CONNECT before returning. The pinned core has no
+	// observable dial phase: core.Dial returns before the exit is contacted, so
+	// a stuck core session is classified later, in the tunnel stage, as Timeout
+	// or DestinationUnconfirmed (docs/contracts.md §2.1, §3).
 	PoolDialDeadline = 10 * time.Second
 	// DirectDialDeadline bounds one direct dial.
 	DirectDialDeadline = 10 * time.Second
@@ -58,7 +62,9 @@ const (
 	// ProbeCooldownFailures is the consecutive-failure count that reaches the
 	// cap; a success resets the counter.
 	ProbeCooldownFailures = 4
-	// HealthSamplesPerExit and HealthRetention bound persisted samples.
+	// HealthSamplesPerExit and HealthRetention bound the prober's in-memory
+	// sample ring, not the persisted state: ExitHealth is the only health
+	// summary that survives a restart (docs/contracts.md §6.4).
 	HealthSamplesPerExit = 200
 	HealthRetention      = 7 * 24 * time.Hour
 	// ProposalRetention bounds how long an unanswered proposal stays visible.

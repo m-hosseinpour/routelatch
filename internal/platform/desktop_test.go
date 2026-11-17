@@ -367,6 +367,9 @@ func TestGNOMEApplyRollsBackOnFailure(t *testing.T) {
 	if !errors.As(err, &failure) || !strings.Contains(failure.Message, "previous values were restored") {
 		t.Fatalf("error = %v, want a clear rollback message", err)
 	}
+	if failure.Kind != contract.ExternalToolFailed || contract.ExitCodeFor[failure.Kind] != contract.ExitError {
+		t.Fatalf("kind = %s exit = %d, want external_tool_failed/1", failure.Kind, contract.ExitCodeFor[failure.Kind])
+	}
 }
 
 type failOnSecondWrite struct {

@@ -78,7 +78,10 @@ type PoolDialResult struct {
 //     reported success. A bare nil return from the core is ProofAccepted at
 //     best.
 //   - It does not write to Conn before returning it, so the frontend owns the
-//     first byte and can still send an error reply.
+//     first byte and can still send an error reply. A stream that fails after a
+//     successful return and before any response byte, without an attributable
+//     transport error, surfaces DestinationUnconfirmed on the returned conn,
+//     not a second dial error; no separate kind exists (docs/contracts.md §3).
 //   - Tag names the exit, not the decision: tags are stable per record, so a
 //     mode or rule change does not retag a healthy exit. The dialer instead
 //     fences req.PolicyVersion against the current policy and rejects a

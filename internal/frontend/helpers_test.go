@@ -120,6 +120,8 @@ type testRegistry struct {
 	registerErr error
 }
 
+func (r *testRegistry) SetPolicyVersion(contract.PolicyVersion) {}
+
 func (r *testRegistry) Register(spec contract.ConnSpec) (contract.ConnHandle, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

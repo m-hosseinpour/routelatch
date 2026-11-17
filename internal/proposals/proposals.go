@@ -1,8 +1,9 @@
 // Package proposals owns the diagnostic proposal registry. A proposal is a
-// suggestion to approve one destination; it never changes routing and never
-// creates a rule (D09, docs/contracts.md §3.5). The registry stores no request
-// material: evidence keeps only destination, port, probe kind, outcome and
-// time.
+// suggestion to approve one destination (Kind route) or remove one approved
+// rule (Kind unroute); it never changes routing and never creates or deletes a
+// rule (D09, docs/contracts.md §3.5, §4.3). The registry stores no request
+// material: route evidence keeps only destination, port, probe kind, outcome
+// and time.
 package proposals
 
 import (
@@ -32,15 +33,24 @@ var (
 
 const maxEvidence = 8
 
+// notFoundFailure keeps ErrNotFound as a wrapped cause while exposing the
+// contract kind that maps a CLI lookup miss to exit code 5.
+func notFoundFailure(op string) *contract.Failure {
+	return &contract.Failure{
+		Kind: contract.NotFound, Path: contract.PathLocal, Op: op,
+		Message: ErrNotFound.Error(), Err: ErrNotFound,
+	}
+}
+
 // Registry is a bounded in-memory proposal store. The control layer persists
 // Snapshot and restores it with Load through the single state owner; the
-// registry itself never touches disk.
+// registry itself never touches disk. Route and unroute suggestions share one
+// map and are distinguished by contract.Proposal.Kind.
 type Registry struct {
-	mu       sync.Mutex
-	byID     map[contract.ProposalID]contract.Proposal
-	unroutes map[UnrouteID]UnrouteSuggestion
-	now      func() time.Time
-	retain   time.Duration
+	mu     sync.Mutex
+	byID   map[contract.ProposalID]contract.Proposal
+	now    func() time.Time
+	retain time.Duration
 }
 
 // New creates an empty registry. now is optional and exists for tests.
@@ -49,10 +59,9 @@ func New(now func() time.Time) *Registry {
 		now = time.Now
 	}
 	return &Registry{
-		byID:     make(map[contract.ProposalID]contract.Proposal),
-		unroutes: make(map[UnrouteID]UnrouteSuggestion),
-		now:      now,
-		retain:   contract.ProposalRetention,
+		byID:   make(map[contract.ProposalID]contract.Proposal),
+		now:    now,
+		retain: contract.ProposalRetention,
 	}
 }
 
@@ -154,6 +163,7 @@ func (r *Registry) Upsert(dst contract.Destination, ev contract.Evidence, note s
 	if !ok || existing.Status == contract.ProposalExpired {
 		p := contract.Proposal{
 			ID:          id,
+			Kind:        contract.ProposalRoute,
 			Destination: dst,
 			Evidence:    []contract.Evidence{ev},
 			Status:      contract.ProposalPending,
@@ -180,9 +190,22 @@ func appendEvidence(list []contract.Evidence, ev contract.Evidence) []contract.E
 	return list
 }
 
-// List returns every retained proposal, pending first and newest first inside
-// each status bucket.
+// List returns every retained route proposal, pending first and newest first
+// inside each status bucket. Unroute suggestions are listed separately.
 func (r *Registry) List() []contract.Proposal {
+	all := r.listAll()
+	out := all[:0]
+	for _, p := range all {
+		if p.Kind == contract.ProposalUnroute {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// listAll returns both proposal kinds, sorted for display.
+func (r *Registry) listAll() []contract.Proposal {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expireLocked(r.now().UTC())
@@ -230,13 +253,18 @@ func (r *Registry) Pending() []contract.Proposal {
 	return out
 }
 
-// Get returns one proposal by ID.
+// Get returns one proposal by ID, of either kind. The caller decides what it
+// can do with an unroute suggestion; the route-only operations (Accept,
+// Reject, Recheck) reject an unroute ID as not found.
 func (r *Registry) Get(id contract.ProposalID) (contract.Proposal, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expireLocked(r.now().UTC())
 	p, ok := r.byID[id]
-	return copyProposal(p), ok
+	if !ok {
+		return contract.Proposal{}, false
+	}
+	return copyProposal(p), true
 }
 
 // Accept marks a pending proposal accepted and returns exactly the destination
@@ -248,8 +276,8 @@ func (r *Registry) Accept(id contract.ProposalID) (contract.Destination, error) 
 	now := r.now().UTC()
 	r.expireLocked(now)
 	p, ok := r.byID[id]
-	if !ok {
-		return contract.Destination{}, ErrNotFound
+	if !ok || p.Kind == contract.ProposalUnroute {
+		return contract.Destination{}, notFoundFailure("proposals.accept")
 	}
 	switch p.Status {
 	case contract.ProposalPending:
@@ -272,8 +300,8 @@ func (r *Registry) Reject(id contract.ProposalID, note string) error {
 	now := r.now().UTC()
 	r.expireLocked(now)
 	p, ok := r.byID[id]
-	if !ok {
-		return ErrNotFound
+	if !ok || p.Kind == contract.ProposalUnroute {
+		return notFoundFailure("proposals.reject")
 	}
 	switch p.Status {
 	case contract.ProposalPending:
@@ -309,8 +337,8 @@ func (r *Registry) Recheck(id contract.ProposalID, ev contract.Evidence, note st
 	now := r.now().UTC()
 	r.expireLocked(now)
 	p, ok := r.byID[id]
-	if !ok {
-		return contract.Proposal{}, false, ErrNotFound
+	if !ok || p.Kind == contract.ProposalUnroute {
+		return contract.Proposal{}, false, notFoundFailure("proposals.recheck")
 	}
 	if p.Status == contract.ProposalExpired {
 		return copyProposal(p), false, ErrExpired
@@ -326,13 +354,12 @@ func (r *Registry) Recheck(id contract.ProposalID, ev contract.Evidence, note st
 	return copyProposal(p), true, nil
 }
 
-// Expire moves pending proposals and unroute suggestions past their 30-day
-// window to expired. It deletes nothing; Clear is the explicit removal path.
+// Expire moves pending route and unroute proposals past their 30-day window to
+// expired. It deletes nothing; Clear is the explicit removal path.
 func (r *Registry) Expire() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := r.now().UTC()
-	return r.expireLocked(now) + r.expireUnroutesLocked(now)
+	return r.expireLocked(r.now().UTC())
 }
 
 func (r *Registry) expireLocked(now time.Time) int {
@@ -368,39 +395,64 @@ func (r *Registry) Clear() int {
 		delete(r.byID, id)
 		n++
 	}
-	r.expireUnroutesLocked(now)
-	for id, s := range r.unroutes {
-		if s.Status == contract.ProposalPending {
-			continue
-		}
-		if !s.ExpiresAt.IsZero() && now.Before(s.ExpiresAt) {
-			continue
-		}
-		delete(r.unroutes, id)
-		n++
-	}
 	return n
 }
 
-// Snapshot returns a deep copy for persistence by the state owner.
+// Snapshot returns a deep copy of both proposal kinds for persistence by the
+// state owner. Unroute suggestions are contract.Proposal values with
+// Kind ProposalUnroute and RuleID set, so State.Proposals holds them too.
 func (r *Registry) Snapshot() []contract.Proposal {
-	return r.List()
+	return r.listAll()
 }
 
-// Load replaces the registry with persisted proposals. IDs must match the
-// stable derivation and evidence must pass the same validation as new input;
-// a corrupt entry refuses the whole load rather than half-restoring state.
+// Load replaces the registry with persisted route and unroute proposals. IDs
+// must match the stable derivation and each entry must pass the same validation
+// as new input; a corrupt entry refuses the whole load rather than
+// half-restoring state. An empty Kind is read as ProposalRoute for state
+// written before the kind field existed.
 func (r *Registry) Load(list []contract.Proposal) error {
 	next := make(map[contract.ProposalID]contract.Proposal, len(list))
 	for _, p := range list {
+		if p.Kind == "" {
+			p.Kind = contract.ProposalRoute
+		}
 		if !validDestination(p.Destination) {
 			return fmt.Errorf("%w: %s", ErrInvalidProposal, p.ID)
 		}
-		want := StableID(p.Destination)
-		if p.ID == "" {
-			p.ID = want
-		} else if p.ID != want {
-			return fmt.Errorf("%w: id %s does not match destination", ErrInvalidProposal, p.ID)
+		switch p.Kind {
+		case contract.ProposalRoute:
+			if p.RuleID != "" {
+				return fmt.Errorf("%w: route proposal %s carries a rule id", ErrInvalidProposal, p.ID)
+			}
+			want := StableID(p.Destination)
+			if p.ID == "" {
+				p.ID = want
+			} else if p.ID != want {
+				return fmt.Errorf("%w: id %s does not match destination", ErrInvalidProposal, p.ID)
+			}
+			for _, ev := range p.Evidence {
+				if !validEvidence(ev) {
+					return fmt.Errorf("%w: bad evidence for %s", ErrInvalidProposal, p.ID)
+				}
+			}
+			if len(p.Evidence) > maxEvidence {
+				p.Evidence = append([]contract.Evidence(nil), p.Evidence[len(p.Evidence)-maxEvidence:]...)
+			}
+		case contract.ProposalUnroute:
+			if p.RuleID == "" {
+				return fmt.Errorf("%w: unroute proposal %s has no rule id", ErrInvalidProposal, p.ID)
+			}
+			if len(p.Evidence) != 0 {
+				return fmt.Errorf("%w: unroute proposal %s carries evidence", ErrInvalidProposal, p.ID)
+			}
+			want := contract.ProposalID(StableUnrouteID(p.RuleID))
+			if p.ID == "" {
+				p.ID = want
+			} else if p.ID != want {
+				return fmt.Errorf("%w: id %s does not match rule id", ErrInvalidProposal, p.ID)
+			}
+		default:
+			return fmt.Errorf("%w: unknown kind %q", ErrInvalidProposal, p.Kind)
 		}
 		switch p.Status {
 		case contract.ProposalPending, contract.ProposalAccepted,
@@ -417,14 +469,6 @@ func (r *Registry) Load(list []contract.Proposal) error {
 		p.CreatedAt = p.CreatedAt.UTC()
 		p.ExpiresAt = p.ExpiresAt.UTC()
 		p.DecidedAt = p.DecidedAt.UTC()
-		for _, ev := range p.Evidence {
-			if !validEvidence(ev) {
-				return fmt.Errorf("%w: bad evidence for %s", ErrInvalidProposal, p.ID)
-			}
-		}
-		if len(p.Evidence) > maxEvidence {
-			p.Evidence = append([]contract.Evidence(nil), p.Evidence[len(p.Evidence)-maxEvidence:]...)
-		}
 		if _, dup := next[p.ID]; dup {
 			return fmt.Errorf("%w: duplicate id %s", ErrInvalidProposal, p.ID)
 		}
@@ -433,9 +477,6 @@ func (r *Registry) Load(list []contract.Proposal) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.byID = next
-	if r.unroutes == nil {
-		r.unroutes = make(map[UnrouteID]UnrouteSuggestion)
-	}
 	r.expireLocked(r.now().UTC())
 	return nil
 }

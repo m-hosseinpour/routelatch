@@ -17,11 +17,7 @@
 //     observation is outside our control (docs/contracts.md §3.4).
 //
 // What this package deliberately does not do: it does not dial, route, rank,
-// decide a proof class or read a byte of tunnel traffic. The frontend owns the
-// copy loops and registers each connection before it starts a dial.
-//
-// Counters: contract.ConnInfo carries BytesUp and BytesDown, but the frozen
-// ConnHandle interface has no way for a frontend to report them. Handles also
-// implement the optional ByteCounter interface so a frontend that copies the
-// bytes can report them without a contract change.
+// decide a proof class, read a byte of tunnel traffic or count bytes. The
+// frontend owns the copy loops and registers each connection before it starts a
+// dial; v1 reports no per-connection byte counters (docs/contracts.md §7.1).
 package conns

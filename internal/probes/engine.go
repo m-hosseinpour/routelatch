@@ -60,9 +60,9 @@ const (
 	PhaseFirstByte Phase = "first_byte"
 )
 
-// Measurement is a probe result plus the attribution the pool needs. The
-// frozen ProbeResult has no attribution field, so it stays out of contract
-// types and is consumed explicitly by pool.ApplyProbe.
+// Measurement is a probe result plus the attribution the pool needs. Result
+// carries the contract attribution (ProbeResult.Attribution); Attributable and
+// LocalOutage stay as the prober's phase-level view for scheduling tests.
 type Measurement struct {
 	Result       contract.ProbeResult
 	Attributable bool
@@ -243,6 +243,17 @@ func (e *Engine) runMeasurement(ctx context.Context, req contract.ProbeRequest, 
 	defer cancel()
 	start := e.opts.Clock()
 	m := e.measure(ctx, req, start)
+	switch {
+	case m.Result.Kind == contract.ProbeDirectTCP || m.Result.Kind == contract.ProbeDirectTLS:
+		// A direct probe is destination evidence, never exit evidence.
+		m.Result.Attribution = contract.ProbeAttributionNone
+	case m.LocalOutage:
+		m.Result.Attribution = contract.ProbeAttributionLocalOutage
+	case m.Attributable:
+		m.Result.Attribution = contract.ProbeAttributionExit
+	default:
+		m.Result.Attribution = contract.ProbeAttributionNone
+	}
 	if m.Result.Kind == contract.ProbeTransport && m.Result.Outcome == contract.OutcomeSuccess {
 		// Transport probes measure the endpoint only and never prove egress.
 		m.Result.Eligible = false

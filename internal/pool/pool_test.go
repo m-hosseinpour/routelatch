@@ -70,12 +70,12 @@ func TestDirectProbeNeverCoolsExit(t *testing.T) {
 	st := &contract.State{Records: []contract.Record{record("x-a", 0, contract.RecordHealthy)}}
 	ApplyProbe(st, contract.ProbeResult{
 		Kind: contract.ProbeDirectTCP, Exit: "x-a", Outcome: contract.OutcomeTimeout, Failure: contract.Timeout,
-	}, true, now)
+	}, now)
 	if len(st.Health) != 0 || st.Records[0].Status != contract.RecordHealthy {
 		t.Fatalf("direct probe cooled an exit: %+v", st.Health)
 	}
 	// A result with no exit must not create a phantom health row either.
-	ApplyProbe(st, contract.ProbeResult{Kind: contract.ProbeEgress, Exit: "", Outcome: contract.OutcomeSuccess, BytesDown: 1}, true, now)
+	ApplyProbe(st, contract.ProbeResult{Kind: contract.ProbeEgress, Exit: "", Outcome: contract.OutcomeSuccess, BytesDown: 1}, now)
 	if len(st.Health) != 0 {
 		t.Fatalf("phantom health row: %+v", st.Health)
 	}
@@ -98,11 +98,11 @@ func TestEWMAAndAttribution(t *testing.T) {
 
 	// A destination-level outcome never cools an exit.
 	for _, res := range []contract.ProbeResult{
-		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeUnconfirmed, Failure: contract.DestinationUnconfirmed},
-		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeCanceled, Failure: contract.Canceled},
-		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeRefused, Failure: contract.DestinationRefused},
+		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeUnconfirmed, Failure: contract.DestinationUnconfirmed, Attribution: contract.ProbeAttributionExit},
+		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeCanceled, Failure: contract.Canceled, Attribution: contract.ProbeAttributionExit},
+		{Exit: "x-a", Kind: contract.ProbeEgress, Outcome: contract.OutcomeRefused, Failure: contract.DestinationRefused, Attribution: contract.ProbeAttributionExit},
 	} {
-		ApplyProbe(st, res, true, now.Add(2*time.Second))
+		ApplyProbe(st, res, now.Add(2*time.Second))
 		if st.Health[0].Status != contract.HealthHealthy || st.Health[0].ConsecutiveFailures != 0 {
 			t.Fatalf("outcome %s destroyed health: %+v", res.Outcome, st.Health[0])
 		}
@@ -112,8 +112,8 @@ func TestEWMAAndAttribution(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		ApplyProbe(st, contract.ProbeResult{
 			Exit: "x-a", Kind: contract.ProbeTransport, Outcome: contract.OutcomeTimeout,
-			Failure: contract.Timeout,
-		}, true, now.Add(time.Duration(i)*time.Second))
+			Failure: contract.Timeout, Attribution: contract.ProbeAttributionExit,
+		}, now.Add(time.Duration(i)*time.Second))
 	}
 	h := st.Health[0]
 	if h.Status != contract.HealthCooling || h.ConsecutiveFailures != 4 || h.CooldownUntil.IsZero() {
@@ -128,13 +128,13 @@ func TestEWMAAndAttribution(t *testing.T) {
 
 	// A local outage is not attributable.
 	st2 := &contract.State{Records: []contract.Record{record("x-b", 0, contract.RecordUnknown)}}
-	ApplyProbe(st2, contract.ProbeResult{Exit: "x-b", Outcome: contract.OutcomeTimeout, Failure: contract.Timeout}, false, now)
+	ApplyProbe(st2, contract.ProbeResult{Exit: "x-b", Outcome: contract.OutcomeTimeout, Failure: contract.Timeout, Attribution: contract.ProbeAttributionLocalOutage}, now)
 	if len(st2.Health) != 0 {
 		t.Fatalf("local outage cooled the exit: %+v", st2.Health)
 	}
 
 	// A successful transport probe clears cooling but does not claim healthy.
-	ApplyProbe(st, contract.ProbeResult{Exit: "x-a", Kind: contract.ProbeTransport, Outcome: contract.OutcomeSuccess}, true, now.Add(20*time.Minute))
+	ApplyProbe(st, contract.ProbeResult{Exit: "x-a", Kind: contract.ProbeTransport, Outcome: contract.OutcomeSuccess}, now.Add(20*time.Minute))
 	if st.Health[0].Status != contract.HealthUnknown || st.Health[0].ConsecutiveFailures != 0 {
 		t.Fatalf("transport success: %+v", st.Health[0])
 	}
@@ -314,8 +314,13 @@ func TestSetSelectedBumpsVersion(t *testing.T) {
 	if state.SelectedExit != "x-a" || state.PolicyVersion != 8 {
 		t.Fatalf("selected=%q version=%d", state.SelectedExit, state.PolicyVersion)
 	}
-	if err := SetSelected(&state, "x-missing"); !errors.Is(err, ErrExitNotFound) {
+	err := SetSelected(&state, "x-missing")
+	if !errors.Is(err, ErrExitNotFound) {
 		t.Fatalf("missing: %v", err)
+	}
+	var f *contract.Failure
+	if !errors.As(err, &f) || f.Kind != contract.NotFound {
+		t.Fatalf("missing kind = %v, want not_found", err)
 	}
 	ClearSelection(&state)
 	if state.SelectedExit != "" || state.PolicyVersion != 9 {

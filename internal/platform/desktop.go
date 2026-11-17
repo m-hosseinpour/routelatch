@@ -266,7 +266,7 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 			return contract.DesktopProxyState{}, commandFailure("platform.desktop.apply", err)
 		}
 		if value == "" && tools.kind == KindGNOME {
-			return contract.DesktopProxyState{}, localFailure(contract.Internal, "platform.desktop.apply",
+			return contract.DesktopProxyState{}, localFailure(contract.ExternalToolFailed, "platform.desktop.apply",
 				"gsettings returned an empty value for a key that always has one; nothing was changed")
 		}
 		if value != "" {

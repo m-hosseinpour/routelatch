@@ -67,10 +67,49 @@ const (
 	StateLocked ErrorKind = "state_locked"
 	// PeerRejected: a management request's peer credential was not accepted.
 	PeerRejected ErrorKind = "peer_rejected"
+	// NotFound: the object the user named (a rule, exit, source or proposal)
+	// does not exist. It is a command outcome, never a traffic result, and maps
+	// to exit code 5 (docs/contracts.md §7.2).
+	NotFound ErrorKind = "not_found"
+	// ExternalToolFailed: an external desktop or service tool failed
+	// (gsettings, kwriteconfig/kreadconfig, systemctl). Nothing may be assumed
+	// about its result: RouteLatch reports the failure and never claims the
+	// setting was applied or restored.
+	ExternalToolFailed ErrorKind = "external_tool_failed"
 	// Internal: a defect, not a routing outcome. It is never eligible for a
 	// proposal.
 	Internal ErrorKind = "internal"
 )
+
+// ErrorKinds returns the closed set declared above. Tests and documentation
+// consume this one list; every new constant must be added here in the same
+// change, otherwise the exit-code coverage test fails.
+func ErrorKinds() []ErrorKind {
+	return []ErrorKind{
+		InvalidDestination,
+		Unsupported,
+		PolicyDenied,
+		Stopped,
+		PoolUnavailable,
+		ExitUnreachable,
+		HandshakeRejected,
+		DestinationRefused,
+		DestinationUnconfirmed,
+		Timeout,
+		Canceled,
+		ConnectRefused,
+		DNSFailure,
+		TLSFailure,
+		SourceFetch,
+		ImportInvalid,
+		StateCorrupt,
+		StateLocked,
+		PeerRejected,
+		NotFound,
+		ExternalToolFailed,
+		Internal,
+	}
+}
 
 // Path names the egress a failure happened on.
 type Path string

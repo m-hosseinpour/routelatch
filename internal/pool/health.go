@@ -40,18 +40,11 @@ func IsTransportFailure(kind contract.ErrorKind) bool {
 	}
 }
 
-// CanCool combines the failure kind with the local-outage signal. When probes
-// report that the machine's own network is down, the failure is not attributed
-// to the exit.
-func CanCool(kind contract.ErrorKind, localOutage bool) bool {
-	return !localOutage && IsTransportFailure(kind)
-}
-
-// ApplyProbe updates health from one measurement. attributable must be false
-// when the prober classified a local-network outage or when the result carries
-// no exit-level evidence. The function writes only state; it never touches the
-// engine.
-func ApplyProbe(st *contract.State, res contract.ProbeResult, attributable bool, now time.Time) {
+// ApplyProbe updates health from one measurement. A failure may cool an exit
+// only when the prober set ProbeAttributionExit; a local-network outage or a
+// result with no exit-level evidence never changes exit health. The function
+// writes only state; it never touches the engine.
+func ApplyProbe(st *contract.State, res contract.ProbeResult, now time.Time) {
 	if res.Exit == "" {
 		// Direct diagnostic probes carry no exit; they must not create a
 		// phantom health row or cool anything.
@@ -77,7 +70,7 @@ func ApplyProbe(st *contract.State, res contract.ProbeResult, attributable bool,
 		// No evidence: neither cooling nor success.
 		return
 	default:
-		if res.Failure == "" || !attributable || !IsTransportFailure(res.Failure) {
+		if res.Failure == "" || res.Attribution != contract.ProbeAttributionExit || !IsTransportFailure(res.Failure) {
 			return
 		}
 		recordFailure(st, res.Exit, res.Failure, now)

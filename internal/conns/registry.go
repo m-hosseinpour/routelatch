@@ -194,11 +194,10 @@ func (r *Registry) Snapshot() []contract.ConnInfo {
 	return out
 }
 
-// SetVersion seeds or advances the fence outside a sweep. The frozen
-// contract.Registry has no way to tell the registry the version that is already
-// committed at startup, so a service calls this with the persisted
-// PolicyVersion before it accepts traffic. The value never moves backwards.
-func (r *Registry) SetVersion(v contract.PolicyVersion) {
+// SetPolicyVersion implements contract.Registry. A service calls it with the
+// persisted PolicyVersion before it accepts traffic; it seeds or advances the
+// fence and closes nothing. The value never moves backwards.
+func (r *Registry) SetPolicyVersion(v contract.PolicyVersion) {
 	r.fence.Lock()
 	defer r.fence.Unlock()
 	r.mu.Lock()

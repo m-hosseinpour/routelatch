@@ -425,6 +425,28 @@ func (f staticFetcher) FetchSource(context.Context, contract.Source) ([]byte, er
 	return f.body, f.err
 }
 
+func TestRefreshMissingNamedSourceIsNotFound(t *testing.T) {
+	known := contract.Source{ID: SourceIDFor(contract.SourceManual, "known"), Kind: contract.SourceManual, Origin: "known"}
+	store := newFakeStore(contract.State{Mode: contract.ModeTargeted, Sources: []contract.Source{known}})
+	r := NewRefresher(store, staticFetcher{})
+
+	missing := contract.SourceID("s-missing")
+	res, err := r.Refresh(context.Background(), []contract.SourceID{missing}, false)
+	if err == nil {
+		t.Fatal("missing source refresh reported success")
+	}
+	if !errors.Is(err, ErrSourceNotFound) {
+		t.Fatalf("missing source error = %v, want ErrSourceNotFound", err)
+	}
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || failure.Kind != contract.NotFound {
+		t.Fatalf("missing source kind = %v, want not_found", err)
+	}
+	if len(res.Sources) != 1 || res.Sources[0].ID != missing || res.Sources[0].OK {
+		t.Fatalf("missing source row = %#v", res.Sources)
+	}
+}
+
 func TestRefreshDuplicateAcrossSources(t *testing.T) {
 	link := "vless://" + testUUID + "@example.com:443?security=tls#n"
 	srcA := contract.Source{ID: SourceIDFor(contract.SourceSubscription, "https://a.example/sub"), Kind: contract.SourceSubscription, Origin: "https://a.example/sub", Order: 0}

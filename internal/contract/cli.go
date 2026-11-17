@@ -67,5 +67,7 @@ var ExitCodeFor = map[ErrorKind]ExitCode{
 	StateCorrupt:           ExitStateCorrupt,
 	StateLocked:            ExitConflict,
 	PeerRejected:           ExitDenied,
+	NotFound:               ExitNotFound,
+	ExternalToolFailed:     ExitError,
 	Internal:               ExitError,
 }

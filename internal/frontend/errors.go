@@ -64,9 +64,10 @@ func httpStatusFor(kind contract.ErrorKind) int {
 		contract.HandshakeRejected, contract.DestinationRefused:
 		return http.StatusBadGateway // 502
 	case contract.DestinationUnconfirmed:
-		// The contract has no pre-reply status for this kind; if it reaches
-		// the frontend before a reply, the honest proxy answer is a gateway
-		// failure, never a claimed tunnel.
+		// A forwarded request whose dial succeeded but which produced no
+		// response byte still gets a gateway failure. A CONNECT tunnel that
+		// already replied only closes and never reaches this mapping
+		// (docs/contracts.md §3.2).
 		return http.StatusBadGateway // 502
 	case contract.Timeout:
 		return http.StatusGatewayTimeout // 504
@@ -76,7 +77,7 @@ func httpStatusFor(kind contract.ErrorKind) int {
 		return http.StatusBadGateway // 502
 	case contract.TLSFailure, contract.SourceFetch, contract.ImportInvalid,
 		contract.StateCorrupt, contract.StateLocked, contract.PeerRejected,
-		contract.Internal:
+		contract.NotFound, contract.ExternalToolFailed, contract.Internal:
 		return http.StatusInternalServerError // 500
 	default:
 		return http.StatusInternalServerError
@@ -117,6 +118,10 @@ func httpReasonText(kind contract.ErrorKind) string {
 		return "dns failure"
 	case contract.TLSFailure:
 		return "tls failure"
+	case contract.NotFound:
+		return "not found"
+	case contract.ExternalToolFailed:
+		return "external tool failed"
 	default:
 		return "proxy error"
 	}

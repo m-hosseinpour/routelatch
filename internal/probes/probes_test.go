@@ -106,6 +106,9 @@ func TestTransportProbeFailureAttribution(t *testing.T) {
 	if m.Result.Outcome != contract.OutcomeRefused || m.Result.Failure != contract.ExitUnreachable || !m.Attributable {
 		t.Fatalf("measurement=%+v", m)
 	}
+	if m.Result.Attribution != contract.ProbeAttributionExit {
+		t.Fatalf("transport failure attribution = %q, want exit", m.Result.Attribution)
+	}
 
 	// The same failure while the machine's own network is down is not
 	// attributable to the exit.
@@ -119,6 +122,9 @@ func TestTransportProbeFailureAttribution(t *testing.T) {
 	}
 	if !m2.LocalOutage || m2.Attributable {
 		t.Fatalf("local outage not separated: %+v", m2)
+	}
+	if m2.Result.Attribution != contract.ProbeAttributionLocalOutage {
+		t.Fatalf("local outage attribution = %q, want local_outage", m2.Result.Attribution)
 	}
 }
 
@@ -369,6 +375,9 @@ func TestDirectProbes(t *testing.T) {
 	})
 	if err != nil || m.Result.Outcome != contract.OutcomeSuccess {
 		t.Fatalf("direct tcp m=%+v err=%v", m, err)
+	}
+	if m.Result.Attribution != contract.ProbeAttributionNone {
+		t.Fatalf("direct probe attribution = %q, want none", m.Result.Attribution)
 	}
 	if _, err := e.RunMeasurement(context.Background(), contract.ProbeRequest{
 		Kind: contract.ProbeDirectTLS, Trigger: contract.TriggerManual,

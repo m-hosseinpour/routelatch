@@ -10,9 +10,17 @@ import (
 	"routelatch/internal/contract"
 )
 
-// ErrSourceNotFound lets the CLI map a missing source to its own exit code
-// without inventing an ErrorKind; the contract has no not-found kind.
+// ErrSourceNotFound remains as a wrapped cause so existing callers can use
+// errors.Is; Refresh returns a typed *contract.Failure with Kind NotFound for
+// an ID the user named that does not exist (exit code 5).
 var ErrSourceNotFound = errors.New("source not found")
+
+func sourceNotFoundFailure() *contract.Failure {
+	return &contract.Failure{
+		Kind: contract.NotFound, Path: contract.PathLocal, Op: "imports.refresh",
+		Message: ErrSourceNotFound.Error(), Err: ErrSourceNotFound,
+	}
+}
 
 // SourceResult is the redacted outcome of refreshing one source.
 type SourceResult struct {
@@ -83,10 +91,9 @@ func (r *Refresher) Refresh(ctx context.Context, ids []contract.SourceID, allowE
 		}
 	}
 	if len(selected) == 0 {
-		if len(result.Sources) == 0 {
-			return result, ErrSourceNotFound
-		}
-		return result, nil
+		// Every requested source is missing (or the pool has no sources at
+		// all). This is a lookup failure, not "every source failed".
+		return result, sourceNotFoundFailure()
 	}
 
 	prepared := make([]preparedSource, 0, len(selected))

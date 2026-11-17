@@ -5,19 +5,9 @@ import (
 	"errors"
 	"net"
 	"sync"
-	"sync/atomic"
 
 	"routelatch/internal/contract"
 )
-
-// ByteCounter is an optional extension of contract.ConnHandle. The frozen
-// interface cannot report traffic counters, but ConnInfo exposes them, so a
-// frontend that owns the copy loops may assert this interface and report the
-// bytes it moved. It is not part of the contract, and ignoring it is harmless:
-// the counters then stay zero.
-type ByteCounter interface {
-	AddBytes(up, down int64)
-}
 
 type handle struct {
 	reg  *Registry
@@ -38,15 +28,9 @@ type handle struct {
 	// A second caller waits on it instead of returning while a close is still
 	// in flight.
 	done chan struct{}
-
-	bytesUp   atomic.Int64
-	bytesDown atomic.Int64
 }
 
-var (
-	_ contract.ConnHandle = (*handle)(nil)
-	_ ByteCounter         = (*handle)(nil)
-)
+var _ contract.ConnHandle = (*handle)(nil)
 
 // ID implements contract.ConnHandle.
 func (h *handle) ID() contract.ConnID { return h.spec.ID }
@@ -126,16 +110,6 @@ func (h *handle) SetProof(p contract.ProofClass) {
 	h.mu.Unlock()
 }
 
-// AddBytes implements ByteCounter.
-func (h *handle) AddBytes(up, down int64) {
-	if up != 0 {
-		h.bytesUp.Add(up)
-	}
-	if down != 0 {
-		h.bytesDown.Add(down)
-	}
-}
-
 // Close implements contract.ConnHandle. It cancels the connection context
 // first, so a blocked dial observes the cancellation, then closes both
 // sockets. It is idempotent and safe from any goroutine, and it never blocks
@@ -207,7 +181,5 @@ func (h *handle) info() contract.ConnInfo {
 		PolicyVersion: h.spec.Decision.PolicyVersion,
 		Exit:          exit,
 		StartedAt:     h.spec.StartedAt,
-		BytesUp:       h.bytesUp.Load(),
-		BytesDown:     h.bytesDown.Load(),
 	}
 }

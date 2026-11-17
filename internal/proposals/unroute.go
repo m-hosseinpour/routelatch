@@ -10,17 +10,16 @@ import (
 	"routelatch/internal/contract"
 )
 
-// UnrouteID identifies one unroute suggestion.
-//
-// contract.Proposal describes only an addition to the approved list and has no
-// rule-id or kind field, so the removal path needs its own small type. It
-// follows the same pending/accepted/rejected/expired lifecycle and retention,
-// and accepting it returns the rule ID for the caller to remove after explicit
-// confirmation; the registry itself removes nothing. Persisting it needs a
-// state-contract field and is therefore escalated rather than invented here.
+// UnrouteID identifies one unroute suggestion. It is the ProposalID of the
+// contract.Proposal stored in State.Proposals with Kind ProposalUnroute, so an
+// unroute suggestion persists and expires exactly like a route proposal. It
+// follows the same pending/accepted/rejected/expired lifecycle; accepting it
+// returns the rule ID for the caller to remove after explicit confirmation, and
+// the registry itself removes nothing.
 type UnrouteID string
 
-// UnrouteSuggestion is a suggestion to remove one approved rule.
+// UnrouteSuggestion is the command-facing view of one unroute proposal. The
+// persisted form is contract.Proposal{Kind: ProposalUnroute, RuleID: ...}.
 type UnrouteSuggestion struct {
 	ID          UnrouteID               `json:"id"`
 	RuleID      contract.RuleID         `json:"rule_id"`
@@ -38,6 +37,19 @@ func StableUnrouteID(ruleID contract.RuleID) UnrouteID {
 	return UnrouteID("u-" + hex.EncodeToString(sum[:8]))
 }
 
+func unrouteView(p contract.Proposal) UnrouteSuggestion {
+	return UnrouteSuggestion{
+		ID:          UnrouteID(p.ID),
+		RuleID:      p.RuleID,
+		Destination: p.Destination,
+		Status:      p.Status,
+		CreatedAt:   p.CreatedAt,
+		DecidedAt:   p.DecidedAt,
+		ExpiresAt:   p.ExpiresAt,
+		Note:        p.Note,
+	}
+}
+
 // SuggestUnroute records a suggestion to remove an approved rule. It is only
 // a proposal: AcceptUnroute still needs the user's confirmation and no rule is
 // removed here.
@@ -48,36 +60,38 @@ func (r *Registry) SuggestUnroute(ruleID contract.RuleID, dst contract.Destinati
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.now().UTC()
-	r.expireUnroutesLocked(now)
-	id := StableUnrouteID(ruleID)
-	existing, ok := r.unroutes[id]
-	if ok && existing.Status == contract.ProposalExpired {
+	r.expireLocked(now)
+	id := contract.ProposalID(StableUnrouteID(ruleID))
+	existing, ok := r.byID[id]
+	if ok && (existing.Kind != contract.ProposalUnroute || existing.Status == contract.ProposalExpired) {
 		ok = false
 	}
 	if ok {
 		if note != "" {
 			existing.Note = note
 		}
-		r.unroutes[id] = existing
-		return existing, false, nil
+		r.byID[id] = existing
+		return unrouteView(existing), false, nil
 	}
-	s := UnrouteSuggestion{
-		ID: id, RuleID: ruleID, Destination: dst,
+	s := contract.Proposal{
+		ID: id, Kind: contract.ProposalUnroute, RuleID: ruleID, Destination: dst,
 		Status: contract.ProposalPending, CreatedAt: now,
 		ExpiresAt: now.Add(r.retain), Note: note,
 	}
-	r.unroutes[id] = s
-	return s, true, nil
+	r.byID[id] = s
+	return unrouteView(s), true, nil
 }
 
 // ListUnroutes returns every retained unroute suggestion, pending first.
 func (r *Registry) ListUnroutes() []UnrouteSuggestion {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.expireUnroutesLocked(r.now().UTC())
-	out := make([]UnrouteSuggestion, 0, len(r.unroutes))
-	for _, s := range r.unroutes {
-		out = append(out, s)
+	r.expireLocked(r.now().UTC())
+	out := make([]UnrouteSuggestion, 0, len(r.byID))
+	for _, p := range r.byID {
+		if p.Kind == contract.ProposalUnroute {
+			out = append(out, unrouteView(p))
+		}
 	}
 	sortUnroutes(out)
 	return out
@@ -101,16 +115,17 @@ func (r *Registry) AcceptUnroute(id UnrouteID) (contract.RuleID, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.now().UTC()
-	r.expireUnroutesLocked(now)
-	s, ok := r.unroutes[id]
-	if !ok {
-		return "", ErrNotFound
+	r.expireLocked(now)
+	pid := contract.ProposalID(id)
+	s, ok := r.byID[pid]
+	if !ok || s.Kind != contract.ProposalUnroute {
+		return "", notFoundFailure("proposals.accept_unroute")
 	}
 	switch s.Status {
 	case contract.ProposalPending:
 		s.Status = contract.ProposalAccepted
 		s.DecidedAt = now
-		r.unroutes[id] = s
+		r.byID[pid] = s
 		return s.RuleID, nil
 	case contract.ProposalExpired:
 		return "", ErrExpired
@@ -124,10 +139,11 @@ func (r *Registry) RejectUnroute(id UnrouteID, note string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.now().UTC()
-	r.expireUnroutesLocked(now)
-	s, ok := r.unroutes[id]
-	if !ok {
-		return ErrNotFound
+	r.expireLocked(now)
+	pid := contract.ProposalID(id)
+	s, ok := r.byID[pid]
+	if !ok || s.Kind != contract.ProposalUnroute {
+		return notFoundFailure("proposals.reject_unroute")
 	}
 	switch s.Status {
 	case contract.ProposalPending:
@@ -136,27 +152,13 @@ func (r *Registry) RejectUnroute(id UnrouteID, note string) error {
 		if note != "" {
 			s.Note = note
 		}
-		r.unroutes[id] = s
+		r.byID[pid] = s
 		return nil
 	case contract.ProposalExpired:
 		return ErrExpired
 	default:
 		return ErrNotPending
 	}
-}
-
-func (r *Registry) expireUnroutesLocked(now time.Time) int {
-	n := 0
-	for id, s := range r.unroutes {
-		if s.Status != contract.ProposalPending || s.ExpiresAt.IsZero() || now.Before(s.ExpiresAt) {
-			continue
-		}
-		s.Status = contract.ProposalExpired
-		s.DecidedAt = now
-		r.unroutes[id] = s
-		n++
-	}
-	return n
 }
 
 func sortUnroutes(list []UnrouteSuggestion) {

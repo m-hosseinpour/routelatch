@@ -43,6 +43,11 @@ default handler رسید و direct شد (۱ تماس با مقصد). هر dial �
 `ProofConfirmed`) dial می‌کند و انتخابشان با exit id صریح است. outbound پیش‌فرض
 کانفیگ هرگز direct نیست.
 
+**`PoolDialDeadline` مرز dial نیست، مرز adapter است.** این عدد فقط handshake مسدود
+adapter SOCKS5 را واقعاً می‌بندد؛ مسیر core پیش از تماس با خروجی برمی‌گردد، پس فاز dial
+قابل مشاهده ندارد و یک session گیرکردهٔ core در مرحلهٔ تونل به `timeout` یا
+`destination_unconfirmed` تبدیل می‌شود، نه به یک dial deadline.
+
 **کتابخانه‌ها.** `goproxy v1.9.4` رد شد: پاسخ را بازنویسی می‌کند (reason/header/chunk)،
 stream غیر-SSE را بافر می‌کند، بایت‌های pipelined CONNECT را گم می‌کند و یک GET را
 روی اتصال reused بازپخش می‌کند. HTTP را با `net/http` خودمان می‌نویسیم: hijack،
@@ -66,7 +71,9 @@ restart نمی‌کند.
   `contracts.md §۱`.
 - اولویت کلاس قبل از قانون: Self → Local → LAN → Approved → Other. loopback،
   link-local و LAN همیشه direct هستند (D17) و هیچ قانونی آن‌ها را pool نمی‌کند؛
-  مقصد خود listener ما refuse می‌شود تا loop نسازد.
+  Self فقط با پورت‌های listener پیکربندی‌شده (`routing.Config.SelfPorts`) شناخته
+  می‌شود و loopback روی پورت دیگر Local است. تصمیم Self `policy_denied` گزارش
+  می‌شود تا loop به listener خودمان پنهان نماند.
 - در targeted فقط تطبیق صریح pool است؛ IP نامشخص خارج از فهرست direct می‌ماند.
   hostname با قانون IP/CIDR مطابقت داده نمی‌شود، چون resolve نمی‌کنیم.
 - remote hostname تا خروجی حفظ می‌شود (D15)؛ مسیر مستقیم از resolver سیستم استفاده
@@ -92,8 +99,9 @@ skip-verify با دلیل `insecure_tls_removed` در `unsupported` می‌ما�
 - سلامت: transport probe (فقط endpoint خروجی) به‌صورت خودکار در targeted/all-proxy؛
   egress فقط با هدف صریح کاربر. شواهد مثبت = بایت برگشتی؛ خطای مقصد در VLESS/Trojan
   قابل انتساب نیست و رکورد را cooling نمی‌کند. در all-direct/stopped هیچ probe خودکار
-  و هیچ مقایسهٔ پنهان مستقیم/پروکسی وجود ندارد (D09). اعداد رتبه/cooldown:
-  `contracts.md §۶`.
+  و هیچ مقایسهٔ پنهان مستقیم/پروکسی وجود ندارد (D09). تاریخ نمونه‌ها ring حافظه‌ای
+  محدود است و فقط خلاصهٔ `ExitHealth` persist می‌شود؛ پس از restart سلامت از probeها
+  دوباره یاد گرفته می‌شود. اعداد رتبه/cooldown: `contracts.md §۶`.
 - v2rayN فقط به‌صورت فایل export‌شده و read-only؛ `guiNDB.db` در v1 خوانده نمی‌شود.
 
 ## ۵. پیشنهادها و حریم خصوصی
@@ -133,12 +141,13 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 
 ## ۷. سرویس، پلتفرم و استفاده
 
-- Linux `amd64`+`arm64`؛ foreground مبنا و systemd user unit افزونهٔ lifecycle است،
-  نه وابستگی policy. root/TUN لازم نیست.
+- Linux `amd64`+`arm64`؛ foreground با فرمان `routelatch run` مبناست و systemd user
+  unit افزونهٔ lifecycle است، نه وابستگی policy. root/TUN لازم نیست.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
-  «پروکسی کل سیستم». مقدار قبلی حفظ و فقط تنظیمی که خودمان نوشتیم restore می‌شود؛
-  `desktop restore` آفلاین هم کار می‌کند.
+  «پروکسی کل سیستم». شکست خود ابزار `external_tool_failed` (exit `1`) است و نتیجهٔ
+  تنظیم نامعلوم اعلام می‌شود؛ مقدار قبلی حفظ و فقط تنظیمی که خودمان نوشتیم restore
+  می‌شود؛ `desktop restore` آفلاین هم کار می‌کند.
 - launcher فقط در فرزند خودش `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` را
   تنظیم می‌کند؛ `NO_PROXY` ارث‌رسیده قانون تأییدشده را دور نمی‌زند. توقف یا خرابی
   listener مجوز اجرای مستقیم نیست. برنامه‌ای که مستقل اجرا شده خارج از کنترل ماست،
