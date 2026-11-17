@@ -97,7 +97,7 @@ Xray `v26.11.9` در [release metadata](https://api.github.com/repos/XTLS/Xray-c
 | GOST | [Bypass](https://gost.run/en/concepts/bypass) و [Load balancing](https://gost.run/en/concepts/load-balancing) | الگوی جداسازی سیاست، انتخاب و hot reload؛ هم‌ارزی transport pool اثبات نشده |
 | COW | [README](https://github.com/cyfdecyf/cow/blob/master/README-en.md) | مستقیم اول، retry، سابقه، استثنا و PAC؛ ایدهٔ مشابه، نه موتور انتخاب‌شده یا پروژهٔ امنیت‌سنجی‌شده |
 | OpenTUI | [README](https://github.com/anomalyco/opentui): Zig و TypeScript/React/Solid | برای TUI جدی نامزد است؛ با تصمیم منوی سبک نیازی به runtime جدا نداریم |
-| huh | [README](https://github.com/charmbracelet/huh): forms/prompts، standalone و accessible mode | نامزد منوی سبک Go؛ هنوز انتخاب/آزمون نشده — **[به‌روزرسانی ۲۰۲۶-۱۱-۱۷]** `huh v1.0.0` انتخاب و pin شد؛ sanitizer خودمان نشت control sequence را می‌پوشاند — **[به‌روزرسانی ۲۰۲۶-۱۱-۱۷]** `huh v1.0.0` انتخاب و pin شد؛ sanitizer خودمان نشت control sequence را می‌پوشاند |
+| huh | [README](https://github.com/charmbracelet/huh): forms/prompts، standalone و accessible mode | نامزد منوی سبک Go؛ هنوز انتخاب/آزمون نشده — **[به‌روزرسانی ۲۰۲۶-۱۱-۱۷]** `huh v1.0.0` انتخاب و pin شد؛ sanitizer خودمان نشت control sequence را می‌پوشاند |
 | goproxy | [README](https://github.com/elazarl/goproxy)، [proxy.go](https://raw.githubusercontent.com/elazarl/goproxy/master/proxy.go)، [https.go](https://raw.githubusercontent.com/elazarl/goproxy/master/https.go): CONNECT، custom transport/dial، hijack | نامزد frontend؛ MITM اختیاری باید خاموش باشد؛ fit و retry/stream semantics آزمون می‌خواهد |
 
 ## سیستم‌عامل و service manager
