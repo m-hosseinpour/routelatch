@@ -86,6 +86,12 @@ type Service struct {
 	// against a superseded version is rejected and closed by fencedPool.
 	fenceMu sync.RWMutex
 
+	// usageMu guards the per-exit coalescing map for real-usage health
+	// evidence; it is separate from pubMu so the data path never waits for a
+	// store write to decide whether to record.
+	usageMu sync.Mutex
+	usageAt map[contract.ExitID]time.Time
+
 	logger  *serviceLogger
 	logPath string
 	logErr  error
@@ -294,8 +300,10 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	}
 	s.direct = &diagnosticDialer{inner: direct, svc: s}
 
+	// Only the frontend sees real user traffic; the prober keeps the unwrapped
+	// dialer because ApplyProbe already records its positive evidence.
 	fe, err := frontend.New(frontend.Options{
-		Router: routerView{s: s}, Pool: s.pool, Direct: s.direct, Registry: s.reg,
+		Router: routerView{s: s}, Pool: &usagePool{svc: s, inner: s.pool}, Direct: s.direct, Registry: s.reg,
 	})
 	if err != nil {
 		_ = eng.Stop(ctx)

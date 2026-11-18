@@ -324,7 +324,7 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 | ۱۱ | همه از پروکسی | Approved/Other | empty | خطا | `pool_unavailable`؛ مقصد محلی همچنان کار می‌کند |
 | ۱۲ | همه مستقیم | Self | هر | refuse | `403` / `0x04` |
 | ۱۳ | همه مستقیم | بقیه | هر | direct | مستقیم؛ pool هیچ اثری ندارد و probe خودکار خاموش است |
-| ۱۴ | متوقف | — | — | no listener | سرویس نیست؛ اتصال در سطح OS رد/بی‌پاسخ است؛ تصمیم مسیری وجود ندارد |
+| ۱۴ | متوقف | — | — | no listener | listener بسته است و engine/workerها متوقف‌اند؛ management socket باقی می‌ماند (`status`/`rules list`/`pool list` پاسخ می‌دهند)، اما `env`/`exec` و `pool test` exit `3`؛ اتصال ترافیک در سطح OS رد می‌شود؛ تصمیم مسیری وجود ندارد و خروج از این حالت process جدید می‌خواهد |
 
 قاعدهٔ اضافی: انتخاب دستی خروجی (`pool select`) فقط سلول‌های pool را عوض می‌کند؛ اگر
 خروجی انتخاب‌شده خراب باشد خطا می‌دهد و به exit دیگری سوییچ نمی‌کند (بی‌صدا نیست).
@@ -926,7 +926,7 @@ process به‌خاطر وضعیت سراسری مجاز نیست.
 | --- | --- | --- |
 | هدفمند / همه از پروکسی | transport (startup + هر ۱۰ دقیقه + after-failure)؛ egress فقط با trigger صریح/rerank | مجاز |
 | همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ `diagnose --direct` مجاز |
-| متوقف | سرویس و worker وجود ندارد | فقط `doctor`/`restore` آفلاین که شبکه لمس نمی‌کنند؛ `pool test` → exit `3` |
+| متوقف | probe و worker وجود ندارد؛ listenerها بسته‌اند | management socket پاسخ می‌دهد: `status`/`rules list`/`pool list` exit `0` با `mode=stopped`؛ `env`/`exec` و `pool test` → exit `3`؛ خروج از stopped فقط با process جدید |
 
 خاموش‌کردن `diagnostics.enabled` صف را لغو می‌کند (`CancelQueued`)، پیشنهاد جدید نمی‌سازد،
 probe مقصد جدید را متوقف می‌کند؛ health pool و فرمان دستی مستقل می‌مانند (D09).
@@ -939,6 +939,7 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 | رشد | ×۲ تا سقف ۱۵ دقیقه | پس از ۴ شکست متوالی به سقف |
 | بازنشانی | موفقیت | شمارنده صفر |
 | EWMA latency | α = ۰٫۳ | نمونهٔ جدید وزن بیشتر |
+| شاهد استفادهٔ واقعی | حداکثر ۱ نمونه در ثانیه برای هر exit | اولین بایت برگشتی از تونل واقعی؛ coalescing تا هر اتصال یک fsync نسازد |
 | حد سوییچ | بهبود ≥ ۲۰٪ و ≥ ۲ نمونهٔ موفق | D16: ضد flapping |
 | حد اقامت | ۵ دقیقه | بین دو سوییچ |
 | deadline probe | ۲۰s کل، ۸s انتظار اولین بایت | dial ≤۱۰s + first byte ≤۸s |
