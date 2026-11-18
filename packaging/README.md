@@ -32,6 +32,7 @@ routelatch-<version>-linux-<amd64|arm64>/
   bin/routelatch
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
+  share/doc/routelatch/SERVICE.md       systemd unit lifecycle, uninstall, crash recovery
   share/doc/routelatch/LICENSE          Apache-2.0 license text
   share/doc/routelatch/NOTICE           project attribution and MPL source pointer
   share/doc/routelatch/THIRD-PARTY-NOTICES.md
@@ -49,7 +50,7 @@ for each architecture.
 
 There are no runtime data files in the package. On first run the directories
 `$XDG_CONFIG_HOME/routelatch/` and `$XDG_STATE_HOME/routelatch/` are created
-(see `docs/contracts.md` §4.1) with `0700` permissions; `config.json` and
+(contract §4.1 in the source tree) with `0700` permissions; `config.json` and
 `state.json` are written with `0600` on the first change and defaults are used
 until then (`doctor` reports `config_file | not created yet`).
 
@@ -78,9 +79,9 @@ routelatch run
 
 Check the result with `routelatch status`, `routelatch doctor`, or
 `systemctl --user status routelatch.service`. Uninstall, crash recovery and the
-GNOME/KDE desktop-proxy restore step are documented in `deploy/README.md`; the
-desktop proxy is opt-in and is not changed by installing or starting the
-service.
+GNOME/KDE desktop-proxy restore step are documented in `SERVICE.md` (the
+source tree's `deploy/README.md`); the desktop proxy is opt-in and is not
+changed by installing or starting the service.
 
 ## Architecture and platform
 
@@ -105,6 +106,17 @@ tested. Only the amd64 artifact was executed during this build.
 Reproducibility: `scripts/build.sh --reproducible` builds each architecture
 twice with the same inputs and compares the checksums. Same toolchain, source,
 `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` give identical bytes.
+
+`scripts/package.sh` packages with a sorted, fixed-mtime tar and `gzip -n` and
+pins `umask 022`, so the same build inputs also give the same `.tar.gz` and
+`SHA256SUMS` regardless of the builder's shell umask; two runs over one build,
+and runs under umask 002 and 022, produced identical tarball checksums. Before
+writing the checksums it runs `routelatch version` from the host-architecture
+package tree and fails unless the reported version, commit and build date all
+match `BUILD-INFO`, so a package cannot silently carry a binary built from
+different inputs. An unknown host architecture skips that check with a warning
+(the cross-built architecture is already covered by build.sh's embedded-string
+check).
 
 ## Version stamping
 

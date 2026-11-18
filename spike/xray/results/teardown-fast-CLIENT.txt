@@ -20,7 +20,7 @@ build: github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
     close -> destination EOF: min=1.001s mean=1.002s max=1.003s
     resources after 10 closed pool connections: goroutines=8 fds=23
     resources after 2s settle: goroutines=8 fds=23
-    fd breakdown after settle: map[REPO/spike/xray/results/teardown-fast-CLIENT.txt:2 anon_inode:4 dev:1 pipe:12 socket:3] (sockets=3)
+    fd breakdown after settle: map[spike/xray/results/teardown-fast-CLIENT.txt:2 anon_inode:4 dev:1 pipe:12 socket:3] (sockets=3)
     transport conns still open after settle: 0
     transport conns closed at forwarder: 10
     pending dial error:    <nil>
@@ -33,4 +33,4 @@ build: github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
     resources after cancel + close: goroutines=8 fds=23
     resources after exits stopped, client core up: goroutines=3 fds=14
     resources after client core stop: goroutines=2 fds=14
-    fd breakdown after stop:  map[REPO/spike/xray/results/teardown-fast-CLIENT.txt:2 anon_inode:2 dev:1 pipe:8] (sockets=0)
+    fd breakdown after stop:  map[spike/xray/results/teardown-fast-CLIENT.txt:2 anon_inode:2 dev:1 pipe:8] (sockets=0)

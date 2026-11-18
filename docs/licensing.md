@@ -166,9 +166,18 @@ Apache-2.0 با این ماژول، بر پایهٔ متن همان فایل م�
 1. **بسته‌بندی:** `LICENSE`، `NOTICE`، `THIRD-PARTY-NOTICES.md` و همین سند
    (`docs/licensing.md`) به‌همراه `go.sum` داخل بسته می‌روند؛
    `scripts/package.sh` این کار را می‌کند و ساخت بسته در همین تغییر بررسی شد.
-2. **Source offer:** برای MPL باید سورس نسخه‌های pinشده (و هر patch آینده)
-   در دسترس باشد. دو راه قابل قبول: همراه‌کردن source tarball، یا offer
-   نوشتاری معتبر. این تصمیم پیش از اولین انتشار لازم است.
+   `SERVICE.md` (نسخهٔ بستهٔ `deploy/README.md`) هم اضافه شد تا ارجاع
+   `INSTALL.md` به uninstall و crash recovery داخل بسته resolve شود.
+   `package.sh` stamp باینری معماری host (version/commit/date) را با
+   `BUILD-INFO` مقایسه می‌کند و در
+   اختلاف fail می‌کند؛ پس بستهٔ با stamp ناهم‌خوان ساخته نمی‌شود.
+2. **Source offer:** برای MPL باید سورس نسخه‌های pin‌شده (و هر patch آینده)
+   در دسترس باشد. بستهٔ فعلی راه **offer نوشتاری** را پیاده می‌کند: `NOTICE`
+   (در `share/doc/routelatch/NOTICE`) نسخهٔ دقیق سه ماژول MPL، دستور
+   `go mod download` و مخزن upstream را می‌دهد. تا وقتی این فایل همراه بسته
+   منتشر شود، دریافت‌کننده مسیر مشخصی به سورس Covered Software دارد.
+   همراه‌کردن source tarball یک جایگزین است، نه الزام؛ اگر مالک پروژه آن را
+   ترجیح دهد، `scripts/package.sh` باید گسترش یابد.
 3. **مجوز انتشار:** تصمیم D20 فقط مجوز پروژه را تعیین می‌کند؛ remote/push/tag/
    release و انتشار بسته نیاز به درخواست جدا دارد.
 4. **بازبینی ادعای امنیت و نام:** بخش «ادعای امنیت» A14 و بررسی نام/علامت
