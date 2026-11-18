@@ -357,4 +357,65 @@ func TestLicenseTextsPresent(t *testing.T) {
 	if !strings.Contains(notice, "Section 3.2") {
 		t.Errorf("%s does not state the MPL-2.0 source-availability obligation", noticesFile)
 	}
+	if !strings.Contains(notice, "### GPL-3.0") || !strings.Contains(notice, "GNU GENERAL PUBLIC LICENSE") {
+		t.Errorf("%s does not reproduce the GPL-3.0 text required by LGPL-3.0 section 4(b)", noticesFile)
+	}
+	// The embedded-component table is what caught the per-package license files
+	// the module-level scan missed. Keep both the table and its content.
+	requiredComponents := []string{
+		"internal/snapref/LICENSE",
+		"zstd/internal/xxhash/LICENSE.txt",
+		"dicttls/LICENSE",
+		"LICENSE-Go",
+		"transport/internet/masque/connectip/LICENSE",
+		"LICENSE.libyaml",
+	}
+	rows := componentRows(t, notice)
+	for _, path := range requiredComponents {
+		row, ok := rows[path]
+		if !ok {
+			t.Errorf("%s lost the embedded component %s", noticesFile, path)
+			continue
+		}
+		if row.license == "" || row.copyright == "" {
+			t.Errorf("embedded component %s has an empty license or copyright column", path)
+		}
+	}
+}
+
+type componentRow struct {
+	module, license, copyright string
+}
+
+func componentRows(t *testing.T, text string) map[string]componentRow {
+	t.Helper()
+	rows := map[string]componentRow{}
+	inTable := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "## Embedded third-party components" {
+			inTable = true
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			inTable = false
+			continue
+		}
+		if !inTable || !strings.HasPrefix(line, "| `") {
+			continue
+		}
+		cells := strings.Split(line, "|")
+		if len(cells) < 5 {
+			t.Fatalf("malformed embedded component row: %q", line)
+		}
+		module := strings.Trim(strings.TrimSpace(cells[1]), "`")
+		path := strings.TrimSpace(cells[2])
+		license := strings.TrimSpace(cells[3])
+		copyright := strings.Trim(strings.TrimSpace(cells[4]), ".")
+		if module == "" || path == "" {
+			t.Fatalf("embedded component row has no module or path: %q", line)
+		}
+		rows[path] = componentRow{module, license, copyright}
+	}
+	return rows
 }

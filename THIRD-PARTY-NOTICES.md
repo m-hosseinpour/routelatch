@@ -223,7 +223,7 @@ Copyright notices:
 - `github.com/xo/terminfo` v0.0.0-20220910002029-abceb7e1c41e: Copyright (c) 2016 Anmol Sethi
 - `github.com/xtls/xray-core` v1.260327.1-0.20261109052709-676eaf66f8f0: Copyright 2024 Marten Seemann (transport/internet/masque/connectip/LICENSE)
 - `github.com/yuin/gopher-lua` v1.1.2: Copyright (c) 2015 Yusuke Inuzuka
-- `golang.zx2c4.com/wireguard` v0.0.0-20250521234502-f333402bd9cb: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
+- `golang.zx2c4.com/wireguard` v0.0.0-20250521234502-f333402bd9cb: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
 - `gopkg.in/yaml.v2` v2.4.0: Copyright (c) 2006 Kirill Simonov (LICENSE.libyaml)
 - `lukechampine.com/blake3` v1.4.1: Copyright (c) 2020 Luke Champine
 
@@ -520,13 +520,13 @@ Copyright notices:
 Copyright notices:
 
 - `github.com/jackpal/go-nat-pmp` v1.0.2: Copyright 2013 John Howard Palevich
-- `github.com/libp2p/go-nat` v1.0.1-0.20250821073202-01afc089f138: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
+- `github.com/libp2p/go-nat` v1.0.1-0.20250821073202-01afc089f138: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
 - `github.com/pelletier/go-toml` v1.9.5: Copyright (c) 2013 - 2021 Thomas Pelletier, Eric Anderton
-- `github.com/pires/go-proxyproto` v0.16.0: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
-- `github.com/vishvananda/netlink` v1.3.1: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
-- `github.com/vishvananda/netns` v0.0.5: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
-- `google.golang.org/genproto/googleapis/rpc` v0.0.0-20260817212433-ac3dfec99bb1: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
-- `google.golang.org/grpc` v1.85.0: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
+- `github.com/pires/go-proxyproto` v0.16.0: Copyright 2016 Paulo Pires
+- `github.com/vishvananda/netlink` v1.3.1: Copyright 2014 Vishvananda Ishaya.; Copyright 2014 Docker, Inc.
+- `github.com/vishvananda/netns` v0.0.5: Copyright 2014 Vishvananda Ishaya.; Copyright 2014 Docker, Inc.
+- `google.golang.org/genproto/googleapis/rpc` v0.0.0-20260817212433-ac3dfec99bb1: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
+- `google.golang.org/grpc` v1.85.0: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
 - `gopkg.in/yaml.v2` v2.4.0: Copyright (c) 2006 Kirill Simonov (LICENSE.libyaml)
 
 Apache-2.0 `NOTICE` files that must be carried with the distribution:
@@ -949,7 +949,7 @@ Copyright notices:
 
 - `github.com/xtls/reality` v0.0.0-20261108101329-4bb46b2afd8b: Copyright (c) 2023 RPRX. All rights reserved.; Copyright (c) 2009 The Go Authors. All rights reserved. (LICENSE-Go)
 - `github.com/xtls/xray-core` v1.260327.1-0.20261109052709-676eaf66f8f0: Copyright 2024 Marten Seemann (transport/internet/masque/connectip/LICENSE)
-- `layeh.com/gopher-luar` v1.0.11: the module's LICENSE carries no separate copyright line; see the upstream repository and source headers
+- `layeh.com/gopher-luar` v1.0.11: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
 
 The MPL-2.0 components are used unmodified as Go module dependencies. No source
 file from these modules exists in, or was modified by, this repository. Section 3.2
