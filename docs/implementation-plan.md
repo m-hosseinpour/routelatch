@@ -217,6 +217,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
    **بازخوانی سرد ۲۰۲۶-۱۱-۱۸ (ارکستریتور):** `git status` پاک و HEAD واقعی `b01661d` بود — دو commit صرفاً سندپسند (`4106da5` بستن ادعای کهنهٔ انتشار، `b01661d` ثبت R11) بالای `efc73c3` که رکورد به آن اشاره میکرد. تنها HEAD بهروز شد؛ هیچ کد/سرویس/تنظیم میزبان تغییر نکرد. commit بازخوانی: `a18dd97`.)
 
 - **بررسی R11 (۲۰۲۶-۱۱-۱۸، ارکستریتور — تحقیق خواندنی فقط؛ بدون مجوز و بدون تغییر کد):** دو عامل مستقل وارد تقسیمشدند، یکی مسیر import/اعتبارسنجی/D-item و دیگری موتور/رانتایم. شواهد سورس: `hysteria2://` در `imports/link.go:41-46` به `unsupported`/`protocol_unsupported` و تنظیمات sing-box در `v2rayn.go:29-34,80` به `invalid` میافتد؛ نقاط تصمیم پروتکل پراکندهاند (`contract/pool.go:16-33`، `imports/{link,v2rayn,record}.go`، `engine/config.go:176-232,343-409`). Xray pinشده (`v26.11.9`، `go.mod:8`) تنها `proxy/hysteria` (هیستریا **v1**) دارد و آن outbound در `main/distro/all/all.go` ثبت نشده و outboundای به نام `hysteria2` در tree نیست → «گسترش موتور pinشده» بهتنهایی R11 را برآورده نمیکند. پشتیبانی واقعی یا رانتایم دوم (sing-box) یا مهاجرت تکموتوره میخواهد؛ جداسازی process-global دو core آزموننشده است (`spike/xray/FINDINGS.md:225`) و اسکیمای sing-box در `docs/research.md` شاهدی ندارد. **پایان تحقیق است، نه شروع R11:** تصمیم معماری + مجوز صریح کاربر اخذ نشده و D-itemها (no MITM، preservation hostname، fail-closed، quarantine) تغییرناپذیراند. آزمون/harness آینده: `internal/acceptance/a06_imports_test.go` (مالک import) و الگوی peer محلی `fixtures_test.go`/`peers_test.go`/`exit_test.go:185`.
+   **تصمیم + مجوز کاربر (همان جلسه):** معماری «رانتایم دوم (sing-box) کنار Xray» پذیرفته شد — Xray فعلی برای مسیرهای اثباتشده میماند و sing-box فقط exitهای hysteria2/sing-box را هدایت میکند. D-itemها تغییرناپذیرند. **دروازهٔ قبل از کد:** مجوز sing-box (GPL-3.0?) و اسکیمای معتبر hysteria2 outbound باید از منبع رسمی تأیید شود؛ چون D20 با Apache-2.0 بسته شده، تعارض مجوز احتمالی پیش از هر تغییر کد با کاربر باز میشود.
 
 - **نسخهٔ لینوکسی پیاده و محلی آزموده است:** `internal/*` و `cmd/routelatch` کامل‌اند؛
   T1 (شواهد هسته)، T2 (قراردادها)، T3/T4/T5 (مسیر، pool، پیشنهادها/مدیریت) و بخش
@@ -375,8 +376,8 @@ failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، 
 
 1. `AGENTS.md` و همین بخش را بخوان؛ `git status` و `git log --oneline -5` را با
    «HEAD هنگام ثبت» مقایسه کن و تغییر/دادهٔ کاربر را حفظ کن.
-2. تنها task بازِ ثبتشده R11 است (پشتیبانی hysteria2/sing-box) و بدون تصمیم معماری و
-   مجوز شروع نمیشود. RouteLatch همین حالا نصب، فعال و به‌عنوان پروکسی دسکتاپ KDE تنظیم شده است (R7)؛ اگر کاربر خواست برگردد،
+2. R11 (پشتیبانی hysteria2/sing-box) با معماری «رانتایم دوم sing-box کنار Xray» و مجوز
+   شروع کاربر، دروازهٔ مجوز/اسکیمای خارجی را پیش از کد میبندد. RouteLatch همین حالا نصب، فعال و به‌عنوان پروکسی دسکتاپ KDE تنظیم شده است (R7)؛ اگر کاربر خواست برگردد،
    `routelatch desktop proxy restore` مقدار قبلی را بازمی‌گرداند. کارهای بعدی — اجرای
    arm64 روی سخت‌افزار، ماشین تازه برای A01، reboot/re-login برای A13، نشست GNOME برای
    A11 و tag/release — مجوز جدا میخواهند؛ push به دو remote قبلاً انجام شد.
