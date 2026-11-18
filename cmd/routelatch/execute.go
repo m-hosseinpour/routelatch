@@ -539,6 +539,19 @@ func (c *cli) human(env contract.Envelope) {
 
 func (c *cli) printStatus(d map[string]any) {
 	fmt.Fprintf(c.stdout, "mode: %v (policy %v)\n", d["mode"], d["policy_version"])
+	// An older running service does not send selected_exit. Absence must not be
+	// printed as "auto": that service may hold a manual pin, and claiming
+	// automatic ranking is exactly the misreading this line exists to prevent.
+	selected, present := d["selected_exit"].(string)
+	switch {
+	case !present:
+		selected = "unknown (the running service does not report selected_exit; restart it after upgrading)"
+	case selected == "":
+		selected = "auto"
+	default:
+		selected = control.SanitizeTerminal(selected)
+	}
+	fmt.Fprintf(c.stdout, "exit: %s\n", selected)
 	if l, ok := d["listeners"].(map[string]any); ok {
 		fmt.Fprintf(c.stdout, "listeners: http %v, socks %v\n", l["http"], l["socks"])
 	}

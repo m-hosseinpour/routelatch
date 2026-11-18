@@ -25,6 +25,39 @@ func TestA10CLISurface(t *testing.T) {
 	svc.mustOK("import", "file", fx.filePath)
 	svc.mustOK("rules", "add", "--kind", "domain", "exact.rl.test")
 
+	// §2.5/§7.1: a manual exit pin disables automatic ranking, so status must
+	// expose it instead of leaving it as a hidden state-file flag.
+	autoStatus := svc.mustOK("status").mapData(t)
+	autoSelected, hasKey := autoStatus["selected_exit"]
+	records := svc.mustOK("pool", "list").list(t, "records")
+	pick := ""
+	for _, rec := range records {
+		if st := str(rec["status"]); st == "healthy" || st == "unknown" {
+			pick = str(rec["id"])
+			break
+		}
+	}
+	if !hasKey || str(autoSelected) != "" || pick == "" {
+		r.fail("A10", "status selected_exit before a pin: present=%v value=%q usable-record=%q", hasKey, str(autoSelected), pick)
+	} else {
+		// Clear the pin even when an assertion below fails; r.fail is not fatal
+		// and the rest of this test must not inherit a manual selection.
+		t.Cleanup(func() { _ = svc.cli("pool", "select", "auto").code })
+		if sel := svc.mustOK("pool", "select", pick).mapData(t); str(sel["selected"]) != pick {
+			r.fail("A10", "pool select %s reported selected=%q", pick, str(sel["selected"]))
+		} else if pinned := svc.mustOK("status").mapData(t); str(pinned["selected_exit"]) != pick {
+			r.fail("A10", "status after pool select = %q, want %q", str(pinned["selected_exit"]), pick)
+		} else {
+			svc.mustOK("pool", "select", "auto")
+			cleared := svc.mustOK("status").mapData(t)
+			if str(cleared["selected_exit"]) == "" {
+				r.pass("A10", "status reports the manual exit pin (%s) and returns selected_exit to empty after 'pool select auto'", pick)
+			} else {
+				r.fail("A10", "status selected_exit after auto = %q, want empty", str(cleared["selected_exit"]))
+			}
+		}
+	}
+
 	// env: loopback proxy variables plus a non-empty NO_PROXY and notice.
 	envRes := svc.mustOK("env")
 	envData := envRes.mapData(t)

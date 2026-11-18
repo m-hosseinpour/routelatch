@@ -1030,6 +1030,51 @@ func TestRerankPinnedSelectionIsReportedUnchanged(t *testing.T) {
 	}
 }
 
+// TestStatusReportsManualExitSelection pins the status contract: automatic
+// ranking is the empty value, and a manual pin is visible in status instead of
+// staying a hidden state only `pool select` reported once (docs/contracts.md
+// §2.5, §7.1).
+func TestStatusReportsManualExitSelection(t *testing.T) {
+	st, paths := newServiceStore(t)
+	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = []contract.Record{rerankRecord("x-a", 0), rerankRecord("x-b", 1)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, st, paths)
+
+	auto, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auto.SelectedExit != "" {
+		t.Fatalf("automatic status selected_exit = %q, want empty", auto.SelectedExit)
+	}
+
+	if _, err := svc.Handle(context.Background(), Request{Op: OpPoolSelect, ID: "x-b"}); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pinned.SelectedExit != "x-b" {
+		t.Fatalf("pinned status selected_exit = %q, want x-b", pinned.SelectedExit)
+	}
+
+	if _, err := svc.Handle(context.Background(), Request{Op: OpPoolSelect, ID: "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.SelectedExit != "" {
+		t.Fatalf("cleared status selected_exit = %q, want empty", cleared.SelectedExit)
+	}
+}
+
 func TestRerankNoUsableExitIsPoolUnavailable(t *testing.T) {
 	st, paths := newServiceStore(t)
 	svc := newTestService(t, st, paths)

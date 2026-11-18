@@ -329,7 +329,8 @@ usable = وضعیت `healthy` یا `unknown` و cooldown منقضی. رکورد 
 قاعدهٔ اضافی: انتخاب دستی خروجی (`pool select`) فقط سلول‌های pool را عوض می‌کند؛ اگر
 خروجی انتخاب‌شده خراب باشد خطا می‌دهد و به exit دیگری سوییچ نمی‌کند (بی‌صدا نیست).
 این تغییر `PolicyVersion` را بالا می‌برد (برای audit) ولی چون `Route` عوض نمی‌شود هیچ
-اتصالی را نمی‌بندد.
+اتصالی را نمی‌بندد. پین دستی در `status` به شکل `selected_exit` گزارش می‌شود؛ رشتهٔ
+خالی یعنی انتخاب خودکار، پس پین دیگر یک حالت پنهان در فایل state نیست.
 
 ### ۲.۶ تغییر حالت و قانون: چه چیزی بسته می‌شود
 
@@ -985,6 +986,7 @@ state. پیشنهادها و شواهدشان هم فقط در حافظه‌ان
 
 ```json
 { "mode": "targeted", "policy_version": 7,
+  "selected_exit": "",
   "listeners": { "http": "127.0.0.1:8317", "socks": "127.0.0.1:8318" },
   "pool": { "total": 12, "usable": 9, "healthy": 6, "cooling": 2 },
   "connections": { "open": 3, "dialing": 1, "proofs": { "confirmed": 0, "accepted": 2 } },
@@ -999,7 +1001,7 @@ state. پیشنهادها و شواهدشان هم فقط در حافظه‌ان
 | --- | --- | --- | --- |
 | `run` | — | 0، 4، 6، 10 | «شروع سرویس» |
 | `version` | `version, commit, build_date` | 0 | — |
-| `status` | `mode, policy_version, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
+| `status` | `mode, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |

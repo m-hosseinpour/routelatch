@@ -48,11 +48,15 @@ type diagnosticsData struct {
 type StatusData struct {
 	Mode          contract.Mode          `json:"mode"`
 	PolicyVersion contract.PolicyVersion `json:"policy_version"`
-	Listeners     listenersData          `json:"listeners"`
-	Pool          poolStatusData         `json:"pool"`
-	Connections   connectionsData        `json:"connections"`
-	Diagnostics   diagnosticsData        `json:"diagnostics"`
-	Warnings      []string               `json:"warnings"`
+	// SelectedExit is the manual pin, not the automatic choice: empty means
+	// automatic ranking. It is reported because a pin silently disables the
+	// D16 ranking and is never replaced on failure (docs/contracts.md §2.5).
+	SelectedExit contract.ExitID `json:"selected_exit"`
+	Listeners    listenersData   `json:"listeners"`
+	Pool         poolStatusData  `json:"pool"`
+	Connections  connectionsData `json:"connections"`
+	Diagnostics  diagnosticsData `json:"diagnostics"`
+	Warnings     []string        `json:"warnings"`
 }
 
 func (s *Service) status(ctx context.Context) (StatusData, error) {
@@ -64,9 +68,10 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	counts := p.Counts()
 	out := StatusData{
 		Mode: snap.State.Mode, PolicyVersion: snap.State.PolicyVersion,
-		Listeners:   listenersData{HTTP: s.httpAddr, SOCKS: s.socksAddr},
-		Pool:        poolStatusData{Total: counts.Total, Usable: counts.Usable, Healthy: counts.Healthy, Cooling: counts.Cooling},
-		Diagnostics: diagnosticsData{Enabled: snap.Config.Diagnostics.Enabled},
+		SelectedExit: snap.State.SelectedExit,
+		Listeners:    listenersData{HTTP: s.httpAddr, SOCKS: s.socksAddr},
+		Pool:         poolStatusData{Total: counts.Total, Usable: counts.Usable, Healthy: counts.Healthy, Cooling: counts.Cooling},
+		Diagnostics:  diagnosticsData{Enabled: snap.Config.Diagnostics.Enabled},
 	}
 	if s.diag != nil {
 		st := s.diag.Stats()

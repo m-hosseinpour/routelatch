@@ -692,3 +692,49 @@ func TestCLIProposalIsMemoryOnlyAcrossCallsAndDiesAtRestart(t *testing.T) {
 	}
 
 }
+
+func TestPrintStatusReportsSelectionHonestly(t *testing.T) {
+	cases := []struct {
+		name      string
+		data      map[string]any
+		want      string
+		forbidden string
+	}{
+		{
+			name:      "a service that omits the key is not reported as auto",
+			data:      map[string]any{"mode": "targeted", "policy_version": 1},
+			want:      "exit: unknown (the running service does not report selected_exit",
+			forbidden: "exit: auto",
+		},
+		{
+			name: "empty value is automatic ranking",
+			data: map[string]any{"mode": "targeted", "policy_version": 1, "selected_exit": ""},
+			want: "exit: auto",
+		},
+		{
+			name: "manual pin is printed verbatim",
+			data: map[string]any{"mode": "targeted", "policy_version": 1, "selected_exit": "x-0123456789abcdef"},
+			want: "exit: x-0123456789abcdef",
+		},
+		{
+			name:      "control bytes in a restored state cannot reach the terminal",
+			data:      map[string]any{"mode": "targeted", "policy_version": 1, "selected_exit": "x-\x1b[31mred"},
+			want:      "exit: x-red",
+			forbidden: "\x1b",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			c := &cli{stdout: &out}
+			c.printStatus(tc.data)
+			lines := strings.Split(out.String(), "\n")
+			if len(lines) < 2 || !strings.Contains(lines[1], tc.want) {
+				t.Fatalf("status output = %q, want line 2 to contain %q", out.String(), tc.want)
+			}
+			if tc.forbidden != "" && strings.Contains(out.String(), tc.forbidden) {
+				t.Fatalf("status output = %q must not contain %q", out.String(), tc.forbidden)
+			}
+		})
+	}
+}
