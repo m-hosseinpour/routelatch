@@ -36,6 +36,9 @@ routelatch-<version>-linux-<amd64|arm64>/
   share/doc/routelatch/NOTICE           project attribution and MPL source pointer
   share/doc/routelatch/THIRD-PARTY-NOTICES.md
                                         dependency inventory, licenses, notices
+  share/doc/routelatch/docs/licensing.md
+                                        audit method, obligations, evidence limits
+  share/doc/routelatch/go.sum           module hashes quoted by the audit
   share/doc/routelatch/BUILD-INFO       version, commit, date, Go version, cgo=0
   share/doc/routelatch/PACKAGE-NOTES    "local build, not published" notice
   share/routelatch/systemd/routelatch.service

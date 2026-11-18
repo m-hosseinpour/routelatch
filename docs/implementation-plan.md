@@ -162,9 +162,9 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
   → pool failure → all-direct → stop/recovery را اجرا کن؛ تستِ فقط mock کافی نیست.
 - **کار:** leak checks با counter/listenerهای direct و pool کنترل‌شده، سقف منابع،
   slow clients، streaming، crash/cancel و secret scan؛ معیار عددی از T2 نه ادعای حدسی.
-- **کار:** مجوز D20 را با کاربر ببند؛ license/source notices و dependency audit actual
-  build، artifact integrity و به‌روزرسانی docs/README. نام/registry/trademark دوباره
-  بررسی شود؛ public repository/publish/push نیاز به مجوز جدا دارد.
+- **کار:** مجوز D20 در R3 بسته شد؛ در T7 فقط artifact نهایی (notices، source offer و
+  integrity) و نام/registry/trademark دوباره بررسی شود؛ public repository/publish/push
+  نیاز به مجوز جدا دارد.
 - **دروازه:** reviewer مستقل باید کل coherent change را با guidance مناسب بررسی کند؛
   یافته‌های مادی رفع و effects بررسی شوند؛ verdict و محدودیت اجرای پلتفرم‌ها گزارش شود.
 
@@ -219,15 +219,16 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   state و با شمارش‌های هم‌خوان؛ ترنسپورت‌های WS، gRPC و XHTTP روی TLS با peer محلی
   واقعاً end-to-end آزموده شدند.
 - **R3 انجام شد (`7792cac`):** D20 با **Apache-2.0** بسته شد. `LICENSE` (متن کامل)،
-  `NOTICE` و `THIRD-PARTY-NOTICES.md` (۶۸ ماژول لینک‌شده) اضافه شدند و ممیزی واقعی
-  build در `docs/licensing.md` ثبت است: `go list -deps` برای amd64/arm64 و
+  `NOTICE` و `THIRD-PARTY-NOTICES.md` (۶۸ ماژول و ۶ کامپوننت embedشده) اضافه شدند و
+  ممیزی واقعی build در `docs/licensing.md` ثبت است: `go list -deps` برای amd64/arm64 و
   `go version -m` روی باینری هر دو ۶۸ ماژول یکسان دادند، `go mod verify` سبز بود،
-  صفر مجوز ناشناخته و هیچ GPL/AGPL. سه ماژول MPL-2.0 به‌صورت dependency بدون تغییر
-  (هیچ فایل سورس MPL تغییر نکرده) و `juju/ratelimit` با LGPL-3.0 و استثنای صریح
-  لینک استاتیک. بسته‌بندی حالا `LICENSE`/`NOTICE`/notices را در
+  صفر مجوز ناشناخته و هیچ GPL/AGPL به‌عنوان مجوز ماژول. سه ماژول MPL-2.0 به‌صورت
+  dependency بدون تغییر (هیچ فایل سورس MPL تغییر نکرده) و `juju/ratelimit` با
+  LGPL-3.0، استثنای صریح لینک استاتیک و متن GPL-3.0 در notices. بسته‌بندی حالا
+  `LICENSE`/`NOTICE`/notices/`docs/licensing.md`/`go.sum` را در
   `share/doc/routelatch/` می‌گذارد و `internal/licensing` drift بین `go.mod` و
   notices را آفلاین می‌گیرد. checks: `go build ./...`، `go vet ./...` و
-  `go test -count=1 ./...` سبز (acceptance: 113.6s); ساخت بسته در یک کپی ایزوله
+  `go test -count=1 ./...` سبز (acceptance: 112.8s); ساخت بسته در یک کپی ایزوله
   بررسی شد و هر سه فایل را حمل می‌کند.
 - **شاهد پذیرش:** `go test -count=1 -v ./internal/acceptance/` روی همین HEAD →
   **۲۰۶ گزارش `pass(...)`، ۰ شکست** (~۱۱۴s). گزارش پکیج، `ok`.
@@ -246,7 +247,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | --- | --- | --- | --- |
 | R1 | آزمون نصب واقعی: اجرای `run` زیر systemd **user** واقعی، lifecycle (start/stop/restart، login)، port collision واقعی، بازیابی بعد از crash | A13 و بخشی از A01 | **بله** — نصب/فعال‌سازی سرویس |
 | R2 | تغییر و restore واقعی پروکسی دسکتاپ روی GNOME یا KDE و آزمون crash recovery | A11 | **بله** — تغییر تنظیم دسکتاپ |
-| R3 | **انجام شد** (`7792cac`): D20 با Apache-2.0 بسته شد؛ `LICENSE`/`NOTICE`/`THIRD-PARTY-NOTICES.md` و ممیزی ۶۸ ماژول لینک‌شده (amd64+arm64، `go version -m` هم‌خوان) اضافه شدند. صفر مجوز ناشناخته؛ MPL-2.0 فقط dependency بدون تغییر؛ LGPL-3.0 با استثنای لینک استاتیک؛ جزئیات و محدودیت‌ها در `docs/licensing.md`. **باقی A14:** source offer برای MPL، بستهٔ سورس/انتشار و بازبینی امنیت/نام — بیرون از این تصمیم | A14 (بخش مجوز/ممیزی) | انجام شد — تصمیم شما ثبت شد |
+| R3 | **انجام شد** (`7792cac`، اصلاحیهٔ notices/attribution `FIXHASH`): D20 با Apache-2.0 بسته شد؛ `LICENSE`/`NOTICE`/`THIRD-PARTY-NOTICES.md` و ممیزی ۶۸ ماژول و ۶ کامپوننت embedشده (amd64+arm64، `go version -m` هم‌خوان) اضافه شدند. صفر مجوز ناشناخته؛ MPL-2.0 فقط dependency بدون تغییر؛ LGPL-3.0 با استثنای لینک استاتیک و متن GPL-3.0؛ جزئیات و محدودیت‌ها در `docs/licensing.md`. **باقی A14:** source offer برای MPL، بستهٔ سورس/انتشار و بازبینی امنیت/نام — بیرون از این تصمیم | A14 (بخش مجوز/ممیزی) | انجام شد — تصمیم شما ثبت شد |
 | R4 | آزمون محدود با خروجی عمومی (اختیاری): یک/چند exit عمومی واقعی برای ردیف‌های عمومی A04/A06 | A04/A06 (ردیف عمومی) | **بله** — ترافیک خروجی عمومی |
 | R5 | **انجام شد** (`640f83c`, `5d328a6`): مسیر import هرگز `unknown` نمی‌سازد (http → `unsupported`/`http_exit_not_verified`، scheme ناشناس → `unsupported`/`protocol_unsupported`) و view/status حالا رکورد undialable را **صرف‌نظر از status ذخیره‌شده** جز `invalid` مشتق می‌کند. `pool list`، `status` و `doctor` از یک مالک واحد (`EffectiveStatus`) می‌خوانند، state بازنویسی نمی‌شود و رکورد پیش از هر dial/probe رد می‌شود. **Residual پذیرفته‌شده:** protocol تهی/صفر عمداً دست‌نخورده است؛ semantics پروتکل‌های پشتیبانی‌شده تغییر نکرده؛ tick چرخش ۳۰ ثانیه‌ای در acceptance درایو نمی‌شود؛ `SyncStatuses` پس از فرمان تغییردهنده ممکن است cooldown منقضی را به `unknown` نرمال کند (bookkeeping قبلی، نه نوشتن مشتق‌سازی) | A06/§5 (کیفیت گزارش) | نه |
 | R6 | **انجام شد** (`a69ae1e`): WS/TLS، gRPC/TLS (`h2`) و XHTTP/TLS (`h2`) با exit pin‌شدهٔ محلی، rule، `pool select` و CONNECT به peer loopback واقعاً آزموده شدند (هر سلول دقیقاً ۱ درخواست مقصد و پاسخ بدون تغییر)؛ pin غلط ۰ داده به مقصد می‌فرستد و سرویس بالا می‌ماند. **هنوز آزمون‌نشده:** REALITY/ECH، mKCP، HTTPUpgrade، h3، mux/XUDP، و رفتار طولانی‌مدت/reuse یک ترنسپورت | T1/T4 دقت ادعا | نه |

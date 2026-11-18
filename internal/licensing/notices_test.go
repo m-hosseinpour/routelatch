@@ -28,6 +28,9 @@ var (
 	requireItem = regexp.MustCompile(`^\s*(\S+)\s+(v\S+)\s*(?://.*)?$`)
 	tableRow    = regexp.MustCompile("^\\|\\s*`([^`]+)`\\s*\\|\\s*([^|]+?)\\s*\\|\\s*([^|]+?)\\s*\\|")
 	summaryRow  = regexp.MustCompile(`^\|\s*\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|$`)
+	summaryItem = regexp.MustCompile(`^\|\s*([^|*][^|]*?)\s*\|\s*(\d+)\s*\|$`)
+	copyright   = regexp.MustCompile("^- `([^`]+)` v[^:]+:")
+	replaceLine = regexp.MustCompile(`(?m)^\s*replace\s`)
 	knownBase   = map[string]bool{
 		"MIT": true, "BSD-2-Clause": true, "BSD-3-Clause": true,
 		"Apache-2.0": true, "MPL-2.0": true, "LGPL-3.0-only": true,
@@ -78,9 +81,10 @@ func goMod(t *testing.T) map[string]string {
 // parseNotices returns the linked and excluded module tables plus the summary
 // total. It fails on a malformed or duplicate row so a broken table cannot pass
 // silently.
-func parseNotices(t *testing.T, text string) (linked map[string]string, reasons map[string]string, total int) {
+func parseNotices(t *testing.T, text string) (linked map[string]string, licenses map[string]string, reasons map[string]string, total int) {
 	t.Helper()
 	linked = make(map[string]string)
+	licenses = make(map[string]string)
 	reasons = make(map[string]string)
 	section := ""
 	total = -1
@@ -120,6 +124,7 @@ func parseNotices(t *testing.T, text string) (linked map[string]string, reasons 
 				t.Fatalf("linked module %s has malformed version %q", mod, version)
 			}
 			linked[mod] = version
+			licenses[mod] = extra
 			if extra == "" || strings.Contains(strings.ToUpper(extra), "UNKNOWN") {
 				t.Fatalf("linked module %s has no usable license", mod)
 			}
@@ -140,7 +145,7 @@ func parseNotices(t *testing.T, text string) (linked map[string]string, reasons 
 	if total < 0 {
 		t.Fatal("notices have no summary total row")
 	}
-	return linked, reasons, total
+	return linked, licenses, reasons, total
 }
 
 func checkSPDX(t *testing.T, mod, expr string) {
@@ -150,7 +155,7 @@ func checkSPDX(t *testing.T, mod, expr string) {
 	}
 	for _, part := range regexp.MustCompile(`\s+(AND|OR|WITH)\s+`).Split(expr, -1) {
 		part = strings.TrimSpace(part)
-		if part == "static-linking-exception" {
+		if part == "static-linking-exception" || strings.HasPrefix(part, "LicenseRef-") {
 			continue
 		}
 		if !knownBase[part] {
@@ -202,12 +207,34 @@ func TestLicenseFilesExist(t *testing.T) {
 // TestNoticesCoverGoMod is the drift gate: adding, removing or upgrading a
 // module in go.mod without updating the shipped inventory fails here, offline.
 func TestNoticesCoverGoMod(t *testing.T) {
+	rawMod := repoFile(t, "go.mod")
+	if replaceLine.MatchString(rawMod) {
+		t.Fatal("go.mod has a replace directive: the replacement module is not the audited one; re-run the dependency audit and record it")
+	}
 	mods := goMod(t)
 	notice := repoFile(t, noticesFile)
-	linked, excludedMods, total := parseNotices(t, notice)
+	linked, licenses, excludedMods, total := parseNotices(t, notice)
 
 	if total != len(linked) {
 		t.Errorf("notices summary says %d modules, the linked table has %d", total, len(linked))
+	}
+	counts := parseSummary(t, notice)
+	if got := sumCounts(counts); got != total {
+		t.Errorf("per-license summary rows add up to %d, the total row says %d", got, total)
+	}
+	tableCounts := map[string]int{}
+	for _, expr := range licenses {
+		tableCounts[expr]++
+	}
+	for expr, n := range tableCounts {
+		if counts[expr] != n {
+			t.Errorf("summary says %d modules under %q, the linked table has %d", counts[expr], expr, n)
+		}
+	}
+	for expr := range counts {
+		if tableCounts[expr] == 0 {
+			t.Errorf("summary lists %q but no linked module uses it", expr)
+		}
 	}
 	for mod, version := range linked {
 		want, ok := mods[mod]
@@ -247,15 +274,68 @@ func TestNoticesCoverGoMod(t *testing.T) {
 	for _, mod := range missing {
 		t.Errorf("%s is required by go.mod but missing from %s (add it with its license, or to the not-linked table)", mod, noticesFile)
 	}
+
+	// Attribution must exist for every linked module, in at least one license
+	// section. This is what catches a module whose notices were dropped while
+	// its row stayed in the table.
+	attributed := map[string]bool{}
+	for _, line := range strings.Split(notice, "\n") {
+		if m := copyright.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			attributed[m[1]] = true
+		}
+	}
+	for mod := range linked {
+		if !attributed[mod] {
+			t.Errorf("module %s has no copyright/attribution bullet in %s", mod, noticesFile)
+		}
+	}
+}
+
+func parseSummary(t *testing.T, text string) map[string]int {
+	t.Helper()
+	counts := map[string]int{}
+	inSummary := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "## Summary" {
+			inSummary = true
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			inSummary = false
+			continue
+		}
+		if !inSummary || summaryRow.MatchString(line) {
+			continue
+		}
+		if m := summaryItem.FindStringSubmatch(line); m != nil {
+			counts[strings.TrimSpace(m[1])] = atoi(t, m[2])
+		}
+	}
+	if len(counts) == 0 {
+		t.Fatal("notices summary has no per-license rows")
+	}
+	return counts
+}
+
+func sumCounts(counts map[string]int) int {
+	n := 0
+	for _, v := range counts {
+		n += v
+	}
+	return n
 }
 
 // TestLicenseTextsPresent checks that every license family named in the table
 // has a section with its text, and that the MPL/LGPL obligations stay visible.
 func TestLicenseTextsPresent(t *testing.T) {
 	notice := repoFile(t, noticesFile)
-	linked, _, _ := parseNotices(t, notice)
+	linked, licenses, _, _ := parseNotices(t, notice)
+	if len(licenses) != len(linked) || len(licenses) == 0 {
+		t.Fatalf("parsed %d linked modules but %d license expressions", len(linked), len(licenses))
+	}
 	wantSections := map[string]bool{}
-	for _, expr := range linked {
+	for _, expr := range licenses {
 		for _, part := range regexp.MustCompile(`\s+(AND|OR|WITH)\s+`).Split(expr, -1) {
 			part = strings.TrimSpace(part)
 			switch part {
@@ -265,6 +345,9 @@ func TestLicenseTextsPresent(t *testing.T) {
 				wantSections["### LGPL-3.0"] = true
 			}
 		}
+	}
+	if len(wantSections) < 5 {
+		t.Fatalf("expected all license families to be referenced, got %v", wantSections)
 	}
 	for heading := range wantSections {
 		if !strings.Contains(notice, heading) {

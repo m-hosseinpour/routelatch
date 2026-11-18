@@ -3,11 +3,11 @@
 مرجع تصمیم مجوز (D20) و شاهد ممیزی وابستگی artifact — ۲۰۲۶-۱۱-۱۸
 
 این سند مالک «چرا Apache-2.0»، روش ممیزی باینری، تعهدهای مجوزهای ثالث و
-محدودیت‌های شاهد است. فهرست کامل ماژول‌ها، نسخه‌ها، مجوزها، copyright و متن
-مجوزها در [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) در ریشهٔ مخزن
-است و همراه بسته منتشر می‌شود. متن مجوز خود پروژه در [`LICENSE`](../LICENSE) و
-attribution پروژه در [`NOTICE`](../NOTICE) است. تصمیم کاربر در
-[نیازمندی‌ها، D20](requirements.md) ثبت شده است.
+محدودیت‌های شاهد است. فهرست کامل ماژول‌ها، کامپوننت‌های embedشده، نسخه‌ها،
+مجوزها، copyright و متن مجوزها در [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)
+در ریشهٔ مخزن است و همراه بسته منتشر می‌شود. متن مجوز خود پروژه در
+[`LICENSE`](../LICENSE) و attribution پروژه در [`NOTICE`](../NOTICE) است. تصمیم
+کاربر در [نیازمندی‌ها، D20](requirements.md) ثبت شده است.
 
 ## تصمیم
 
@@ -17,9 +17,11 @@ attribution پروژه در [`NOTICE`](../NOTICE) است. تصمیم کاربر 
 | دارندهٔ copyright | Mahdi Hosseinpour، سال ۲۰۲۶ |
 | تاریخ تصمیم | ۲۰۲۶-۱۱-۱۸ |
 | دامنهٔ ممیزی‌شده | باینری‌های لینوکس `amd64` و `arm64` (`CGO_ENABLED=0`) |
+| ماژول ثالث لینک‌شده | ۶۸ |
+| کامپوننت embedشده با مجوز مستقل | ۶ |
 | مجوزهای ثالث | MIT، BSD-2/3، Apache-2.0، MPL-2.0، LGPL-3.0 (با استثنای لینک استاتیک) |
 | مجوز ناشناخته | صفر |
-| GPL/AGPL | هیچ |
+| GPL/AGPL به‌عنوان مجوز ماژول | هیچ |
 
 Apache-2.0 انتخاب شد چون: با انتشار باینری و سورس سازگار است، اجازهٔ استفادهٔ
 تجاری و تغییر می‌دهد، برای کتابخانه‌های Go رایج است، و تعهدهای انتساب آن با
@@ -28,49 +30,63 @@ Apache-2.0 انتخاب شد چون: با انتشار باینری و سورس 
 
 ## روش ممیزی (چیزهایی که واقعاً اجرا شد)
 
-ممیزی روی `go.mod` تنها نیست؛ مجموعهٔ ماژول‌هایی که واقعاً به باینری لینک
-می‌شوند با toolchain pinشدهٔ `go1.27.4` بیرون کشیده شد:
+ممیزی روی `go.mod` تنها نیست؛ مجموعهٔ ماژول‌ها **و پکیج‌های**ی که واقعاً به
+باینری لینک می‌شوند با toolchain pinشدهٔ `go1.27.4` بیرون کشیده شد:
 
 ```sh
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go list -deps \
   -f '{{with .Module}}{{.Path}} {{.Version}}{{end}}' ./cmd/routelatch
 # همان فرمان با GOARCH=arm64 و با GOOS=windows برای مقایسه
+go list -deps -f '{{if .Module}}{{.Module.Path}}|{{.Module.Version}}|{{.Dir}}{{end}}' \
+  ./cmd/routelatch   # پکیج‌ها برای یافتن مجوزهای داخل پکیج
 ```
 
 - **amd64 و arm64 دقیقاً همان ۶۸ ماژول ثالث را لینک می‌کنند.**
 - `go version -m routelatch` روی باینری ساخته‌شده هم همان ۶۸ ماژول را نشان
   داد؛ یعنی فهرست `go list` با artifact واقعی می‌خواند، نه فقط گراف `go.mod`.
 - `go mod verify` → `all modules verified`؛ محتوای ماژول‌های کش با `go.sum`
-  مطابق است.
+  مطابق است. `go.mod` هیچ `replace` ندارد و `vendor/` وجود ندارد.
 - هر ماژول به پوشهٔ `module@version` در module cache وصل شد و فایل‌های
-  `LICENSE`/`COPYING`/`NOTICE`/`PATENTS` آن خوانده و دسته‌بندی شد. نتیجه در
-  جدول `THIRD-PARTY-NOTICES.md` است.
+  `LICENSE`/`COPYING`/`NOTICE`/`PATENTS` سطح ماژول خوانده و دسته‌بندی شد.
+- **مجوزهای داخل پکیج‌ها هم اسکن شد:** برای هر پکیج لینک‌شده، فایل‌های مجوز
+  همان پوشه خوانده شد. این کار ۶ کامپوننت با مجوز مستقل پیدا کرد که با اتکا به
+  `LICENSE` ریشهٔ ماژول دیده نمی‌شدند: `internal/snapref` (BSD-3، Snappy-Go
+  Authors)، `zstd/internal/xxhash` (MIT، Caleb Spare)، `dicttls` (BSD-3،
+  Gaukas Wang)، `LICENSE-Go` در reality (BSD-3، Go Authors)،
+  `transport/internet/masque/connectip` (MIT، Marten Seemann) و
+  `LICENSE.libyaml` (MIT، Kirill Simonov). این‌ها در جدول
+  «Embedded third-party components» و در بخش copyright همان فایل آمده‌اند.
 - `go.mod` در کل ۷۳ requirement دارد. ۶۸ تا لینک می‌شوند؛ ۵ تا نمی‌شوند و در
   بخش «not linked» همان فایل با دلیل آمده‌اند: چهار ماژول فقط Windows
   (`coninput`، `go-localereader`، `wintun`، `wireguard/windows` — با
   `GOOS=windows go list` دیده شدند و در build لینوکس build-constrained‌اند) و
-  `kr/text` که فقط از helper تست‌ها (`kr/pretty`) می‌آید و در باینری import
+  `kr/text` که از مسیر تست‌های `yaml.v2` → `kr/pretty` می‌آید و در باینری import
   نمی‌شود.
 
 ### توزیع مجوزها در ۶۸ ماژول
 
 | SPDX | تعداد |
 | --- | --- |
-| MIT | ۳۶ |
+| MIT | ۳۵ |
 | BSD-3-Clause | ۱۶ |
 | Apache-2.0 | ۷ |
-| MPL-2.0 | ۳ |
 | BSD-2-Clause | ۲ |
+| MPL-2.0 | ۱ |
 | MIT AND Apache-2.0 | ۱ |
-| BSD-3-Clause AND Apache-2.0 | ۱ |
 | Apache-2.0 AND MIT | ۱ |
-| LGPL-3.0-only WITH static-linking-exception | ۱ |
+| MIT AND BSD-3-Clause | ۱ |
+| BSD-3-Clause AND MIT | ۱ |
+| MPL-2.0 AND BSD-3-Clause | ۱ |
+| MPL-2.0 AND MIT | ۱ |
+| LGPL-3.0-only WITH LicenseRef-static-linking-exception | ۱ |
 
-سه ماژول ترکیبی از دو مجوز دارند (فایل `LICENSE` آن‌ها بخش‌های متفاوت را جدا
-اعلام می‌کند): `klauspost/compress` (BSD-3 برای ماژول و Apache-2.0 برای
-`gzhttp/`)، `pelletier/go-toml` (MIT و Apache-2.0 برای `localtime.go`)، و
-`gopkg.in/yaml.v2` (Apache-2.0 و MIT برای فایل‌های portشده از libyaml). متن هر
-دو مجوز در notices آمده است.
+شش ماژول بیش از یک مجوز دارند و فایل `LICENSE` یا کامپوننت داخلی آن‌ها بخش‌ها
+را جدا اعلام می‌کند: `pelletier/go-toml` (MIT + Apache-2.0 برای `localtime.go`)،
+`gopkg.in/yaml.v2` (Apache-2.0 + MIT برای فایل‌های libyaml)، `klauspost/compress`
+(BSD-3 + MIT؛ بخش Apache-2.0 همان فایل فقط برای `gzhttp/` است که لینک نمی‌شود)،
+`ghodss/yaml` (MIT + بخش BSD-3 برای کد Go)، `xtls/reality` (MPL-2.0 +
+`LICENSE-Go` با BSD-3) و `xtls/xray-core` (MPL-2.0 + `connectip` با MIT). متن
+هر دو/هر سه مجوز در notices آمده است.
 
 ## MPL-2.0: تعهد دقیق و بررسی در مخزن
 
@@ -82,11 +98,14 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go list -deps \
 | `github.com/xtls/reality` | `v0.0.0-20261108101329-4bb46b2afd8b` | `h1:fAn11r21QiUY2oAGwENWb5ummjhWwMcs2WzkbjDMh+k=` |
 | `layeh.com/gopher-luar` | `v1.0.11` | `h1:8zJudpKI6HWkoh9eyyNFaTM79PY6CAPcIr6X/KTiliw=` |
 
-**بررسی شد، فرض نشد:** MPL کپی‌لفت در سطح فایل است، نه در سطح لینک. جز متن مجوز در اسناد notices، هیچ فایل سورس MPL و هیچ
-`vendor/` در مخزن نیست (`git grep` و `git ls-files` بررسی شد)، هیچ فایل MPL تغییر نکرده، و موتور از طریق import بستهٔ عمومی Go
-(`_ "github.com/xtls/xray-core/main/distro/all"` و API `core`) و به‌صورت
-dependency بدون تغییر استفاده می‌شود. `go mod verify` و hashهای `go.sum` بالا
-همین نسخهٔ بدون تغییر را pin می‌کنند.
+**بررسی شد، فرض نشد:** MPL کپی‌لفت در سطح فایل است، نه در سطح لینک. جز متن مجوز
+در اسناد notices، هیچ فایل سورس MPL و هیچ `vendor/` در مخزن نیست (`git grep` و
+`git ls-files` بررسی شد)، هیچ فایل MPL تغییر نکرده، و موتور از طریق import بستهٔ
+عمومی Go (`_ "github.com/xtls/xray-core/main/distro/all"` و API `core`) و
+به‌صورت dependency بدون تغییر استفاده می‌شود. `go mod verify` و hashهای
+`go.sum` بالا همین نسخهٔ بدون تغییر را pin می‌کنند. پکیج `connectip` داخل
+xray-core مجوز MIT جدا دارد و در notices انتساب شده است؛ این مجوز جدا، MPL
+فایل‌های دیگر را تغییر نمی‌دهد.
 
 تعهد §3.2 MPL برای توزیع Executable Form:
 
@@ -115,15 +134,25 @@ installation information مجاز است، مشروط به رعایت بقیهٔ
 Apache-2.0 با این ماژول، بر پایهٔ متن همان فایل مجوز، سازگار است — نه بر پایهٔ
 فرض.
 
-محدودیت: این یک تحلیل از متن مجوز است، نه نظر حقوقی رسمی. اگر روزی این استثنا
-از فایل مجوز حذف شود یا ماژول عوض شود، توزیع باینری باید بازبینی شود
-(جایگزینی ماژول یا اجرای کامل §4 LGPL).
+استثنا فقط بخش‌های 4(d) و 4(e) را کنار می‌گذارد. بخش 4(b) LGPL-3.0 همچنان یک
+نسخه از GNU GPL را می‌خواهد؛ متن کامل **GPL-3.0** در notices (بخش
+«GPL-3.0 (incorporated by LGPL-3.0)») آمده و این تعهد را پوشش می‌دهد. تحلیل
+حقوقی رسمی انجام نشده است؛ اگر روزی این استثنا از فایل مجوز حذف شود یا ماژول
+عوض شود، توزیع باینری باید بازبینی شود (جایگزینی ماژول یا اجرای کامل §4 LGPL).
 
 ## چه چیزی بررسی نشد (ادعای فراتر از شاهد)
 
-- فقط فایل‌های مجوز سطح ماژول خوانده شد؛ هدر فایل‌به‌فایل کل کد و قطعه‌کدهای
-  ثالث داخل ماژول‌ها اسکن نشد. برای ماژول‌های combined، بخش‌های اعلام‌شده در
-  `LICENSE` پوشش داده شد.
+- فایل‌های مجوز سطح ماژول و سطح پکیج‌های لینک‌شده خوانده شد؛ **هدر فایل‌به‌فایل
+  همهٔ سورس‌ها برای copyright‌های فردی اسکن نشد.** مثلاً `Psiphon Inc.` در
+  `utls/u_prng.go`، `Ross Oreto` در `quic-go/internal/utils/tree`، `Arm Limited`
+  در `go-brrr/internal/encoder/log2.go` و `Google LLC` در `go-toml/localtime.go`
+  فقط در هدر فایل‌اند و در فهرست bullets نیامده‌اند؛ مجوز و متن آن‌ها پوشش داده
+  شده، ولی این نام‌ها به‌صورت جدا انتساب نشده‌اند.
+- runtime و stdlib خود Go (BSD-3، The Go Authors) داخل باینری است؛ در notices
+  به‌عنوان BSD-3 و Copyright 2009 The Go Authors ذکر شده، اما فهرست فایل‌های
+  stdlib جداگانه تولید نشده است.
+- `golang.org/x/crypto/x509roots/fallback` دادهٔ گواهی ریشهٔ مشتق از Mozilla را
+  embed می‌کند؛ وضعیت مجوز خود آن داده جدا تحلیل نشده است.
 - ممیزی برای build لینوکس است. build ویندوز (آینده) ماژول‌های دیگری مثل
   `coninput`/`wintun` را لینک می‌کند و باید ممیزی جدا بگیرد.
 - `arm64` فقط cross-build شده و اجرا نشده؛ مجموعهٔ ماژول‌ها با amd64 یکی است.
@@ -133,28 +162,32 @@ Apache-2.0 با این ماژول، بر پایهٔ متن همان فایل م�
 
 ## تعهدهای باقی‌مانده پیش از انتشار (بخشی از A14)
 
-1. **بسته‌بندی:** `LICENSE`، `NOTICE` و `THIRD-PARTY-NOTICES.md` باید داخل
-   بستهٔ ساخته‌شده باشند. `scripts/package.sh` این‌ها را در
-   `share/doc/routelatch/` می‌گذارد؛ بررسی ساخت بسته در همین تغییر انجام شد.
+1. **بسته‌بندی:** `LICENSE`، `NOTICE`، `THIRD-PARTY-NOTICES.md` و همین سند
+   (`docs/licensing.md`) به‌همراه `go.sum` داخل بسته می‌روند؛
+   `scripts/package.sh` این کار را می‌کند و ساخت بسته در همین تغییر بررسی شد.
 2. **Source offer:** برای MPL باید سورس نسخه‌های pinشده (و هر patch آینده)
    در دسترس باشد. دو راه قابل قبول: همراه‌کردن source tarball، یا offer
    نوشتاری معتبر. این تصمیم پیش از اولین انتشار لازم است.
 3. **مجوز انتشار:** تصمیم D20 فقط مجوز پروژه را تعیین می‌کند؛ remote/push/tag/
    release و انتشار بسته نیاز به درخواست جدا دارد.
 4. **بازبینی ادعای امنیت و نام:** بخش «ادعای امنیت» A14 و بررسی نام/علامت
-   تجاری در T7 باقی است؛ این سند فقط مجوز و وابستگی را می‌بندد.
+   تجاری در T7 باقی است.
 
 ## جلوگیری از drift
 
-`internal/licensing/notices_test.go` یک بررسی آفلاین و سریع است: وجود
-`LICENSE`/`NOTICE`، پوشش کامل requirementهای `go.mod` در
-`THIRD-PARTY-NOTICES.md` (با نسخهٔ یکسان)، و نبود مجوز خالی/`UNKNOWN`.
+`internal/licensing/notices_test.go` یک بررسی آفلاین و سریع است:
+
+- وجود `LICENSE` و `NOTICE` و متن canonical؛
+- پوشش کامل requirementهای `go.mod` در `THIRD-PARTY-NOTICES.md` با نسخهٔ
+  یکسان، و رد هر `replace` (چون ماژول جایگزین ممیزی نشده است);
+- هم‌خوانی شمارش هر خانوادهٔ مجوز در summary با جدول، و مجموع با total؛
+- وجود حداقل یک bullet انتساب/copyright برای هر ماژول لینک‌شده.
+
 این تست `go list` را دوباره اجرا نمی‌کند تا به toolchain، module cache یا
 شبکه وابسته نباشد؛ در عوض هر requirement در `go.mod` باید یا در جدول linked
-باشد یا در جدول مستند «not linked» با دلیل. هزینهٔ این انتخاب: اگر `go.mod`
-ماژولی را نگه دارد که هیچ‌وقت لینک نمی‌شود، باید دستی در جدول not linked
-ثبت شود؛ و اگر ماژولی بدون تغییر `go.mod` به‌صورت ترانزیتی لینک شود ولی در
-`go.mod` نیامده باشد، تست آن را نمی‌گیرد (Go 1.17+ همهٔ ماژول‌های لازم را در
-`go.mod` می‌آورد، پس این حالت با `-mod=readonly` و `go mod tidy` بعید است).
-ممیزی کامل با `go list -deps` و `go version -m` باید هنگام هر تغییر dependency
-تکرار شود؛ این تست فقط جلوی drift خاموش را می‌گیرد.
+باشد یا در جدول مستند «not linked» با دلیل. **محدودیت‌های باقی‌مانده:** تست
+نمی‌تواند تشخیص دهد که یک ماژول واقعاً لینک می‌شود یا نه (یک ردیف می‌تواند با
+دلیل ساختگی به جدول not linked منتقل شود)، و اگر کسی عمداً مجوز یک ماژول را
+به یک مجوز شناخته‌شدهٔ دیگر عوض کند، تست سبز می‌ماند. به همین دلیل ممیزی کامل
+با `go list -deps`، اسکن مجوز پکیج‌ها و `go version -m` هنگام هر تغییر
+dependency اجباری است؛ این تست فقط جلوی drift خاموش را می‌گیرد.

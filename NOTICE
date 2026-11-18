@@ -5,26 +5,28 @@ RouteLatch is licensed under the Apache License, Version 2.0. The full license
 text is in the file LICENSE in this distribution.
 
 This product includes software developed by third parties. The complete
-inventory of the Go modules linked into the shipped binary, their versions,
-licenses, copyright notices and required license texts is in
-THIRD-PARTY-NOTICES.md, which is part of this distribution. That file also
-reproduces the NOTICE texts of the Apache-2.0 dependencies that carry one.
+inventory of the Go modules and embedded components linked into the shipped
+binary, their versions, licenses, copyright notices and required license texts
+is in THIRD-PARTY-NOTICES.md, which is part of this distribution. That file also
+reproduces the NOTICE texts of the Apache-2.0 dependencies that carry one, the
+GNU GPL version 3 text required by the LGPL-3.0 component, and the license files
+of embedded components inside linked packages.
 
 The product includes the Xray-core proxy engine (github.com/xtls/xray-core) and
 its REALITY transport (github.com/xtls/reality), both licensed under the Mozilla
-Public License 2.0 (MPL-2.0), and github.com/layeh/gopher-luar, also MPL-2.0.
-They are used unmodified as Go module dependencies; no MPL-covered source file is
-part of, or was modified by, this project. Section 3.2 of the MPL-2.0 requires
-that recipients of the executable form be told how to obtain the source form of
-the covered software. The exact source for the versions in this build can be
-obtained with:
+Public License 2.0 (MPL-2.0), and layeh.com/gopher-luar, also MPL-2.0. They are
+used unmodified as Go module dependencies; no MPL-covered source file is part of,
+or was modified by, this project. Section 3.2 of the MPL-2.0 requires that
+recipients of the executable form be told how to obtain the source form of the
+covered software. The exact source for the versions in this build can be obtained
+with:
 
     go mod download github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0
     go mod download github.com/xtls/reality@v0.0.0-20261108101329-4bb46b2afd8b
     go mod download layeh.com/gopher-luar@v1.0.11
 
-or from the upstream repositories at those versions. The matching go.sum
-hashes are recorded in docs/licensing.md.
+or from the upstream repositories at those versions. The matching go.sum hashes
+are recorded in docs/licensing.md.
 
 RouteLatch is an independent project. It is not an official Xray client and is
 not affiliated with or endorsed by XTLS.

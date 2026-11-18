@@ -35,7 +35,7 @@ for arch in amd64 arm64; do
 		echo "missing $bin; run scripts/build.sh first" >&2
 		exit 2
 	fi
-	mkdir -p "$root/bin" "$root/share/doc/routelatch" "$root/share/routelatch/systemd"
+	mkdir -p "$root/bin" "$root/share/doc/routelatch/docs" "$root/share/routelatch/systemd"
 	install -m 0755 "$bin" "$root/bin/routelatch"
 	install -m 0644 "$info" "$root/share/doc/routelatch/BUILD-INFO"
 	# The unit lives in deploy/ in the source tree; the package copies it
@@ -49,6 +49,11 @@ for arch in amd64 arm64; do
 	install -m 0644 "$repo/LICENSE" "$root/share/doc/routelatch/LICENSE"
 	install -m 0644 "$repo/NOTICE" "$root/share/doc/routelatch/NOTICE"
 	install -m 0644 "$repo/THIRD-PARTY-NOTICES.md" "$root/share/doc/routelatch/THIRD-PARTY-NOTICES.md"
+	# The audit record is referenced by NOTICE and the notices; keep its source
+	# path so those links resolve in the package. go.sum backs the module
+	# hashes quoted in the audit.
+	install -m 0644 "$repo/docs/licensing.md" "$root/share/doc/routelatch/docs/licensing.md"
+	install -m 0644 "$repo/go.sum" "$root/share/doc/routelatch/go.sum"
 	cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 This is a local build assembled by scripts/package.sh from BUILD-INFO
 (version/commit/date above). It is reproducible for the same inputs.
@@ -56,8 +61,8 @@ This is a local build assembled by scripts/package.sh from BUILD-INFO
 RouteLatch is licensed under the Apache License, Version 2.0; see LICENSE,
 NOTICE and THIRD-PARTY-NOTICES.md in this directory. Assembling this package
 does not publish anything: publishing a release, uploading a package or
-distributing the source still needs a separate decision and the release
-checklist in docs/implementation-plan.md.
+distributing the source still needs a separate decision and the project's
+release checklist.
 
 Installing is the user's action. This package was built without enabling a
 service, without touching desktop proxy or network settings, and without a
