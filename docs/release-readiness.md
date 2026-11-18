@@ -6,18 +6,19 @@ needs the decisions listed under "Before a public push"; nothing here authorizes
 push, tag, release or upload.
 
 This is the readiness record for the future public GitHub release (A14's remaining
-gates). It is a dated snapshot: branch `r8-release` at `110cce3`, based on
-`47ec19a`, with `main` at `c1e60ea` (four later docs/CI commits from a parallel
-worker). Redaction rule used throughout: findings name the commit, path and kind,
-never the matched value.
+gates). It is a dated snapshot: branch `r8-release` (binary/version `110cce3`), based
+on `47ec19a`, with `main` at `c1e60ea` (four later docs/CI commits from a parallel
+worker). Later commits on this branch fix the packaging script and this record;
+they add no history content. Redaction rule used throughout: findings name the
+commit, path and kind, never the matched value.
 
 ## 1. History scan
 
-Method: every reachable object in every ref (`git rev-list --all --objects`, 43
-commits over `main`, `r6-transports` and `r8-release`), every text blob read in
-full (438 blobs), plus `git grep` over all revisions for scheme links, tokens,
-keys, webhooks, home paths and private addresses. The scan separates "present in
-the current tree" from "only in history".
+Method: every reachable object in every ref (`git rev-list --all --objects`),
+recorded at `110cce3`: 43 commits over `main`, `r6-transports` and `r8-release`,
+438 text blobs read in full, plus `git grep` over all revisions for scheme links,
+tokens, keys, webhooks, home paths and private addresses. The scan separates
+"present in the current tree" from "only in history".
 
 | Class | Result |
 | --- | --- |
@@ -25,7 +26,7 @@ the current tree" from "only in history".
 | Private pool / subscription content | 0. No subscription blob, pool file, copied state, `config.json` or `state.json` was ever committed. No long base64 blob decodes to a proxy payload. |
 | Tokens and credentials | 0. No `ghp_`/`github_pat_`/`AKIA`/`sk-`/`xox*`, no bot token, no Discord/Slack/Telegram webhook, no `-----BEGIN … PRIVATE KEY-----`, no certificate. |
 | Committed binaries or state | 0 binary blobs of any size; no state, log, database, backup or archive files in history. |
-| Non-loopback IPs / private hosts | only documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), `8.8.8.8`, routing-test samples and `100.64.0.0/10`; no `10/8` or `192.168/16` service address, no `*.local`/`*.lan` host. |
+| Non-loopback IPs / private hosts | only documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), `8.8.8.8`, routing-test samples and `100.64.0.0/10`; no `10/8` or `192.168/16` service address; the only `.local` name is the `spike.local` self-signed test certificate CN, not a service host. |
 | Personal machine paths | **finding, fixed in the current tree**: four generated files embedded an absolute home-directory path (home + user + `workspace/routelatch/...`) in an fd map. No credential, but a local path must not ship. |
 
 **Personal-path finding.** Introduced by `1494765` (T1 spike) in
@@ -41,21 +42,22 @@ path: the only match is the synthetic `HOME=` fixture in
 `internal/platform/launcher_test.go`. No macOS or Windows user-profile path and
 no root-home path is tracked.
 
-**Identity exposure (not a secret).** Every commit has author `OpenCode
-<noreply@opencode.ai>` and committer `Mahdi Hosseinpour
-<mahdihosseinpour1996@gmail.com>`, and the trailer repeats that address. This is
-deliberate attribution, but a public history publishes the address. Decision, not
-a defect.
+**Identity exposure (not a secret).** Every commit has author `OpenCode` with
+its noreply address and committer `Mahdi Hosseinpour` with the user's personal
+address (from the repository's Git configuration); the trailer repeats that
+address. This is deliberate attribution, but a public history publishes it.
+Decision, not a defect.
 
 ## 2. Release package
 
-Built from `110cce3` with Go 1.27.4, `SOURCE_DATE_EPOCH=1794960000`
+Built from the `110cce3` binary with the final packaging script, Go 1.27.4,
+`SOURCE_DATE_EPOCH=1794960000`
 (2026-11-18), `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags "-s -w -X …"`:
 
 - `dist/packages/routelatch-110cce3-linux-amd64.tar.gz`
-  `a90029bd43451393b24b2d3f36916dcc72e042b52012c24d9197f8cd579d8e30`
+  `2aceb05fbe679a977cc67f7235685a98cc7f459390f53839ca66bd1852ad8315`
 - `dist/packages/routelatch-110cce3-linux-arm64.tar.gz`
-  `45b30b034f927abcf57af6a9eb9c4a59fcd79028a1caa155c64f216d0726b718`
+  `77b2aa8e5c0d84626d15eceb43fcd3257569c7949cd2baecb793c3ab35c09df6`
 
 Each package carries `bin/routelatch`, `share/routelatch/systemd/routelatch.service`,
 and under `share/doc/routelatch/`: `README.md`, `INSTALL.md`, `SERVICE.md`,
@@ -70,20 +72,24 @@ Evidence, not assumption:
   `build date: 2026-11-18T00:00:00Z`, matching `BUILD-INFO` and `--json version`;
 - `scripts/build.sh --reproducible` rebuilt both architectures twice and reported
   identical checksums;
-- two packaging runs over one build produced identical tarball checksums;
+- packaging is umask-independent: `package.sh` pins `umask 022`, all tar
+  directory entries are `drwxr-xr-x`, and runs under umask 002 and 022 produced
+  identical tarball checksums;
 - `scripts/check-artifact.sh dist/routelatch-linux-amd64` passed: static ELF, no
   `PT_INTERP`, stamp matches, empty-environment `run` answered `status` on loopback
   and exited 0 on SIGTERM;
-- the new stamp guard fails closed: forcing `version=deadbeef` in `BUILD-INFO`
-  made `scripts/package.sh` stop with
-  `package stamp check FAILED: binary reports '47ec19a-dirty', BUILD-INFO says 'deadbeef'`
-  (run before the sanitization commit, when the tree was dirty).
+- the new stamp guard fails closed: forcing `commit=deadbeef` in `BUILD-INFO`
+  made `scripts/package.sh` stop with `package stamp check FAILED: binary reports
+  version '110cce3', commit '110cce3', date '2026-11-18T00:00:00Z'; BUILD-INFO
+  says '110cce3', 'deadbeef', …`.
 
 **Changes made for this.** `scripts/package.sh` now ships `SERVICE.md` (the packaged
-copy of `deploy/README.md` with a header mapping source-tree paths to the package),
-because `INSTALL.md` pointed readers at a file that was not in the package; and it
-verifies the host-architecture binary's stamp against `BUILD-INFO` before writing
-checksums. `packaging/README.md` and `docs/licensing.md` were updated to match.
+copy of `deploy/README.md` with a header mapping source-tree paths and references
+to the package), because `INSTALL.md` pointed readers at a file that was not in
+the package; it pins `umask 022` so directory modes and tarball bytes do not depend
+on the builder; and it verifies the host-architecture binary's version, commit and
+build date against `BUILD-INFO` before writing checksums. `packaging/README.md`
+and `docs/licensing.md` were updated to match.
 
 **MPL-2.0 source offer.** The package ships the written offer in `NOTICE`: exact
 versions of `xtls/xray-core`, `xtls/reality` and `layeh.com/gopher-luar`, the

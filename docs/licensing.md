@@ -168,7 +168,8 @@ Apache-2.0 با این ماژول، بر پایهٔ متن همان فایل م�
    `scripts/package.sh` این کار را می‌کند و ساخت بسته در همین تغییر بررسی شد.
    `SERVICE.md` (نسخهٔ بستهٔ `deploy/README.md`) هم اضافه شد تا ارجاع
    `INSTALL.md` به uninstall و crash recovery داخل بسته resolve شود.
-   `package.sh` نسخهٔ باینری معماری host را با `BUILD-INFO` مقایسه و در
+   `package.sh` stamp باینری معماری host (version/commit/date) را با
+   `BUILD-INFO` مقایسه می‌کند و در
    اختلاف fail می‌کند؛ پس بستهٔ با stamp ناهم‌خوان ساخته نمی‌شود.
 2. **Source offer:** برای MPL باید سورس نسخه‌های pin‌شده (و هر patch آینده)
    در دسترس باشد. بستهٔ فعلی راه **offer نوشتاری** را پیاده می‌کند: `NOTICE`
