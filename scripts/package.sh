@@ -43,14 +43,21 @@ for arch in amd64 arm64; do
 	install -m 0644 "$repo/deploy/systemd/routelatch.service" "$root/share/routelatch/systemd/routelatch.service"
 	install -m 0644 "$repo/README.md" "$root/share/doc/routelatch/README.md"
 	install -m 0644 "$repo/packaging/README.md" "$root/share/doc/routelatch/INSTALL.md"
+	# Apache-2.0 requires the license and the project notice to travel with the
+	# binary; THIRD-PARTY-NOTICES carries the dependency licenses and the MPL-2.0
+	# source-availability statement.
+	install -m 0644 "$repo/LICENSE" "$root/share/doc/routelatch/LICENSE"
+	install -m 0644 "$repo/NOTICE" "$root/share/doc/routelatch/NOTICE"
+	install -m 0644 "$repo/THIRD-PARTY-NOTICES.md" "$root/share/doc/routelatch/THIRD-PARTY-NOTICES.md"
 	cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 This is a local build assembled by scripts/package.sh from BUILD-INFO
 (version/commit/date above). It is reproducible for the same inputs.
 
-It is NOT a published release and is NOT licensed for distribution. The
-project license is undecided (D20) and the release audit is open (A14):
-source offer, third-party notices and a real dependency/license review must be
-completed before any artifact leaves the build machine.
+RouteLatch is licensed under the Apache License, Version 2.0; see LICENSE,
+NOTICE and THIRD-PARTY-NOTICES.md in this directory. Assembling this package
+does not publish anything: publishing a release, uploading a package or
+distributing the source still needs a separate decision and the release
+checklist in docs/implementation-plan.md.
 
 Installing is the user's action. This package was built without enabling a
 service, without touching desktop proxy or network settings, and without a

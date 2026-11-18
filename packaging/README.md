@@ -32,8 +32,12 @@ routelatch-<version>-linux-<amd64|arm64>/
   bin/routelatch
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
+  share/doc/routelatch/LICENSE          Apache-2.0 license text
+  share/doc/routelatch/NOTICE           project attribution and MPL source pointer
+  share/doc/routelatch/THIRD-PARTY-NOTICES.md
+                                        dependency inventory, licenses, notices
   share/doc/routelatch/BUILD-INFO       version, commit, date, Go version, cgo=0
-  share/doc/routelatch/PACKAGE-NOTES    "local build, not distributable" notice
+  share/doc/routelatch/PACKAGE-NOTES    "local build, not published" notice
   share/routelatch/systemd/routelatch.service
 ```
 
@@ -131,12 +135,15 @@ is copied into the package docs.
 hash while the repository has no tags. Override `VERSION`, `COMMIT` and
 `SOURCE_DATE_EPOCH` for a named build.
 
-## Licensing and publication are not settled
+## Licensing and publication
 
-Do not distribute these packages. The project license is undecided (D20) and
-the release audit (A14) is open: third-party notices, a real dependency/license
-review including the pinned Xray core's MPL-2.0 obligations, and a
-corresponding-source bundle are required before publication. That source offer
-is intentionally absent here rather than guessed, which is why `PACKAGE-NOTES`
-in every package says it is a local build. Publishing, releasing, tagging or
-pushing is a separate decision with the project owner.
+The project is licensed under **Apache-2.0** (D20, decided 2026-11-18). Every
+package carries `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md` under
+`share/doc/routelatch/`; the latter lists the exact linked module versions, their
+licenses and the MPL-2.0 source-availability route. The audit and its limits are
+in `docs/licensing.md`.
+
+Publication is still not settled. Do not publish, release, tag, push or upload
+these packages: that is a separate decision with the project owner, and the
+release checklist still requires the MPL-2.0 source offer and the rest of A14.
+`PACKAGE-NOTES` in every package says it is a local build for that reason.

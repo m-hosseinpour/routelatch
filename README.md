@@ -18,12 +18,15 @@ two minutes on this machine, over
 the documented CLI surface, the four routing modes, pool/import/health,
 diagnostics, the launcher and crash/shutdown recovery. What it does **not**
 prove: a clean-machine install with no manual runtime (A01), real GNOME/KDE
-desktop-proxy changes, a real systemd service lifecycle, public egress through
-real exits, and the license/dependency audit (A14).
+desktop-proxy changes, a real systemd service lifecycle, and public egress
+through real exits.
 
-Distribution is not authorized: the project license is undecided and the release
-audit is open (see [License and publication](#license-and-publication)). Treat
-this as a build that passes its local checks, not a supported release.
+RouteLatch is licensed under the Apache License 2.0; see
+[`LICENSE`](LICENSE), [`NOTICE`](NOTICE) and
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Publication and distribution
+are still not authorized: no release, tag, remote push or package publication is
+part of this state, and the release source offer has not been assembled yet.
+Treat this as a build that passes its local checks, not a supported release.
 
 ## What the Linux v1 does
 
@@ -295,13 +298,19 @@ The design documents are in Persian:
 
 ## License and publication
 
-The project's license has **not** been selected. No release, tag, package
-publication or source distribution is authorized yet. Before publishing,
-the project must settle the license, review the actual pinned dependency set
-(including the Xray core's MPL-2.0 obligations and third-party notices), and
-produce a corresponding-source offer. Local packages from
-`scripts/package.sh` carry a notice saying they are local builds, not
-distributable artifacts.
+RouteLatch is licensed under the **Apache License, Version 2.0**. The full text is
+in [`LICENSE`](LICENSE); project attribution is in [`NOTICE`](NOTICE). The binary
+also includes third-party Go modules under MIT, BSD-2/3-Clause, Apache-2.0,
+MPL-2.0 and LGPL-3.0 licenses. Their exact versions, copyright notices and license
+texts are in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). The audit method,
+the MPL-2.0 source-availability obligation, the LGPL-3.0 static-linking exception
+and the remaining evidence limits are documented in
+[`docs/licensing.md`](docs/licensing.md).
+
+Publication is not authorized. There is no release, tag, remote push, package
+publication or source distribution yet; before any artifact leaves the build
+machine, the source offer for the MPL-2.0 modules must be assembled and the
+release checklist in `docs/implementation-plan.md` must pass.
 
 RouteLatch is not an official Xray client and does not imply affiliation with
 XTLS.
