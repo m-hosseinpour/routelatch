@@ -305,8 +305,11 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 		_ = eng.Stop(ctx)
 		return &contract.Failure{
 			Kind: contract.StateLocked, Path: contract.PathLocal, Op: "control.listen",
+			// EnvelopeFor sanitizes and truncates dynamic text to
+			// contract.MaxNodeNameRunes, so keep this self-generated message
+			// complete within that bound instead of losing its last words.
 			Message: "a traffic listener could not bind (" + snap.Config.HTTPListen + " / " + snap.Config.SOCKSListen +
-				"); no traffic was redirected and no fallback port was chosen",
+				"); no traffic redirected, no fallback port",
 			Err: err,
 		}
 	}

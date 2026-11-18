@@ -44,10 +44,11 @@ routelatch-<version>-linux-<amd64|arm64>/
 and `dist/packages/SHA256SUMS` plus `routelatch-<version>-linux-<arch>.tar.gz`
 for each architecture.
 
-There are no runtime data files in the package. Config and state are created on
-first run under `$XDG_CONFIG_HOME/routelatch/` and
-`$XDG_STATE_HOME/routelatch/` (see `docs/contracts.md` §4.1), with `0700`
-directories and `0600` files.
+There are no runtime data files in the package. On first run the directories
+`$XDG_CONFIG_HOME/routelatch/` and `$XDG_STATE_HOME/routelatch/` are created
+(see `docs/contracts.md` §4.1) with `0700` permissions; `config.json` and
+`state.json` are written with `0600` on the first change and defaults are used
+until then (`doctor` reports `config_file | not created yet`).
 
 ## Install (a user action)
 

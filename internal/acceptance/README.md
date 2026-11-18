@@ -20,6 +20,25 @@ prober's hard-coded 60 s destination cooldown, and A07 waits one 30 s rotation
 tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
 `-v -run 'TestFailureAndLimits|TestResourceBaseline'` for the cheap checks.
 
+### Gated real-systemd check (R1)
+
+One test needs a real `systemd --user` manager and installs a temporary unit, so
+it is skipped by default and stays out of the offline suite:
+
+```sh
+ROUTELATCH_SYSTEMD_TEST=1 go test -count=1 -v -run TestA13SystemdUserLifecycle ./internal/acceptance/
+```
+
+It takes the shipped `deploy/systemd/routelatch.service`, points `ExecStart` at
+the built binary plus an isolated `--data-dir` and random loopback ports, writes
+that unit into the caller's real user-manager unit directory and removes it
+afterwards (`systemctl --user daemon-reload` is part of the run). It asserts
+start/restart, loopback-only listeners, a foreign listener on the configured
+HTTP port (exit 6, `NRestarts=0`, no fallback), SIGKILL followed by the
+on-failure restart with byte-identical state and no silent direct, and a clean
+exit 0 stop. Only run it where installing a user service is authorized; a
+reboot/re-login is never performed.
+
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
@@ -76,6 +95,7 @@ setting is used.
 | A11 | An inherited `NO_PROXY` naming an approved destination is replaced by the product's fixed list in the child; with listeners stopped, and with no service at all, `env`/`exec` exit 3 and the child never runs (no silent direct). |
 | A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
+| A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
@@ -160,8 +180,11 @@ them until the suite is updated.
   refusal are asserted.
 * **A12:** redirects, `101` upgrades, slowloris/size limits and real IPv6 egress
   are not exercised; UDP is asserted only as an explicit refusal.
-* **A13 / platform:** systemd lifecycle/crash-loop supervision, Windows, Android
-  and TUN are out of scope.
+* **A13 / platform:** systemd lifecycle is covered by the gated test above and
+  the R1 install run. A real reboot/re-login is not executed, and linger was
+  already enabled on the R1 machine, so only `enable`'s symlink and the
+  `WantedBy=default.target` configuration were inspected for login start-up.
+  Windows, Android and TUN are out of scope.
 * **Transport limits:** WS/gRPC/XHTTP are runtime-verified only over TLS against a
   local pinned exit, with the ALPN above and one VLESS stream per test
   request. REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP are

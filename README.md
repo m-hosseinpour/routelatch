@@ -13,12 +13,15 @@ not install Go or Xray separately.
 **Status:** the Linux v1 is implemented, unit-tested, and covered by an
 end-to-end acceptance suite ([`internal/acceptance/`](internal/acceptance/README.md))
 that drives the built binary against loopback-only fixture exits and peers. A
-run in this environment prints 176 assertion lines and no failures in roughly
-two minutes on this machine, over
+run in this environment prints 206 assertion lines and no failures in about two
+minutes (125 s) on this machine, over
 the documented CLI surface, the four routing modes, pool/import/health,
-diagnostics, the launcher and crash/shutdown recovery. What it does **not**
+diagnostics, the launcher and crash/shutdown recovery. The systemd user service
+was installed and driven under a real `systemd --user` manager
+(start/stop/restart, port collision, SIGKILL recovery), and a gated acceptance
+test repeats that supervision on an isolated data dir. What it does **not**
 prove: a clean-machine install with no manual runtime (A01), real GNOME/KDE
-desktop-proxy changes, a real systemd service lifecycle, and public egress
+desktop-proxy changes, login start-up across a reboot/re-login, and public egress
 through real exits.
 
 RouteLatch is licensed under the Apache License 2.0; see
