@@ -32,6 +32,7 @@ routelatch-<version>-linux-<amd64|arm64>/
   bin/routelatch
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
+  share/doc/routelatch/SERVICE.md       systemd unit lifecycle, uninstall, crash recovery
   share/doc/routelatch/LICENSE          Apache-2.0 license text
   share/doc/routelatch/NOTICE           project attribution and MPL source pointer
   share/doc/routelatch/THIRD-PARTY-NOTICES.md
@@ -78,9 +79,9 @@ routelatch run
 
 Check the result with `routelatch status`, `routelatch doctor`, or
 `systemctl --user status routelatch.service`. Uninstall, crash recovery and the
-GNOME/KDE desktop-proxy restore step are documented in `deploy/README.md`; the
-desktop proxy is opt-in and is not changed by installing or starting the
-service.
+GNOME/KDE desktop-proxy restore step are documented in `SERVICE.md` (the
+source tree's `deploy/README.md`); the desktop proxy is opt-in and is not
+changed by installing or starting the service.
 
 ## Architecture and platform
 
@@ -105,6 +106,13 @@ tested. Only the amd64 artifact was executed during this build.
 Reproducibility: `scripts/build.sh --reproducible` builds each architecture
 twice with the same inputs and compares the checksums. Same toolchain, source,
 `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` give identical bytes.
+
+`scripts/package.sh` packages with a sorted, fixed-mtime tar and `gzip -n`, so
+the same build inputs also give the same `.tar.gz` and `SHA256SUMS`; two runs
+over one build produced identical tarball checksums. Before writing the
+checksums it runs `routelatch version` from the host-architecture package tree
+and fails if the reported version differs from `BUILD-INFO`, so a package
+cannot silently carry a binary built from different inputs.
 
 ## Version stamping
 

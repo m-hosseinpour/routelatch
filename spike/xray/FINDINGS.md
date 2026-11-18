@@ -1,5 +1,16 @@
 # T1 unit A — embedded Xray boundary and handshake gate
 
+> **Dated evidence snapshot (2026-11-17).** This file records the T1 spike as it
+> stood then, including the "blocked on the handshake gate" status below; that
+> was the state at the time, not the current product. The gate was closed by the
+> T2 proof model (`ProofConfirmed` / `ProofAccepted` in
+> [`docs/contracts.md`](../../docs/contracts.md) §2) and the later product work,
+> which keeps a VLESS/Trojan dial labelled "accepted, destination unconfirmed"
+> rather than claiming destination reachability. Read this as measurements and
+> limitations of that dated run, not as a current status report. Absolute home
+> paths in `results/*.txt` were replaced with repository-relative paths for
+> publication; the measured values are unchanged.
+
 **Status: blocked on the handshake gate (b).** The other five questions were
 measured. The exact blocking question and the options with their costs are in
 [§9](#9-gate-decision). This document records what was **implemented**,

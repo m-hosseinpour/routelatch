@@ -18,6 +18,11 @@ if [ ! -f "$info" ]; then
 	exit 2
 fi
 version=$(sed -n 's/^version=//p' "$info")
+case $(uname -m) in
+x86_64) host_arch=amd64 ;;
+aarch64 | arm64) host_arch=arm64 ;;
+*) host_arch=unknown ;;
+esac
 epoch=$(sed -n 's/^source_date_epoch=//p' "$info")
 if [ -z "$epoch" ]; then
 	epoch=$(date -u -d "$(sed -n 's/^date=//p' "$info")" +%s)
@@ -37,12 +42,38 @@ for arch in amd64 arm64; do
 	fi
 	mkdir -p "$root/bin" "$root/share/doc/routelatch/docs" "$root/share/routelatch/systemd"
 	install -m 0755 "$bin" "$root/bin/routelatch"
+	# A package must never ship a binary whose stamp disagrees with BUILD-INFO.
+	# Only the host architecture can run here; build.sh already proved the other
+	# architecture embeds the same strings.
+	if [ "$arch" = "$host_arch" ]; then
+		got=$("$root/bin/routelatch" version | sed -n 's/^RouteLatch //p')
+		if [ "$got" != "$version" ]; then
+			echo "package stamp check FAILED: binary reports '$got', BUILD-INFO says '$version'" >&2
+			exit 1
+		fi
+		echo "package stamp $arch: binary reports $got"
+	fi
 	install -m 0644 "$info" "$root/share/doc/routelatch/BUILD-INFO"
 	# The unit lives in deploy/ in the source tree; the package copies it
 	# instead of keeping a second copy in packaging/.
 	install -m 0644 "$repo/deploy/systemd/routelatch.service" "$root/share/routelatch/systemd/routelatch.service"
 	install -m 0644 "$repo/README.md" "$root/share/doc/routelatch/README.md"
 	install -m 0644 "$repo/packaging/README.md" "$root/share/doc/routelatch/INSTALL.md"
+	# INSTALL.md sends readers to deploy/README.md for uninstall and crash
+	# recovery, so that document ships too. Its paths describe the source tree;
+	# this header maps them onto the extracted package.
+	{
+		cat <<'SERVICE_HEADER'
+This is deploy/README.md from the RouteLatch source tree, shipped as SERVICE.md
+so the install notes resolve inside this package. Paths written as
+deploy/systemd/... refer to the source tree; the unit in this package is
+share/routelatch/systemd/routelatch.service, and INSTALL.md has the install
+commands that work from the extracted package. The readiness checks that run
+tests and gated systemd tests describe the source tree, not this package.
+SERVICE_HEADER
+		cat "$repo/deploy/README.md"
+	} >"$root/share/doc/routelatch/SERVICE.md"
+	chmod 0644 "$root/share/doc/routelatch/SERVICE.md"
 	# Apache-2.0 requires the license and the project notice to travel with the
 	# binary; THIRD-PARTY-NOTICES carries the dependency licenses and the MPL-2.0
 	# source-availability statement.
