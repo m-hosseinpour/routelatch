@@ -207,7 +207,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ، خروجی عمومی و انتشار همیشه مجوز جدا می‌خواهند.
 
-### وضعیت فعلی (۲۰۲۶-۱۱-۱۸؛ همهٔ بررسی‌های این بخش روی `596529f` اجرا شده‌اند —
+### وضعیت فعلی (۲۰۲۶-۱۱-۱۸؛ همهٔ بررسی‌های این بخش روی `da333fe` اجرا شده‌اند —
 هنگام شروع، `git log` را ببین)
 
 - **نسخهٔ لینوکسی پیاده و محلی آزموده است:** `internal/*` و `cmd/routelatch` کامل‌اند؛
@@ -244,15 +244,40 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   **ماشین بازگردانده شد:** unit متوقف/حذف، پورت‌ها آزاد، هیچ سرویس/تنظیم دیگری تغییر
   نکرد و هیچ‌چیز نصب‌شده نماند. **اجرا نشد:** reboot/re-login و corrupt-state زیر systemd
   (فقط offline). A01 همچنان پذیرفته‌نشده است (نصب روی این ماشین اثبات شد، نه محیط پاک).
+- **R2 انجام شد (`72835fc`) روی KDE Plasma واقعی:** آداپتر `kwriteconfig6`/`kioslaverc` استفاده شد و
+  سرویس `systemd --user` متغیرهای نشست را درست دید (`XDG_CURRENT_DESKTOP=KDE`)؛ daemon از
+  shell لخت `supported:false` و `set` exit 7 می‌دهد (حالا مستند). set واقعی روی OS نوشت
+  (http/https و socks به پورت‌های routelatch، `ProxyType=1`) و مقدار قبلی را ثبت کرد؛
+  restore با **diff بایت‌به‌بایت** به snapshot برگشت و marker `applied:false` شد؛ ویرایش
+  دستی کاربر (`:1099`) حفظ شد و `user_modified:[httpProxy]` گزارش شد؛ سرویس خاموش
+  **fail closed** بود (۰ تماس مقصد، بدون direct پنهان)؛ `kill -9` → restart ~۲s با state
+  سالم و عبور ۲۰۰. **نقص رفع‌شده:** `status` با نشانگر کهنه بازهم مالکیت را ادعا می‌کرد؛
+  `Conflicts`/`conflict`/`notice`، ترتیب restore، گزارش marker خراب و خواندن OS بیرون از
+  قفل اضافه شد. `TestA11DesktopProxyLifecycle` (گیت `ROUTELATCH_DESKTOP_TEST=1`) زنده pass شد.
+  **اجرا نشد:** نشست واقعی GNOME؛ `ftpProxy`/`Authmode` طبق设计中 مدیریت نمی‌شوند.
+- **R4 انجام شد (`766edcd`، `da333fe`) با pool خصوصی کاربر (فقط‌خواندنی، هیچ secret در repo/گزارش):**
+  نمونهٔ قطعی ۴ لینک (۲ trojan + ۲ vless، ۴ سرور) از pool با ۱۶۵ خط؛ import → ۳ valid و
+  ۱ `unsupported`/`engine_record_rejected` (VLESS عمومی بدون TLS، مستندشده)؛ `refresh --all`
+  شکل را حفظ کرد؛ transport ۳/۳ موفق ۲۷۴–۳۹۴ms؛ یک exit با `bytes_down=1` مدرک egress داد و
+  دو تای دیگر `destination_unconfirmed` بدون cooling؛ targeted یک درخواست کنترل‌شده →
+  CONNECT 200، پاسخ HTTP/2 200 با body بایت‌یکسان، **۱ تماس مقصد**، IP خروجی ≠ IP مستقیم؛
+  exit مرده/مسدود → 502 «exit unreachable» با ۰ افزایش شمارنده و بدون fallback؛ all-direct و
+  stopped مطابق قرارداد؛ grep اختصاصی D21: صفر hit برای مقصد در state/log/CLI. **نقص رفع‌شده:**
+  شواهد downlink ترافیک واقعی به health نمی‌رسید (`pool.RecordUsage` مرده بود و exit سالم
+  `unknown` می‌ماند) — فرانت‌اند حالا اولین بایت downlink را به یک نمونهٔ coalesced تبدیل می‌کند
+  و probeها wrap نشده‌اند. **باقی:** مقاصد دلخواه VLESS/Trojan، پایداری
+  طولانی‌مدت/churn و همهٔ اعضای pool اثبات نشده؛ state/کپی حاوی secret حذف شد.
 - **شاهد پذیرش:** `go test -count=1 -v ./internal/acceptance/` روی همین HEAD →
-  **۲۰۶ گزارش `pass(...)`، ۰ شکست و ۱۳ `NOTE`** (اجراهای گیت‌شده/غیرقابل‌اجرا، نه pass
-  جعلی)، ~۱۱۵s. گزارش پکیج، `ok`. `go build ./...`، `go vet ./...` و
+  **۲۰۸ گزارش `pass(...)`، ۰ شکست و ۱۳ `NOTE`** (اجراهای گیت‌شده/غیرقابل‌اجرا، نه pass
+  جعلی)، ~۱۱۴s. گزارش پکیج، `ok`. `go build ./...`، `go vet ./...` و
   `go test -count=1 ./...` سبزند و tree پاک است.
 - **بازبینی مستقل:** قراردادها (دو دور)، هر واحد پیاده‌سازی، پذیرش، کل تغییر
   (`1416c32..HEAD`)، D21، تغییر ادغام‌شدهٔ R5+R6، R3 (دو دور: embedded notices و
-  attribution) و R1 (approve-with-findings + تأیید یافته‌ها) verdict مثبت گرفتند.
+  attribution)، R1، R2 (approve-with-findings → یافته‌های مادی رفع) و R4 (approve؛ دو
+  یافته بسته، دو nit غیرمسدودکننده) verdict مثبت گرفتند.
   یافته‌های مادی (F1–F8، bypass وضعیت `cooling`/`healthy`، بریده‌شدن پیام collision،
-  holderهای جاافتاده و کامپوننت‌های embedشده) رفع و بازبینی شدند. هیچ یافتهٔ باز
+  holderهای جاافتاده و کامپوننت‌های embedشده، ادعای مالکیت کهنه در desktop status، و
+  نرسیدن شواهد downlink واقعی به health) رفع و بازبینی شدند. هیچ یافتهٔ باز
   مسدودکننده‌ای ثبت نشده است.
 - **تصمیم‌های کاربر ثبت‌شده:** دروازهٔ handshake (تأیید واقعی هر جا ممکن + پذیرش صریح
   VLESS/Trojan)، ماتریس amd64/arm64 با GNOME/KDE، D21 (هیچ مقصدی در هیچ لاگ/فایل
@@ -266,15 +291,15 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | # | کار | نتیجهٔ متناظر | مجوز لازم؟ |
 | --- | --- | --- | --- |
 | R1 | **انجام شد** (`e168512`, `b5b155e`, `5f293e8`, `596529f`): unit واقعی `systemd --user` نصب و lifecycle آن اجرا شد — enable/start/restart/stop، `ExecMainStatus=0`، `/proc/PID/exe` باینری نصب‌شده، دو listener فقط loopback، socket کنترل `0600` در dir `0700`؛ port collision واقعی با `ExecMainStatus=6`/`NRestarts=0`/CLI exit 3 و بدون fallback؛ `kill -9` → restart ~۲s با `state.json` سالم و بدون direct پنهان (exit خاموش → 502 با ۰ تماس)؛ اجرای دوم exit 4 و loop شروع exit 7. دو نقص بریده‌شدن پیام رفع شد و `TestA13SystemdUserLifecycle` (گیت `ROUTELATCH_SYSTEMD_TEST=1`) اضافه شد. **ماشین به وضعیت قبل بازگشت و هیچ چیزی نصب نماند. اجرا نشد:** reboot/re-login و corrupt-state زیر systemd | A13 (اثبات واقعی) و مسیر نصب A01 | انجام شد با مجوز شما |
-| R2 | **شروع نشد** (به درخواست کاربر متوقف شد): تغییر و restore واقعی پروکسی دسکتاپ روی GNOME یا KDE و آزمون crash recovery | A11 | مجوز داده شد؛ منتظر «ادامه بده» |
+| R2 | **انجام شد** (`72835fc`) روی KDE Plasma واقعی: آداپتر `kwriteconfig6`/`kioslaverc`، set واقعی روی OS، ثبت مقدار قبلی، restore با **diff بایت‌به‌بایت** به snapshot، ویرایش دستی کاربر حفظ و `user_modified` گزارش شد، سرویس خاموش **fail closed** (۰ تماس مقصد)، `kill -9` → restart ~۲s با عبور ۲۰۰. نقص ادعای مالکیت کهنه در `status` رفع شد؛ `TestA11DesktopProxyLifecycle` (گیت `ROUTELATCH_DESKTOP_TEST=1`) زنده pass شد. **اجرا نشد:** نشست واقعی GNOME؛ `ftpProxy`/`Authmode` طبق تصمیم مدیریت نمی‌شوند | A11 (KDE) | انجام شد |
 | R3 | **انجام شد** (`7792cac`، اصلاحیه‌های notices/attribution `4e0dde6`، `61604c5`): D20 با Apache-2.0 بسته شد؛ `LICENSE`/`NOTICE`/`THIRD-PARTY-NOTICES.md` و ممیزی ۶۸ ماژول و ۶ کامپوننت embedشده (amd64+arm64، `go version -m` هم‌خوان) اضافه شدند. صفر مجوز ناشناخته؛ MPL-2.0 فقط dependency بدون تغییر؛ LGPL-3.0 با استثنای لینک استاتیک و متن GPL-3.0؛ جزئیات و محدودیت‌ها در `docs/licensing.md`. **باقی A14:** source offer برای MPL، بستهٔ سورس/انتشار و بازبینی امنیت/نام — بیرون از این تصمیم | A14 (بخش مجوز/ممیزی) | انجام شد — تصمیم شما ثبت شد |
-| R4 | **شروع نشد** (به درخواست کاربر متوقف شد): آزمون محدود با یک/چند exit عمومی واقعی از پول کاربر برای ردیف‌های عمومی A04/A06 | A04/A06 (ردیف عمومی) | مجوز داده شد؛ منتظر «ادامه بده» |
+| R4 | **انجام شد** (`766edcd`, `da333fe`) با pool خصوصی کاربر (فقط‌خواندنی؛ هیچ secret در repo/گزارش): نمونهٔ ۴ لینک از ۱۶۵ خط، import ۳/۳ valid + ۱ `engine_record_rejected` مستند، transport ۳/۳ و health/ranking اندازه‌گیری‌شده، یک درخواست targeted با CONNECT 200 و **۱ تماس مقصد** و IP خروجی ≠ مستقیم، exit مرده → 502 بدون fallback، all-direct/stopped مطابق قرارداد، و grep D21 بدون هیچ hit مقصد. نقص «شواهد downlink واقعی به health نمی‌رسید» رفع شد. **باقی:** مقاصد دلخواه، churn/طولانی‌مدت، و همهٔ اعضای pool | A04/A06 (ردیف عمومی، اثبات محدود) | انجام شد |
 | R5 | **انجام شد** (`640f83c`, `5d328a6`): مسیر import هرگز `unknown` نمی‌سازد (http → `unsupported`/`http_exit_not_verified`، scheme ناشناس → `unsupported`/`protocol_unsupported`) و view/status حالا رکورد undialable را **صرف‌نظر از status ذخیره‌شده** جز `invalid` مشتق می‌کند. `pool list`، `status` و `doctor` از یک مالک واحد (`EffectiveStatus`) می‌خوانند، state بازنویسی نمی‌شود و رکورد پیش از هر dial/probe رد می‌شود. **Residual پذیرفته‌شده:** protocol تهی/صفر عمداً دست‌نخورده است؛ semantics پروتکل‌های پشتیبانی‌شده تغییر نکرده؛ tick چرخش ۳۰ ثانیه‌ای در acceptance درایو نمی‌شود؛ `SyncStatuses` پس از فرمان تغییردهنده ممکن است cooldown منقضی را به `unknown` نرمال کند (bookkeeping قبلی، نه نوشتن مشتق‌سازی) | A06/§5 (کیفیت گزارش) | نه |
 | R6 | **انجام شد** (`a69ae1e`): WS/TLS، gRPC/TLS (`h2`) و XHTTP/TLS (`h2`) با exit pin‌شدهٔ محلی، rule، `pool select` و CONNECT به peer loopback واقعاً آزموده شدند (هر سلول دقیقاً ۱ درخواست مقصد و پاسخ بدون تغییر)؛ pin غلط ۰ داده به مقصد می‌فرستد و سرویس بالا می‌ماند. **هنوز آزمون‌نشده:** REALITY/ECH، mKCP، HTTPUpgrade، h3، mux/XUDP، و رفتار طولانی‌مدت/reuse یک ترنسپورت | T1/T4 دقت ادعا | نه |
 
-**قاعدهٔ انتخاب:** R1، R3، R5 و R6 بسته شدند. R2 و R4 مجوز دارند ولی به درخواست
-کاربر متوقف شده‌اند و فقط با «ادامه بده» شروع می‌شوند؛ «T7 تمام‌شده» به معنی انتشار
-یا پذیرش کامل نیست.
+**قاعدهٔ انتخاب:** R1–R6 همه بسته شدند و هیچ task محلیِ رفع‌مانع باقی نمانده است.
+کارهای باقی‌مانده (اجرای arm64، محیط پاک برای A01، و گیت‌های انتشار/A14) مجوز جدا
+می‌خواهند؛ «T7 تمام‌شده» به معنی انتشار یا پذیرش کامل نیست.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -282,12 +307,12 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | --- | --- | --- |
 | A02، A03، A05، A06، A08، A12 | اثبات محلی | شمارندهٔ تماس مقصد/خروجی و assertion مستقیم در harness؛ A06 شامل مشتق‌سازی legacy و مسیر import هر دو قاعده |
 | WS/gRPC/XHTTP روی TLS | اثبات محلی (R6) | peer loopback pin‌شده، ۱ درخواست مقصد، pin غلط با ۰ داده؛ reuse طولانی‌مدت و h3 آزمون‌نشده |
-| A04، A07، A09، A10، A11 | اثبات محلی (بخشی) | mode switch زنده+در جریان، rerank/cooldown، مجوز فایل/socket، CLI، launcher env، crash/restart با kill -9 |
+| A04، A07، A09، A10 | اثبات محلی + نمونهٔ عمومی محدود (R4) | mode switch زنده+در جریان، rerank/cooldown، مجوز فایل/socket، CLI، launcher env، crash/restart، و ۴ exit عمومی با health/ranking واقعی؛ همهٔ مقاصد/اعضای pool نه |
 | A13 | **اثبات واقعی (R1)** | نصب/فعال‌سازی unit واقعی و lifecycle؛ **اجرا نشد:** reboot/re-login و corrupt-state زیر systemd (offline فقط) |
 | A01 | **پذیرفته‌نشده** | مسیر نصب واقعی و launch آن اثبات شد (R1)؛ ولی محیط پاک/ماشین تازه و اجرای arm64 هنوز نه |
-| A11 (تنظیم واقعی دسکتاپ) | **پذیرفته‌نشده** | فقط runner جعلی (R2، متوقف به درخواست کاربر) |
+| A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **اجرا نشد:** نشست واقعی GNOME |
 | A14 | **مجوز/ممیزی بسته (R3)** | Apache-2.0 و ممیزی ۶۸ ماژول انجام شد؛ source offer، بستهٔ release و بازبینی امنیت/نام هنوز باز است |
-| خروجی عمومی، wire-level replay، UDP واقعی، arm64 اجرا | **قابل‌آزمون نیست** | خارج از loopback/مجوز؛ arm64 فقط cross-build شده |
+| wire-level replay، UDP واقعی، arm64 اجرا | **قابل‌آزمون نیست** | خارج از loopback/مجوز؛ arm64 فقط cross-build شده |
 
 **محدودیت‌های آزمون‌نشدهٔ دیگر که ادعا را محدود می‌کنند:** HTTP CONNECT exit، TLS-pin
 failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، reuse طولانی‌مدت
@@ -298,9 +323,10 @@ failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، 
 
 1. `AGENTS.md` و همین بخش را بخوان؛ `git status` و `git log --oneline -5` را با
    «HEAD هنگام ثبت» مقایسه کن و تغییر/دادهٔ کاربر را حفظ کن.
-2. R2 و R4 مجوز خود را دارند ولی **به درخواست کاربر متوقف شده‌اند**؛ بدون «ادامه بده»
-   شروع نشوند. هیچ کار محلی دیگرِ رفع‌مانع باقی نمانده است. برای انتشار/remote و
-   باقی A14 (source offer، بستهٔ سورس/انتشار، بازبینی امنیت/نام) مجوز جدا لازم است.
+2. هیچ task محلیِ رفع‌مانع باقی نمانده است. کارهای بعدی — اجرای arm64 روی سخت‌افزار،
+   ماشین تازه برای A01، reboot/re-login برای A13، نشست GNOME برای A11، و گیت‌های
+   انتشار/A14 (source offer، بستهٔ سورس، بازبینی امنیت/نام، remote/push) — مجوز جدا
+   می‌خواهند و نباید خودکار شروع شوند.
 3. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
    است، چون F1/F8 را فقط آن گرفت)، سپس بازبینی مستقل و commit محلی.
 4. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.
