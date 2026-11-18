@@ -73,7 +73,7 @@ routelatch.service` or `systemctl --user is-failed routelatch.service`.
 | Exit | Meaning |
 | --- | --- |
 | 4 | another instance owns the data directory |
-| 6 | a traffic listener could not bind (port collision); no traffic is redirected and no fallback port exists. The attempted addresses are in the service log (`listeners.bind_failed`) |
+| 6 | a traffic listener could not bind (port collision); no traffic is redirected and no fallback port exists. The attempted addresses are in the service log (`listeners.bind_failed`, at the default log level) |
 | 7 | unsupported configuration, such as a non-loopback listener |
 | 10 | corrupt state or state written by a newer version |
 

@@ -149,8 +149,9 @@ them until the suite is updated.
 
 ## Cannot be proven in this environment
 
-* **A01 / A14:** a clean machine with no manual runtime, and the license,
-  notice and dependency audit, need a fresh install and release build.
+* **A01 / A14:** a clean machine with no manual runtime (A01) and the release
+  build/source package (A14) remain; the license decision and real binary audit
+  are recorded in [`docs/licensing.md`](../docs/licensing.md).
 * **A02 matrix:** the rest of §1.5/§2.5 is not enumerated (one negative suffix
   boundary plus unapproved public/IP cases); public IPv4 egress is deliberately
   never attempted (it would leave the machine).

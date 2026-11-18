@@ -1069,7 +1069,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 | A11 | T6 | GNOME/KDE set/restore با ownership؛ unsupported صریح؛ bypass پنهانی نیست؛ restore آفلاین |
 | A12 | T3 | status/redirect/body/stream بایت‌به‌بایت؛ HEAD/POST/body؛ UDP صریحاً `0x07` بدون سوکت UDP |
 | A13 | T6 | foreground/systemd، crash/port collision، config خراب، shutdown تمیز با دادهٔ سالم |
-| A14 | T7 — **مجوز بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
+| A14 | T7 — **D20 بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
 
 ## ۹. محدودیت‌های ثبت‌شده و کار باز
 

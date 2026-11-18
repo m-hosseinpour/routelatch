@@ -66,6 +66,7 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 	if _, err := os.Stat(unitPath); err == nil {
 		t.Fatalf("refusing to overwrite existing unit %s", unitPath)
 	}
+	unitBody := renderUnit(t, dir)
 	createdUnitDir := false
 	if _, err := os.Stat(unitDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(unitDir, 0o755); err != nil {
@@ -73,7 +74,7 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 		}
 		createdUnitDir = true
 	}
-	if err := os.WriteFile(unitPath, renderUnit(t, dir), 0o644); err != nil {
+	if err := os.WriteFile(unitPath, unitBody, 0o644); err != nil {
 		t.Fatalf("write temporary unit: %v", err)
 	}
 	t.Cleanup(func() {
@@ -85,11 +86,12 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 			t.Logf("cleanup: reset-failed %s: %v (%s)", unit, err, strings.TrimSpace(out))
 		}
 		activeOut, _ := sdRun(t, systemctl, "is-active", unit)
-		active := strings.TrimSpace(activeOut)
-		if active == "active" {
-			// Removing the definition now would leave a live service with no
-			// unit file; report it instead of hiding the leak.
-			t.Logf("temporary unit %s is still active after cleanup; left %s in place", unit, unitPath)
+		state := strings.TrimSpace(activeOut)
+		keep := state == "active" || state == "activating" || state == "reloading" || state == "deactivating"
+		if keep {
+			// Removing the definition now would leave a live/starting service
+			// with no unit file; report it instead of hiding the leak.
+			t.Logf("temporary unit %s is still %s after cleanup; left %s in place", unit, state, unitPath)
 		} else {
 			_ = os.Remove(unitPath)
 		}
@@ -97,7 +99,7 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 		if createdUnitDir {
 			_ = os.Remove(unitDir) // succeeds only if we left it empty
 		}
-		if _, err := os.Stat(unitPath); err == nil && active != "active" {
+		if _, err := os.Stat(unitPath); err == nil && !keep {
 			t.Logf("temporary unit %s still exists after cleanup", unitPath)
 		}
 	})
@@ -335,6 +337,20 @@ func systemdArg(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "\"", "\\\"")
 	return "\"" + s + "\""
+}
+
+func TestSystemdArgQuotesExecStartPaths(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"/tmp/routelatch", "/tmp/routelatch"},
+		{"/tmp/with space/routelatch", `"/tmp/with space/routelatch"`},
+		{"/tmp/100%/routelatch", "/tmp/100%%/routelatch"},
+		{`/tmp/a"b/routelatch`, `"/tmp/a\"b/routelatch"`},
+	}
+	for _, c := range cases {
+		if got := systemdArg(c.in); got != c.want {
+			t.Errorf("systemdArg(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
 }
 
 type unitStatus struct {
