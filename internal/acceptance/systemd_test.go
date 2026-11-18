@@ -66,15 +66,38 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 	if _, err := os.Stat(unitPath); err == nil {
 		t.Fatalf("refusing to overwrite existing unit %s", unitPath)
 	}
+	createdUnitDir := false
+	if _, err := os.Stat(unitDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(unitDir, 0o755); err != nil {
+			t.Fatalf("create user unit directory %s: %v", unitDir, err)
+		}
+		createdUnitDir = true
+	}
 	if err := os.WriteFile(unitPath, renderUnit(t, dir), 0o644); err != nil {
 		t.Fatalf("write temporary unit: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = sdRun(t, systemctl, "stop", unit)
-		_, _ = sdRun(t, systemctl, "reset-failed", unit)
-		_ = os.Remove(unitPath)
+		if out, err := sdRun(t, systemctl, "stop", unit); err != nil {
+			t.Logf("cleanup: systemctl --user stop %s failed: %v (%s)", unit, err, strings.TrimSpace(out))
+			_, _ = sdRun(t, systemctl, "kill", unit)
+		}
+		if out, err := sdRun(t, systemctl, "reset-failed", unit); err != nil {
+			t.Logf("cleanup: reset-failed %s: %v (%s)", unit, err, strings.TrimSpace(out))
+		}
+		activeOut, _ := sdRun(t, systemctl, "is-active", unit)
+		active := strings.TrimSpace(activeOut)
+		if active == "active" {
+			// Removing the definition now would leave a live service with no
+			// unit file; report it instead of hiding the leak.
+			t.Logf("temporary unit %s is still active after cleanup; left %s in place", unit, unitPath)
+		} else {
+			_ = os.Remove(unitPath)
+		}
 		_, _ = sdRun(t, systemctl, "daemon-reload")
-		if _, err := os.Stat(unitPath); err == nil {
+		if createdUnitDir {
+			_ = os.Remove(unitDir) // succeeds only if we left it empty
+		}
+		if _, err := os.Stat(unitPath); err == nil && active != "active" {
 			t.Logf("temporary unit %s still exists after cleanup", unitPath)
 		}
 	})
@@ -89,7 +112,11 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read exe of main pid %d: %v", pid, err)
 	}
-	if exe != productBin {
+	wantExe, err := filepath.EvalSymlinks(productBin)
+	if err != nil {
+		t.Fatalf("resolve built binary path %q: %v", productBin, err)
+	}
+	if exe != wantExe {
 		r.fail("A13", "the unit runs %q, want the built binary %q", exe, productBin)
 	} else {
 		r.pass("A13", "the shipped unit starts under the real systemd --user manager (main pid %d, ExecStart binary %s)", pid, exe)
@@ -109,6 +136,8 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 		} else {
 			r.fail("A13", "listeners of pid %d are %v; want exactly two loopback sockets", pid, listeners)
 		}
+	} else {
+		r.note("A13", "ss is unavailable; the loopback-only listeners were observed in the R1 install run but are not asserted here")
 	}
 
 	// 2. Restart replaces the process and both listeners stay usable.
@@ -133,13 +162,20 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("occupy %s: %v", httpAddr, err)
 	}
-	accepted := make(chan struct{}, 1)
+	t.Cleanup(func() { _ = foreign.Close() })
+	accepted := make(chan struct{}, 8)
 	go func() {
-		conn, err := foreign.Accept()
-		if err == nil {
+		for {
+			conn, err := foreign.Accept()
+			if err != nil {
+				return
+			}
 			_, _ = conn.Write([]byte("foreign\n"))
 			_ = conn.Close()
-			accepted <- struct{}{}
+			select {
+			case accepted <- struct{}{}:
+			default:
+			}
 		}
 	}()
 	_, _ = sdRun(t, systemctl, "reset-failed", unit)
@@ -154,21 +190,29 @@ func TestA13SystemdUserLifecycle(t *testing.T) {
 	}
 	// The operator sees this message in `systemctl status`/journald; the
 	// documented truncation bound must not cut the explanation itself.
-	if out, _ := sdRun(t, systemctl, "status", unit, "--no-pager", "-n", "30"); strings.Contains(out, "no traffic redirected, no fallback port") {
+	if out, _ := sdRun(t, systemctl, "status", unit, "--no-pager", "-n", "30"); strings.Contains(out, "no traffic was redirected and no fallback port exists") {
 		r.pass("A13", "the port-collision error reaches systemctl's status output complete (no fallback is explicit, not truncated)")
 	} else {
 		r.fail("A13", "the port-collision message is missing or truncated in systemctl status: %q", out)
 	}
-	if conn, err := net.DialTimeout("tcp", httpAddr, 2*time.Second); err == nil {
+	conn, dialErr := net.DialTimeout("tcp", httpAddr, 2*time.Second)
+	if dialErr == nil {
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		buf := make([]byte, 16)
-		n, _ := conn.Read(buf)
+		n, readErr := conn.Read(buf)
 		_ = conn.Close()
 		select {
 		case <-accepted:
-			r.pass("A13", "the foreign listener still owns %s and answered %q", httpAddr, strings.TrimSpace(string(buf[:n])))
+			if readErr != nil || n == 0 {
+				r.fail("A13", "the foreign listener accepted but sent no marker: %v", readErr)
+			} else {
+				r.pass("A13", "the foreign listener still owns %s and answered %q", httpAddr, strings.TrimSpace(string(buf[:n])))
+			}
 		case <-time.After(2 * time.Second):
 			r.fail("A13", "the foreign listener did not accept after the failed start")
 		}
+	} else {
+		r.fail("A13", "the foreign listener is gone after the failed start: %v", dialErr)
 	}
 	if dialOK(socksAddr) {
 		r.fail("A13", "the SOCKS listener fell back to %s after the HTTP collision", socksAddr)
@@ -273,8 +317,24 @@ func renderUnit(t *testing.T, dataDir string) []byte {
 	if !strings.Contains(string(raw), old) {
 		t.Fatalf("shipped unit no longer contains %q", old)
 	}
-	rendered := strings.Replace(string(raw), old, "ExecStart="+productBin+" --data-dir "+dataDir+" run", 1)
+	if strings.ContainsAny(productBin+dataDir, "\n\r") {
+		t.Skipf("temp paths contain a newline; cannot render a unit file")
+	}
+	rendered := strings.Replace(string(raw), old,
+		"ExecStart="+systemdArg(productBin)+" --data-dir "+systemdArg(dataDir)+" run", 1)
 	return []byte(rendered)
+}
+
+// systemdArg quotes one ExecStart argument. systemd expands '%' specifiers
+// unless it is doubled and uses double-quote escaping for spaces.
+func systemdArg(s string) string {
+	s = strings.ReplaceAll(s, "%", "%%")
+	if !strings.ContainsAny(s, " \t\"'\\") {
+		return s
+	}
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	return "\"" + s + "\""
 }
 
 type unitStatus struct {

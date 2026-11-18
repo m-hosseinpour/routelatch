@@ -185,6 +185,12 @@ func TestNonLoopbackListenerIsUnsupported(t *testing.T) {
 	if got := contract.ExitCodeFor[failure.Kind]; got != contract.ExitUnsupported {
 		t.Fatalf("exit code = %d, want %d", got, contract.ExitUnsupported)
 	}
+	if !strings.Contains(failure.Message, "unsupported") {
+		t.Fatalf("message is not actionable: %q", failure.Message)
+	}
+	if runes := len([]rune(failure.Message)); runes > contract.MaxNodeNameRunes {
+		t.Fatalf("the message is %d runes; EnvelopeFor would truncate it at %d: %q", runes, contract.MaxNodeNameRunes, failure.Message)
+	}
 	// Runtime validation reaches the same kind even if the file was edited by
 	// something other than the CLI.
 	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {

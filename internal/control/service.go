@@ -303,14 +303,15 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	}
 	if err := fe.Start(snap.Config.HTTPListen, snap.Config.SOCKSListen); err != nil {
 		_ = eng.Stop(ctx)
+		// The addresses stay in the operational log: EnvelopeFor truncates
+		// dynamic text to contract.MaxNodeNameRunes, and a long loopback IPv6
+		// literal would push the actionable tail out of the message.
+		s.logger.Logf(levelError, "listeners.bind_failed", "http=%s socks=%s",
+			snap.Config.HTTPListen, snap.Config.SOCKSListen)
 		return &contract.Failure{
 			Kind: contract.StateLocked, Path: contract.PathLocal, Op: "control.listen",
-			// EnvelopeFor sanitizes and truncates dynamic text to
-			// contract.MaxNodeNameRunes, so keep this self-generated message
-			// complete within that bound instead of losing its last words.
-			Message: "a traffic listener could not bind (" + snap.Config.HTTPListen + " / " + snap.Config.SOCKSListen +
-				"); no traffic redirected, no fallback port",
-			Err: err,
+			Message: "a traffic listener could not bind; no traffic was redirected and no fallback port exists",
+			Err:     err,
 		}
 	}
 	s.fe = fe

@@ -424,7 +424,7 @@ func applyConfigValue(cfg *contract.Config, key, value string) error {
 			// v1, not a malformed command line.
 			return &contract.Failure{
 				Kind: contract.Unsupported, Path: contract.PathLocal, Op: "config.set",
-				Message: "listener must be a literal loopback host:port address (127.0.0.1 or ::1); non-loopback traffic listeners are not supported",
+				Message: "listener must be a literal loopback host:port (127.0.0.1 or ::1); other listeners are unsupported",
 			}
 		}
 		if key == "http_listen" {

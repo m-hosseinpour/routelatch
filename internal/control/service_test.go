@@ -712,6 +712,55 @@ func TestListenerPortCollisionIsAClearFailure(t *testing.T) {
 	if !strings.Contains(failure.Message, "could not bind") || !strings.Contains(failure.Message, "no fallback") {
 		t.Fatalf("message is not actionable: %q", failure.Message)
 	}
+	if runes := len([]rune(failure.Message)); runes > contract.MaxNodeNameRunes {
+		t.Fatalf("the message is %d runes; EnvelopeFor would truncate it at %d: %q", runes, contract.MaxNodeNameRunes, failure.Message)
+	}
+	_ = svc.Close(context.Background())
+}
+
+// TestListenerCollisionMessageSurvivesLongLoopbackLiterals covers the address
+// shape that made the old message overflow the 120-rune display bound: a
+// fully written IPv6 loopback literal is accepted by the config validator, so
+// the actionable tail must not depend on the addresses' length.
+func TestListenerCollisionMessageSurvivesLongLoopbackLiterals(t *testing.T) {
+	st, paths := newServiceStore(t)
+	occupied, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback is unavailable: %v", err)
+	}
+	defer occupied.Close()
+	port := occupied.Addr().(*net.TCPAddr).Port
+	long := func(p int) string {
+		return fmt.Sprintf("[0000:0000:0000:0000:0000:0000:0000:0001]:%d", p)
+	}
+	socksProbe, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback is unavailable: %v", err)
+	}
+	socksPort := socksProbe.Addr().(*net.TCPAddr).Port
+	_ = socksProbe.Close()
+	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
+		cfg.HTTPListen = long(port)
+		cfg.SOCKSListen = long(socksPort)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = svc.StartNetwork(context.Background())
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || failure.Kind != contract.StateLocked {
+		t.Fatalf("err = %v, want a conflict-kind failure", err)
+	}
+	if !strings.Contains(failure.Message, "no fallback port exists") {
+		t.Fatalf("message lost its actionable tail: len=%d %q", len([]rune(failure.Message)), failure.Message)
+	}
+	if runes := len([]rune(failure.Message)); runes > contract.MaxNodeNameRunes {
+		t.Fatalf("the message is %d runes (%q); EnvelopeFor would truncate it at %d", runes, failure.Message, contract.MaxNodeNameRunes)
+	}
 	_ = svc.Close(context.Background())
 }
 
