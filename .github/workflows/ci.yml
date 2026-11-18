@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build, vet and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the Go version pinned in go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download pinned modules
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        # The gated real-systemd and real-desktop checks stay skipped: a hosted
+        # runner has no desktop session and installing a user service is not
+        # part of CI. Set ROUTELATCH_SYSTEMD_TEST or ROUTELATCH_DESKTOP_TEST
+        # only on an authorized machine.
+        run: go test -count=1 ./...
+
+  cross-build-arm64:
+    name: Cross-build linux/arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm64
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the Go version pinned in go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build every package for arm64
+        run: go build ./...
+
+      - name: Build the arm64 binary
+        run: go build -trimpath -buildvcs=false -o dist/routelatch-linux-arm64 ./cmd/routelatch
+
+      - name: Check the artifact architecture
+        run: |
+          file dist/routelatch-linux-arm64
+          file dist/routelatch-linux-arm64 | grep -q 'ARM aarch64'
