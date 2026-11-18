@@ -37,9 +37,9 @@ at `110cce3` by replacing the absolute prefix with a repository-relative path
 history rewrite in a copy before the first push — see the decision below.
 
 Scanning the current tree for absolute home-directory prefixes finds no real
-path: the only home-prefixed content is the synthetic `HOME=` fixture in
-`internal/platform/launcher_test.go`, plus the pattern quoted in this sentence.
-No macOS or Windows user-profile path and no root-home path is tracked.
+path: the only match is the synthetic `HOME=` fixture in
+`internal/platform/launcher_test.go`. No macOS or Windows user-profile path and
+no root-home path is tracked.
 
 **Identity exposure (not a secret).** Every commit has author `OpenCode
 <noreply@opencode.ai>` and committer `Mahdi Hosseinpour
