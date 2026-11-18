@@ -1,8 +1,21 @@
 # Local build toolchain and module cache (downloaded, not part of the repo)
 .toolchain/
 
-# Spike binaries and build output
-/spike/**/bin/
-/spike/**/*.test
+# Build output
 /routelatch
 /dist/
+*.tar.gz
+
+# Spike binaries and Go test/profile output
+/spike/**/bin/
+*.test
+coverage.out
+*.prof
+
+# Logs and local state written by a foreground run
+*.log
+
+# Editor and OS files
+.DS_Store
+*.swp
+*~
