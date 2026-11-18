@@ -557,3 +557,164 @@ func TestPreByteReplayCanDuplicateAtDestination(t *testing.T) {
 		t.Fatalf("destination requests = %d, want 2 (documented replay limit)", got)
 	}
 }
+
+// capEOFConn produces an upstream EOF while its write side still accepts, and
+// blocks the write that follows the replay-cap commit. It covers the
+// post-commit EOF branch; the committed-guard itself has a direct test in
+// TestNextAttemptRefusesAfterCommit.
+type capEOFConn struct {
+	writeCh   chan int
+	readGate  chan struct{}
+	writeGate chan struct{}
+	closed    chan struct{}
+
+	mu      sync.Mutex
+	writes  int
+	closeOn sync.Once
+}
+
+func newCapEOFConn() *capEOFConn {
+	return &capEOFConn{
+		writeCh:   make(chan int),
+		readGate:  make(chan struct{}),
+		writeGate: make(chan struct{}),
+		closed:    make(chan struct{}),
+	}
+}
+
+func (c *capEOFConn) Read([]byte) (int, error) {
+	select {
+	case <-c.readGate:
+		return 0, io.EOF
+	case <-c.closed:
+		return 0, io.EOF
+	}
+}
+
+func (c *capEOFConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	c.writes++
+	n := c.writes
+	c.mu.Unlock()
+	select {
+	case c.writeCh <- n:
+	case <-c.closed:
+		return 0, io.ErrClosedPipe
+	}
+	if n >= 3 {
+		select {
+		case <-c.writeGate:
+			return len(p), nil
+		case <-c.closed:
+			return 0, io.ErrClosedPipe
+		}
+	}
+	return len(p), nil
+}
+
+func (c *capEOFConn) Close() error {
+	c.closeOn.Do(func() { close(c.closed) })
+	return nil
+}
+func (c *capEOFConn) LocalAddr() net.Addr              { return pipeAddr{} }
+func (c *capEOFConn) RemoteAddr() net.Addr             { return pipeAddr{} }
+func (c *capEOFConn) SetDeadline(time.Time) error      { return nil }
+func (c *capEOFConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *capEOFConn) SetWriteDeadline(time.Time) error { return nil }
+
+func TestPostCommitDownstreamEOFDoesNotRetry(t *testing.T) {
+	conn := newCapEOFConn()
+	var (
+		mu      sync.Mutex
+		reports []contract.ExitID
+	)
+	s := newStack(t, func(s *testStack) {
+		s.router.fn = poolRoute()
+		s.report = func(exit contract.ExitID, _ contract.ErrorKind) {
+			mu.Lock()
+			reports = append(reports, exit)
+			mu.Unlock()
+		}
+		s.pool.fn = func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+			return pipeResult(conn, "x-1", false), nil
+		}
+	})
+	c := dialProxy(t, s.f.HTTPAddr().String())
+	mustWrite(t, c, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n")
+	if head := readHeadDirect(t, c); !containsStatus(head, 200) {
+		t.Fatalf("CONNECT reply = %q", head)
+	}
+
+	// Three separated 32 KiB writes: the first two fill the replay buffer
+	// without crossing the cap, the third crosses it and commits. The EOF is
+	// released only after the commit, so this exercises the post-commit branch
+	chunk := make([]byte, 32<<10)
+	for i := 0; i < 3; i++ {
+		if _, err := c.Write(chunk); err != nil {
+			t.Fatalf("client write %d: %v", i, err)
+		}
+		select {
+		case n := <-conn.writeCh:
+			if n != i+1 {
+				t.Fatalf("exit write %d, want %d", n, i+1)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("exit did not receive write %d", i+1)
+		}
+	}
+	// The third write is blocked inside the exit; release the EOF and then the
+	// write. The coordinator must treat the EOF as post-commit.
+	close(conn.readGate)
+	close(conn.writeGate)
+	time.Sleep(200 * time.Millisecond)
+
+	if s.pool.count() != 1 {
+		t.Fatalf("pool dials = %d after the cap commit, want 1 (no retry)", s.pool.count())
+	}
+	mu.Lock()
+	got := append([]contract.ExitID(nil), reports...)
+	mu.Unlock()
+	if len(got) != 0 {
+		t.Fatalf("reported a pre-byte failure after commit: %v", got)
+	}
+}
+
+// TestNextAttemptRefusesAfterCommit guards the invariant that commitment closes
+// the retry window even if a stale error event is still in flight. The parent
+// implementation reported a false pre-byte failure and dialed a second exit
+// with an emptied replay buffer.
+func TestNextAttemptRefusesAfterCommit(t *testing.T) {
+	first, firstPeer := net.Pipe()
+	defer firstPeer.Close()
+	second, secondPeer := net.Pipe()
+	defer secondPeer.Close()
+
+	s := newStack(t, func(s *testStack) {
+		s.pool.fn = func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+			s.pool.mu.Lock()
+			n := len(s.pool.calls)
+			s.pool.mu.Unlock()
+			if n == 1 {
+				return pipeResult(first, "x-1", false), nil
+			}
+			return pipeResult(second, "x-2", false), nil
+		}
+	})
+	pt := &poolTunnel{
+		ctx:      context.Background(),
+		p:        &httpProxy{f: s.f},
+		h:        &testHandle{id: "c-1", ctx: context.Background()},
+		dec:      contract.Decision{Route: contract.RoutePool, PolicyVersion: 1},
+		upstream: first,
+		exit:     "x-1",
+		attempts: 1,
+		max:      contract.ConnectFailoverExits,
+	}
+	pt.committed.Store(true)
+	if pt.nextAttempt() {
+		t.Fatal("nextAttempt retried after the tunnel committed")
+	}
+	if s.pool.count() != 0 {
+		t.Fatalf("pool dials = %d, want 0 after commit", s.pool.count())
+	}
+}

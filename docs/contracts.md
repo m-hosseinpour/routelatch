@@ -527,7 +527,7 @@ timeout یا لغو وجود داشته باشد، kind خودش (`exit_unreacha
 | --- | --- | --- |
 | `PoolDialDeadline` | ۱۰s | فقط handshake مسدود adapter SOCKS5؛ مسیر core فاز dial قابل مشاهده ندارد (§۲.۱) |
 | `ConnectFailoverExits` | ۳ (۲ retry) | سقف تلاش exit در یک CONNECT پیش از اولین بایت مقصد؛ تصمیم مهندسی برای شواهد ۴۰–۵۰٪ خرابی exit |
-| `ConnectReplayBufferBytes` | ۶۴KiB | سقف بایت‌های کلاینت برای replay؛ رسیدن به سقف پنجره را می‌بندد |
+| `ConnectReplayBufferBytes` | ۶۴KiB | سقف بایت‌های کلاینت برای replay؛ رسیدن به سقف پنجره را می‌بندد و exit جاری را commit می‌کند |
 | `DirectDialDeadline` | ۱۰s | — |
 | `ProbeTimeout` | ۲۰s | dial از exit ≤۱۰s + انتظار اولین بایت ≤۸s |
 | `ProbeFirstByte` | ۸s | فقط برای egress probe |

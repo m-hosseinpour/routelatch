@@ -301,6 +301,9 @@ func (t *poolTunnel) currentExit() contract.ExitID {
 }
 
 func (t *poolTunnel) run() {
+	// downDone is closed once; a closed channel in a select case would fire on
+	// every iteration. Nil it after the first observation.
+	downDone := t.downDone
 	for {
 		select {
 		case <-t.ctx.Done():
@@ -325,11 +328,24 @@ func (t *poolTunnel) run() {
 				t.commit()
 				continue
 			}
-			if ev.err != nil && !t.nextAttempt() {
-				return
+			if ev.err != nil {
+				if t.committed.Load() {
+					// The EOF was queued while the attempt was uncommitted, but
+					// a client chunk then committed it at the replay cap. It is
+					// a post-commit end, never a pre-byte retry.
+					if errors.Is(ev.err, io.EOF) {
+						t.upEOF = true
+						closeWrite(t.client)
+					} else {
+						return
+					}
+				} else if !t.nextAttempt() {
+					return
+				}
 			}
-		case <-t.downDone:
+		case <-downDone:
 			t.upEOF = true
+			downDone = nil
 		}
 		if t.clientEOF && t.upEOF {
 			return
@@ -389,6 +405,11 @@ func (t *poolTunnel) commit() {
 // is exhausted; the client then sees only the teardown of a tunnel that was
 // never committed, and no direct attempt is made.
 func (t *poolTunnel) nextAttempt() bool {
+	if t.committed.Load() {
+		// Commitment closes the window even if an old error event is still in
+		// flight (for example an EOF queued just before the replay cap).
+		return false
+	}
 	for {
 		if t.ctx.Err() != nil {
 			return false
