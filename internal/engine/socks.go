@@ -45,7 +45,24 @@ const (
 
 func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.Destination) (DialResult, error) {
 	rec := spec.record
+	return e.dialSocksEndpoint(ctx, spec, dst,
+		net.JoinHostPort(rec.Server, strconv.Itoa(int(rec.Port))),
+		rec.Credentials.UserID, rec.Credentials.Password)
+}
 
+// dialSidecar hands the request to one explicit exit inside the separate
+// sing-box process through its authenticated loopback SOCKS5 inbound. The
+// endpoint and credentials are the runtime's, not the record's, and a domain
+// destination still goes out as ATYP 0x03 so the exit resolves it.
+func (e *Engine) dialSidecar(ctx context.Context, spec *exitSpec, dst contract.Destination, handoff contract.SidecarHandoff) (DialResult, error) {
+	return e.dialSocksEndpoint(ctx, spec, dst, handoff.Address, handoff.Username, handoff.Password)
+}
+
+// dialSocksEndpoint owns the common SOCKS5 handshake for a route-latch adapter
+// exit and a sidecar handoff. Both return ProofConfirmed because we parse the
+// reply ourselves: that is the exit reporting success, not independent proof
+// the destination was reached (docs/contracts.md §2.1–2.3).
+func (e *Engine) dialSocksEndpoint(ctx context.Context, spec *exitSpec, dst contract.Destination, address, user, password string) (DialResult, error) {
 	dialCtx := ctx
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -55,7 +72,7 @@ func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.De
 	deadline, _ := dialCtx.Deadline()
 
 	var dialer net.Dialer
-	conn, err := dialer.DialContext(dialCtx, "tcp", net.JoinHostPort(rec.Server, strconv.Itoa(int(rec.Port))))
+	conn, err := dialer.DialContext(dialCtx, "tcp", address)
 	if err != nil {
 		return DialResult{}, adapterFailure(dialCtx, spec.exit.ID, dst, "the exit address could not be reached", err)
 	}
@@ -94,7 +111,7 @@ func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.De
 		}
 	}
 
-	if err := socksHandshake(conn, spec.exit.ID, rec.Credentials.UserID, rec.Credentials.Password, dst); err != nil {
+	if err := socksHandshake(conn, spec.exit.ID, user, password, dst); err != nil {
 		closedByUs := ac.wasClosed()
 		_ = ac.Close()
 		if closedByUs {
@@ -129,7 +146,7 @@ func (e *Engine) dialSOCKS5(ctx context.Context, spec *exitSpec, dst contract.De
 	return DialResult{
 		Conn:       ac,
 		Exit:       spec.exit.ID,
-		Tag:        "",
+		Tag:        spec.exit.Tag,
 		Proof:      contract.ProofConfirmed,
 		AcceptedAt: accepted,
 	}, nil

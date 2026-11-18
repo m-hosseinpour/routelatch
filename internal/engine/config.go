@@ -215,6 +215,10 @@ func validateRecord(rec contract.Record) error {
 				Message: "SOCKS5 record carries transport options that would be ignored",
 			}
 		}
+	case contract.ProtocolHysteria2:
+		if err := validateHysteria2Record(rec); err != nil {
+			return err
+		}
 	case contract.ProtocolHTTP:
 		return &contract.Failure{
 			Kind:    contract.Unsupported,
@@ -337,11 +341,59 @@ func validateRecord(rec contract.Record) error {
 	return nil
 }
 
+// maxSidecarMbps mirrors the importer's bound for an explicit, trusted
+// bandwidth. A value outside it is a record defect, not a silent clamp.
+const maxSidecarMbps = 100000
+
+// validateHysteria2Record checks the settings RouteLatch can actually enforce
+// in the separate sing-box config. Anything it would have to ignore is
+// refused: a silent downgrade is not acceptable (D18, D21).
+func validateHysteria2Record(rec contract.Record) error {
+	unsupported := func(message string) error {
+		return &contract.Failure{
+			Kind:    contract.Unsupported,
+			Path:    contract.PathLocal,
+			Op:      "engine.record",
+			Message: message,
+		}
+	}
+	if rec.Credentials.Password == "" || len(rec.Credentials.Password) > 4096 ||
+		strings.ContainsAny(rec.Credentials.Password, "\r\n\x00") {
+		return invalidRecord("hysteria2 record has no usable password")
+	}
+	if rec.Transport != contract.TransportRaw || rec.Security != contract.SecurityTLS {
+		return unsupported("hysteria2 requires the raw transport with TLS")
+	}
+	switch rec.Hysteria2Obfs {
+	case "", "salamander", "gecko":
+	default:
+		return unsupported("hysteria2 obfs is not supported")
+	}
+	if strings.ContainsAny(rec.Hysteria2ObfsPassword, "\r\n\x00") ||
+		(rec.Hysteria2Obfs == "salamander" && rec.Hysteria2ObfsPassword == "") {
+		return invalidRecord("hysteria2 obfs password is not usable")
+	}
+	if rec.Hysteria2UpMbps > maxSidecarMbps || rec.Hysteria2DownMbps > maxSidecarMbps {
+		return invalidRecord("hysteria2 bandwidth is out of range")
+	}
+	// sing-box cannot enforce a hex leaf pin (its pin option is a base64
+	// public-key hash), so a pinned record would lose its constraint. Refuse
+	// it rather than weaken verification.
+	if rec.PinnedPeerCertSHA256 != "" {
+		return unsupported("hysteria2 certificate pins cannot be enforced by the sidecar")
+	}
+	if rec.Flow != "" || rec.Path != "" || rec.Host != "" || rec.GRPCService != "" ||
+		len(rec.XHTTPExtra) > 0 || len(rec.ALPN) > 0 || rec.Fingerprint != "" {
+		return unsupported("hysteria2 record carries transport options that would be ignored")
+	}
+	return nil
+}
+
 // buildOutbound returns the core outbound for a core-backed record, or nil for
-// a SOCKS5 record, which is dialed by our own adapter (no core handler and no
-// engine tag, docs/contracts.md §2.1).
+// a record dialed without a core handler (SOCKS5 by our adapter, hysteria2 by
+// the separate sidecar). Such a record has no engine tag on the pinned core.
 func buildOutbound(rec contract.Record) (*coreOutbound, error) {
-	if rec.Protocol == contract.ProtocolSOCKS5 {
+	if rec.Protocol == contract.ProtocolSOCKS5 || rec.Protocol == contract.ProtocolHysteria2 {
 		return nil, nil
 	}
 

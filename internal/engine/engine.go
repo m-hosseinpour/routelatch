@@ -30,11 +30,17 @@ type Options struct {
 	// LogLevel is one of "debug", "info", "warning", "error", "none"; empty
 	// means "warning". Access logging is always disabled.
 	LogLevel string
+	// Sidecar is the separate sing-box executable used only for hysteria2
+	// exits. When it is nil, unhealthy, or has no handoff for a tag, those
+	// exits are excluded and a dial naming one fails closed. It never affects
+	// the pinned Xray path.
+	Sidecar contract.SidecarRuntime
 }
 
-// Exit is the engine's per-record dialing handle. Tag is empty for protocols
-// dialed by our own adapter (SOCKS5), which is the contract's rule for an
-// adapter-selected exit (docs/contracts.md §2.1).
+// Exit is the engine's per-record dialing handle. Tag is empty only for SOCKS5
+// exits dialed by our own adapter (docs/contracts.md §2.1). Hysteria2 exits
+// dialed through the sing-box sidecar carry a stable tag: the sidecar has its
+// own outbound tag and Dial must name that one explicit exit.
 type Exit struct {
 	ID        contract.ExitID    `json:"id"`
 	Tag       string             `json:"tag,omitempty"`
@@ -79,12 +85,19 @@ type WarmTransport struct {
 // Engine owns the single core instance of this process and the exit table built
 // from trusted records.
 type Engine struct {
-	mu        sync.RWMutex
+	mu sync.RWMutex
+	// syncMu serializes sidecar AddExit/RemoveExit regenerations with each
+	// other so a stale snapshot cannot win. It is NOT taken by Stop or Dial:
+	// e.mu is released across the potentially slow Sync so neither is blocked.
+	// A registration racing a Stop cleans up the runtime it started itself.
+	syncMu    sync.Mutex
 	inst      *core.Instance
 	exits     map[contract.ExitID]*exitSpec
 	version   contract.PolicyVersion
 	stopped   bool
 	rawConfig []byte
+	// sidecar manages hysteria2 exits. It is nil when no runtime was supplied.
+	sidecar contract.SidecarRuntime
 	// excluded records could not be built and are reported, not fatal.
 	excluded []ExcludedExit
 	// handlers is the set of tags that already have a core outbound handler.
@@ -108,11 +121,19 @@ type exitSpec struct {
 	record   contract.Record
 	exit     Exit
 	outbound *coreOutbound
+	// sidecar marks an exit dialed through the separate sing-box process, not
+	// the pinned core. Such an exit has no core outbound/handler.
+	sidecar bool
 }
 
 // ReasonRecordRejected is the stable StatusReason for a record the engine could
 // not turn into an exit. The record is kept for reporting and never dialed.
 const ReasonRecordRejected = "engine_record_rejected"
+
+// ReasonSidecarUnavailable is the stable StatusReason for a hysteria2 record
+// the engine refused because the separate sing-box executable was absent or
+// could not be started. It is reported, never silently routed direct.
+const ReasonSidecarUnavailable = "sidecar_unavailable"
 
 // ExcludedExit is one record Start (or AddExit) refused to build. Kind is the
 // contract classification; Reason is a stable, redacted token suitable for
@@ -147,7 +168,7 @@ func CheckRecord(rec contract.Record) error {
 // One unbuildable record never aborts the service: it is excluded and reported
 // in Excluded(), while the remaining records serve. Only a genuinely global
 // configuration or core failure aborts Start.
-func Start(opts Options) (*Engine, error) {
+func Start(opts Options) (_ *Engine, err error) {
 	e := &Engine{
 		exits:    make(map[contract.ExitID]*exitSpec),
 		conns:    make(map[io.Closer]struct{}),
@@ -155,6 +176,7 @@ func Start(opts Options) (*Engine, error) {
 		handlers: make(map[string]struct{}),
 		retired:  make(map[contract.ExitID]string),
 		version:  opts.PolicyVersion,
+		sidecar:  opts.Sidecar,
 	}
 
 	accepted := make([]*exitSpec, 0, len(opts.Exits))
@@ -187,6 +209,26 @@ func Start(opts Options) (*Engine, error) {
 		}
 		e.exits[spec.exit.ID] = spec
 		accepted = append(accepted, spec)
+	}
+
+	// Hysteria2 exits live only in the separate executable. There is no
+	// add/remove-outbound RPC, so they are configured by a full regeneration.
+	// A missing or failing sidecar excludes every such record; the pinned core
+	// still serves the remaining exits and no traffic falls back to direct.
+	accepted, sidecarStarted := e.prepareSidecar(accepted)
+	if sidecarStarted {
+		// prepareSidecar started a process before the core was configured. Every
+		// failure from here until a live engine is returned must stop it again:
+		// no authenticated loopback listener or its 0600 credential config may
+		// survive a failed Start, and retries must not accumulate processes.
+		// Traffic stays fail-closed because no engine is published on failure.
+		defer func() {
+			if err != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), sidecarSyncTimeout)
+				defer cancel()
+				_ = e.sidecar.Stop(ctx)
+			}
+		}()
 	}
 
 	var (
@@ -256,6 +298,141 @@ func Start(opts Options) (*Engine, error) {
 	return e, nil
 }
 
+// sidecarSyncTimeout bounds a process start so a stuck executable cannot hold
+// service startup indefinitely. The runtime applies the same bound itself.
+const sidecarSyncTimeout = 15 * time.Second
+
+// prepareSidecar starts (or refuses) the second executable for the hysteria2
+// exits in accepted. It returns the list the pinned core must still serve and
+// whether this call actually started the runtime, so Start can guarantee a
+// Stop on every later failure path.
+func (e *Engine) prepareSidecar(accepted []*exitSpec) ([]*exitSpec, bool) {
+	kept := accepted[:0]
+	hy := make([]*exitSpec, 0, len(accepted))
+	for _, spec := range accepted {
+		if spec.sidecar {
+			hy = append(hy, spec)
+		} else {
+			kept = append(kept, spec)
+		}
+	}
+	if len(hy) == 0 {
+		return kept, false
+	}
+	unavailable := e.sidecar == nil
+	if !unavailable {
+		exits := make([]contract.SidecarExit, 0, len(hy))
+		for _, spec := range hy {
+			exits = append(exits, sidecarExitFor(spec.record))
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), sidecarSyncTimeout)
+		err := e.sidecar.Sync(ctx, exits)
+		cancel()
+		unavailable = err != nil
+		// A failed regeneration may have withdrawn every handoff already; the
+		// engine treats all sidecar exits as unusable, not just one.
+	}
+	if unavailable {
+		for _, spec := range hy {
+			e.excluded = append(e.excluded, ExcludedExit{
+				ID:     spec.exit.ID,
+				Kind:   contract.Unsupported,
+				Reason: ReasonSidecarUnavailable,
+				Detail: "the sing-box sidecar is unavailable; the exit was not dialed",
+			})
+			delete(e.exits, spec.exit.ID)
+		}
+		return kept, false
+	}
+	return append(kept, hy...), true
+}
+
+// sidecarExitFor projects one typed record into the minimal, trusted view the
+// sidecar needs. Verification uses an explicit name when one was imported and
+// otherwise the exit server; it is never disabled.
+//
+// The final fallback to rec.Server (which may be an IP literal) is deliberate.
+// In the pinned sing-box v1.14.4 schema (option/tls.go) the hysteria2 outbound's
+// tls.server_name is the SNI/certificate-verification name and tls.insecure is
+// a separate flag RouteLatch always sets false; an empty server_name makes
+// sing-box default to the server address. Setting it explicitly to rec.Server
+// therefore matches that default and never weakens verification: a server
+// whose certificate lacks a matching IP SAN fails closed, and a domain
+// certificate is reached by importing sni=, not by disabling verification.
+func sidecarExitFor(rec contract.Record) contract.SidecarExit {
+	serverName := rec.VerifyPeerCertByName
+	if serverName == "" {
+		serverName = rec.SNI
+	}
+	if serverName == "" {
+		serverName = rec.Server
+	}
+	return contract.SidecarExit{
+		Tag:          tagFor(rec.ID),
+		Server:       rec.Server,
+		Port:         rec.Port,
+		Password:     rec.Credentials.Password,
+		ServerName:   serverName,
+		UpMbps:       rec.Hysteria2UpMbps,
+		DownMbps:     rec.Hysteria2DownMbps,
+		Obfs:         rec.Hysteria2Obfs,
+		ObfsPassword: rec.Hysteria2ObfsPassword,
+	}
+}
+
+// sidecarExitsLocked builds the sidecar exit list from a consistent view of
+// the exit table. It must be called with e.mu held (read or write).
+func (e *Engine) sidecarExitsLocked() []contract.SidecarExit {
+	exits := make([]contract.SidecarExit, 0, len(e.exits))
+	for _, spec := range e.exits {
+		if spec.sidecar {
+			exits = append(exits, sidecarExitFor(spec.record))
+		}
+	}
+	return exits
+}
+
+// syncSidecar regenerates the runtime from a prebuilt snapshot. It must NOT
+// hold e.mu: Sync can take up to sidecarSyncTimeout and would otherwise block
+// every dial and Stop. It returns the runtime it used so a caller that loses a
+// race with Stop can stop exactly that process. Callers hold e.syncMu, which
+// serializes regenerations with each other; the runtime pointer is read under
+// e.mu so a concurrent Stop cannot cause a data race.
+func (e *Engine) syncSidecar(ctx context.Context, exits []contract.SidecarExit) (contract.SidecarRuntime, error) {
+	e.mu.RLock()
+	sidecar := e.sidecar
+	e.mu.RUnlock()
+	if sidecar == nil {
+		if len(exits) > 0 {
+			return nil, &contract.Failure{
+				Kind:    contract.Unsupported,
+				Path:    contract.PathLocal,
+				Op:      "engine.sidecar",
+				Message: "the sing-box sidecar is unavailable; the exit was not added",
+			}
+		}
+		return nil, nil
+	}
+	return sidecar, sidecar.Sync(ctx, exits)
+}
+
+// stopIfStopped cleans up a runtime used by a Sync that completed after a
+// concurrent Stop withdrew the engine's runtime. The engine is already
+// fail-closed (Stop set stopped and Dial sees no runtime); stopping the runtime
+// here ensures no process outlives the in-flight registration.
+func (e *Engine) stopIfStopped(sidecar contract.SidecarRuntime) bool {
+	e.mu.RLock()
+	stopped := e.stopped
+	e.mu.RUnlock()
+	if !stopped || sidecar == nil {
+		return stopped
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), sidecarSyncTimeout)
+	defer cancel()
+	_ = sidecar.Stop(ctx)
+	return true
+}
+
 // exclusionFor classifies a per-record build failure. Only record-specific
 // kinds are isolated; anything else is a global failure the caller must see.
 func exclusionFor(rec contract.Record, err error) (ExcludedExit, bool) {
@@ -297,6 +474,8 @@ func (e *Engine) Stop(ctx context.Context) error {
 	e.stopped = true
 	inst := e.inst
 	e.inst = nil
+	sidecar := e.sidecar
+	e.sidecar = nil
 	e.mu.Unlock()
 
 	// From here a concurrent dial that already passed the stopped check must
@@ -347,6 +526,9 @@ func (e *Engine) Stop(ctx context.Context) error {
 
 	if inst != nil {
 		if err := inst.Close(); err != nil {
+			if sidecar != nil {
+				_ = sidecar.Stop(ctx)
+			}
 			return &contract.Failure{
 				Kind:    contract.Internal,
 				Path:    contract.PathLocal,
@@ -354,6 +536,13 @@ func (e *Engine) Stop(ctx context.Context) error {
 				Message: "engine core did not close cleanly",
 				Err:     err,
 			}
+		}
+	}
+	// The second executable is stopped through the same narrow interface; no
+	// handoff survives a stopped engine.
+	if sidecar != nil {
+		if err := sidecar.Stop(ctx); err != nil {
+			return err
 		}
 	}
 	if closeErr != nil {
@@ -390,10 +579,65 @@ func (e *Engine) SetPolicyVersion(v contract.PolicyVersion) {
 // are derived from the record identity (docs/contracts.md §5.1), so a changed
 // record has a different id and this is an internal inconsistency.
 func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
+	// syncMu serializes this regeneration with other regenerations. e.mu is
+	// released by prepareAddExit before the slow Sync, so dials, status reads
+	// and Stop are never blocked by a restart; a racing Stop is cleaned up via
+	// stopIfStopped below.
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	spec, snapshot, needsSync, err := e.prepareAddExit(rec)
+	if err != nil {
+		return Exit{}, err
+	}
+	if !needsSync {
+		return spec.exit, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), sidecarSyncTimeout)
+	sidecar, err := e.syncSidecar(ctx, snapshot)
+	cancel()
+	if err != nil {
+		// No half-registered exit: the runtime never published a handoff, so
+		// remove the spec committed by prepareAddExit. syncMu keeps this
+		// rollback atomic with respect to other regenerations.
+		e.mu.Lock()
+		delete(e.exits, spec.exit.ID)
+		e.mu.Unlock()
+		var failure *contract.Failure
+		if errors.As(err, &failure) {
+			failure.Exit = spec.exit.ID
+			return Exit{}, failure
+		}
+		return Exit{}, err
+	}
+	if e.stopIfStopped(sidecar) {
+		// A Stop ran while Sync was in flight. Its runtime is stopped above and
+		// the exit must not be handed out by the now-stopped engine.
+		e.mu.Lock()
+		delete(e.exits, spec.exit.ID)
+		e.mu.Unlock()
+		return Exit{}, &contract.Failure{
+			Kind:    contract.Stopped,
+			Path:    contract.PathLocal,
+			Exit:    spec.exit.ID,
+			Op:      "engine.add_exit",
+			Message: "engine is stopped",
+		}
+	}
+	return spec.exit, nil
+}
+
+// prepareAddExit performs the quick, non-blocking part of AddExit under e.mu:
+// checks, core handler registration, and committing the spec to the exit table.
+// needsSync is true only when a new sidecar exit was committed; an already
+// registered exit or a core-backed one returns false and is not regenerated.
+// The snapshot of sidecar exits is built under the same lock so the caller can
+// regenerate the runtime without holding e.mu.
+func (e *Engine) prepareAddExit(rec contract.Record) (*exitSpec, []contract.SidecarExit, bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.stopped || e.inst == nil {
-		return Exit{}, &contract.Failure{
+		return nil, nil, false, &contract.Failure{
 			Kind:    contract.Stopped,
 			Path:    contract.PathLocal,
 			Op:      "engine.add_exit",
@@ -404,7 +648,7 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 	if key, ok := e.retired[exitID]; ok && key != rec.DedupeKey {
 		// Peek only: a failed re-add must not consume the reservation and let a
 		// later, different record inherit the stale handler.
-		return Exit{}, &contract.Failure{
+		return nil, nil, false, &contract.Failure{
 			Kind:    contract.Internal,
 			Path:    contract.PathLocal,
 			Exit:    exitID,
@@ -414,18 +658,18 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 	}
 	if cur, ok := e.exits[exitID]; ok {
 		if cur.record.DedupeKey != rec.DedupeKey {
-			return Exit{}, &contract.Failure{
+			return nil, nil, false, &contract.Failure{
 				Kind:    contract.Internal,
 				Path:    contract.PathLocal,
 				Op:      "engine.add_exit",
 				Message: "exit id is already registered with different settings",
 			}
 		}
-		return cur.exit, nil
+		return cur, nil, false, nil
 	}
 	spec, ob, err := prepareExit(rec)
 	if err != nil {
-		return Exit{}, err
+		return nil, nil, false, err
 	}
 	if ob != nil {
 		if _, registered := e.handlers[ob.Tag]; !registered {
@@ -433,14 +677,14 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 			if err != nil {
 				var f *contract.Failure
 				if errors.As(err, &f) && f.Kind == contract.Internal {
-					return Exit{}, err
+					return nil, nil, false, err
 				}
 				failure := describeRecordError(err).(*contract.Failure)
 				failure.Exit = spec.exit.ID
-				return Exit{}, failure
+				return nil, nil, false, failure
 			}
 			if len(cfg.Outbound) != 2 {
-				return Exit{}, &contract.Failure{
+				return nil, nil, false, &contract.Failure{
 					Kind:    contract.Internal,
 					Path:    contract.PathLocal,
 					Op:      "engine.add_exit",
@@ -448,7 +692,7 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 				}
 			}
 			if err := core.AddOutboundHandler(e.inst, cfg.Outbound[1]); err != nil {
-				return Exit{}, &contract.Failure{
+				return nil, nil, false, &contract.Failure{
 					Kind:    contract.Internal,
 					Path:    contract.PathLocal,
 					Exit:    spec.exit.ID,
@@ -462,7 +706,11 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 	}
 	delete(e.retired, spec.exit.ID)
 	e.exits[spec.exit.ID] = spec
-	return spec.exit, nil
+	var snapshot []contract.SidecarExit
+	if spec.sidecar {
+		snapshot = e.sidecarExitsLocked()
+	}
+	return spec, snapshot, spec.sidecar, nil
 }
 
 // RemoveExit makes an exit undialable. The core handler is intentionally left
@@ -472,15 +720,47 @@ func (e *Engine) AddExit(rec contract.Record) (Exit, error) {
 // tag stays reserved, so restoring the same record reuses its handler instead
 // of failing on a duplicate tag.
 func (e *Engine) RemoveExit(id contract.ExitID) bool {
+	// syncMu serializes this regeneration with other regenerations; e.mu is
+	// released by prepareRemoveExit before the slow Sync, so dials and Stop
+	// are never blocked. A Stop racing the Sync is cleaned up below.
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	snapshot, sidecar, ok := e.prepareRemoveExit(id)
+	if !ok {
+		return false
+	}
+	if sidecar {
+		// There is no remove-outbound RPC: a full regeneration restarts the
+		// process and drops connections to the removed exit. The call has no
+		// error return, so a failed regeneration leaves every handoff withdrawn
+		// (fail closed) rather than reviving the removed exit.
+		ctx, cancel := context.WithTimeout(context.Background(), sidecarSyncTimeout)
+		runtime, _ := e.syncSidecar(ctx, snapshot)
+		cancel()
+		// If a Stop landed while Sync was in flight, stop the process this
+		// regeneration started so it does not outlive the stopped engine.
+		e.stopIfStopped(runtime)
+	}
+	return true
+}
+
+// prepareRemoveExit deletes the exit from the table under e.mu and returns a
+// snapshot of the remaining sidecar exits, so the caller can regenerate the
+// runtime without holding e.mu.
+func (e *Engine) prepareRemoveExit(id contract.ExitID) ([]contract.SidecarExit, bool, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	spec, ok := e.exits[id]
 	if !ok {
-		return false
+		return nil, false, false
 	}
 	delete(e.exits, id)
 	e.retired[id] = spec.record.DedupeKey
-	return true
+	if !spec.sidecar {
+		return nil, false, true
+	}
+	return e.sidecarExitsLocked(), true, true
 }
 
 // HasExit reports whether the tag is currently dialable.
@@ -548,6 +828,7 @@ func (e *Engine) Dial(ctx context.Context, req DialRequest) (DialResult, error) 
 	stopped := e.stopped
 	inst := e.inst
 	version := e.version
+	sidecar := e.sidecar
 	spec, ok := e.exits[req.Exit]
 	e.mu.RUnlock()
 
@@ -575,6 +856,18 @@ func (e *Engine) Dial(ctx context.Context, req DialRequest) (DialResult, error) 
 		}
 	}
 
+	if spec.sidecar {
+		// Fail closed: a missing runtime or a missing tag is never a cue to
+		// try another exit or to dial the destination directly.
+		if sidecar == nil {
+			return DialResult{}, poolUnavailable("the sing-box sidecar is unavailable", req.Exit, req.Destination)
+		}
+		handoff, ok := sidecar.Handoff(spec.exit.Tag)
+		if !ok {
+			return DialResult{}, poolUnavailable("the sing-box sidecar has no handoff for this exit", req.Exit, req.Destination)
+		}
+		return e.dialSidecar(ctx, spec, req.Destination, handoff)
+	}
 	if spec.exit.Protocol == contract.ProtocolSOCKS5 {
 		return e.dialSOCKS5(ctx, spec, req.Destination)
 	}
@@ -593,8 +886,15 @@ func prepareExit(rec contract.Record) (*exitSpec, *coreOutbound, error) {
 			Protocol:  rec.Protocol,
 			Transport: rec.Transport,
 		},
+		sidecar: rec.Protocol.RequiresSidecar(),
 	}
 	if rec.Protocol == contract.ProtocolSOCKS5 {
+		return spec, nil, nil
+	}
+	if spec.sidecar {
+		// The sidecar has its own outbound tag; the pinned core has no handler
+		// for this exit. The tag still names one explicit exit in Dial.
+		spec.exit.Tag = tagFor(rec.ID)
 		return spec, nil, nil
 	}
 	ob, err := buildOutbound(rec)

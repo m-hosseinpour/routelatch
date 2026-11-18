@@ -45,6 +45,14 @@ type Options struct {
 	Paths  store.Paths
 	Now    func() time.Time
 	Direct contract.Dialer
+	// Sidecar is an optional injected runtime for hysteria2 exits. It mirrors
+	// the Direct test seam: when set, the service uses it instead of building a
+	// sing-box runtime from the configured executable path.
+	Sidecar contract.SidecarRuntime
+	// SidecarExecutable overrides the sing-box executable path. Production
+	// leaves it empty and uses the environment/packaged-location resolver in
+	// sidecar.go. An absent executable makes hysteria2 exits fail closed.
+	SidecarExecutable string
 	// LogOutput is the foreground log stream. Production passes stdout; tests
 	// pass io.Discard. The file log is always at Paths.LogDir/routelatch.log.
 	LogOutput io.Writer
@@ -67,6 +75,9 @@ type Service struct {
 	pool     contract.PoolDialer
 	reranker *pool.Dialer
 	direct   contract.Dialer
+	// sidecar is the runtime for hysteria2 exits. It is nil when no executable
+	// is configured, in which case the engine fails those exits closed.
+	sidecar contract.SidecarRuntime
 
 	snap   atomic.Pointer[contract.Snapshot]
 	policy atomic.Pointer[routing.Policy]
@@ -169,6 +180,10 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		s.logger.Logf(levelWarning, "log.open", "operational log is unavailable at %s: %s; the service continues", s.logPath, logErr.Error())
 	}
 	s.logger.Logf(levelInfo, "service.init", "mode=%s policy=%d", snap.State.Mode, snap.State.PolicyVersion)
+	// Resolve the hysteria2 sidecar here, not at the cmd layer: NewService is
+	// the single owner of runtime wiring. No executable means a nil runtime,
+	// which makes the engine exclude (never silently direct) hysteria2 exits.
+	s.initSidecar(opts, paths)
 	if residue := s.store.Residue(); residue.Rewritten > 0 || len(residue.Warnings) > 0 {
 		// Only counts reach the log; doctor carries the destination-free detail.
 		if residue.Rewritten > 0 {
@@ -253,6 +268,7 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	records := dialableRecords(snap.State)
 	eng, err := engine.Start(engine.Options{
 		Exits: records, PolicyVersion: snap.State.PolicyVersion, LogLevel: snap.Config.LogLevel,
+		Sidecar: s.sidecar,
 	})
 	if err != nil {
 		return err

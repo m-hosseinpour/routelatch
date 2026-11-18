@@ -49,7 +49,8 @@ const ReasonInsecureTLSRemoved = "insecure_tls_removed"
 // them for any stored status except invalid) must report the same literal
 // (docs/contracts.md §5.3–5.4).
 const (
-	// ReasonProtocolUnsupported: the scheme is outside {vless, trojan, socks5}.
+	// ReasonProtocolUnsupported: the scheme is outside the dialable set
+	// {vless, trojan, socks5, hysteria2}.
 	ReasonProtocolUnsupported = "protocol_unsupported"
 	// ReasonHTTPExitNotVerified: an HTTP(S) exit cannot be verified in v1 (R-2).
 	ReasonHTTPExitNotVerified = "http_exit_not_verified"
@@ -133,13 +134,20 @@ type Record struct {
 	// InsecureTLS marks skip-verify input. Such a record is never dialable in
 	// v1 (the pinned core removed skip-verify); it is reported as Unsupported
 	// with ReasonInsecureTLSRemoved (D18, R-12).
-	InsecureTLS  bool         `json:"insecure_tls,omitempty"`
-	Status       RecordStatus `json:"status"`
-	StatusReason string       `json:"status_reason,omitempty"`
-	Order        int          `json:"order"` // global display rank; user order survives refresh
-	AddedAt      time.Time    `json:"added_at"`
-	ValidatedAt  time.Time    `json:"validated_at,omitzero"`
-	LastError    string       `json:"last_error,omitempty"` // redacted
+	InsecureTLS bool `json:"insecure_tls,omitempty"`
+	// Hysteria2* carry the sidecar-only settings of a hysteria2 exit. The auth
+	// password lives in Credentials.Password. Bandwidth is normally left zero
+	// so RouteLatch applies its own default; a trusted caller may set it.
+	Hysteria2Obfs         string       `json:"hysteria2_obfs,omitempty"`          // "salamander" | "gecko" | ""
+	Hysteria2ObfsPassword string       `json:"hysteria2_obfs_password,omitempty"` // salamander obfs password (secret)
+	Hysteria2UpMbps       uint32       `json:"hysteria2_up_mbps,omitempty"`
+	Hysteria2DownMbps     uint32       `json:"hysteria2_down_mbps,omitempty"`
+	Status                RecordStatus `json:"status"`
+	StatusReason          string       `json:"status_reason,omitempty"`
+	Order                 int          `json:"order"` // global display rank; user order survives refresh
+	AddedAt               time.Time    `json:"added_at"`
+	ValidatedAt           time.Time    `json:"validated_at,omitzero"`
+	LastError             string       `json:"last_error,omitempty"` // redacted
 }
 
 // Fetcher retrieves one source's raw payload under fixed limits. It never

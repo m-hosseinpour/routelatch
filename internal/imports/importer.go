@@ -261,6 +261,9 @@ var linkQueryKeys = map[string]bool{
 	"pinnedpeercertsha256": true, "verifypeercertbyname": true, "allowinsecure": true,
 	"insecure": true, "skipcertverify": true, "mode": true, "extra": true,
 	"headertype": true, "encryption": true,
+	// hysteria2 / hy2 share-link parameters.
+	"obfs": true, "obfs-password": true, "obfspassword": true,
+	"ech": true,
 }
 
 // countDroppedQueryKeys counts link parameters outside the allow-list. They are

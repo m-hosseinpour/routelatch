@@ -42,6 +42,9 @@ const (
 	ReasonValueTooLong         = "value_too_long"
 	ReasonDuplicateHeader      = "duplicate_or_invalid_header"
 	ReasonNoCredential         = "missing_credential"
+	ReasonInvalidObfs          = "invalid_obfs"
+	ReasonECHUnsupported       = "ech_unsupported"
+	ReasonSingBoxField         = "singbox_field_rejected"
 )
 
 const (
@@ -52,7 +55,18 @@ const (
 	maxXHTTPHeaders     = 16
 	maxALPNEntries      = 8
 	maxFieldStringBytes = 8 << 10
+	maxHyMbps           = 100000
+	maxHyObfsPassword   = 256
 )
+
+// validHyObfs is the allow-list of sing-box v1.14.4 hysteria2 obfuscators.
+func validHyObfs(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "salamander", "gecko":
+		return true
+	}
+	return false
+}
 
 // rootScopeKeys are whole-config sections that must never be accepted from a
 // node import. They would change routing, DNS, the API, logging or inbound
@@ -61,6 +75,30 @@ var rootScopeKeys = map[string]bool{
 	"routing": true, "dns": true, "api": true, "env": true, "inbounds": true,
 	"observatory": true, "policy": true, "stats": true, "reverse": true,
 	"fakedns": true, "log": true,
+	// sing-box application-config sections. A sing-box outbound object is
+	// accepted, but a whole app config (route/DNS/inbounds/service) is not.
+	"route": true, "ntp": true, "certificate": true, "experimental": true,
+	"endpoints": true, "services": true,
+}
+
+// singboxHy2Keys is the whole top-level surface of a sing-box hysteria2
+// outbound that RouteLatch will own. Any other key (realm, server_ports,
+// hop_interval, transport/network, TLS files, dial fields, a hex pin) changes
+// trust, routing or the endpoint and is refused, never carried over silently.
+var singboxHy2Keys = map[string]bool{
+	"type": true, "tag": true, "server": true, "server_port": true,
+	"password": true, "up_mbps": true, "down_mbps": true,
+	"obfs": true, "tls": true,
+	// Metadata aliases used by v2rayN exports; not connection settings.
+	"remarks": true, "name": true, "address": true, "port": true,
+}
+
+var singboxHy2TLSKeys = map[string]bool{
+	"enabled": true, "server_name": true, "insecure": true,
+}
+
+var singboxHy2ObfsKeys = map[string]bool{
+	"type": true, "password": true,
 }
 
 // dependencyKeys name another outbound or a dialer proxy. Accepting them would
@@ -390,6 +428,12 @@ func reasonText(reason string) string {
 		return "REALITY is not verified in this build; the record is kept for reporting only"
 	case ReasonHTTPExitUnverified:
 		return "HTTP CONNECT exits are not verified in this build; use VLESS, Trojan or SOCKS5"
+	case ReasonECHUnsupported:
+		return "ECH is not verified in this build; remove the ech parameter"
+	case ReasonInvalidObfs:
+		return "hysteria2 obfs must be salamander or gecko"
+	case ReasonSingBoxField:
+		return "the sing-box outbound carries a field RouteLatch does not own"
 	default:
 		return fmt.Sprintf("record rejected: %s", reason)
 	}

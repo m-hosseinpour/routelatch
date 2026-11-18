@@ -70,6 +70,15 @@ func v2rayNItem(item any, srcID contract.SourceID, order int, now time.Time, aud
 	if serialized, err := json.Marshal(m); err == nil && recordTooLarge(serialized) {
 		return rawRecord(item, contract.RecordInvalid, ReasonRecordOversized, name, srcID, order, now)
 	}
+	if typ := strings.ToLower(getString(m, "type")); typ == "hysteria2" || typ == "hy2" {
+		if name == "" {
+			name = getString(m, "tag")
+		}
+		return singBoxHysteria2(item, m, srcID, order, now, name, audit)
+	}
+	if proto := normalizeProtocol(getString(m, "protocol")); proto == contract.ProtocolHysteria2 {
+		return singBoxHysteria2(item, m, srcID, order, now, name, audit)
+	}
 
 	if _, hasAddr := lookup(m, "address", "Address", "server"); hasAddr {
 		return v2rayNProfile(m, srcID, order, now, name, audit)
@@ -78,6 +87,133 @@ func v2rayNItem(item any, srcID contract.SourceID, order int, now time.Time, aud
 		return v2rayNOutbound(m, srcID, order, now, name, audit)
 	}
 	return rawRecord(item, contract.RecordInvalid, ReasonInvalidJSON, name, srcID, order, now)
+}
+
+// singBoxHysteria2 projects one sing-box hysteria2 outbound object. It is
+// deliberately strict: a sing-box *application* config (route/DNS/inbounds/
+// log/...) is already refused by validateRecordJSON and parseV2rayNJSON, and
+// any field on the outbound that RouteLatch does not own is refused rather
+// than silently ignored. Nothing here starts a core or reads a file named by
+// the payload (docs/contracts.md §5.4, AGENTS.md invariants).
+func singBoxHysteria2(_ any, m map[string]any, srcID contract.SourceID, order int, now time.Time, name string, audit *Audit) contract.Record {
+	n := node{
+		protocol:  contract.ProtocolHysteria2,
+		name:      name,
+		transport: contract.TransportRaw,
+		security:  contract.SecurityTLS,
+	}
+	var rej *rejection
+	reject := func(status contract.RecordStatus, reason string) {
+		if rej == nil {
+			rej = &rejection{status, reason}
+		}
+	}
+
+	for key := range m {
+		if !singboxHy2Keys[strings.ToLower(key)] {
+			// A hex certificate pin, realm, port hopping, detour, TLS files
+			// and dial fields all change trust or routing outside our control.
+			reject(contract.RecordInvalid, ReasonSingBoxField)
+		}
+	}
+
+	server, err := NormalizeServer(getString(m, "server", "address"))
+	if err != nil || server == "" {
+		reject(contract.RecordInvalid, ReasonInvalidServer)
+	} else {
+		n.server = server
+	}
+	if port, ok := getPort(m, "server_port", "port"); ok {
+		n.port = port
+	} else {
+		reject(contract.RecordInvalid, ReasonInvalidPort)
+	}
+
+	password := getString(m, "password")
+	if password == "" || !noControl(password) {
+		reject(contract.RecordInvalid, ReasonNoCredential)
+	} else {
+		n.creds.Password = password
+	}
+	if raw, present := lookup(m, "up_mbps"); present {
+		if up, ok := hyBandwidth(raw); ok {
+			n.hyUpMbps = up
+		} else {
+			reject(contract.RecordInvalid, ReasonValueTooLong)
+		}
+	}
+	if raw, present := lookup(m, "down_mbps"); present {
+		if down, ok := hyBandwidth(raw); ok {
+			n.hyDownMbps = down
+		} else {
+			reject(contract.RecordInvalid, ReasonValueTooLong)
+		}
+	}
+
+	if raw, present := lookup(m, "obfs"); present {
+		om, ok := raw.(map[string]any)
+		if !ok {
+			reject(contract.RecordInvalid, ReasonInvalidObfs)
+		} else {
+			for key := range om {
+				if !singboxHy2ObfsKeys[strings.ToLower(key)] {
+					reject(contract.RecordInvalid, ReasonSingBoxField)
+				}
+			}
+			obfs := strings.ToLower(getString(om, "type"))
+			if !validHyObfs(obfs) {
+				reject(contract.RecordInvalid, ReasonInvalidObfs)
+			} else {
+				n.hyObfs = obfs
+			}
+			obfsPassword := getString(om, "password")
+			if !noControl(obfsPassword) || len(obfsPassword) > maxHyObfsPassword ||
+				(obfs == "salamander" && obfsPassword == "") {
+				reject(contract.RecordInvalid, ReasonInvalidObfs)
+			} else {
+				n.hyObfsPassword = obfsPassword
+			}
+		}
+	}
+
+	if raw, present := lookup(m, "tls"); !present {
+		// TLS is mandatory for hysteria2; its absence is not a silent downgrade.
+		reject(contract.RecordUnsupported, ReasonUnsupportedSecurity)
+	} else if tm, ok := raw.(map[string]any); !ok {
+		reject(contract.RecordUnsupported, ReasonUnsupportedSecurity)
+	} else {
+		for key := range tm {
+			if !singboxHy2TLSKeys[strings.ToLower(key)] {
+				reject(contract.RecordInvalid, ReasonSingBoxField)
+			}
+		}
+		n.sni = getString(tm, "server_name")
+		if truthy(getString(tm, "insecure")) || boolValue(tm["insecure"]) {
+			n.insecure = true
+		}
+	}
+	if n.insecure && n.sni == "" {
+		// No pin can be carried to a sidecar, and no name keeps verification
+		// on: the downgrade is quarantined, never dialed (D18).
+		reject(contract.RecordUnsupported, contract.ReasonInsecureTLSRemoved)
+	} else if n.insecure && n.verify == "" && n.sni != "" {
+		n.verify = n.sni
+	}
+	return buildRecord(n, rej, srcID, order, now, audit)
+}
+
+// hyBandwidth reads a bounded, non-negative Mbps value. It never reads a
+// bandwidth parameter from a share-link URI: only trusted callers and an
+// explicit outbound object may set it.
+func hyBandwidth(v any) (uint32, bool) {
+	if v == nil {
+		return 0, true
+	}
+	n, ok := intValue(v)
+	if !ok || n < 0 || n > maxHyMbps {
+		return 0, false
+	}
+	return uint32(n), true
 }
 
 func v2rayNProfile(m map[string]any, srcID contract.SourceID, order int, now time.Time, name string, audit *Audit) contract.Record {
@@ -107,8 +243,10 @@ func v2rayNProfile(m map[string]any, srcID contract.SourceID, order int, now tim
 	}
 	secRaw := getString(m, "streamSecurity", "StreamSecurity", "stream_security")
 	n.security, _ = securityFromString(secRaw)
-	if n.security == "" {
-		n.security = contract.SecurityNone
+	if secRaw == "" && n.protocol == contract.ProtocolHysteria2 {
+		// hysteria2 is always TLS; a missing v2rayN security field is not a
+		// downgrade to plaintext.
+		n.security = contract.SecurityTLS
 	}
 	n.sni = getString(m, "sni", "Sni", "serverName")
 	if alpnRaw, ok := lookup(m, "alpn", "Alpn"); ok {
@@ -250,9 +388,11 @@ func profileProtocol(m map[string]any) (contract.Protocol, *rejection) {
 				return contract.ProtocolVLESS, nil
 			case 6:
 				return contract.ProtocolTrojan, nil
+			case 7:
+				return contract.ProtocolHysteria2, nil
 			case 10:
 				return contract.ProtocolHTTP, &rejection{contract.RecordUnsupported, ReasonHTTPExitUnverified}
-			case 1, 2, 3, 7, 8, 9:
+			case 1, 2, 3, 8, 9:
 				return contract.Protocol(strings.ToLower(strings.TrimSpace(fmt.Sprint(ct)))), &rejection{contract.RecordUnsupported, ReasonUnsupportedProtocol}
 			}
 		}
@@ -270,6 +410,8 @@ func normalizeProtocol(raw string) contract.Protocol {
 		return contract.ProtocolTrojan
 	case "http", "https":
 		return contract.ProtocolHTTP
+	case "hysteria2", "hy2":
+		return contract.ProtocolHysteria2
 	default:
 		return contract.Protocol(strings.ToLower(strings.TrimSpace(raw)))
 	}
@@ -277,7 +419,8 @@ func normalizeProtocol(raw string) contract.Protocol {
 
 func supportedProtocol(p contract.Protocol) bool {
 	switch p {
-	case contract.ProtocolVLESS, contract.ProtocolTrojan, contract.ProtocolSOCKS5, contract.ProtocolHTTP:
+	case contract.ProtocolVLESS, contract.ProtocolTrojan, contract.ProtocolSOCKS5,
+		contract.ProtocolHysteria2, contract.ProtocolHTTP:
 		return true
 	default:
 		return false
@@ -295,6 +438,8 @@ func profileCredentials(proto contract.Protocol, m map[string]any) contract.Cred
 			UserID:   getString(m, "username", "user", "id", "Id"),
 			Password: getString(m, "password", "Password"),
 		}
+	case contract.ProtocolHysteria2:
+		return contract.Credentials{Password: getString(m, "password", "Password", "id", "Id")}
 	default:
 		return contract.Credentials{}
 	}
@@ -329,6 +474,8 @@ func outboundCredentials(proto contract.Protocol, user map[string]any) contract.
 		return contract.Credentials{Password: getString(user, "password")}
 	case contract.ProtocolSOCKS5:
 		return contract.Credentials{UserID: getString(user, "user"), Password: getString(user, "pass", "password")}
+	case contract.ProtocolHysteria2:
+		return contract.Credentials{Password: getString(user, "password", "pass")}
 	default:
 		return contract.Credentials{}
 	}

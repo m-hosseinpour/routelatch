@@ -14,22 +14,31 @@ type ExitID string
 type Protocol string
 
 const (
-	ProtocolVLESS  Protocol = "vless"
-	ProtocolTrojan Protocol = "trojan"
-	ProtocolSOCKS5 Protocol = "socks5"
-	ProtocolHTTP   Protocol = "http"
+	ProtocolVLESS     Protocol = "vless"
+	ProtocolTrojan    Protocol = "trojan"
+	ProtocolSOCKS5    Protocol = "socks5"
+	ProtocolHTTP      Protocol = "http"
+	ProtocolHysteria2 Protocol = "hysteria2"
 )
 
 // Supported reports whether v1 can ever dial the protocol. `http` is
 // representable but gated on R-2, and any other value is a scheme outside the
 // v1 set; both are imported as unsupported and never dialed (docs/contracts.md
-// §5.4).
+// §5.4). Hysteria2 is dialed through the separate sing-box sidecar, not the
+// pinned Xray core, but it is a first-class dialable protocol.
 func (p Protocol) Supported() bool {
 	switch p {
-	case ProtocolVLESS, ProtocolTrojan, ProtocolSOCKS5:
+	case ProtocolVLESS, ProtocolTrojan, ProtocolSOCKS5, ProtocolHysteria2:
 		return true
 	}
 	return false
+}
+
+// RequiresSidecar reports whether a protocol is dialed through the separate
+// sing-box executable rather than the pinned Xray core or RouteLatch's own
+// adapter. Such exits are unavailable (fail-closed) when the sidecar is absent.
+func (p Protocol) RequiresSidecar() bool {
+	return p == ProtocolHysteria2
 }
 
 // ProofClass is the strength of the evidence a pool dial carries. It is the

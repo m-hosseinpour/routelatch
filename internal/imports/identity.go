@@ -107,6 +107,14 @@ func DedupeKey(r contract.Record) string {
 	field("grpc", r.GRPCService)
 	field("pinned_peer_cert_sha256", strings.ToLower(r.PinnedPeerCertSHA256))
 	field("verify_peer_cert_by_name", strings.ToLower(r.VerifyPeerCertByName))
+	field("hysteria2_obfs", strings.ToLower(r.Hysteria2Obfs))
+	field("hysteria2_obfs_password", r.Hysteria2ObfsPassword)
+	if r.Hysteria2UpMbps != 0 {
+		fmt.Fprintf(&b, "hysteria2_up_mbps=%d\n", r.Hysteria2UpMbps)
+	}
+	if r.Hysteria2DownMbps != 0 {
+		fmt.Fprintf(&b, "hysteria2_down_mbps=%d\n", r.Hysteria2DownMbps)
+	}
 	if extra := canonicalExtra(r.XHTTPExtra); extra != "" {
 		field("xhttp_extra", extra)
 	}
@@ -115,7 +123,7 @@ func DedupeKey(r contract.Record) string {
 		switch r.Protocol {
 		case contract.ProtocolVLESS:
 			credentialBytes = r.Credentials.UserID
-		case contract.ProtocolTrojan:
+		case contract.ProtocolTrojan, contract.ProtocolHysteria2:
 			credentialBytes = r.Credentials.Password
 		default:
 			credentialBytes = r.Credentials.UserID + "\x00" + r.Credentials.Password

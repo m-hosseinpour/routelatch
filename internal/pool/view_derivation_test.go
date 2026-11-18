@@ -20,7 +20,13 @@ func TestEffectiveStatusDerivesLegacyUnsupported(t *testing.T) {
 	vmessRec := record("x-vmess", 2, contract.RecordUnknown)
 	vmessRec.Protocol = contract.Protocol("vmess")
 	emptyStatusScheme := record("x-unknown-scheme", 3, "")
-	emptyStatusScheme.Protocol = contract.Protocol("hysteria2")
+	// Must be a scheme v1 can never dial: hysteria2 is now supported and would
+	// keep its stored status rather than derive protocol_unsupported.
+	emptyStatusScheme.Protocol = contract.Protocol("ftp")
+	hysteria2Rec := record("x-hysteria2", 11, contract.RecordUnknown)
+	hysteria2Rec.Protocol = contract.ProtocolHysteria2
+	emptyStatusHysteria2 := record("x-hysteria2-empty", 12, "")
+	emptyStatusHysteria2.Protocol = contract.ProtocolHysteria2
 	vlessRec := record("x-vless", 4, contract.RecordUnknown)
 	emptyStatusVLESS := record("x-vless-empty", 5, "")
 	emptyProtocol := record("x-no-proto", 6, contract.RecordUnknown)
@@ -42,6 +48,8 @@ func TestEffectiveStatusDerivesLegacyUnsupported(t *testing.T) {
 		{"http empty status", emptyStatusHTTP, contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified},
 		{"unknown scheme unknown", vmessRec, contract.RecordUnsupported, contract.ReasonProtocolUnsupported},
 		{"unknown scheme empty status", emptyStatusScheme, contract.RecordUnsupported, contract.ReasonProtocolUnsupported},
+		{"hysteria2 unknown stays unknown", hysteria2Rec, contract.RecordUnknown, ""},
+		{"hysteria2 empty status stays unknown", emptyStatusHysteria2, contract.RecordUnknown, ""},
 		{"vless unknown stays unknown", vlessRec, contract.RecordUnknown, ""},
 		{"vless empty status stays unknown", emptyStatusVLESS, contract.RecordUnknown, ""},
 		{"empty protocol stays as today", emptyProtocol, contract.RecordUnknown, ""},

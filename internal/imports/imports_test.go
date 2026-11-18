@@ -134,12 +134,12 @@ func TestDedupeKeyIdentity(t *testing.T) {
 
 func TestUnsupportedKindsRejectedWithReason(t *testing.T) {
 	im := newTestImporter()
-	payload := "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSJ9\nhysteria2://x@example.com:443\nvless://" + testUUID + "@example.com:443?security=reality&pbk=abc&sid=def"
+	payload := "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSJ9\nvless://" + testUUID + "@example.com:443?security=reality&pbk=abc&sid=def"
 	recs, err := im.Import(context.Background(), testSource(contract.SourceFile, "f"), []byte(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(recs) != 3 {
+	if len(recs) != 2 {
 		t.Fatalf("records=%d", len(recs))
 	}
 	for i, r := range recs {
@@ -150,8 +150,8 @@ func TestUnsupportedKindsRejectedWithReason(t *testing.T) {
 			t.Fatalf("record %d has no reason", i)
 		}
 	}
-	if recs[2].StatusReason != ReasonRealityUnverified {
-		t.Fatalf("reality reason=%s", recs[2].StatusReason)
+	if recs[1].StatusReason != ReasonRealityUnverified {
+		t.Fatalf("reality reason=%s", recs[1].StatusReason)
 	}
 }
 

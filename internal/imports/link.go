@@ -33,6 +33,8 @@ func parseLink(raw string, srcID contract.SourceID, order int, now time.Time, au
 		return parseVLESSStyle(u, contract.ProtocolTrojan, srcID, order, now, true, audit)
 	case "socks5", "socks":
 		return parseSOCKS5(u, srcID, order, now, audit)
+	case "hysteria2", "hy2":
+		return parseHysteria2(u, srcID, order, now, audit)
 	case "http", "https":
 		// An HTTP(S) URL is not a share link. Import must not fetch it.
 		rec := buildRecord(node{protocol: contract.ProtocolHTTP, name: u.Fragment},
@@ -237,6 +239,99 @@ func parseSOCKS5(u *url.URL, srcID contract.SourceID, order int, now time.Time, 
 		}
 	}
 	return buildRecord(n, rej, srcID, order, now, audit)
+}
+
+// parseHysteria2 projects a hysteria2:// or hy2:// share link. Only the
+// documented parameters are read; bandwidth is never taken from a URI because
+// RouteLatch sets it itself. An insecure link is quarantined unless a pin or a
+// name constraint keeps certificate verification on (D18).
+func parseHysteria2(u *url.URL, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
+	q := u.Query()
+	n := node{
+		protocol:  contract.ProtocolHysteria2,
+		name:      u.Fragment,
+		server:    u.Hostname(),
+		port:      443, // hysteria2 URI default; not an invented port for other schemes
+		transport: contract.TransportRaw,
+		security:  contract.SecurityTLS,
+	}
+	var rej *rejection
+
+	if server, err := NormalizeServer(u.Hostname()); err != nil || u.Hostname() == "" {
+		rej = &rejection{contract.RecordInvalid, ReasonInvalidServer}
+	} else {
+		n.server = server
+	}
+	if raw := u.Port(); raw != "" {
+		if port, ok := parsePort(raw); ok {
+			n.port = port
+		} else if rej == nil {
+			rej = &rejection{contract.RecordInvalid, ReasonInvalidPort}
+		}
+	}
+
+	if u.User != nil {
+		pw, hasPW := u.User.Password()
+		if hasPW {
+			// The official userpass alias is "user:pass"; sing-box needs the
+			// combined string as the password.
+			n.creds.Password = u.User.Username() + ":" + pw
+		} else {
+			n.creds.Password = u.User.Username()
+		}
+	}
+	if n.creds.Password == "" || !noControl(n.creds.Password) {
+		if rej == nil {
+			rej = &rejection{contract.RecordInvalid, ReasonNoCredential}
+		}
+	}
+
+	n.sni = firstFold(q, "sni", "serverName")
+	n.hyObfs = strings.ToLower(strings.TrimSpace(firstFold(q, "obfs")))
+	n.hyObfsPassword = firstFold(q, "obfs-password", "obfsPassword")
+	if !validHyObfs(n.hyObfs) || !noControl(n.hyObfsPassword) || len(n.hyObfsPassword) > maxHyObfsPassword {
+		if rej == nil {
+			rej = &rejection{contract.RecordInvalid, ReasonInvalidObfs}
+		}
+	}
+	if pinRaw := firstFold(q, "pinSHA256", "pinnedPeerCertSha256"); pinRaw != "" {
+		if pin, ok := validatePin(pinRaw); ok {
+			n.pin = pin
+		} else if rej == nil {
+			rej = &rejection{contract.RecordInvalid, ReasonInvalidPin}
+		}
+	}
+	if firstFold(q, "ech") != "" && rej == nil {
+		rej = &rejection{contract.RecordUnsupported, ReasonECHUnsupported}
+	}
+	if truthy(firstFold(q, "insecure", "allowInsecure", "skipCertVerify")) {
+		if n.pin == "" && n.sni == "" {
+			if rej == nil {
+				rej = &rejection{contract.RecordUnsupported, contract.ReasonInsecureTLSRemoved}
+			}
+		} else {
+			// The downgrade is ignored: verification stays on through the pin
+			// or through the SNI used as the verification name.
+			n.insecure = true
+			if n.verify == "" && n.sni != "" {
+				n.verify = n.sni
+			}
+		}
+	}
+	return buildRecord(n, rej, srcID, order, now, audit)
+}
+
+// firstFold is first() with case-insensitive key matching. URI parameter names
+// such as pinSHA256 are commonly written in several cases by real exporters.
+func firstFold(q url.Values, names ...string) string {
+	for _, name := range names {
+		for key, values := range q {
+			if strings.EqualFold(key, name) && len(values) > 0 {
+				return strings.TrimSpace(values[0])
+			}
+		}
+	}
+	return ""
 }
 
 func first(q url.Values, names ...string) string {

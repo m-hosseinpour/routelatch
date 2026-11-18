@@ -11,6 +11,13 @@ import (
 // skip verification but a pin/name kept verification on (D18 as amended).
 const noticeInsecureIgnored = "allow_insecure_ignored: verification stays on; the certificate pin or name constraint is applied"
 
+// noticeInsecureIgnoredHy2Pin is the honest notice for a hysteria2 link whose
+// skip-verify was ignored only because of a hex pin. The pin is retained (never
+// downgraded to insecure), but the pinned sing-box sidecar cannot enforce a hex
+// leaf pin, so the engine rejects the record as engine_record_rejected. It would
+// be misleading to claim the pin "is applied" when the exit is not dialable.
+const noticeInsecureIgnoredHy2Pin = "allow_insecure_ignored: the skip-verify downgrade was ignored and the pin retained, but hysteria2 hex certificate pins cannot be enforced by the sidecar; the record is not dialable"
+
 // node is the untrusted, already-projected intermediate between a share link
 // or v2rayN profile and a canonical record. Fields not listed here never leave
 // the parser.
@@ -36,6 +43,11 @@ type node struct {
 	shortID   string
 	spiderX   string
 	name      string
+	// hysteria2 (sidecar-dispatched) settings. The auth password is creds.Password.
+	hyObfs         string
+	hyObfsPassword string
+	hyUpMbps       uint32
+	hyDownMbps     uint32
 }
 
 // rejection carries a status and a stable reason for a record that must be
@@ -59,38 +71,48 @@ func insecureIgnored(n node) bool {
 func buildRecord(n node, rej *rejection, srcID contract.SourceID, order int, now time.Time, audit *Audit) contract.Record {
 	ignored := insecureIgnored(n)
 	rec := contract.Record{
-		SourceIDs:            []contract.SourceID{srcID},
-		DisplayName:          SanitizeDisplay(n.name),
-		Protocol:             n.protocol,
-		Server:               n.server,
-		Port:                 n.port,
-		Credentials:          n.creds,
-		Transport:            n.transport,
-		Security:             n.security,
-		SNI:                  n.sni,
-		ALPN:                 n.alpn,
-		Fingerprint:          n.fp,
-		Flow:                 n.flow,
-		Path:                 n.path,
-		Host:                 n.host,
-		GRPCService:          n.grpc,
-		XHTTPExtra:           n.xhttp,
-		PublicKey:            n.publicKey,
-		ShortID:              n.shortID,
-		SpiderX:              n.spiderX,
-		PinnedPeerCertSHA256: n.pin,
-		VerifyPeerCertByName: n.verify,
-		InsecureTLS:          n.insecure && !ignored,
-		Order:                order,
-		AddedAt:              now.UTC(),
-		ValidatedAt:          now.UTC(),
+		SourceIDs:             []contract.SourceID{srcID},
+		DisplayName:           SanitizeDisplay(n.name),
+		Protocol:              n.protocol,
+		Server:                n.server,
+		Port:                  n.port,
+		Credentials:           n.creds,
+		Transport:             n.transport,
+		Security:              n.security,
+		SNI:                   n.sni,
+		ALPN:                  n.alpn,
+		Fingerprint:           n.fp,
+		Flow:                  n.flow,
+		Path:                  n.path,
+		Host:                  n.host,
+		GRPCService:           n.grpc,
+		XHTTPExtra:            n.xhttp,
+		PublicKey:             n.publicKey,
+		ShortID:               n.shortID,
+		SpiderX:               n.spiderX,
+		PinnedPeerCertSHA256:  n.pin,
+		VerifyPeerCertByName:  n.verify,
+		InsecureTLS:           n.insecure && !ignored,
+		Hysteria2Obfs:         n.hyObfs,
+		Hysteria2ObfsPassword: n.hyObfsPassword,
+		Hysteria2UpMbps:       n.hyUpMbps,
+		Hysteria2DownMbps:     n.hyDownMbps,
+		Order:                 order,
+		AddedAt:               now.UTC(),
+		ValidatedAt:           now.UTC(),
 	}
 
 	status, reason := validateNode(n, rej)
 	rec.Status = status
 	rec.StatusReason = reason
 	if ignored && audit != nil && status != contract.RecordInvalid && status != contract.RecordUnsupported {
-		audit.Notices = append(audit.Notices, noticeInsecureIgnored)
+		notice := noticeInsecureIgnored
+		if n.protocol == contract.ProtocolHysteria2 && n.pin != "" {
+			// The engine refuses every hysteria2 hex pin; say so instead of
+			// claiming the pin is applied to a record that will be rejected.
+			notice = noticeInsecureIgnoredHy2Pin
+		}
+		audit.Notices = append(audit.Notices, notice)
 	}
 	if reason != "" && status == contract.RecordInvalid {
 		rec.LastError = reasonText(reason)
@@ -125,6 +147,21 @@ func validateNode(n node, rej *rejection) (contract.RecordStatus, string) {
 	case contract.ProtocolSOCKS5:
 		if !noControl(n.creds.UserID) || !noControl(n.creds.Password) {
 			return contract.RecordInvalid, ReasonInvalidCredential
+		}
+	case contract.ProtocolHysteria2:
+		if strings.TrimSpace(n.creds.Password) == "" || !noControl(n.creds.Password) {
+			return contract.RecordInvalid, ReasonNoCredential
+		}
+		if !validHyObfs(n.hyObfs) || !noControl(n.hyObfsPassword) ||
+			len(n.hyObfsPassword) > maxHyObfsPassword ||
+			(n.hyObfs == "salamander" && n.hyObfsPassword == "") {
+			return contract.RecordInvalid, ReasonInvalidObfs
+		}
+		if n.hyUpMbps > maxHyMbps || n.hyDownMbps > maxHyMbps {
+			return contract.RecordInvalid, ReasonValueTooLong
+		}
+		if n.transport != contract.TransportRaw || n.security != contract.SecurityTLS {
+			return contract.RecordUnsupported, ReasonUnsupportedTransport
 		}
 	default:
 		return contract.RecordUnsupported, ReasonUnsupportedProtocol
