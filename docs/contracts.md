@@ -1069,7 +1069,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 | A11 | T6 | GNOME/KDE set/restore با ownership؛ unsupported صریح؛ bypass پنهانی نیست؛ restore آفلاین |
 | A12 | T3 | status/redirect/body/stream بایت‌به‌بایت؛ HEAD/POST/body؛ UDP صریحاً `0x07` بدون سوکت UDP |
 | A13 | T6 | foreground/systemd، crash/port collision، config خراب، shutdown تمیز با دادهٔ سالم |
-| A14 | T7 — **مسدود** | نیازمند تصمیم مجوز (D20) و ممیزی واقعی dependency/notices/source؛ تا آن زمان انتشار ممنوع |
+| A14 | T7 — **مجوز بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
 
 ## ۹. محدودیت‌های ثبت‌شده و کار باز
 
@@ -1083,12 +1083,14 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 | R-6 | DNS و policy سمت exit ناشناخته است؛ ادعا دربارهٔ hostname ارسالی است | مستندسازی؛ sniffing پایهٔ تضمین نیست |
 | R-7 | `huh` sanitization ندارد | `text.SanitizeTerminal` + تست منفی T5 |
 | R-8 | IPv6 end-to-end و public exit تست نشده‌اند | T3/T7 |
-| R-9 | A14 | تصمیم مجوز + ممیزی build واقعی |
+| R-9 | A14 (انتشار) | source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی امنیت/نام؛ تصمیم D20 و ممیزی باینری انجام شده‌اند ([`licensing.md`](licensing.md)) |
 | R-10 | خرابی auth خروجی VLESS/Trojan از شکست مقصد قابل تفکیک نیست؛ رکورد cooling نمی‌شود | انتخاب دستی/rerank با شاهد بایت؛ در milestone بعد شاید handshake adapter اختصاصی |
 | R-11 | `ProofConfirmed` تنها assertion خروجی است؛ سرور early-reply (از جمله SOCKS خود Xray) همان reply را پیش از connect می‌دهد و کلاینت تشخیص نمی‌دهد | برچسب «exit reported success» + حذف رکورد مشکوک؛ تأیید مستقل ممکن نیست |
 | R-12 | هستهٔ pin‌شده `allowInsecure` را حذف کرده؛ رکورد skip-verify همیشه `unsupported` با `insecure_tls_removed` است | تنها pin/name معتبر پذیرفته می‌شود؛ بازگشت رضایت نیازمند R-14 |
 | R-13 | REALITY/ECH در T1 اجرا نشد؛ فیلدهای آن در مدل هست ولی مسیر build/dial تأیید نشده | T3/T4 با fixture کنترل‌شده؛ تا آن زمان `reality` در import `unsupported` |
 | R-14 | مسیر رضایت/استثنای TLS ناامن در v1 حذف شده است | فقط با استثنای محدود، قابل‌مشاهده و قابل‌لغو که واقعاً بتواند رکورد را قابل dial کند؛ قرارداد جدید لازم است |
 
-**تصمیم‌های باز برای کاربر:** `D20` (مجوز) و ممیزی انتشار. هیچ تصمیم T2 بازی نمانده
-است؛ R-12/R-14 محدودیت ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
+**تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
+باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است
+([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
+ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
