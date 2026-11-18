@@ -781,6 +781,137 @@ func TestDetectDesktop(t *testing.T) {
 	}
 }
 
+func TestConflictsReportsSettingsTheUserChanged(t *testing.T) {
+	state := contract.DesktopProxyState{
+		Applied:     true,
+		Environment: string(KindKDE),
+		Keys: []contract.DesktopKey{
+			{Name: "kioslaverc:Proxy Settings/ProxyType", Applied: "1", Previous: "0"},
+			{Name: "kioslaverc:Proxy Settings/httpProxy", Applied: "http://127.0.0.1 8317", Previous: "http://old-proxy 3128"},
+		},
+	}
+
+	t.Run("matching values are not a conflict", func(t *testing.T) {
+		f := kdeSystem()
+		f.values["ProxyType"] = "1"
+		f.values["httpProxy"] = "http://127.0.0.1 8317"
+		changed, err := newAdapter(f).Conflicts(context.Background(), state)
+		if err != nil || len(changed) != 0 {
+			t.Fatalf("Conflicts = %v, %v; want no conflict", changed, err)
+		}
+		for _, call := range f.calls {
+			if call.name == "kwriteconfig6" && len(call.args) > 0 && call.args[0] != "--help" {
+				t.Fatalf("status inspection wrote a setting: %#v", call)
+			}
+		}
+	})
+
+	t.Run("user edit is reported by name", func(t *testing.T) {
+		f := kdeSystem()
+		f.values["ProxyType"] = "1"
+		f.values["httpProxy"] = "http://127.0.0.1 9999"
+		changed, err := newAdapter(f).Conflicts(context.Background(), state)
+		if err != nil {
+			t.Fatalf("Conflicts: %v", err)
+		}
+		if len(changed) != 1 || changed[0] != "kioslaverc:Proxy Settings/httpProxy" {
+			t.Fatalf("Conflicts = %v, want the edited key only", changed)
+		}
+	})
+
+	t.Run("read failure is an error, not a conflict", func(t *testing.T) {
+		f := kdeSystem()
+		f.readErr["httpProxy"] = errors.New("kreadconfig failed")
+		changed, err := newAdapter(f).Conflicts(context.Background(), state)
+		if err == nil || changed != nil {
+			t.Fatalf("Conflicts = %v, %v; want an error and no claim", changed, err)
+		}
+		var failure *contract.Failure
+		if !errors.As(err, &failure) || failure.Kind != contract.ExternalToolFailed {
+			t.Fatalf("error = %v, want external_tool_failed", err)
+		}
+	})
+
+	t.Run("unknown recorded key is corrupt state", func(t *testing.T) {
+		f := kdeSystem()
+		bad := contract.DesktopProxyState{Applied: true, Environment: string(KindKDE), Keys: []contract.DesktopKey{
+			{Name: "kioslaverc:Proxy Settings/other", Applied: "x"},
+		}}
+		changed, err := newAdapter(f).Conflicts(context.Background(), bad)
+		if err == nil || changed != nil {
+			t.Fatalf("Conflicts = %v, %v; want state_corrupt", changed, err)
+		}
+		var failure *contract.Failure
+		if !errors.As(err, &failure) || failure.Kind != contract.StateCorrupt {
+			t.Fatalf("error = %v, want state_corrupt", err)
+		}
+		if len(f.calls) != 0 {
+			for _, call := range f.calls {
+				if call.name == "kwriteconfig6" && !(len(call.args) == 1 && call.args[0] == "--help") {
+					t.Fatalf("inspection wrote a setting for an unknown key: %#v", call)
+				}
+			}
+		}
+	})
+
+	t.Run("conflicts follow restore order", func(t *testing.T) {
+		f := kdeSystem()
+		deep := contract.DesktopProxyState{Applied: true, Environment: string(KindKDE), Keys: []contract.DesktopKey{
+			{Name: "kioslaverc:Proxy Settings/ProxyType", Applied: "1"},
+			{Name: "kioslaverc:Proxy Settings/httpProxy", Applied: "http://127.0.0.1 8317"},
+		}}
+		f.values["ProxyType"] = "0"
+		f.values["httpProxy"] = "http://other-proxy 1"
+		changed, err := newAdapter(f).Conflicts(context.Background(), deep)
+		if err != nil {
+			t.Fatalf("Conflicts: %v", err)
+		}
+		// Restore reports user edits while walking the layouts in reverse.
+		want := []string{"kioslaverc:Proxy Settings/ProxyType", "kioslaverc:Proxy Settings/httpProxy"}
+		if strings.Join(changed, ",") != strings.Join(want, ",") {
+			t.Fatalf("Conflicts = %v, want restore order %v", changed, want)
+		}
+	})
+
+	t.Run("applied without keys is corrupt state", func(t *testing.T) {
+		f := kdeSystem()
+		changed, err := newAdapter(f).Conflicts(context.Background(), contract.DesktopProxyState{
+			Applied: true, Environment: string(KindKDE),
+		})
+		if err == nil || changed != nil {
+			t.Fatalf("Conflicts = %v, %v; want state_corrupt", changed, err)
+		}
+		var failure *contract.Failure
+		if !errors.As(err, &failure) || failure.Kind != contract.StateCorrupt {
+			t.Fatalf("error = %v, want state_corrupt", err)
+		}
+	})
+
+	t.Run("duplicate key is corrupt state", func(t *testing.T) {
+		f := kdeSystem()
+		duplicate := contract.DesktopProxyState{Applied: true, Environment: string(KindKDE), Keys: []contract.DesktopKey{
+			{Name: "kioslaverc:Proxy Settings/ProxyType", Applied: "1"},
+			{Name: "kioslaverc:Proxy Settings/ProxyType", Applied: "1"},
+		}}
+		changed, err := newAdapter(f).Conflicts(context.Background(), duplicate)
+		if err == nil || changed != nil {
+			t.Fatalf("Conflicts = %v, %v; want state_corrupt", changed, err)
+		}
+		var failure *contract.Failure
+		if !errors.As(err, &failure) || failure.Kind != contract.StateCorrupt {
+			t.Fatalf("error = %v, want state_corrupt", err)
+		}
+	})
+
+	t.Run("not applied needs no commands", func(t *testing.T) {
+		f := kdeSystem()
+		changed, err := newAdapter(f).Conflicts(context.Background(), contract.DesktopProxyState{})
+		if err != nil || changed != nil || len(f.calls) != 0 {
+			t.Fatalf("Conflicts = %v, %v, calls=%v; want a no-op", changed, err, f.calls)
+		}
+	})
+}
+
 func contains(list []string, want string) bool {
 	for _, item := range list {
 		if item == want {

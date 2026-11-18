@@ -283,8 +283,9 @@ of RouteLatch, and RouteLatch cannot make you anonymous.
 
 The desktop proxy is changed only by `routelatch desktop proxy set` and
 restored by `routelatch desktop proxy restore`, which reverts only the keys
-RouteLatch wrote. Starting or stopping the service does not touch desktop or
-network settings.
+RouteLatch wrote. `desktop proxy status` re-reads those keys and reports
+`conflict` when one was changed outside RouteLatch. Starting or stopping the
+service does not touch desktop or network settings.
 
 ## Documentation
 

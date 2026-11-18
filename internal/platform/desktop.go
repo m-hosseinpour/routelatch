@@ -436,6 +436,66 @@ func (a *DesktopAdapter) rollback(ctx context.Context, tools desktopTools, layou
 	return errors.Join(errs...)
 }
 
+// Conflicts reports which recorded settings no longer hold the value RouteLatch
+// wrote, without changing anything. `desktop proxy status` uses it so an
+// ownership marker the user has since edited is reported as a conflict instead
+// of being presented as an unquestioned claim. A read failure is returned to the
+// caller rather than reported as a conflict: an unknown value is not ownership.
+func (a *DesktopAdapter) Conflicts(ctx context.Context, state contract.DesktopProxyState) ([]string, error) {
+	if !state.Applied {
+		return nil, nil
+	}
+	if len(state.Keys) == 0 {
+		return nil, localFailure(contract.StateCorrupt, "platform.desktop.status",
+			"desktop proxy state says applied but records no settings; cannot verify the desktop proxy")
+	}
+	kind := Kind(state.Environment)
+	layouts := layoutsFor(kind)
+	if layouts == nil {
+		return nil, localFailure(contract.Unsupported, "platform.desktop.status",
+			"the recorded desktop environment is not supported by this build; cannot verify the desktop proxy")
+	}
+	tools, err := a.resolveTools(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(state.Keys))
+	byName := make(map[string]contract.DesktopKey, len(state.Keys))
+	for _, key := range state.Keys {
+		if _, duplicate := seen[key.Name]; duplicate {
+			return nil, localFailure(contract.StateCorrupt, "platform.desktop.status",
+				"desktop proxy state lists the same setting twice; cannot verify the desktop proxy")
+		}
+		seen[key.Name] = struct{}{}
+		if _, ok := layoutByName(layouts, key.Name); !ok {
+			return nil, localFailure(contract.StateCorrupt, "platform.desktop.status",
+				"desktop proxy state names a setting this build does not manage; cannot verify the desktop proxy")
+		}
+		if key.Applied == "" {
+			return nil, localFailure(contract.StateCorrupt, "platform.desktop.status",
+				"desktop proxy state has an empty applied value; cannot verify the desktop proxy")
+		}
+		byName[key.Name] = key
+	}
+	// Walk the layouts in reverse, the same order Restore reports user edits,
+	// so the two payloads name conflicts consistently.
+	var changed []string
+	for i := len(layouts) - 1; i >= 0; i-- {
+		key, ok := byName[layouts[i].name]
+		if !ok {
+			continue
+		}
+		current, err := a.readValue(ctx, tools, layouts[i])
+		if err != nil {
+			return nil, commandFailure("platform.desktop.status", err)
+		}
+		if current != key.Applied {
+			changed = append(changed, key.Name)
+		}
+	}
+	return changed, nil
+}
+
 // Restore works offline: it needs no running service and never consults the
 // current desktop detection. It uses the environment recorded in the ownership
 // marker, so a crash in a GNOME session can be repaired from a KDE session (or
@@ -556,13 +616,18 @@ func (a *DesktopAdapter) Restore(ctx context.Context, state contract.DesktopProx
 	return result, nil
 }
 
-func knownLayout(layouts []keyLayout, name string) bool {
+func layoutByName(layouts []keyLayout, name string) (keyLayout, bool) {
 	for _, layout := range layouts {
 		if layout.name == name {
-			return true
+			return layout, true
 		}
 	}
-	return false
+	return keyLayout{}, false
+}
+
+func knownLayout(layouts []keyLayout, name string) bool {
+	_, ok := layoutByName(layouts, name)
+	return ok
 }
 
 func validateStoredValue(value string) error {

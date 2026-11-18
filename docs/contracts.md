@@ -676,6 +676,23 @@ restore **کلید‌به‌کلید** است: `DesktopProxyState.Keys` برای
 ماست. ویرایش کاربر روی کلیدهای دیگر restore را خراب نمی‌کند. حالت بدون listener هرگز
 desktop را مستقیم نمی‌کند؛ `doctor` و `desktop restore` آفلاین در دسترس‌اند.
 
+کلیدهای مدیریت‌شدهٔ KDE همان شش کلید `ReversedException`، `httpProxy`، `httpsProxy`،
+`socksProxy`، `NoProxyFor` و `ProxyType` هستند؛ `ftpProxy` و `Authmode` دست‌نخورده
+می‌مانند. در GNOME فقط `http`/`https`/`socks` (`host` و `port`)، `ignore-hosts` و
+`mode` نوشته می‌شوند؛ `ftp`، `use-same-proxy`، `autoconfig-url` و کلیدهای
+authentication دست‌نخورده‌اند.
+
+`desktop proxy status` در حالت `applied` همان کلیدهای ثبت‌شده را دوباره از OS می‌خواند
+و کلیدهایی را که کاربر بعد از apply عوض کرده در `conflict` (نام کلیدها) و `notice`
+گزارش می‌کند؛ بنابراین marker کهنه به‌عنوان مالکیت بی‌قید نمایش داده نمی‌شود. اگر خواندن
+ممکن نباشد، `notice` می‌گوید مالکیت قابل تأیید نیست و هیچ نتیجهٔ تازه‌ای فرض نمی‌شود.
+تشخیص محیط فقط از متغیرهای نشست است (`XDG_CURRENT_DESKTOP`، `DESKTOP_SESSION`،
+`KDE_FULL_SESSION`، `GNOME_DESKTOP_SESSION_ID`) و هیچ‌وقت حدس نمی‌زند: سرویس
+`systemd --user` این متغیرها را از نشست گرافیکی دارد، ولی اجرای دستی
+`desktop proxy set` از پوسته‌ای که هیچ‌کدام را ندارد `unsupported` (exit `7`) می‌دهد؛
+`desktop proxy status` در همان محیط با `supported:false` و exit `0` برمی‌گردد و
+هیچ تنظیمی را تغییر نمی‌دهد.
+
 ## ۵. pool، import و sanitization
 
 ### ۵.۱ هویت رکورد
@@ -999,7 +1016,7 @@ state. پیشنهادها و شواهدشان هم فقط در حافظه‌ان
 | `config get\|set\|path` | `path, values` | 0، 2، 3، 6، 7 | «تنظیمات» |
 | `doctor` | `checks[{name,status,detail,fix}]` | 0، 3، 10 | «بررسی سلامت» |
 | `env` / `exec -- <cmd>` | `HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,NO_PROXY` / child exit code | 0، 3، 7 + کد فرزند | «اجرای برنامه» |
-| `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
+| `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set, conflict` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
 | `backup` / `restore <ref>` | `ref{path,schema_version,created_at}` | 0، 3، 6، 10 | «پشتیبان» |
 | `menu` | — | 0، 2، 3 | خودش |
 

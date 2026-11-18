@@ -279,16 +279,17 @@ type DesktopData struct {
 	Supported    bool     `json:"supported"`
 	Applied      bool     `json:"applied"`
 	PreviousSet  bool     `json:"previous_set"`
+	Conflict     []string `json:"conflict,omitempty"`
 	Restored     []string `json:"restored,omitempty"`
 	UserModified []string `json:"user_modified,omitempty"`
 	Failed       []string `json:"failed,omitempty"`
 	Notice       string   `json:"notice,omitempty"`
 }
 
-func (s *Service) desktopStatus() (DesktopData, error) {
+func (s *Service) desktopStatus(ctx context.Context) (DesktopData, error) {
 	s.opMu.Lock()
-	defer s.opMu.Unlock()
 	snap := s.Snapshot()
+	s.opMu.Unlock()
 	kind, err := platform.DetectDesktop(os.LookupEnv)
 	out := DesktopData{
 		Applied: snap.State.Desktop.Applied, PreviousSet: len(snap.State.Desktop.Keys) > 0,
@@ -299,6 +300,19 @@ func (s *Service) desktopStatus() (DesktopData, error) {
 	if err == nil {
 		out.Environment = string(kind)
 		out.Supported = true
+	}
+	if snap.State.Desktop.Applied {
+		// Reading the desktop settings can block on an external tool, so it
+		// happens after opMu is released: status must not stall mutations.
+		adapter := &platform.DesktopAdapter{Runner: platform.ExecRunner{}, Now: s.now}
+		changed, verifyErr := adapter.Conflicts(ctx, snap.State.Desktop)
+		switch {
+		case verifyErr != nil:
+			out.Notice = "could not verify the desktop proxy ownership; check the desktop settings tool and the recorded state"
+		case len(changed) > 0:
+			out.Conflict = changed
+			out.Notice = "the desktop setting changed since RouteLatch applied it; run 'routelatch desktop proxy restore'"
+		}
 	}
 	return out, nil
 }

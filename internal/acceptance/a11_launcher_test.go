@@ -66,5 +66,5 @@ func TestA11Launcher(t *testing.T) {
 	} else {
 		r.fail("A11", "dead service exec: exit=%d child-ran=%v", deadExec.code, markerExists(deadMarker))
 	}
-	r.note("A11", "real desktop proxy set/restore (GNOME/KDE) is out of scope here; only the launcher environment and unhealthy-service refusal are asserted")
+	r.note("A11", "real desktop proxy set/restore is covered only by the gated ROUTELATCH_DESKTOP_TEST=1 check; this test asserts the launcher environment and unhealthy-service refusal")
 }

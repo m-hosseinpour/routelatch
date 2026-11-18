@@ -482,7 +482,7 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 	case OpEnv:
 		return s.env()
 	case OpDesktopStatus:
-		return s.desktopStatus()
+		return s.desktopStatus(ctx)
 	case OpDesktopSet:
 		return s.desktopApply(ctx)
 	case OpDesktopRestore:

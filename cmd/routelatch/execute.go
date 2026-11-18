@@ -511,7 +511,14 @@ func (c *cli) human(env contract.Envelope) {
 		}
 	case "desktop proxy status":
 		if d, ok := env.Data.(map[string]any); ok {
-			fmt.Fprintf(c.stdout, "environment: %v supported: %v applied: %v\n", d["environment"], d["supported"], d["applied"])
+			fmt.Fprintf(c.stdout, "environment: %v supported: %v applied: %v previous recorded: %v\n",
+				d["environment"], d["supported"], d["applied"], d["previous_set"])
+			if conflicts, ok := d["conflict"].([]any); ok && len(conflicts) > 0 {
+				fmt.Fprintf(c.stdout, "conflict: changed outside RouteLatch: %v\n", conflicts)
+			}
+			if notice, ok := d["notice"].(string); ok && notice != "" {
+				fmt.Fprintln(c.stdout, "notice:", notice)
+			}
 			return
 		}
 	case "desktop proxy set":

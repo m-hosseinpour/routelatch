@@ -39,6 +39,24 @@ on-failure restart with byte-identical state and no silent direct, and a clean
 exit 0 stop. Only run it where installing a user service is authorized; a
 reboot/re-login is never performed.
 
+### Gated real-desktop check (R2)
+
+The desktop adapter also has a gated test that changes this machine's **real**
+KDE or GNOME proxy setting, so it is skipped by default:
+
+```sh
+ROUTELATCH_DESKTOP_TEST=1 go test -count=1 -v -run TestA11DesktopProxyLifecycle ./internal/acceptance/
+```
+
+Run it from inside the desktop session (it detects KDE/GNOME from the session
+environment), on a machine whose desktop proxy you may change and repair. It
+captures a snapshot first, applies the proxy, reads the OS configuration back,
+stops the service, checks that the desktop still points at RouteLatch (never
+silently direct) and that the closed listener refuses connections, restores
+offline, and compares the OS setting with the snapshot. A deferred cleanup
+restores the snapshot even if an assertion fails, but `kill -9` of the test
+process would skip it, so do not run it unattended.
+
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
@@ -66,8 +84,10 @@ reboot/re-login is never performed.
   addresses (`2001:db8::/32`); this host has no IPv6 route, so a direct dial
   fails with `ENETUNREACH` and no packet leaves the machine.
 
-No public exit, credential, service installation, desktop proxy change or system
-setting is used.
+No public exit, credential, service installation or system setting is used by
+the default suite. The two real-system checks above are gated and skipped unless
+their environment variable is set; only the gated desktop check can change a
+desktop proxy setting.
 
 ## Commands exercised
 
@@ -93,6 +113,7 @@ setting is used.
 | A09 | The process's own socket table has exactly two listening TCP sockets, both loopback, and management only as a Unix socket owned by the running uid with mode 0600; proxy-to-self is 403 `policy_denied`; directories 0700 and state/config/lock/`state.json.bak`/`log/routelatch.log` 0600; every captured CLI/log surface has no UUID/password/share link/subscription URL and no request nonce; a node title carrying ESC/CSI/OSC/BEL/CR appears sanitized in both pool tables, its printable text intact, and the service streams and log file carry no raw control byte; state carries secrets only in `records[].credentials`/`sources[].origin`. |
 | A10 | `env`, `exec` (proxy env + child exit code; with `--json` the child's streams stay on stderr and stdout is one parseable Envelope per §7.1), `doctor`, `backup`/`restore` (private ref + sha256, traffic and rules after restore), `desktop proxy status`, `config get|path|set` (values and private paths; wildcard and valid LAN listeners are both `unsupported`/7), and the non-interactive menu (exit 0). |
 | A11 | An inherited `NO_PROXY` naming an approved destination is replaced by the product's fixed list in the child; with listeners stopped, and with no service at all, `env`/`exec` exit 3 and the child never runs (no silent direct). |
+| A11 (gated desktop) | `ROUTELATCH_DESKTOP_TEST=1`: the real KDE/GNOME setting is applied and read back from the OS, the state records the previous value, stopping the service leaves the desktop pointing at RouteLatch (never silent direct) with a closed listener, offline restore returns the exact snapshot, and the marker stops claiming ownership. |
 | A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
 | A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
@@ -174,11 +195,13 @@ them until the suite is updated.
 * **A09:** second-uid `SO_PEERCRED` rejection needs privileges the suite does
   not have (running as the same uid); the interactive menu's TUI rendering is not
   driven (CLI human output, the service streams and the log file are).
-* **A10:** menu item prompts/mappings, `desktop proxy set|restore` (real desktop)
-  and the 5/9/11/12 exit codes are not exercised (exit 7 is asserted by F6).
-* **A11 desktop:** real GNOME/KDE set/restore/ownership needs a real desktop and
-  would change user settings; only the launcher environment and unhealthy-service
-  refusal are asserted.
+* **A10:** menu item prompts/mappings and the 5/9/11/12 exit codes are not
+  exercised (exit 7 is asserted by F6); the real desktop `set|restore` is only in
+  the gated A11 desktop check.
+* **A11 desktop:** real GNOME/KDE set/restore/ownership is covered by the gated
+  `ROUTELATCH_DESKTOP_TEST=1` check, not by the default offline suite; the
+  ownership-conflict and `kill -9` desktop sequences are recorded as manual R2
+  evidence rather than automated here.
 * **A12:** redirects, `101` upgrades, slowloris/size limits and real IPv6 egress
   are not exercised; UDP is asserted only as an explicit refusal.
 * **A13 / platform:** systemd lifecycle is covered by the gated test above and
