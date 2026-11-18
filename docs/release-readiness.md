@@ -59,11 +59,15 @@ Built from the `110cce3` binary with the final packaging script, Go 1.27.4,
 - `dist/packages/routelatch-110cce3-linux-arm64.tar.gz`
   `77b2aa8e5c0d84626d15eceb43fcd3257569c7949cd2baecb793c3ab35c09df6`
 
-Each package carries `bin/routelatch`, `share/routelatch/systemd/routelatch.service`,
+Each package carries `bin/routelatch` (and, when the R11 sidecar is supplied,
+`bin/sing-box` plus `share/doc/routelatch/SINGBOX-INFO`),
+`share/routelatch/systemd/routelatch.service`,
 and under `share/doc/routelatch/`: `README.md`, `INSTALL.md`, `SERVICE.md`,
 `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md`, `docs/licensing.md`, `go.sum`,
 `BUILD-INFO`, `PACKAGE-NOTES`. `dist/packages/SHA256SUMS` verifies with
-`sha256sum -c`.
+`sha256sum -c`. The checksums above are the historical R8 snapshot without the
+sidecar; rebuilding with the sidecar produces new tarball checksums and the same
+verification flow.
 
 Evidence, not assumption:
 
@@ -96,6 +100,42 @@ versions of `xtls/xray-core`, `xtls/reality` and `layeh.com/gopher-luar`, the
 `go mod download <module>@<version>` commands and the upstream repositories, with
 the `go.sum` hashes in `docs/licensing.md`. No source tarball is bundled; that
 remains an optional alternative, recorded in `docs/licensing.md`.
+
+### R11 sidecar binary: sing-box v1.14.4 (GPL-3.0, separate executable)
+
+R11 adds a **second, separately shipped binary** to the release package:
+`bin/sing-box`, the unmodified upstream `sing-box` v1.14.4 executable (tag
+`v1.14.4`, commit `c005f35300ce76427dc285481ec5695f5b179cd2`), licensed
+GPL-3.0-or-later with an added naming clause. `scripts/build.sh` does not build
+it and it is **not linked into** `bin/routelatch`; RouteLatch stays Apache-2.0
+and the 68-module audit is unchanged. The aggregate rationale, naming-clause
+handling, written source offer and legal-risk disclaimer are in
+`docs/licensing.md` and `THIRD-PARTY-NOTICES.md`.
+
+With the sidecar included, each tarball additionally carries:
+
+- `bin/sing-box` — the pinned, unmodified sidecar executable for that architecture;
+- `share/doc/routelatch/SINGBOX-INFO` — pinned tag/commit, per-architecture
+  SHA-256 and a pointer to the source offer;
+- the GPL-3.0 notice section and written source offer in
+  `THIRD-PARTY-NOTICES.md` (already shipped in every package).
+
+`scripts/package.sh` pins tag `v1.14.4`, re-verifies each supplied binary against
+`dist/singbox/SHA256SUMS` with `sha256sum -c` before copying it, and records the
+hash in `SINGBOX-INFO`. It also pins the authoritative SHA-256 digests that GitHub
+reports for the two official v1.14.4 release archives (that release has no
+separate `SHA256SUMS` asset) and re-verifies an archive when it is supplied;
+`REQUIRE_SINGBOX=1` makes the archives mandatory. `BUILD-INFO` stays the RouteLatch
+build stamp and is not modified; the existing `dist/packages/SHA256SUMS` →
+`sha256sum -c` flow is unchanged and now also covers the tarball containing the
+sidecar.
+
+**Manual step before a release build:** the operator must supply the verified
+binaries, the official archives and the checksum file under `dist/singbox/`
+(see `packaging/README.md` for the authoritative obtain-and-verify procedure and
+the pinned archive digests). Without them, a routine build packages without the
+sidecar and prints a notice; `REQUIRE_SINGBOX=1` makes any missing input a hard
+error. This work does not download, install or publish anything.
 
 ## 3. Name check (RouteLatch)
 
@@ -159,5 +199,9 @@ last verified in R1/R2. Package and artifact checks are in §2.
 3. **Confirm the name decision** and obtain real trademark clearance before
    announcing; Docker Hub remains unchecked.
 4. **Decide on the committer email** in public history.
-5. Nice-to-have, outside this change: pin GitHub Actions to commit SHAs, and add
+5. **Supply and verify the sing-box v1.14.4 binary** under `dist/singbox/` before
+   building a release package, using the procedure in `packaging/README.md`;
+   confirm the pinned checksum comes from the official release and that
+   `REQUIRE_SINGBOX=1` packaging succeeds. No binary is included in this change.
+6. Nice-to-have, outside this change: pin GitHub Actions to commit SHAs, and add
    this file to `docs/README.md` and the plan's status record.

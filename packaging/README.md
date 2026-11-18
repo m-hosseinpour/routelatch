@@ -1,10 +1,13 @@
 # Packaging and install notes
 
-RouteLatch ships as a single Go binary. Users do not need Go, Python, Node or a
-separate Xray installation: the pinned Xray core is compiled into the binary.
-This directory documents the package layout and the user's install steps. **The
-build never installs anything** — no service is enabled, no desktop proxy or
-network setting is touched, and nothing is published.
+RouteLatch's own program ships as a single Go binary. Users do not need Go,
+Python, Node or a separate Xray installation: the pinned Xray core is compiled
+into that binary. A release package can additionally carry `bin/sing-box`, a
+**separate, unmodified GPL-3.0 executable** supplied by the release operator (see
+"The sing-box sidecar" below). This directory documents the package layout and
+the user's install steps. **The build never installs anything** — no service is
+enabled, no desktop proxy or network setting is touched, and nothing is
+published or downloaded.
 
 The default answer for "how do I get a package" is `scripts/build.sh` followed
 by `scripts/package.sh`. Both are local build steps.
@@ -15,6 +18,7 @@ by `scripts/package.sh`. Both are local build steps.
 scripts/build.sh           linux/amd64 + linux/arm64 static build, dist/SHA256SUMS, dist/BUILD-INFO
 scripts/package.sh         assembles the package trees and .tar.gz files under dist/packages/
 scripts/check-artifact.sh  static-link and empty-environment smoke check for one binary
+dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
 packaging/README.md        this file; it is shipped inside the package as INSTALL.md
 deploy/systemd/routelatch.service
                            the one copy of the systemd user unit (the package copies it)
@@ -30,6 +34,7 @@ deploy/README.md           service lifecycle: install, check, uninstall, crash r
 ```
 routelatch-<version>-linux-<amd64|arm64>/
   bin/routelatch
+  bin/sing-box                          optional: separate GPL-3.0 sidecar (pinned v1.14.4)
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
   share/doc/routelatch/SERVICE.md       systemd unit lifecycle, uninstall, crash recovery
@@ -41,6 +46,7 @@ routelatch-<version>-linux-<amd64|arm64>/
                                         audit method, obligations, evidence limits
   share/doc/routelatch/go.sum           module hashes quoted by the audit
   share/doc/routelatch/BUILD-INFO       version, commit, date, Go version, cgo=0
+  share/doc/routelatch/SINGBOX-INFO     optional: sidecar tag/commit and per-arch SHA-256
   share/doc/routelatch/PACKAGE-NOTES    "local build, not published" notice
   share/routelatch/systemd/routelatch.service
 ```
@@ -90,6 +96,74 @@ Only `linux/amd64` and `linux/arm64` are built. `uname -m` must report
 targets both architectures on one machine, so an arm64 package can be produced
 without an arm64 host — but it also has to be run on arm64 hardware to be
 tested. Only the amd64 artifact was executed during this build.
+
+## The sing-box sidecar (GPL-3.0, separate executable)
+
+`bin/sing-box` is not built by `scripts/build.sh` and is not linked into
+RouteLatch. It is an optional input: an **already extracted, unmodified upstream
+binary** for each architecture, supplied by the release operator under
+`dist/singbox/` (gitignored together with `dist/`). `scripts/package.sh` pins
+upstream tag `v1.14.4` (commit `c005f35300ce76427dc285481ec5695f5b179cd2`) and the
+sidecar's identity is recorded in the package's `SINGBOX-INFO`.
+
+Expected inputs, all under `dist/singbox/`:
+
+```
+sing-box-linux-amd64      extracted upstream v1.14.4 binary for amd64
+sing-box-linux-arm64      extracted upstream v1.14.4 binary for arm64
+SHA256SUMS                lines: <sha256>  sing-box-linux-<arch>
+# Optional for a routine build, required for REQUIRE_SINGBOX=1: verify against
+# the digests pinned in scripts/package.sh before extracting the binaries above.
+sing-box-1.14.4-linux-amd64.tar.gz   official v1.14.4 archive for amd64
+sing-box-1.14.4-linux-arm64.tar.gz   official v1.14.4 archive for arm64
+```
+
+How to obtain and pin them — done by the operator at release time; **this script
+and this change download nothing**:
+
+1. Fetch the **official** `v1.14.4` release archives
+   `sing-box-1.14.4-linux-amd64.tar.gz` and `sing-box-1.14.4-linux-arm64.tar.gz`
+   from the [upstream release](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4).
+   That release has no `SHA256SUMS` asset; the authoritative per-asset digests are
+   those GitHub reports, pinned in `scripts/package.sh`:
+
+   | Archive | Authoritative SHA-256 (GitHub asset digest, tag v1.14.4) |
+   | --- | --- |
+   | `sing-box-1.14.4-linux-amd64.tar.gz` | `699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968` |
+   | `sing-box-1.14.4-linux-arm64.tar.gz` | `436441f76ee2f7fe21b5b2d426d3cb261a480455a704865789ad533e4273ec26` |
+
+   Verify each downloaded archive against its pinned digest before extracting.
+   `scripts/package.sh` repeats this check when the archive is present and fails
+   closed on a mismatch. Do not substitute a mirror or a self-built binary.
+2. Extract the `sing-box` executable from each verified archive and place the two
+   files at the paths above. Upstream publishes no per-binary digest, so the
+   extracted binary can only be anchored to the official release by extracting it
+   from an archive that passed step 1; the script cannot prove that provenance on
+   its own.
+3. In `dist/singbox/`, run `sha256sum sing-box-linux-amd64 sing-box-linux-arm64`
+   and save the two lines as `SHA256SUMS`. These are the operator-generated pins
+   for the **extracted binaries**; `scripts/package.sh` re-verifies each supplied
+   binary with `sha256sum -c` before it is copied into a package and fails closed
+   on a mismatch. They are meaningful only when the binaries came from the
+   archives verified in step 1.
+4. Run `scripts/package.sh`. With the inputs present, every tarball carries
+   `bin/sing-box` and `SINGBOX-INFO` (tag, commit, per-architecture SHA-256), the
+   `PACKAGE-NOTES` note, and the GPL-3.0 text and written source offer in
+   `THIRD-PARTY-NOTICES.md`. For a routine local build, a missing sidecar
+   directory, a directory without `SHA256SUMS`, or missing official archives only
+   print a notice and packaging continues without the sidecar. For a release
+   build set `REQUIRE_SINGBOX=1`: it then requires the sidecar directory,
+   `SHA256SUMS`, **and** both official archives with matching pinned digests, and
+   fails closed if any is missing or wrong.
+
+`BUILD-INFO` remains the RouteLatch build stamp and is deliberately **not**
+changed by the sidecar; the sidecar's identity is recorded separately in
+`SINGBOX-INFO`, so the existing stamp check and the copied `BUILD-INFO` stay
+consistent. The outer `dist/packages/SHA256SUMS` and its `sha256sum -c`
+verification are unchanged and now cover a tarball that contains the sidecar.
+Installing a tarball does not install or enable sing-box; it is just a file under
+`bin/`. The compliance assessment and source-offer instructions are in
+[`docs/licensing.md`](../docs/licensing.md).
 
 ## Verification performed
 
@@ -157,7 +231,9 @@ The project is licensed under **Apache-2.0** (D20, decided 2026-11-18). Every
 package carries `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md` under
 `share/doc/routelatch/`; the latter lists the exact linked module versions, their
 licenses and the MPL-2.0 source-availability route. The audit and its limits are
-in `docs/licensing.md`.
+in `docs/licensing.md`. When the sidecar is included, the same notices also carry
+the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
+and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
 Publication is still not settled. Do not publish, release, tag, push or upload
 these packages: that is a separate decision with the project owner, and the

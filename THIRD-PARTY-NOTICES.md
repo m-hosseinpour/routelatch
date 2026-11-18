@@ -35,7 +35,8 @@ requirement is missing here.
 | **Total** | **68** |
 
 No module in the binary is GPL-3.0, AGPL or of unknown license; the GPL-3.0 text
-appears below only because LGPL-3.0 incorporates it. The MPL-2.0 components
+appears below both because LGPL-3.0 incorporates it and because it governs the
+separately shipped executable described at the end of this file. The MPL-2.0 components
 are `xtls/xray-core`, `xtls/reality` and `layeh.com/gopher-luar`; `juju/ratelimit`
 is LGPL-3.0 with an explicit static-linking exception. Both cases are explained
 below and in the audit record.
@@ -1855,3 +1856,98 @@ The Xray-core engine (`github.com/xtls/xray-core`) and its REALITY transport
 an unmodified dependency; it does not vendor or modify engine source. RouteLatch is
 an independent project, is not an official Xray client, and is not affiliated with or
 endorsed by XTLS.
+
+## Separately shipped GPL-3.0 executable: sing-box v1.14.4 (NOT part of RouteLatch)
+
+> **This section describes a different, separately distributed program.** The
+> `sing-box` binary described here is **not** linked into, compiled into, or derived
+> from RouteLatch. RouteLatch itself remains under the Apache License, Version 2.0;
+> nothing here changes `LICENSE`, the 68-module audit above, or the license of
+> `bin/routelatch`. The full GPL-3.0 text that governs the sidecar is reproduced
+> above under "GPL-3.0 (incorporated by LGPL-3.0)", and the sidecar's own
+> upstream `LICENSE` (GPL-3.0-or-later plus its added naming clause) is
+> reproduced verbatim below. Both texts ship in this file and apply to the
+> sidecar.
+
+When a release package is built with the optional second runtime, it also ships
+`bin/sing-box` as a **separate, unmodified executable**. RouteLatch talks to it over
+a local socket as an arm's-length helper. The two programs form an "aggregate" under
+the final paragraph of GPL-3.0 §5 (see also §0), not a single combined work, so the
+GPL does not extend to RouteLatch's Apache-2.0 code.
+
+| Item | Value |
+| --- | --- |
+| Program | `sing-box` (`github.com/sagernet/sing-box`), shipped as `bin/sing-box` |
+| Pinned release | tag `v1.14.4` (2026-10-24), commit `c005f35300ce76427dc285481ec5695f5b179cd2` |
+| License | **GPL-3.0-or-later**, plus an added naming-restriction clause; GitHub SPDX reports `NOASSERTION` because of that clause |
+| Base library | `SagerNet/sing`, also GPL-3.0-or-later; its source is part of the Corresponding Source |
+| Transitive source | `github.com/apernet/hysteria/core/v2` at `core/v2.14.0` (MIT) is in sing-box's own source graph; it is **not** a Go dependency of RouteLatch |
+| Modifications | none — the upstream binary is shipped verbatim |
+| Copyright notice | `Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>` — from the verbatim upstream `LICENSE` reproduced below, fetched from the authoritative raw file at tag `v1.14.4` and confirmed identical at the pinned commit; per-file source headers remain available via the source offer below |
+
+### Verbatim upstream `LICENSE` (tag `v1.14.4`)
+
+The following is the complete `LICENSE` file from the upstream source at tag
+`v1.14.4` (commit `c005f35300ce76427dc285481ec5695f5b179cd2`), fetched from
+`https://raw.githubusercontent.com/SagerNet/sing-box/v1.14.4/LICENSE` and
+confirmed byte-for-byte identical at the pinned commit. It is the short "how to
+apply" notice plus the added naming clause that GitHub reports as `NOASSERTION`;
+the full GPL-3.0 terms it incorporates are reproduced above.
+
+```
+Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+In addition, no derivative work may use the name or imply association
+with this application without prior consent.
+```
+
+### Added naming clause
+
+The final paragraph of the verbatim upstream `LICENSE` above reads:
+
+> "In addition, no derivative work may use the name or imply association
+> with this application without prior consent."
+
+This added clause is why GitHub does not report plain SPDX `GPL-3.0-or-later` for the
+upstream project. RouteLatch complies by (a) shipping the upstream binary
+**unmodified**, (b) naming it factually as `sing-box` only where its presence must be
+disclosed, (c) not presenting any modified build under that name, and (d) not
+claiming endorsement or affiliation. RouteLatch's own name and branding are
+independent and are not derived from sing-box.
+
+### Written source offer (GPL-3.0 §6)
+
+When a package containing `bin/sing-box` is conveyed in object-code form without its
+source, this file is the written offer, valid for at least three years and for as
+long as the binary is offered, to give any recipient a complete, machine-readable
+copy of the Corresponding Source, at no charge, for the pinned release above:
+
+```sh
+git clone https://github.com/SagerNet/sing-box.git sing-box-v1.14.4
+cd sing-box-v1.14.4
+git checkout c005f35300ce76427dc285481ec5695f5b179cd2   # tag v1.14.4
+```
+
+That source tree pins `SagerNet/sing` and the hysteria2 core in its own
+`go.mod`/`go.sum`; fetching those pinned dependencies completes the Corresponding
+Source. The SHA-256 of each shipped sidecar binary is recorded in `SINGBOX-INFO`
+inside the package and in `dist/singbox/SHA256SUMS` at build time;
+[`docs/licensing.md`](docs/licensing.md) records the fetch instructions and the
+limits of this assessment. No source tarball is bundled; bundling one later is an
+alternative, not a present requirement.
+
+This is a compliance-risk assessment by the project, not legal advice, and it has
+not been reviewed by counsel.

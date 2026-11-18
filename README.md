@@ -50,7 +50,11 @@ sweep finishes.
 Prebuilt tarballs for `linux/amd64` and `linux/arm64` are produced by
 `scripts/package.sh`. Source is published on GitHub; no release artifacts or tags are published yet, so
 use a tarball you built yourself or build from source. A package contains the
-binary, the systemd user unit and the license/notice files.
+binary, the systemd user unit and the license/notice files. A release package can
+also ship a second binary, `bin/sing-box`: the unmodified, GPL-3.0 `sing-box`
+v1.14.4 proxy runtime, distributed as a separate program. Its per-binary SHA-256
+is in `SINGBOX-INFO` and a written source offer is in the notices. RouteLatch
+itself stays Apache-2.0; see [License](#license).
 
 From a tarball:
 
@@ -283,6 +287,15 @@ Apache-2.0, MPL-2.0 and LGPL-3.0 licenses. Exact versions, notices and license
 texts are in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md); the audit
 method and the MPL-2.0/LGPL-3.0 obligations are documented in
 [docs/licensing.md](docs/licensing.md).
+
+A release package may also include `bin/sing-box`, an unmodified, separately
+shipped GPL-3.0-or-later executable (pinned v1.14.4) used as a second proxy
+runtime. It is an independent program, not linked into RouteLatch; the full
+GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause and
+the written source offer are in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), with the compliance
+assessment (not legal advice) in [docs/licensing.md](docs/licensing.md). Shipping
+it does not change RouteLatch's Apache-2.0 license.
 
 RouteLatch is not an official Xray client and does not imply affiliation with
 XTLS.
