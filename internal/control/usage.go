@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -9,6 +10,11 @@ import (
 	"routelatch/internal/contract"
 	"routelatch/internal/pool"
 )
+
+// errUsageExitGone aborts a usage write for an exit that was removed between
+// the first downlink byte and the mutation; the removed record must not come
+// back as a phantom health row.
+var errUsageExitGone = errors.New("usage evidence for a removed exit")
 
 // usagePool observes real user connections so positive egress evidence reaches
 // health (docs/contracts.md §5.3, §6.2). Probes use the unwrapped dialer: their
@@ -92,6 +98,9 @@ func (s *Service) recordUsage(exit contract.ExitID, latency time.Duration) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		snap, err := s.store.Mutate(ctx, func(st *contract.State) error {
+			if !hasRecord(st, exit) {
+				return errUsageExitGone
+			}
 			pool.RecordUsage(st, exit, latency, now)
 			pool.SyncStatuses(st, now)
 			return nil
@@ -101,4 +110,13 @@ func (s *Service) recordUsage(exit contract.ExitID, latency time.Duration) {
 		}
 		s.snap.Store(&snap)
 	}()
+}
+
+func hasRecord(st *contract.State, exit contract.ExitID) bool {
+	for i := range st.Records {
+		if contract.ExitID(st.Records[i].ID) == exit {
+			return true
+		}
+	}
+	return false
 }

@@ -176,6 +176,107 @@ func TestA07PoolHealth(t *testing.T) {
 	_ = tunnel.Close()
 }
 
+// TestA07RealUsageHealth drives one real tunnel through the production
+// frontend and asserts that bytes returned through the exit promote it to
+// healthy (contracts §5.3, §6.2). It fails if StartNetwork stops attaching the
+// usage-aware pool wrapper, or if probes start counting real traffic twice.
+func TestA07RealUsageHealth(t *testing.T) {
+	r := report{t: t}
+	env := newTestEnv(t)
+	dir := filepath.Join(env.home, "usage")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("data dir: %v", err)
+	}
+	fx := newFixtureSet(t)
+	echo := newEchoPeer(t)
+	second := newSOCKSExit(t)
+	poolFile := filepath.Join(t.TempDir(), "pool.txt")
+	lines := fx.links[2] + "\n" + fmt.Sprintf("socks5://127.0.0.1:%d#socks-second\n", second.port())
+	if err := os.WriteFile(poolFile, []byte(lines), 0o600); err != nil {
+		t.Fatalf("write pool fixture: %v", err)
+	}
+
+	svc := startService(t, env, dir, serviceConfig{
+		Probes: map[string]any{"targets": []string{}, "timeout_ms": 20000},
+	})
+	t.Cleanup(func() { _ = svc.stop() })
+	svc.mustOK("import", "file", poolFile)
+	svc.mustOK("rules", "add", "--kind", "domain", "exact.rl.test")
+
+	cold, _ := svc.statusNow()
+	if cold.poolHealthy != 0 {
+		r.fail("A07", "cold start already reported healthy=%d", cold.poolHealthy)
+	}
+
+	conn, br, code, err := connectHTTP(t, svc.httpAddr, fmt.Sprintf("exact.rl.test:%d", echo.port()))
+	if err != nil || code != 200 {
+		r.fail("A07", "real-usage tunnel: code=%d err=%v", code, err)
+		return
+	}
+	got, echoErr := tunnelEcho(t, conn, br, "usage-evidence")
+	_ = conn.Close()
+	if echoErr != nil || got != "usage-evidence" {
+		r.fail("A07", "real-usage echo: got=%q err=%v", got, echoErr)
+		return
+	}
+
+	if !waitFor(15*time.Second, func() bool {
+		st, ok := svc.statusNow()
+		return ok && st.poolHealthy == 1
+	}) {
+		st, _ := svc.statusNow()
+		r.fail("A07", "a successful real request did not promote any exit: healthy=%d", st.poolHealthy)
+		return
+	}
+	healthy, unknown := 0, 0
+	samples, ewma := 0, int64(0)
+	usedID := ""
+	for _, row := range svc.mustOK("pool", "list").list(t, "records") {
+		switch str(row["status"]) {
+		case "healthy":
+			healthy++
+			usedID = str(row["id"])
+			if h, ok := row["health"].(map[string]any); ok {
+				samples, ewma = num(h["samples"]), int64(num(h["ewma_latency_ms"]))
+			}
+		case "unknown":
+			unknown++
+		}
+	}
+	if healthy != 1 || unknown != 1 || samples < 1 || ewma <= 0 {
+		r.fail("A07", "real-usage health: healthy=%d unknown=%d samples=%d ewma=%d", healthy, unknown, samples, ewma)
+		return
+	}
+	r.pass("A07", "bytes returned through a real tunnel promoted the serving exit to healthy (samples=%d, ewma=%dms) and left the untouched exit unknown", samples, ewma)
+
+	// The probe path must not be counted twice: one explicit egress probe adds
+	// exactly one sample, even though a wrapped probe conn would also read a
+	// byte and could record usage on top of ApplyProbe. The pause clears the
+	// one-per-second usage coalescing window so a double count cannot hide.
+	time.Sleep(1100 * time.Millisecond)
+	greeter := newGreeterPeer(t, "g")
+	probe := svc.mustOK("pool", "test", "--exit", usedID, "--target", fmt.Sprintf("exact.rl.test:%d", greeter.port()))
+	rows := probe.list(t, "results")
+	if len(rows) != 1 || str(rows[0]["outcome"]) != "success" || num(rows[0]["bytes_down"]) < 1 {
+		r.fail("A07", "usage-probe interleaving: rows=%+v", rows)
+		return
+	}
+	time.Sleep(200 * time.Millisecond)
+	after := 0
+	for _, row := range svc.mustOK("pool", "list").list(t, "records") {
+		if str(row["id"]) == usedID {
+			if h, ok := row["health"].(map[string]any); ok {
+				after = num(h["samples"])
+			}
+		}
+	}
+	if after != samples+1 {
+		r.fail("A07", "an egress probe changed samples by %d, want exactly 1", after-samples)
+		return
+	}
+	r.pass("A07", "one explicit egress probe added exactly one sample (no probe/usage double count)")
+}
+
 // TestA07AllCooling checks the documented clear error when every exit is
 // cooling or unusable.
 func TestA07AllCooling(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/store"
 )
 
 type usageProbeConn struct {
@@ -131,10 +132,46 @@ func TestUsagePoolOnlyWrapsPoolConns(t *testing.T) {
 	}
 }
 
+func seedUsageRecord(t *testing.T, st *store.Store, id string) {
+	t.Helper()
+	_, err := st.Mutate(context.Background(), func(state *contract.State) error {
+		state.Records = append(state.Records, contract.Record{
+			ID: contract.RecordID(id), DedupeKey: "sha256:" + id,
+			Protocol: contract.ProtocolSOCKS5, Server: "127.0.0.1", Port: 1080,
+			Transport: contract.TransportRaw, Security: contract.SecurityNone,
+			Status: contract.RecordUnknown, AddedAt: time.Now().UTC(),
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRecordUsageIgnoresRemovedExit(t *testing.T) {
+	st, paths := newServiceStore(t)
+	svc := newTestService(t, st, paths)
+	svc.now = time.Now
+
+	svc.recordUsage("x-gone", 50*time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
+	if h := svc.Snapshot().State.Health; len(h) != 0 {
+		t.Fatalf("usage for a removed exit created health: %+v", h)
+	}
+	persisted, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted.State.Health) != 0 {
+		t.Fatalf("persisted health = %+v", persisted.State.Health)
+	}
+}
+
 func TestRecordUsagePersistsEvidenceAndCoalesces(t *testing.T) {
 	st, paths := newServiceStore(t)
 	svc := newTestService(t, st, paths)
 	svc.now = time.Now
+	seedUsageRecord(t, st, "x-a")
 
 	svc.recordUsage("x-a", 120*time.Millisecond)
 	wait := time.Now().Add(2 * time.Second)

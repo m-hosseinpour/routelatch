@@ -85,7 +85,9 @@ func (c *countingDirect) DialDirect(ctx context.Context, dst contract.Destinatio
 }
 
 // attachFrontend gives a core-only service the real two listeners with a
-// caller-supplied pool. Production StartNetwork does the same wiring.
+// caller-supplied pool. It deliberately attaches that pool raw: these tests
+// cover closures and refusal surfaces, not health evidence. StartNetwork adds
+// the usagePool wrapper, which the acceptance suite drives end to end.
 func attachFrontend(t *testing.T, s *Service, pl contract.PoolDialer, direct contract.Dialer) {
 	t.Helper()
 	fe, err := frontend.New(frontend.Options{
