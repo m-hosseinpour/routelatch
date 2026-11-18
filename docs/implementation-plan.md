@@ -212,7 +212,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و و در مخزن عمومی وجود
 > ندارند. مرجع معتبر، HEAD انتشارشده است.
- (۲۰۲۶-۱۱-۱۸؛ همهٔ بررسی‌های این بخش روی `3cb7bd7` اجرا شده‌اند —
+  (۲۰۲۶-۱۱-۱۸؛ HEAD فعلی `efc73c3`. بررسیها روی معادل قبل از بازنویسی `3425c3f` اجرا و روی `3cb7bd7` پس از بازنویسی تأیید شد —
 هنگام شروع، `git log` را ببین)
 
 - **نسخهٔ لینوکسی پیاده و محلی آزموده است:** `internal/*` و `cmd/routelatch` کامل‌اند؛
@@ -340,14 +340,14 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | R5 | **انجام شد** (`640f83c`, `5d328a6`): مسیر import هرگز `unknown` نمی‌سازد (http → `unsupported`/`http_exit_not_verified`، scheme ناشناس → `unsupported`/`protocol_unsupported`) و view/status حالا رکورد undialable را **صرف‌نظر از status ذخیره‌شده** جز `invalid` مشتق می‌کند. `pool list`، `status` و `doctor` از یک مالک واحد (`EffectiveStatus`) می‌خوانند، state بازنویسی نمی‌شود و رکورد پیش از هر dial/probe رد می‌شود. **Residual پذیرفته‌شده:** protocol تهی/صفر عمداً دست‌نخورده است؛ semantics پروتکل‌های پشتیبانی‌شده تغییر نکرده؛ tick چرخش ۳۰ ثانیه‌ای در acceptance درایو نمی‌شود؛ `SyncStatuses` پس از فرمان تغییردهنده ممکن است cooldown منقضی را به `unknown` نرمال کند (bookkeeping قبلی، نه نوشتن مشتق‌سازی) | A06/§5 (کیفیت گزارش) | نه |
 | R6 | **انجام شد** (`a69ae1e`): WS/TLS، gRPC/TLS (`h2`) و XHTTP/TLS (`h2`) با exit pin‌شدهٔ محلی، rule، `pool select` و CONNECT به peer loopback واقعاً آزموده شدند (هر سلول دقیقاً ۱ درخواست مقصد و پاسخ بدون تغییر)؛ pin غلط ۰ داده به مقصد می‌فرستد و سرویس بالا می‌ماند. **هنوز آزمون‌نشده:** REALITY/ECH، mKCP، HTTPUpgrade، h3، mux/XUDP، و رفتار طولانی‌مدت/reuse یک ترنسپورت | T1/T4 دقت ادعا | نه |
 | R7 | **انجام شد — استفادهٔ واقعی و ماندگار:** نصب unit و `enable --now`، pool کاربری import شد، ۳۴ قاعده برای دامنه‌های کاربر، mode `targeted`، پروکسی دسکتاپ KDE روی RouteLatch با مسیر بازگشت. سه بررسی واقعی (approved→exit، unapproved→direct، exit مرده→502) pass. **شروع در login فقط config-verified**؛ reboot اجرا نشد | A11/A13 در استفادهٔ واقعی + تجربهٔ dogfood | انجام شد با مجوز شما |
-| R8 | **انجام شد (`e098ceb` merge):** README/CI/فایل‌های عمومی، بستهٔ release با checksum/stamp/source offer، اسکن تاریخچه (پاک)، بررسی نام، `docs/release-readiness.md`. **انتشار انجام نشد** | آمادگی انتشار (بدون push) | انجام شد؛ push/remote/public جدا ممنوع |
+| R8 | **انجام شد (`e098ceb` merge):** README/CI/فایل‌های عمومی، بستهٔ release با checksum/stamp/source offer، اسکن تاریخچه (پاک)، بررسی نام، `docs/release-readiness.md`. | آمادگی انتشار | انجام شد؛ push بعداً با مجوز کاربر انجام شد |
 | R10 | **انجام شد (`c1a98f9`, `cbc6a87`, `3425c3f`):** failover CONNECT پیش از ۲۰۰ با سقف ۳ exit و بافر ۶۴ KiB، پین دستی تکـتلاش، بدون direct و بدون تغییر HTTP ساده/SOCKS5؛ ۱۶/۳۰ → ۹۲/۱۰۰ و smoke ۱۹/۲۰؛ نصب و restart سرویس روزمره | A02/A03/D22 | انجام شد |
-| انتشار | **انجام شد (`3cb7bd7`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
+| انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD فعلی `efc73c3`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 
 **قاعدهٔ انتخاب:** R1–R8، R10 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد و
 هیچ task محلی رفعمانع باقی نمانده است.
-کارهای باقی‌مانده (اجرای arm64، محیط پاک برای A01، reboot/re-login، و انتشار: push/remote/
-repo عمومی/tag/release) مجوز جدا می‌خواهند؛ «T7 تمام‌شده» به معنی انتشار یا پذیرش کامل نیست.
+کارهای باقیمانده (اجرای arm64، محیط پاک برای A01، reboot/re-login و GNOME) مجوز جدا
+میخواهند؛ انتشار و push از قبل انجام شد، ولی tag/release مجوز جدا میخواهد.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -375,7 +375,7 @@ failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، 
    فعال و به‌عنوان پروکسی دسکتاپ KDE تنظیم شده است (R7)؛ اگر کاربر خواست برگردد،
    `routelatch desktop proxy restore` مقدار قبلی را بازمی‌گرداند. کارهای بعدی — اجرای
    arm64 روی سخت‌افزار، ماشین تازه برای A01، reboot/re-login برای A13، نشست GNOME برای
-   A11، و انتشار (push/remote/repo عمومی/tag) — مجوز جدا می‌خواهند.
+   A11 و tag/release — مجوز جدا میخواهند؛ push به دو remote قبلاً انجام شد.
 3. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
    است، چون F1/F8 را فقط آن گرفت)، سپس بازبینی مستقل و commit محلی.
 4. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.

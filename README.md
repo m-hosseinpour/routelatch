@@ -48,7 +48,7 @@ sweep finishes.
 ## Install
 
 Prebuilt tarballs for `linux/amd64` and `linux/arm64` are produced by
-`scripts/package.sh`. This repository does not publish release artifacts yet, so
+`scripts/package.sh`. Source is published on GitHub; no release artifacts or tags are published yet, so
 use a tarball you built yourself or build from source. A package contains the
 binary, the systemd user unit and the license/notice files.
 
