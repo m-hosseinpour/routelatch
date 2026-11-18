@@ -364,7 +364,7 @@ func TestSnapshotReportsStateWithoutUpstreamAddress(t *testing.T) {
 	}
 }
 
-func TestProofAndExitAreSetOnce(t *testing.T) {
+func TestProofIsSetOnceAndExitFollowsTheServingAttempt(t *testing.T) {
 	r := conns.New()
 	h := mustRegister(t, r, spec("c-1", contract.RoutePool, 1))
 	h.SetProof(contract.ProofAccepted)
@@ -376,8 +376,8 @@ func TestProofAndExitAreSetOnce(t *testing.T) {
 	if info.Proof != contract.ProofAccepted {
 		t.Fatalf("proof = %q, want accepted (set once)", info.Proof)
 	}
-	if info.Exit != "x-1" {
-		t.Fatalf("exit = %q, want x-1 (set once)", info.Exit)
+	if info.Exit != "x-2" {
+		t.Fatalf("exit = %q, want x-2 (the serving attempt)", info.Exit)
 	}
 }
 

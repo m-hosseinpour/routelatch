@@ -59,6 +59,10 @@ func TestFailoverBeforeFirstByte(t *testing.T) {
 		t.Fatalf("pool rows missing: flaky=%v healthy=%v", flakyRow, healthyRow)
 	}
 
+	// origin.rl.test does not resolve on the host, so a hidden direct attempt
+	// would fail before contacting this peer; no-direct-fallback is asserted by
+	// the frontend unit tests' injected dialer counter. What the real process
+	// can prove here is the absence of any direct success or destination contact.
 	target := fmt.Sprintf("origin.rl.test:%d", origin.port())
 	conn, br, code, err := connectHTTP(t, svc.httpAddr, target)
 	if err != nil || code != 200 {

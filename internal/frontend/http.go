@@ -178,6 +178,12 @@ func (p *httpProxy) serveConnect(c net.Conn, br *bufio.Reader, req *http.Request
 		if proof != contract.ProofUnknown {
 			h.SetProof(proof)
 		}
+	} else if exit != "" {
+		// Record the current attempt immediately so an exit-removal sweep can
+		// identify this live tunnel before the first destination byte. The
+		// frontend updates it when a retry switches exits and when the serving
+		// exit commits (docs/contracts.md §2.6).
+		h.SetExit(exit)
 	}
 	if err := writeAll(c, []byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
 		return

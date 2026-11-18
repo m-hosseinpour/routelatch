@@ -66,6 +66,10 @@ type ConnInfo struct {
 //   - SetUpstream and SetClient are idempotent and must be called as soon as
 //     the conn exists, because the frontend libraries return no handle and
 //     Close is the only way to unblock their copies.
+//   - SetExit records the exit currently serving the connection. It may be
+//     called again when a pre-byte CONNECT failover switches exits; the last
+//     non-empty value is authoritative, so a sweep can identify the live
+//     tunnel by the exit it actually uses.
 //   - SetProof is called once, immediately after PoolDial returns and before
 //     the first byte is copied, so status and logs can report confirmed vs
 //     accepted. On a failover-capable HTTP CONNECT the frontend calls it when

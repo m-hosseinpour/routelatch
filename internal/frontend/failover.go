@@ -6,12 +6,13 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"routelatch/internal/contract"
 )
 
-// tunnelPool carries an HTTP CONNECT tunnel for an automatic pool exit and
-// makes a pre-byte exit failure invisible to the client.
+// execute carries an HTTP CONNECT tunnel for a pool exit and makes a pre-byte
+// exit failure invisible to the client.
 //
 // The 200 is sent as soon as the pool dial returns a proven connection: a
 // conforming client sends nothing until it sees 2xx (RFC 9110 §9.3.6), so
@@ -54,6 +55,8 @@ func newPoolTunnel(p *httpProxy, h contract.ConnHandle, client net.Conn, clientR
 		max:      maxAttempts,
 		tried:    []contract.ExitID{firstExit},
 		clientCh: make(chan tunnelEvent),
+		forward:  make(chan struct{}),
+		downDone: make(chan struct{}),
 		done:     make(chan struct{}),
 	}
 }
@@ -71,10 +74,23 @@ func (t *poolTunnel) start() {
 }
 
 // tunnelEvent is one read result from either side. data is delivered before a
-// non-nil err from the same Read call.
+// non-nil err from the same Read call. buf is the pooled buffer that owns data;
+// the coordinator returns it after the write so bulk tunnels do not allocate a
+// fresh 32 KiB slice per chunk.
 type tunnelEvent struct {
 	data []byte
+	buf  []byte
 	err  error
+}
+
+var tunnelBufPool = sync.Pool{
+	New: func() any { return make([]byte, 32<<10) },
+}
+
+func freeTunnelBuf(buf []byte) {
+	if buf != nil {
+		tunnelBufPool.Put(buf)
+	}
 }
 
 type upReader struct {
@@ -102,12 +118,21 @@ type poolTunnel struct {
 	max       int
 	tried     []contract.ExitID
 	replay    []byte
-	committed bool
+	committed atomic.Bool
+	sawDown   atomic.Bool
 	clientEOF bool
 	upEOF     bool
 
 	clientCh chan tunnelEvent
 	upCh     *upReader
+
+	// forward is closed once when the destination's first byte commits the
+	// tunnel; a reader waiting with that byte then writes it directly to the
+	// client. downDone is closed when the reader observes an upstream EOF.
+	forward     chan struct{}
+	forwardOnce sync.Once
+	downDone    chan struct{}
+	downOnce    sync.Once
 
 	wg        sync.WaitGroup
 	done      chan struct{}
@@ -117,16 +142,20 @@ type poolTunnel struct {
 
 func (t *poolTunnel) readClient() {
 	defer t.wg.Done()
-	buf := make([]byte, 32<<10)
+	buf := tunnelBufPool.Get().([]byte)
 	for {
 		n, err := t.clientR.Read(buf)
 		if n > 0 {
-			data := append([]byte(nil), buf[:n]...)
-			if !t.send(t.clientCh, tunnelEvent{data: data}) {
+			if !t.send(t.clientCh, tunnelEvent{data: buf[:n], buf: buf}) {
+				freeTunnelBuf(buf)
 				return
 			}
+			// The coordinator owns the previous buffer until it finishes the
+			// write; an empty pool here simply allocates another one.
+			buf = tunnelBufPool.Get().([]byte)
 		}
 		if err != nil {
+			freeTunnelBuf(buf)
 			t.send(t.clientCh, tunnelEvent{err: err})
 			return
 		}
@@ -138,22 +167,83 @@ func (t *poolTunnel) readUpstream(conn net.Conn) *upReader {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		buf := make([]byte, 32<<10)
+		buf := tunnelBufPool.Get().([]byte)
 		for {
 			n, err := conn.Read(buf)
 			if n > 0 {
-				data := append([]byte(nil), buf[:n]...)
-				if !t.sendReader(r, tunnelEvent{data: data}) {
+				t.sawDown.Store(true)
+				ev := tunnelEvent{data: buf[:n], buf: buf}
+				if t.committed.Load() {
+					// The tunnel is committed: this reader is the only writer
+					// to the client, so a slow client cannot stall the upload
+					// copy that the coordinator runs in parallel.
+					if !t.writeDown(ev) {
+						return
+					}
+				} else {
+					// Hand the first byte to the coordinator, which decides
+					// whether this attempt is the one that serves the client.
+					if !t.sendReader(r, ev) {
+						freeTunnelBuf(buf)
+						return
+					}
+					select {
+					case <-t.forward:
+					case <-r.done:
+						freeTunnelBuf(buf)
+						return
+					case <-t.done:
+						freeTunnelBuf(buf)
+						return
+					case <-t.ctx.Done():
+						freeTunnelBuf(buf)
+						return
+					}
+					if !t.writeDown(ev) {
+						return
+					}
+				}
+				if err != nil {
+					t.endDown(err)
 					return
 				}
+				buf = tunnelBufPool.Get().([]byte)
+				continue
 			}
 			if err != nil {
+				if t.committed.Load() {
+					t.endDown(err)
+					return
+				}
 				t.sendReader(r, tunnelEvent{err: err})
 				return
 			}
 		}
 	}()
 	return r
+}
+
+// writeDown writes one destination chunk and returns its pooled buffer. A
+// client write failure is a client-side teardown, not an exit failure.
+func (t *poolTunnel) writeDown(ev tunnelEvent) bool {
+	err := writeAll(t.client, ev.data)
+	freeTunnelBuf(ev.buf)
+	if err != nil {
+		t.abort()
+		return false
+	}
+	return true
+}
+
+// endDown handles the end of the committed downstream stream: a clean EOF is a
+// half-close the tunnel forwards, anything else tears the tunnel down.
+func (t *poolTunnel) endDown(err error) {
+	if errors.Is(err, io.EOF) {
+		closeWrite(t.client)
+		t.downOnce.Do(func() { close(t.downDone) })
+		return
+	}
+	t.abort()
 }
 
 func (t *poolTunnel) send(ch chan tunnelEvent, ev tunnelEvent) bool {
@@ -215,20 +305,31 @@ func (t *poolTunnel) run() {
 		select {
 		case <-t.ctx.Done():
 			return
+		case <-t.done:
+			return
 		case ev := <-t.clientCh:
 			if len(ev.data) > 0 && !t.onClientData(ev.data) {
+				freeTunnelBuf(ev.buf)
 				return
 			}
 			if ev.err != nil && !t.onClientEnd(ev.err) {
+				freeTunnelBuf(ev.buf)
 				return
 			}
+			freeTunnelBuf(ev.buf)
 		case ev := <-t.upCh.ch:
-			if len(ev.data) > 0 && !t.onUpstreamData(ev.data) {
+			if len(ev.data) > 0 {
+				// The first destination byte commits this attempt. The
+				// reader owns ev.buf until it has written the byte after the
+				// forward signal, so it must not be freed here.
+				t.commit()
+				continue
+			}
+			if ev.err != nil && !t.nextAttempt() {
 				return
 			}
-			if ev.err != nil && !t.onUpstreamEnd(ev.err) {
-				return
-			}
+		case <-t.downDone:
+			t.upEOF = true
 		}
 		if t.clientEOF && t.upEOF {
 			return
@@ -237,21 +338,23 @@ func (t *poolTunnel) run() {
 }
 
 func (t *poolTunnel) onClientData(data []byte) bool {
-	if !t.committed {
+	if !t.committed.Load() {
 		if len(t.replay)+len(data) > contract.ConnectReplayBufferBytes {
 			// Retrying would require dropping bytes the client already sent.
 			// Commit to this exit and behave like the ordinary tunnel.
-			t.committed = true
-			t.replay = nil
+			t.commit()
 		} else {
 			t.replay = append(t.replay, data...)
 		}
 	}
 	if err := writeAll(t.currentUpstream(), data); err != nil {
-		if !t.committed {
-			return t.nextAttempt()
+		if t.committed.Load() || t.sawDown.Load() {
+			// A destination byte already exists (possibly still in the
+			// reader's handoff). Never retry or cool an exit that carried it.
+			t.commit()
+			return false
 		}
-		return false
+		return t.nextAttempt()
 	}
 	return true
 }
@@ -267,36 +370,18 @@ func (t *poolTunnel) onClientEnd(err error) bool {
 	return true
 }
 
-func (t *poolTunnel) onUpstreamData(data []byte) bool {
-	if !t.committed {
-		t.commit()
-	}
-	if err := writeAll(t.client, data); err != nil {
-		return false
-	}
-	return true
-}
-
-// commit fixes the serving exit and its proof class in the registry. Before the
-// first destination byte the connection is still retryable, so the handle must
-// not report an exit that may be replaced (docs/contracts.md §2.2).
+// commit fixes the serving exit and its proof class in the registry and releases
+// a reader waiting with the destination's first byte. Before that byte the
+// connection is still retryable, so the handle must not report a proof for an
+// exit that may be replaced (docs/contracts.md §2.2).
 func (t *poolTunnel) commit() {
-	t.committed = true
-	t.replay = nil
-	t.h.SetExit(t.currentExit())
-	t.h.SetProof(t.proof)
-}
-
-func (t *poolTunnel) onUpstreamEnd(err error) bool {
-	if !t.committed {
-		return t.nextAttempt()
-	}
-	if errors.Is(err, io.EOF) {
-		t.upEOF = true
-		closeWrite(t.client)
-		return true
-	}
-	return false
+	t.forwardOnce.Do(func() {
+		t.committed.Store(true)
+		t.replay = nil
+		t.h.SetExit(t.currentExit())
+		t.h.SetProof(t.proof)
+		close(t.forward)
+	})
 }
 
 // nextAttempt reports the current exit's pre-byte failure and tries the next
@@ -314,18 +399,31 @@ func (t *poolTunnel) nextAttempt() bool {
 		if t.attempts >= t.max {
 			return false
 		}
-		upstream, nextExit, nextProof, _, ferr := t.p.f.dial(t.ctx, t.dec, t.dst, t.tried)
+		upstream, nextExit, nextProof, nextPinned, ferr := t.p.f.dial(t.ctx, t.dec, t.dst, t.tried)
 		if ferr != nil {
 			return false
 		}
 		t.attempts++
+		if nextPinned {
+			// A manual selection appeared while this connection was in flight.
+			// Use it for this attempt but never chain another retry from it.
+			t.max = t.attempts
+		}
 		t.tried = append(t.tried, nextExit)
 		t.setUpstream(upstream, nextExit)
+		t.h.SetExit(nextExit)
 		t.proof = nextProof
 		t.upCh = t.readUpstream(upstream)
 		if len(t.replay) > 0 {
 			if err := writeAll(upstream, t.replay); err != nil {
+				// This attempt accepted the dial but failed during replay; the
+				// next loop reports it and tries another exit. Stop its reader
+				// now so it does not wait for the whole connection.
 				_ = upstream.Close()
+				if t.upCh != nil {
+					close(t.upCh.done)
+					t.upCh = nil
+				}
 				continue
 			}
 		}

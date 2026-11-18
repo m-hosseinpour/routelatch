@@ -85,6 +85,13 @@ func TestConnectFailsOverBeforeFirstByte(t *testing.T) {
 	if head := readHeadDirect(t, c); !containsStatus(head, 200) {
 		t.Fatalf("CONNECT reply = %q", head)
 	}
+	h := s.registry.firstHandle()
+	if h == nil {
+		t.Fatal("no registry handle")
+	}
+	if h.info().Exit != "x-1" || h.proofClass() != "" {
+		t.Fatalf("pre-commit handle = %+v, want exit x-1 and no proof", h.info())
+	}
 
 	mustWrite(t, c, "hello")
 	if got := readExact(t, firstServer, 5); got != "hello" {
@@ -101,6 +108,13 @@ func TestConnectFailsOverBeforeFirstByte(t *testing.T) {
 	}
 	if got := readExact(t, c, 5); got != "world" {
 		t.Fatalf("client read %q, want world", got)
+	}
+	h = s.registry.firstHandle()
+	if h == nil {
+		t.Fatal("no registry handle after commit")
+	}
+	if h.info().Exit != "x-2" || h.proofClass() != contract.ProofAccepted {
+		t.Fatalf("committed handle = %+v, want exit x-2 with accepted proof", h.info())
 	}
 
 	reqs := s.pool.requests()
@@ -293,9 +307,253 @@ func TestConnectCommitsAtReplayCap(t *testing.T) {
 	if s.pool.count() != 1 {
 		t.Fatalf("pool dials = %d, want 1: replay must stop at the cap", s.pool.count())
 	}
+	h := s.registry.firstHandle()
+	if h == nil {
+		t.Fatal("no registry handle")
+	}
+	if h.info().Exit != "x-1" || h.proofClass() != contract.ProofAccepted {
+		t.Fatalf("cap commit handle = %+v, want exit x-1 with accepted proof", h.info())
+	}
 }
 
 func containsStatus(head string, code int) bool {
 	return len(head) >= 9 && head[:9] == "HTTP/1.1 " &&
 		head[9:12] == string([]byte{byte('0' + code/100), byte('0' + (code/10)%10), byte('0' + code%10)})
+}
+
+// TestCommittedTunnelKeepsUploadIndependentOfClientReads proves the committed
+// tunnel has two independent copy directions: a client that stops reading the
+// downstream burst must not stall its own upload. The exit drains the upload in
+// one goroutine while its downstream write blocks.
+func TestCommittedTunnelKeepsUploadIndependentOfClientReads(t *testing.T) {
+	proxyConn, exitConn := tcpPair(t)
+
+	s := newStack(t, func(s *testStack) {
+		s.router.fn = poolRoute()
+		s.pool.fn = func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+			return pipeResult(proxyConn, "x-1", false), nil
+		}
+	})
+	c := dialProxy(t, s.f.HTTPAddr().String())
+	if tcp, ok := c.(*net.TCPConn); ok {
+		_ = tcp.SetReadBuffer(4096)
+	}
+	mustWrite(t, c, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n")
+	if head := readHeadDirect(t, c); !containsStatus(head, 200) {
+		t.Fatalf("CONNECT reply = %q", head)
+	}
+
+	// The exit sends a large downstream burst and blocks on the client that is
+	// deliberately not reading. Its reader still drains the upload.
+	payload := make([]byte, 1<<20)
+	go func() { _, _ = exitConn.Write(make([]byte, 8<<20)) }()
+	uploadDone := make(chan int64, 1)
+	go func() {
+		buf := make([]byte, 32<<10)
+		var total int64
+		for total < int64(len(payload)) {
+			n, err := exitConn.Read(buf)
+			total += int64(n)
+			if err != nil {
+				break
+			}
+		}
+		uploadDone <- total
+	}()
+
+	go func() { _, _ = c.Write(payload) }()
+
+	select {
+	case n := <-uploadDone:
+		if n < int64(len(payload)) {
+			t.Fatalf("exit received %d upload bytes, want at least %d", n, len(payload))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("upload stalled behind a client that does not read the downstream burst")
+	}
+}
+
+// halfDeadConn models the review's race deterministically: the destination
+// produced one byte, but the client-to-exit write fails before the coordinator
+// has forwarded it. The first byte must commit the attempt, so it is not
+// retried or reported as an exit failure.
+type halfDeadConn struct {
+	once     sync.Once
+	read     chan struct{}
+	closed   chan struct{}
+	closeOne sync.Once
+}
+
+func newHalfDeadConn() *halfDeadConn {
+	return &halfDeadConn{read: make(chan struct{}), closed: make(chan struct{})}
+}
+
+func (c *halfDeadConn) Read(p []byte) (int, error) {
+	first := false
+	c.once.Do(func() {
+		first = true
+		close(c.read)
+	})
+	if first {
+		p[0] = 'S'
+		return 1, nil
+	}
+	<-c.closed
+	return 0, io.EOF
+}
+
+func (c *halfDeadConn) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+func (c *halfDeadConn) Close() error {
+	c.closeOne.Do(func() { close(c.closed) })
+	return nil
+}
+func (c *halfDeadConn) LocalAddr() net.Addr              { return pipeAddr{} }
+func (c *halfDeadConn) RemoteAddr() net.Addr             { return pipeAddr{} }
+func (c *halfDeadConn) SetDeadline(time.Time) error      { return nil }
+func (c *halfDeadConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *halfDeadConn) SetWriteDeadline(time.Time) error { return nil }
+
+type pipeAddr struct{}
+
+func (pipeAddr) Network() string { return "pipe" }
+func (pipeAddr) String() string  { return "pipe" }
+
+// tcpPair returns two ends of a real loopback TCP connection, whose directions
+// are independent unlike net.Pipe's serialized writers.
+func tcpPair(t *testing.T) (net.Conn, net.Conn) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err == nil {
+			accepted <- c
+		}
+	}()
+	client, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		_ = ln.Close()
+		t.Fatalf("dial: %v", err)
+	}
+	server := <-accepted
+	_ = ln.Close()
+	t.Cleanup(func() {
+		_ = client.Close()
+		_ = server.Close()
+	})
+	return client, server
+}
+
+func TestPreByteDownlinkIsNotDiscardedByAClientWriteFailure(t *testing.T) {
+	conn := newHalfDeadConn()
+	var (
+		mu      sync.Mutex
+		reports []contract.ExitID
+	)
+	s := newStack(t, func(s *testStack) {
+		s.router.fn = poolRoute()
+		s.report = func(exit contract.ExitID, _ contract.ErrorKind) {
+			mu.Lock()
+			reports = append(reports, exit)
+			mu.Unlock()
+		}
+		s.pool.fn = func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+			return pipeResult(conn, "x-1", false), nil
+		}
+	})
+	c := dialProxy(t, s.f.HTTPAddr().String())
+	mustWrite(t, c, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n")
+	if head := readHeadDirect(t, c); !containsStatus(head, 200) {
+		t.Fatalf("CONNECT reply = %q", head)
+	}
+
+	// Wait until the exit has produced its first byte. sawDown is set before
+	// the reader hands it to the coordinator, so the client write below races
+	// exactly the scene the fix must handle.
+	select {
+	case <-conn.read:
+	case <-time.After(3 * time.Second):
+		t.Fatal("exit never produced its first byte")
+	}
+	_, _ = c.Write([]byte("hello"))
+	time.Sleep(100 * time.Millisecond)
+
+	if s.pool.count() != 1 {
+		t.Fatalf("pool dials = %d after a destination byte, want 1 (no retry)", s.pool.count())
+	}
+	mu.Lock()
+	got := append([]contract.ExitID(nil), reports...)
+	mu.Unlock()
+	if len(got) != 0 {
+		t.Fatalf("reported a pre-byte failure after the destination answered: %v", got)
+	}
+	h := s.registry.firstHandle()
+	if h == nil || h.info().Exit != "x-1" {
+		t.Fatalf("handle = %+v, want the serving exit x-1", h)
+	}
+}
+
+// TestPreByteReplayCanDuplicateAtDestination records the documented limit: the
+// client sees one response, but an exit that already forwarded the request
+// before dying may have caused the destination to see it once more. This is
+// inherent to replaying bytes the first exit accepted; it is not a client-visible
+// duplicate.
+func TestPreByteReplayCanDuplicateAtDestination(t *testing.T) {
+	firstServer, firstTunnel := net.Pipe()
+	defer firstServer.Close()
+	secondServer, secondTunnel := net.Pipe()
+	defer secondServer.Close()
+
+	var (
+		mu       sync.Mutex
+		requests int
+	)
+	count := func() {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+	}
+	s := newStack(t, func(s *testStack) {
+		s.router.fn = poolRoute()
+		s.pool.fn = func(_ context.Context, _ contract.PoolDialRequest) (contract.PoolDialResult, error) {
+			s.pool.mu.Lock()
+			n := len(s.pool.calls)
+			s.pool.mu.Unlock()
+			if n == 1 {
+				return pipeResult(firstTunnel, "x-1", false), nil
+			}
+			return pipeResult(secondTunnel, "x-2", false), nil
+		}
+	})
+	c := dialProxy(t, s.f.HTTPAddr().String())
+	mustWrite(t, c, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n")
+	if head := readHeadDirect(t, c); !containsStatus(head, 200) {
+		t.Fatalf("CONNECT reply = %q", head)
+	}
+	mustWrite(t, c, "hello")
+	if got := readExact(t, firstServer, 5); got != "hello" {
+		t.Fatalf("first exit received %q", got)
+	}
+	count() // the first exit forwarded the request before dying
+	_ = firstServer.Close()
+
+	if got := readExact(t, secondServer, 5); got != "hello" {
+		t.Fatalf("second exit received %q", got)
+	}
+	count() // the second exit forwarded the replayed request
+	if _, err := secondServer.Write([]byte("world")); err != nil {
+		t.Fatalf("second exit response: %v", err)
+	}
+	if got := readExact(t, c, 5); got != "world" {
+		t.Fatalf("client read %q, want one response", got)
+	}
+	mu.Lock()
+	got := requests
+	mu.Unlock()
+	if got != 2 {
+		t.Fatalf("destination requests = %d, want 2 (documented replay limit)", got)
+	}
 }

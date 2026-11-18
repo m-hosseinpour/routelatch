@@ -84,16 +84,16 @@ func (h *handle) adopt(c net.Conn, upstream bool) error {
 	return nil
 }
 
-// SetExit implements contract.ConnHandle. The first non-empty value wins so
-// status can never disagree with the exit the dial actually used.
+// SetExit implements contract.ConnHandle. The last non-empty value is the exit
+// currently serving the connection: a pre-byte CONNECT failover replaces the
+// attempt, and a sweep must be able to identify the live tunnel by the exit it
+// is actually using (docs/contracts.md §2.2, §2.6).
 func (h *handle) SetExit(id contract.ExitID) {
 	if id == "" {
 		return
 	}
 	h.mu.Lock()
-	if h.exit == "" {
-		h.exit = id
-	}
+	h.exit = id
 	h.mu.Unlock()
 }
 
