@@ -17,6 +17,7 @@ coverage.out
 
 # Editor and OS files
 .idea/
+.playwright-mcp/
 .DS_Store
 *.swp
 *~

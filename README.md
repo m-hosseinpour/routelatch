@@ -235,7 +235,7 @@ other software.
 The current acceptance suite
 ([`internal/acceptance/`](internal/acceptance/README.md)) drives the shipped
 binary as a real process against loopback-only fixture exits and peers. A full
-run on the current source tree prints **208 PASS, 0 FAIL and 13 NOTE in about
+run on the current source tree prints **215 PASS, 0 FAIL and 13 NOTE in about
 115 s**. The 13 NOTE lines are gated or impossible checks, not passes; the
 gated tests stay skipped unless a real desktop or `systemd --user` session is
 available. `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are
