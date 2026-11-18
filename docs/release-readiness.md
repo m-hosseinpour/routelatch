@@ -26,7 +26,7 @@ the current tree" from "only in history".
 | Tokens and credentials | 0. No `ghp_`/`github_pat_`/`AKIA`/`sk-`/`xox*`, no bot token, no Discord/Slack/Telegram webhook, no `-----BEGIN … PRIVATE KEY-----`, no certificate. |
 | Committed binaries or state | 0 binary blobs of any size; no state, log, database, backup or archive files in history. |
 | Non-loopback IPs / private hosts | only documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), `8.8.8.8`, routing-test samples and `100.64.0.0/10`; no `10/8` or `192.168/16` service address, no `*.local`/`*.lan` host. |
-| Personal machine paths | **finding, fixed in the current tree**: four generated files embedded `/home/<user>/workspace/routelatch/...` in an fd map. No credential, but a local path must not ship. |
+| Personal machine paths | **finding, fixed in the current tree**: four generated files embedded an absolute home-directory path (home + user + `workspace/routelatch/...`) in an fd map. No credential, but a local path must not ship. |
 
 **Personal-path finding.** Introduced by `1494765` (T1 spike) in
 `spike/xray/results/teardown-fast.txt`, `teardown-fast-both.txt`,
@@ -36,9 +36,10 @@ at `110cce3` by replacing the absolute prefix with a repository-relative path
 **remain in history only** (blobs of `1494765`) and can be removed only by a
 history rewrite in a copy before the first push — see the decision below.
 
-`git grep -n "/home/"` on the current tree now returns only
-`internal/platform/launcher_test.go` with the synthetic fixture `HOME=/home/example`.
-No `/Users/`, `C:\Users` or `/root/` path exists in the tree.
+Scanning the current tree for absolute home-directory prefixes finds no real
+path: the only home-prefixed content is the synthetic `HOME=` fixture in
+`internal/platform/launcher_test.go`, plus the pattern quoted in this sentence.
+No macOS or Windows user-profile path and no root-home path is tracked.
 
 **Identity exposure (not a secret).** Every commit has author `OpenCode
 <noreply@opencode.ai>` and committer `Mahdi Hosseinpour
