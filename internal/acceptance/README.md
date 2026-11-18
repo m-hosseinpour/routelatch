@@ -57,6 +57,38 @@ offline, and compares the OS setting with the snapshot. A deferred cleanup
 restores the snapshot even if an assertion fails, but `kill -9` of the test
 process would skip it, so do not run it unattended.
 
+### Gated real hysteria2 traffic check (R11)
+
+The default suite proves the R11 import projection, the handoff config shape
+and the fail-closed exclusion with a local fake sidecar (a helper mode of this
+test binary started by a small wrapper script). No binary, network or system
+state is involved there. The real traffic cell is skipped by default:
+
+```sh
+RL_ACCEPT_SINGBOX_EXEC=/path/to/verified/sing-box \
+RL_ACCEPT_HYSTERIA2_TEST=1 go test -count=1 -v -run TestR11Hysteria2RealTraffic ./internal/acceptance/
+```
+
+Use **either** `RL_ACCEPT_SINGBOX_EXEC` (a binary you already verified) or let
+the test download and verify it itself. With no `ROUTELATCH_SINGBOX_EXEC`, the test
+fetches the **official** sing-box v1.14.4 archive from the upstream release,
+verifies its SHA-256 against the digest pinned in `scripts/package.sh` and
+`packaging/README.md`, and extracts the binary into a disposable directory
+under `/tmp/opencode` (removed afterwards). A download or checksum failure is
+reported as a `NOTE ... real-traffic NOT RUN` with the exact reason — it is
+never counted as a pass. The verified binary is used only as a loopback
+hysteria2 server and as the RouteLatch sidecar; nothing is installed, no
+service, proxy, DNS or desktop setting is touched. A test-generated CA is
+trusted by the test process only through `SSL_CERT_FILE` (no root CA is
+installed); TLS verification stays on in both RouteLatch and sing-box.
+
+That cell drives a real HTTP CONNECT through RouteLatch → the real sing-box
+sidecar → a real hysteria2 inbound → a loopback echo peer, asserts a
+byte-identical echo with exactly one destination contact, then checks the
+dead-exit and absent-sidecar 502 paths (0 destination contacts), an unapproved
+destination going direct, and the D21 canary in state, sidecar config, service
+streams and CLI output.
+
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
@@ -119,6 +151,7 @@ desktop proxy setting.
 | A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
+| R11 | Default-on fake-sidecar cell: `hysteria2://` and a sing-box hysteria2 outbound JSON import through the real CLI, a skip-verify link is quarantined `insecure_tls_removed`; the generated handoff pins one hysteria2 outbound with `insecure:false`, no `resolve` rules and a block final; with no executable the stored exit is `unsupported`/`sidecar_unavailable` and gives 502 with 0 destination contacts while Xray still imports and dials. The gated real-traffic cell (opt-in above) adds a digest-verified v1.14.4 binary, a real TLS handshake to a loopback hysteria2 server, a byte-identical echo with exactly 1 destination contact, the dead-exit 502, direct-vs-approved routing and the D21 canary in state, sidecar config, streams and CLI output. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
 ## Findings in the product
@@ -209,6 +242,12 @@ them until the suite is updated.
   already enabled on the R1 machine, so only `enable`'s symlink and the
   `WantedBy=default.target` configuration were inspected for login start-up.
   Windows, Android and TUN are out of scope.
+* **R11 real traffic:** the real hysteria2 handshake needs the opt-in cell above;
+  the default suite proves only the import shape, the generated handoff config
+  and the fail-closed exclusion with a fake sidecar. The gated run cannot use a
+  public hysteria2 exit or a system CA, the pinned leaf is a locally generated
+  certificate trusted only via `SSL_CERT_FILE`, and only one loopback server and
+  one destination peer are exercised (no obfs, bandwidth negotiation or roaming).
 * **Transport limits:** WS/gRPC/XHTTP are runtime-verified only over TLS against a
   local pinned exit, with the ALPN above and one VLESS stream per test
   request. REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP are
