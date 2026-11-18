@@ -94,15 +94,19 @@ remains an optional alternative, recorded in `docs/licensing.md`.
 
 Evidence observed on 2026-11-18:
 
-- `routelatch.com` is a live commercial SaaS ("trade-show control tower", event
-  logistics), registered 2026-08-27, actively marketed. Same name, unrelated
-  field, no visible ™/® marking on the site.
-- GitHub: `routelatch` user/org is 404 and the user search returns 0; repository
-  search returns two 0-star repos (`orlandophillipss/routelatch`, LLM workflow
-  routing; `G-Kondor/RouteLatch`, GPX navigation). The handle is free.
-- npm, PyPI, crates.io, RubyGems and the Go module proxy return 404/no match for
-  `routelatch`; Docker Hub and pkg.go.dev were blocked (403), so Docker is
-  unverified.
+- `https://routelatch.com/` is a live commercial SaaS ("trade-show control
+  tower", event logistics), registered 2026-08-27 per RDAP, actively marketed.
+  Same name, unrelated field, no visible ™/® marking on the site.
+- GitHub: `https://github.com/routelatch` is 404 and the user search returns 0;
+  `https://github.com/search?q=routelatch&type=repositories` returns two 0-star
+  repos (`orlandophillipss/routelatch`, LLM workflow routing;
+  `G-Kondor/RouteLatch`, GPX navigation). The handle is free.
+- `https://registry.npmjs.org/routelatch`, `https://pypi.org/pypi/routelatch/json`,
+  `https://crates.io/api/v1/crates/routelatch`,
+  `https://rubygems.org/api/v1/gems/routelatch.json` and
+  `https://proxy.golang.org/github.com/routelatch/routelatch/@v/list` return
+  404/no match; Docker Hub (`https://hub.docker.com/`) and `pkg.go.dev` were
+  blocked (403), so Docker is unverified.
 - Trademark registers (USPTO/Justia, TMview, UK IPO, WIPO) were all blocked by
   CAPTCHA/403 from this network. **No trademark clearance was performed.**
 
