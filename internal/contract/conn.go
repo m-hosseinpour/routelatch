@@ -68,9 +68,11 @@ type ConnInfo struct {
 //     Close is the only way to unblock their copies.
 //   - SetProof is called once, immediately after PoolDial returns and before
 //     the first byte is copied, so status and logs can report confirmed vs
-//     accepted. It is set-once: a later different value must be ignored and
-//     never overwrite the class the client was told. Direct connections leave
-//     the proof empty.
+//     accepted. On a failover-capable HTTP CONNECT the frontend calls it when
+//     the serving exit is committed (the destination's first byte), because a
+//     pre-byte failure may replace the exit. It is set-once: a later different
+//     value must be ignored and never overwrite the class the client was told.
+//     Direct connections leave the proof empty.
 //   - Close is safe to call more than once and from any goroutine; after it
 //     returns both conns are closed and the context is canceled.
 type ConnHandle interface {

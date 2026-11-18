@@ -278,6 +278,7 @@ type testStack struct {
 	pool      *testPool
 	registry  *testRegistry
 	normalize NormalizeFunc
+	report    func(contract.ExitID, contract.ErrorKind)
 }
 
 func newStack(t *testing.T, mutate func(*testStack)) *testStack {
@@ -292,11 +293,12 @@ func newStack(t *testing.T, mutate func(*testStack)) *testStack {
 		mutate(s)
 	}
 	f, err := New(Options{
-		Router:    s.router,
-		Pool:      s.pool,
-		Direct:    s.direct,
-		Registry:  s.registry,
-		Normalize: s.normalize,
+		Router:            s.router,
+		Pool:              s.pool,
+		Direct:            s.direct,
+		Registry:          s.registry,
+		Normalize:         s.normalize,
+		ReportExitFailure: s.report,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

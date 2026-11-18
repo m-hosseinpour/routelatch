@@ -65,6 +65,14 @@ func (s *Selector) Current() contract.ExitID {
 // unknown, then EWMA ascending, then user order, with the switch gates in
 // docs/contracts.md §6.4.
 func (s *Selector) SelectFor(state contract.State, requested contract.ExitID, now time.Time) (contract.Record, *contract.Failure) {
+	return s.SelectForExcluding(state, requested, nil, now)
+}
+
+// SelectForExcluding is SelectFor with the exits already attempted by one
+// client connection removed from automatic selection. A manual pin ignores the
+// exclusion list: the pin is the user's decision, and the caller must surface
+// its failure rather than silently using another exit (docs/contracts.md §2.2).
+func (s *Selector) SelectForExcluding(state contract.State, requested contract.ExitID, excludes []contract.ExitID, now time.Time) (contract.Record, *contract.Failure) {
 	p := Build(state, now)
 	if pinned := firstNonEmptyExit(requested, state.SelectedExit); pinned != "" {
 		rec, ok := p.Record(pinned)
@@ -76,7 +84,7 @@ func (s *Selector) SelectFor(state contract.State, requested contract.ExitID, no
 		}
 		return rec, nil
 	}
-	rec, _, fail := s.auto(p, now)
+	rec, _, fail := s.auto(p, excludes, now)
 	return rec, fail
 }
 
@@ -92,7 +100,7 @@ func (s *Selector) Rerank(state contract.State, now time.Time) (RerankResult, er
 		}, nil
 	}
 	before := s.Current()
-	after, skips, fail := s.auto(Build(state, now), now)
+	after, skips, fail := s.auto(Build(state, now), nil, now)
 	if fail != nil {
 		// No usable exit is not an execution error: the CLI needs the skip
 		// reasons (including no_target) to explain it.
@@ -105,8 +113,11 @@ func (s *Selector) Rerank(state contract.State, now time.Time) (RerankResult, er
 
 // auto applies the ranking and hysteresis and updates the selector's in-memory
 // current exit. It returns skip reasons for every exit that was not chosen.
-func (s *Selector) auto(p *Pool, now time.Time) (contract.Record, []RerankSkip, *contract.Failure) {
-	ranked := rank(p)
+// excludes are exits this client connection already tried; they are not
+// candidates, and a current exit that becomes excluded is replaced immediately
+// so a pre-byte retry cannot loop on the same exit.
+func (s *Selector) auto(p *Pool, excludes []contract.ExitID, now time.Time) (contract.Record, []RerankSkip, *contract.Failure) {
+	ranked := rank(p, excludes)
 	if len(ranked) == 0 {
 		return contract.Record{}, unusableSkips(p), selectFailure("no usable exit: the pool is empty, cooling or unsupported")
 	}
@@ -120,10 +131,10 @@ func (s *Selector) auto(p *Pool, now time.Time) (contract.Record, []RerankSkip, 
 		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
 	}
 	current, ok := p.Record(s.current)
-	if !ok || !p.Usable(s.current) {
-		// A cooling/removed current exit is not a dwell case: recovery must be
-		// immediate. A cooling current is excluded from rank(), so best is a
-		// usable exit.
+	if !ok || !p.Usable(s.current) || isExcluded(s.current, excludes) {
+		// A cooling/removed/excluded current exit is not a dwell case: recovery
+		// must be immediate. A cooling current is excluded from rank(), so best
+		// is a usable exit.
 		s.current = contract.ExitID(best.ID)
 		s.switchedAt = now
 		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
@@ -137,6 +148,15 @@ func (s *Selector) auto(p *Pool, now time.Time) (contract.Record, []RerankSkip, 
 		return best, skipOthers(p, contract.ExitID(best.ID), contract.ExitID(best.ID), ""), nil
 	}
 	return current, skipOthers(p, s.current, contract.ExitID(best.ID), s.gateReason(p, current, best, now)), nil
+}
+
+func isExcluded(exit contract.ExitID, excludes []contract.ExitID) bool {
+	for _, x := range excludes {
+		if x == exit {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Selector) gateReason(p *Pool, current, best contract.Record, now time.Time) RerankSkipReason {
@@ -235,11 +255,12 @@ func (s *Selector) shouldSwitch(p *Pool, current, best contract.Record, now time
 
 // rank returns usable records ordered healthy-first, then EWMA ascending, then
 // user order. An exit with no latency sample sorts after sampled ones because
-// its quality is unknown.
-func rank(p *Pool) []contract.Record {
+// its quality is unknown. Excluded exits are removed before ranking.
+func rank(p *Pool, excludes []contract.ExitID) []contract.Record {
 	usable := make([]contract.Record, 0, len(p.records))
 	for _, rec := range p.records {
-		if (rec.Status == contract.RecordHealthy || rec.Status == contract.RecordUnknown) && Dialable(rec) {
+		if (rec.Status == contract.RecordHealthy || rec.Status == contract.RecordUnknown) &&
+			Dialable(rec) && !isExcluded(contract.ExitID(rec.ID), excludes) {
 			usable = append(usable, rec)
 		}
 	}

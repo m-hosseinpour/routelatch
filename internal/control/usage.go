@@ -120,3 +120,33 @@ func hasRecord(st *contract.State, exit contract.ExitID) bool {
 	}
 	return false
 }
+
+// recordTunnelFailure persists one pre-byte tunnel failure against the exit
+// that accepted the request. It is deliberately not coalesced: every failed
+// attempt is one conceded sample, and the cooldown ladder is built from the
+// consecutive count. The write carries no destination (D21); the health row is
+// the only artifact.
+func (s *Service) recordTunnelFailure(exit contract.ExitID, kind contract.ErrorKind) {
+	if exit == "" || kind != contract.DestinationUnconfirmed {
+		return
+	}
+	now := s.now().UTC()
+	go func() {
+		s.pubMu.Lock()
+		defer s.pubMu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		snap, err := s.store.Mutate(ctx, func(st *contract.State) error {
+			if !hasRecord(st, exit) {
+				return errUsageExitGone
+			}
+			pool.RecordTunnelFailure(st, exit, now)
+			pool.SyncStatuses(st, now)
+			return nil
+		})
+		if err != nil {
+			return
+		}
+		s.snap.Store(&snap)
+	}()
+}

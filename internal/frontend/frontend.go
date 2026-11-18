@@ -12,8 +12,15 @@
 //     resolver (D15).
 //   - The HTTP 200 and SOCKS5 0x00 replies are written only after a pool dial
 //     returned ProofConfirmed or ProofAccepted, or after a direct dial
-//     succeeded (docs/contracts.md §2.2). A pool failure is a mapped pre-reply
-//     error and is never retried or turned into a direct dial (D11).
+//     succeeded (docs/contracts.md §2.2). A failed pool dial is a mapped
+//     pre-reply error and is never turned into a direct dial (D11).
+//   - An HTTP CONNECT on an automatic pool exit has a bounded pre-byte window:
+//     after the 200, client bytes are buffered and held uncommitted until the
+//     destination returns its first byte. If the exit ends the tunnel first,
+//     the same bytes are replayed to another automatic exit, at most three
+//     exits per connection. A manual pin never fails over. No response from a
+//     failed attempt ever reaches the client, and there is no direct fallback
+//     (§2.2, §3.3).
 //   - Before any reply, a failure is mapped to the HTTP status or SOCKS5 code
 //     in §3.2 and the connection is closed. After a reply, the only possible
 //     outcome is teardown: no error page is ever written into a tunnel.
@@ -78,6 +85,11 @@ type Options struct {
 	// producer of normalized destinations (docs/contracts.md §1.2). Tests use
 	// it to observe the untouched client authority.
 	Normalize NormalizeFunc
+	// ReportExitFailure records a pre-byte tunnel failure against the exit
+	// that accepted it. It is nil in tests that do not assert health. The
+	// service wires it to a health mutation; the frontend only reports, it
+	// never changes selection or retries a pin (docs/contracts.md §2.2, §6.2).
+	ReportExitFailure func(exit contract.ExitID, kind contract.ErrorKind)
 	// NewID generates ConnIDs. The default is a per-process counter.
 	NewID func(contract.ConnKind) contract.ConnID
 	// Now supplies StartedAt. The default is time.Now.
@@ -366,8 +378,9 @@ func (f *Frontend) decide(ctx context.Context, dst contract.Destination) (contra
 // dial executes exactly the route the Decision names. It checks the proof gate
 // before returning a usable connection: a pool success without a proof class
 // is a defect and must not reach a 2xx/0x00 reply (docs/contracts.md §2.1).
-// There is no fallback path from pool to direct.
-func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract.Destination) (net.Conn, contract.ExitID, contract.ProofClass, *contract.Failure) {
+// There is no fallback path from pool to direct. exclude names exits this
+// connection already tried; it applies only to automatic pool selection.
+func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract.Destination, exclude []contract.ExitID) (net.Conn, contract.ExitID, contract.ProofClass, bool, *contract.Failure) {
 	switch dec.Route {
 	case contract.RoutePool:
 		// ctx is the connection lifetime owned by the registry handle, which is
@@ -382,30 +395,31 @@ func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract
 			Destination:   dst,
 			RuleID:        dec.RuleID,
 			PolicyVersion: dec.PolicyVersion,
+			Exclude:       exclude,
 		})
 		if err != nil {
-			return nil, "", "", dialFailure(err, ctx, contract.PathPool)
+			return nil, "", "", false, dialFailure(err, ctx, contract.PathPool)
 		}
 		if res.Conn == nil || (res.Proof != contract.ProofConfirmed && res.Proof != contract.ProofAccepted) {
 			if res.Conn != nil {
 				_ = res.Conn.Close()
 			}
-			return nil, "", "", newFailure(contract.Internal, contract.PathPool,
+			return nil, "", "", false, newFailure(contract.Internal, contract.PathPool,
 				"frontend.pool", "pool dial returned no proof")
 		}
-		return res.Conn, res.Exit, res.Proof, nil
+		return res.Conn, res.Exit, res.Proof, res.Pinned, nil
 	case contract.RouteDirect:
 		dctx, cancel := context.WithTimeout(ctx, contract.DirectDialDeadline)
 		defer cancel()
 		conn, err := f.opts.Direct.DialDirect(dctx, dst)
 		if err != nil {
-			return nil, "", "", dialFailure(err, dctx, contract.PathDirect)
+			return nil, "", "", false, dialFailure(err, dctx, contract.PathDirect)
 		}
 		if conn == nil {
-			return nil, "", "", newFailure(contract.Internal, contract.PathDirect,
+			return nil, "", "", false, newFailure(contract.Internal, contract.PathDirect,
 				"frontend.direct", "direct dial returned no connection")
 		}
-		return conn, "", contract.ProofUnknown, nil
+		return conn, "", contract.ProofUnknown, false, nil
 	case contract.RouteRefuse:
 		kind := contract.PolicyDenied
 		if dec.Reason == contract.ReasonModeStopped {
@@ -417,10 +431,10 @@ func (f *Frontend) dial(ctx context.Context, dec contract.Decision, dst contract
 			// ConnInfo.Reason keep the matrix reason (docs/contracts.md §1.4).
 			message = "denied by local policy: self_loop"
 		}
-		return nil, "", "", newFailure(kind, contract.PathLocal,
+		return nil, "", "", false, newFailure(kind, contract.PathLocal,
 			"frontend.refuse", message)
 	default:
-		return nil, "", "", newFailure(contract.Internal, contract.PathLocal,
+		return nil, "", "", false, newFailure(contract.Internal, contract.PathLocal,
 			"frontend.route", "unknown route")
 	}
 }

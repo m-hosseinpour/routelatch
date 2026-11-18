@@ -304,6 +304,7 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	// dialer because ApplyProbe already records its positive evidence.
 	fe, err := frontend.New(frontend.Options{
 		Router: routerView{s: s}, Pool: &usagePool{svc: s, inner: s.pool}, Direct: s.direct, Registry: s.reg,
+		ReportExitFailure: s.recordTunnelFailure,
 	})
 	if err != nil {
 		_ = eng.Stop(ctx)

@@ -134,7 +134,7 @@ func (p *httpProxy) serveConnect(c net.Conn, br *bufio.Reader, req *http.Request
 	// A client that disappears while the dial is pending must cancel it
 	// (canceled includes "client went away"; the pending-dial bound is 50ms).
 	watch := startClientWatch(c, br, func() { _ = h.Close() })
-	upstream, exit, proof, ferr := p.f.dial(h.Context(), dec, dst)
+	upstream, exit, proof, pinned, ferr := p.f.dial(h.Context(), dec, dst, nil)
 	captured, clientGone := watch.stop()
 	if ferr != nil {
 		p.writeHTTPError(c, ferr.Kind)
@@ -145,23 +145,46 @@ func (p *httpProxy) serveConnect(c net.Conn, br *bufio.Reader, req *http.Request
 		_ = h.Close()
 		return
 	}
-	if err := h.SetUpstream(upstream); err != nil {
-		_ = upstream.Close()
+	clientReader := io.Reader(br)
+	if len(captured) > 0 {
+		clientReader = io.MultiReader(bytes.NewReader(captured), br)
+	}
+	var auto *poolTunnel
+	registered := upstream
+	if dec.Route == contract.RoutePool {
+		// The 200 is prepared before any destination byte, but no client byte
+		// is committed until the destination answers: a pre-byte exit failure
+		// is retried on a different automatic exit with the same buffered
+		// bytes. A manual pin gets the same honest failure sample but a
+		// one-exit budget, so the user's choice is never replaced
+		// (docs/contracts.md §2.2). The handled conn owns whichever retry is
+		// current so a registry sweep closes it synchronously.
+		maxAttempts := contract.ConnectFailoverExits
+		if pinned {
+			maxAttempts = 1
+		}
+		auto = newPoolTunnel(p, h, c, clientReader, upstream, exit, proof, dec, dst, maxAttempts)
+		registered = &lifetimeConn{Conn: upstream, closeFn: auto.abort}
+	}
+	if err := h.SetUpstream(registered); err != nil {
+		_ = registered.Close()
 		p.writeHTTPError(c, failureOf(err).Kind)
 		return
 	}
-	if exit != "" {
-		h.SetExit(exit)
-	}
-	if proof != contract.ProofUnknown {
-		h.SetProof(proof)
+	if auto == nil {
+		if exit != "" {
+			h.SetExit(exit)
+		}
+		if proof != contract.ProofUnknown {
+			h.SetProof(proof)
+		}
 	}
 	if err := writeAll(c, []byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
 		return
 	}
-	clientReader := io.Reader(br)
-	if len(captured) > 0 {
-		clientReader = io.MultiReader(bytes.NewReader(captured), br)
+	if auto != nil {
+		auto.execute()
+		return
 	}
 	tunnel(h.Context(), c, clientReader, upstream, bufio.NewReader(upstream))
 }
@@ -218,7 +241,7 @@ func (p *httpProxy) serveForward(c net.Conn, br *bufio.Reader, req *http.Request
 	// The client may pipeline body bytes (or the next request) while the dial
 	// is pending; the watch avoids losing them and cancels a vanished client.
 	watch := startClientWatch(c, br, func() { _ = h.Close() })
-	upstream, exit, proof, ferr := p.f.dial(h.Context(), dec, dst)
+	upstream, exit, proof, _, ferr := p.f.dial(h.Context(), dec, dst, nil)
 	captured, clientGone := watch.stop()
 	if ferr != nil {
 		p.writeHTTPError(c, ferr.Kind)

@@ -96,6 +96,19 @@ func RecordTransportFailure(st *contract.State, exit contract.ExitID, kind contr
 	recordFailure(st, exit, kind, now)
 }
 
+// RecordTunnelFailure records the one exit-level negative sample that is not a
+// dial-phase transport error: the exit accepted the request, then ended the
+// tunnel before returning any destination byte. The recorded kind stays
+// DestinationUnconfirmed because the destination side is unknown; this is a
+// "this exit failed to carry the tunnel" sample, never a claim that the
+// destination was reached, refused or confirmed (docs/contracts.md §5.3, §6.2).
+func RecordTunnelFailure(st *contract.State, exit contract.ExitID, now time.Time) {
+	if exit == "" {
+		return
+	}
+	recordFailure(st, exit, contract.DestinationUnconfirmed, now)
+}
+
 func latencyMS(d time.Duration) int64 {
 	ms := d.Milliseconds()
 	if d > 0 && ms == 0 {

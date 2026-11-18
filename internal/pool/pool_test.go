@@ -615,3 +615,72 @@ func TestRerankNoTargetSkips(t *testing.T) {
 		t.Fatalf("empty rerank=%+v", res)
 	}
 }
+
+func TestSelectForExcludingSkipsAttemptedExits(t *testing.T) {
+	now := t0()
+	state := selectorState(now)
+	s := NewSelector()
+
+	rec, fail := s.SelectForExcluding(state, "", nil, now)
+	if fail != nil || rec.ID != "x-a" {
+		t.Fatalf("first selection rec=%v fail=%v", rec.ID, fail)
+	}
+	rec, fail = s.SelectForExcluding(state, "", []contract.ExitID{"x-a"}, now)
+	if fail != nil || rec.ID != "x-b" {
+		t.Fatalf("excluded selection rec=%v fail=%v", rec.ID, fail)
+	}
+	// A manual pin ignores the exclusion list: the user's choice is not
+	// silently replaced by another exit.
+	state.SelectedExit = "x-a"
+	if rec, fail = s.SelectForExcluding(state, "", []contract.ExitID{"x-a"}, now); fail != nil || rec.ID != "x-a" {
+		t.Fatalf("pinned rec=%v fail=%v", rec.ID, fail)
+	}
+	// Excluding every usable exit is pool_unavailable, not a same-exit retry.
+	state.SelectedExit = ""
+	if _, fail = NewSelector().SelectForExcluding(state, "", []contract.ExitID{"x-a", "x-b", "x-c"}, now); fail == nil || fail.Kind != contract.PoolUnavailable {
+		t.Fatalf("all excluded fail=%+v", fail)
+	}
+}
+
+func TestDialerReportsAManualPin(t *testing.T) {
+	now := t0()
+	state := selectorState(now)
+	state.SelectedExit = "x-b"
+	d := NewDialer(func() (contract.Snapshot, bool) { return contract.Snapshot{State: state}, true },
+		func(context.Context, contract.ExitID, contract.Destination) (net.Conn, contract.ProofClass, string, error) {
+			client, server := net.Pipe()
+			server.Close()
+			return client, contract.ProofAccepted, "tag", nil
+		}, func() time.Time { return now })
+	res, err := d.DialPool(context.Background(), contract.PoolDialRequest{
+		Destination:   contract.Destination{Kind: contract.DestDomain, Host: "example.com", Port: 443},
+		PolicyVersion: state.PolicyVersion,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Conn.Close()
+	if res.Exit != "x-b" || !res.Pinned {
+		t.Fatalf("result=%+v, want exit x-b with Pinned", res)
+	}
+}
+
+func TestRecordTunnelFailureCoolsWithoutDestinationClaim(t *testing.T) {
+	now := t0()
+	st := &contract.State{Records: []contract.Record{record("x-a", 0, contract.RecordUnknown)}}
+	RecordTunnelFailure(st, "x-a", now)
+	if len(st.Health) != 1 {
+		t.Fatalf("health=%+v", st.Health)
+	}
+	h := st.Health[0]
+	if h.Status != contract.HealthCooling || h.LastFailureKind != contract.DestinationUnconfirmed || h.ConsecutiveFailures != 1 {
+		t.Fatalf("health=%+v", h)
+	}
+	if st.Records[0].Status != contract.RecordCooling || st.Records[0].StatusReason != "cooling:destination_unconfirmed" {
+		t.Fatalf("record=%+v", st.Records[0])
+	}
+	RecordTunnelFailure(st, "", now)
+	if len(st.Health) != 1 {
+		t.Fatalf("empty exit created a health row: %+v", st.Health)
+	}
+}

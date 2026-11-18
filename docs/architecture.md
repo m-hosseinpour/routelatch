@@ -51,9 +51,13 @@ adapter SOCKS5 را واقعاً می‌بندد؛ مسیر core پیش از ت�
 **کتابخانه‌ها.** `goproxy v1.9.4` رد شد: پاسخ را بازنویسی می‌کند (reason/header/chunk)،
 stream غیر-SSE را بافر می‌کند، بایت‌های pipelined CONNECT را گم می‌کند و یک GET را
 روی اتصال reused بازپخش می‌کند. HTTP را با `net/http` خودمان می‌نویسیم: hijack،
-dial، سپس `200`، سپس replay بایت‌های buffer. SOCKS5 با `go-socks5 v0.1.4` فقط با
-resolver بدون lookup (hostname تا خروجی حفظ می‌شود) و `WithDialAndRequest`؛ BIND و
-UDP ASSOCIATE صریحاً `0x07` می‌گیرند و هیچ سوکت UDP باز نمی‌شود. UDP در v1 رد است.
+dial، سپس `200`، سپس replay بایت‌های buffer. برای CONNECT مسیر pool، `200` از dial
+موفق جدا شده و «تعهد» به اولین بایت مقصد بسته است: بایت‌های کلاینت تا سقف محدود
+بافر و به exit جاری فرستاده می‌شوند و مرگ پیش از بایت اول با همان بایت‌ها روی exit
+دیگری retry می‌شود (بدون ۲۰۰ دوم و بدون fallback مستقیم؛ `contracts.md §۲.۲`). SOCKS5 با
+`go-socks5 v0.1.4` فقط با resolver بدون lookup (hostname تا خروجی حفظ می‌شود) و
+`WithDialAndRequest`؛ BIND و UDP ASSOCIATE صریحاً `0x07` می‌گیرند و هیچ سوکت UDP باز نمی‌شود.
+UDP در v1 رد است.
 
 **چرخهٔ عمر موتور.** یک `core.Instance` در هر process (probe هم از همان با tag صریح)؛
 restart درون‌process ممنوع است، چون `core.Stop` وضعیت dialer سراسری gRPC/XHTTP را پاک

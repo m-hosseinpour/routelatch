@@ -19,7 +19,9 @@ RouteLatch never silently falls back to direct for approved traffic.
 - One approved-destination list with exact domains, domain/subdomain rules, IPs
   and CIDRs.
 - Pool ranking with cooldowns, plus an honest distinction between an exit that
-  confirmed a destination and one that only accepted the request.
+  confirmed a destination and one that only accepted the request. HTTP CONNECT
+  retries a tunnel that dies before the destination's first byte on a different
+  automatic exit (bounded, never a direct fallback, never from a manual pin).
 - Share-link, link-file, subscription-URL and v2rayN import. Records that fail
   validation stay quarantined with a reason and are never dialed.
 - Diagnostics that write **proposals** only; adding or removing a route needs

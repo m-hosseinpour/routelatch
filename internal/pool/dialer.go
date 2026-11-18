@@ -76,11 +76,12 @@ func (d *Dialer) DialPool(ctx context.Context, req contract.PoolDialRequest) (co
 			Destination: req.Destination,
 		}
 	}
-	rec, fail := d.selector.SelectFor(snap.State, req.Exit, d.now())
+	rec, fail := d.selector.SelectForExcluding(snap.State, req.Exit, req.Exclude, d.now())
 	if fail != nil {
 		fail.Destination = req.Destination
 		return contract.PoolDialResult{}, fail
 	}
+	pinned := firstNonEmptyExit(req.Exit, snap.State.SelectedExit) != ""
 
 	// ctx is the connection lifetime, not a dial scope: the returned session
 	// must stay attached to it so only the caller's registry/close path can end
@@ -102,7 +103,7 @@ func (d *Dialer) DialPool(ctx context.Context, req contract.PoolDialRequest) (co
 		return contract.PoolDialResult{}, internalFailure("pool dial returned a connection without a proof class")
 	}
 	return contract.PoolDialResult{
-		Conn: conn, Exit: contract.ExitID(rec.ID), Tag: tag, Proof: proof, AcceptedAt: d.now(),
+		Conn: conn, Exit: contract.ExitID(rec.ID), Tag: tag, Proof: proof, AcceptedAt: d.now(), Pinned: pinned,
 	}, nil
 }
 

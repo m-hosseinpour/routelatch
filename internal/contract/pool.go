@@ -63,7 +63,8 @@ type PoolDialRequest struct {
 	Destination   Destination
 	RuleID        RuleID
 	PolicyVersion PolicyVersion
-	Exit          ExitID // empty: ranker selects; set: manual selection
+	Exit          ExitID   // empty: ranker selects; set: manual selection
+	Exclude       []ExitID // per-connection failover attempts; ignored for a manual pin
 }
 
 // PoolDialResult is a successful pool dial.
@@ -73,6 +74,10 @@ type PoolDialResult struct {
 	Tag        string // explicit engine tag; empty when our SOCKS5/HTTP adapter dialed the exit
 	Proof      ProofClass
 	AcceptedAt time.Time // when the engine or adapter accepted the request
+	// Pinned reports that a manual selection chose this exit. The frontend
+	// never fails over from a pin: the user's explicit choice must not become
+	// a different exit silently (docs/contracts.md §2.2, §2.5).
+	Pinned bool
 }
 
 // PoolDialer dials approved destinations through one selected exit.
@@ -99,6 +104,11 @@ type PoolDialResult struct {
 //     fences req.PolicyVersion against the current policy and rejects a
 //     removed or unsupported exit before dialing; it never substitutes a
 //     different exit for the requested one.
+//   - Request.Exclude lists exits already tried for this same client
+//     connection. Automatic selection skips them; a manual pin ignores them
+//     because a pin is never silently replaced (docs/contracts.md §2.2).
+//     Result.Pinned tells the caller that this exit is a manual choice, so the
+//     caller must not fail over either.
 type PoolDialer interface {
 	DialPool(ctx context.Context, req PoolDialRequest) (PoolDialResult, error)
 }

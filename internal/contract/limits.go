@@ -19,6 +19,16 @@ import "time"
 //     refused at 2.006s, caller deadline at 401ms); destination failures on
 //     VLESS/Trojan collapse to EOF and are not attributable.
 const (
+	// ConnectFailoverExits is the total number of exits one HTTP CONNECT may
+	// try before the destination's first byte decides the tunnel. It is two
+	// retries after the first exit (docs/contracts.md §2.2, §3.4).
+	ConnectFailoverExits = 3
+	// ConnectReplayBufferBytes bounds the client bytes kept for replay while a
+	// CONNECT waits for the destination's first byte. At the cap, replay stops
+	// and the current exit is committed: retrying would require dropping bytes
+	// the client already sent (docs/contracts.md §2.2).
+	ConnectReplayBufferBytes = 64 << 10
+
 	// PoolDialDeadline bounds one blocking pool dial. It is a real handshake
 	// bound only for the owned SOCKS5 adapter, which must finish greeting,
 	// authentication and CONNECT before returning. The pinned core has no

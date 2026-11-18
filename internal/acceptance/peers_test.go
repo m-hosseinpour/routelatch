@@ -140,12 +140,14 @@ type socksDial struct {
 type socksExit struct {
 	ln net.Listener
 
-	accepts atomic.Int64
-	dials   atomic.Int64 // successfully connected destination dials
+	accepts    atomic.Int64
+	dials      atomic.Int64 // successfully connected destination dials
+	flakyDials atomic.Int64 // accepted CONNECTs ended before any byte
 
 	mu     sync.Mutex
 	seen   []socksDial
 	stalls map[string]bool
+	flaky  map[string]bool
 	closes []time.Time // when the product closed the exit-side connection
 	conns  []net.Conn
 	once   sync.Once
@@ -157,7 +159,7 @@ func newSOCKSExit(t *testing.T) *socksExit {
 	if err != nil {
 		t.Fatalf("socks exit listen: %v", err)
 	}
-	x := &socksExit{ln: ln, stalls: map[string]bool{}}
+	x := &socksExit{ln: ln, stalls: map[string]bool{}, flaky: map[string]bool{}}
 	go x.serve()
 	t.Cleanup(x.close)
 	return x
@@ -191,6 +193,16 @@ func (x *socksExit) unstallHost(host string) {
 	x.mu.Unlock()
 }
 
+// failHost makes this exit answer the SOCKS5 CONNECT successfully and then end
+// the tunnel without a destination byte. It models the measured exit-side
+// flakiness without contacting the destination, so the acceptance check can
+// count destination requests independently of exit attempts.
+func (x *socksExit) failHost(host string) {
+	x.mu.Lock()
+	x.flaky[host] = true
+	x.mu.Unlock()
+}
+
 func (x *socksExit) observations() []socksDial {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -204,6 +216,8 @@ func (x *socksExit) closeTimes() []time.Time {
 }
 
 func (x *socksExit) dialCount() int64 { return x.dials.Load() }
+
+func (x *socksExit) flakyCount() int64 { return x.flakyDials.Load() }
 
 func (x *socksExit) drainCount() int64 { return x.accepts.Load() }
 
@@ -271,6 +285,25 @@ func (x *socksExit) handle(c net.Conn) {
 		// Accept the request and never answer: this is a pending pool dial that
 		// only a mode-change cancel can end.
 		_, _ = io.Copy(io.Discard, br)
+		return
+	}
+
+	x.mu.Lock()
+	flaky := x.flaky[host]
+	x.mu.Unlock()
+	if flaky {
+		// Report success, take the client's first byte, then end the tunnel
+		// without a destination byte or a destination contact. This is the
+		// measured exit-side failure: it is visible to the proxy only as a
+		// pre-byte close, so the frontend must retry with the same bytes.
+		x.appendDial(dial)
+		x.flakyDials.Add(1)
+		if _, err := c.Write(socksReply(0x00)); err != nil {
+			return
+		}
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		var first [1]byte
+		_, _ = io.ReadFull(br, first[:])
 		return
 	}
 

@@ -127,7 +127,7 @@ func (s *socksConn) dial(ctx context.Context, _ string, _ string, req *socks5.Re
 		s.watching.Store(true)
 		watch = startClientWatch(s.client, br, func() { _ = h.Close() })
 	}
-	upstream, exit, proof, ferr := s.f.dial(h.Context(), dec, dst)
+	upstream, exit, proof, _, ferr := s.f.dial(h.Context(), dec, dst, nil)
 	captured, clientGone := []byte(nil), false
 	if watch != nil {
 		captured, clientGone = watch.stop()
