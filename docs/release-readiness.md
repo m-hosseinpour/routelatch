@@ -33,6 +33,55 @@ Scope: this release ships **only** the two Linux `.tar.gz` files. Distribution
 packages (`.deb`, `.rpm`), Windows/macOS builds, 32-bit builds and additional CPU
 architectures are **not** part of v0.1.0 — they are future work. A01 clean-machine
 install, arm64 runtime execution and a real GNOME session are not claimed here.
+A later, **unpublished** local `.deb` build is recorded in "R12 Phase 1" below;
+it does not change the tag, its assets or this release's scope.
+
+## R12 Phase 1: local Debian packages (unpublished)
+
+Phase 1 adds a reproducible, locally verified Debian package to the same
+packaging pipeline; it does **not** publish anything, sign anything or add an
+apt repository. The agreed trust model is the v0.1.0 one: unsigned artifacts
+with `SHA256SUMS` only. The v0.1.0 tag, GitHub Release and assets were not
+touched.
+
+`scripts/build.sh` now cross-builds `linux/amd64`, `arm64`, `riscv64` and
+`ppc64le`. `scripts/package.sh` writes, for each architecture, the existing
+tarball plus `routelatch_<debian-version>_<arch>.deb`, and records both in
+`dist/packages/SHA256SUMS`. The `.deb` payload maps the tarball root to `/usr`:
+`/usr/bin/routelatch`, `/usr/share/doc/routelatch/…`, the unchanged unit under
+`/usr/share/routelatch/systemd/`, and a generated standard user unit at
+`/usr/lib/systemd/user/routelatch.service` whose only change is
+`ExecStart=/usr/bin/routelatch run`. Control metadata is `Package: routelatch`,
+a Debian-normalised version (leading `v` stripped; a non-digit value gets a
+`0.0.0+` prefix), the target architecture, `Depends: ca-certificates` and a
+description. There are no maintainer scripts, so installation does not enable a
+service or change desktop/user settings.
+
+Evidence from the local build (`VERSION=v0.1.0-r12.1`, `COMMIT=a028469`,
+`SOURCE_DATE_EPOCH=1700000000`, Go 1.27.4, `CGO_ENABLED=0`):
+
+- all four binaries built and embedded version/commit/date; only the amd64
+  binary was executed;
+- `scripts/check-artifact.sh` passed for amd64;
+- four tarballs and four `.deb` files were produced; `scripts/check-package.sh`
+  passed for every architecture, including `dpkg-deb -f` metadata, payload
+  paths, `/usr/bin/routelatch` bytes against the dist binary, unit checking and
+  `sha256sum -c SHA256SUMS`;
+- running packaging twice over the same build produced byte-identical
+  `SHA256SUMS` (tarball and `.deb`), so the `.deb` is reproducible for the same
+  inputs;
+- the amd64 `.deb` extracted with `dpkg-deb -x` and its `version` output matched
+  `BUILD-INFO`;
+- `go build ./...`, `go vet ./...` and `go test -count=1 ./...` all passed
+  (17/17 packages).
+
+Limits: `arm64` remains cross-built and runtime-untested; `riscv64` and
+`ppc64le` are **cross-build-only and explicitly runtime-untested**. The
+sing-box sidecar is pinned and shipped only for `amd64`/`arm64`; on
+`riscv64`/`ppc64le` hysteria2 exits remain unavailable
+(`sidecar_unavailable`) while Xray exits are unaffected. No clean-machine
+install, real-hardware run, `.rpm`, GPG signature, package repository or
+Windows `exe` is part of this phase. RPM is the documented next phase.
 
 ## 1. History scan
 
@@ -209,7 +258,9 @@ No drift; no notices change was needed.
 `go build ./...` ok, `go vet ./...` ok, `go test -count=1 ./...` ok (all 16
 packages; `internal/acceptance` 115.7 s, `internal/licensing` ok). The gated
 systemd/desktop acceptance runs were not re-executed; they remain gated and were
-last verified in R1/R2. Package and artifact checks are in §2.
+last verified in R1/R2. Package and artifact checks are in §2. This paragraph is
+the v0.1.0 snapshot; the R12 Phase 1 re-run is recorded above and passed 17/17
+packages.
 
 ## Historical pre-push gates (resolved for v0.1.0)
 

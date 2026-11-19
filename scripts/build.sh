@@ -5,8 +5,11 @@
 # change desktop/network settings or publish anything.
 #
 # Usage:
-#   scripts/build.sh                 # build linux/amd64 and linux/arm64
+#   scripts/build.sh                 # build linux/amd64, arm64, riscv64, ppc64le
 #   scripts/build.sh --reproducible  # build twice and compare checksums
+#
+# DIST overrides the output directory (default ./dist); an isolated DIST keeps
+# a previous build or supplied dist/singbox inputs untouched.
 #
 # Inputs that make the build reproducible: same Go toolchain (see go.mod),
 # same source tree, same VERSION/COMMIT, and SOURCE_DATE_EPOCH for the date.
@@ -16,7 +19,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 repo=$(pwd)
-dist="$repo/dist"
+dist=${DIST:-$repo/dist}
+arches=${ARCHES:-"amd64 arm64 riscv64 ppc64le"}
 
 VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}
 COMMIT=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}
@@ -101,11 +105,18 @@ assert_stamp() {
 
 build_all() {
 	root=$1
-	build_arch amd64 "$root/routelatch-linux-amd64"
-	build_arch arm64 "$root/routelatch-linux-arm64"
-	assert_stamp amd64 "$root/routelatch-linux-amd64"
-	assert_stamp arm64 "$root/routelatch-linux-arm64"
-	( cd "$root" && sha256sum routelatch-linux-amd64 routelatch-linux-arm64 >SHA256SUMS )
+	for arch in $arches; do
+		build_arch "$arch" "$root/routelatch-linux-$arch"
+	done
+	for arch in $arches; do
+		assert_stamp "$arch" "$root/routelatch-linux-$arch"
+	done
+	(
+		cd "$root"
+		for arch in $arches; do
+			sha256sum "routelatch-linux-$arch"
+		done >SHA256SUMS
+	)
 }
 
 # BUILD-INFO is the readable stamp that ships beside the binaries; the same

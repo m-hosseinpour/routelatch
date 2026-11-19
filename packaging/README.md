@@ -10,14 +10,19 @@ enabled, no desktop proxy or network setting is touched, and nothing is
 published or downloaded.
 
 The default answer for "how do I get a package" is `scripts/build.sh` followed
-by `scripts/package.sh`. Both are local build steps.
+by `scripts/package.sh`. Both are local build steps. The packaging step writes
+reproducible `.tar.gz` files and unsigned Debian `.deb` files; the only trust
+anchor is the generated `SHA256SUMS`, as for the v0.1.0 tarballs. There is no
+GPG signing, apt repository or package-service integration.
 
 ## Source tree layout
 
 ```
-scripts/build.sh           linux/amd64 + linux/arm64 static build, dist/SHA256SUMS, dist/BUILD-INFO
-scripts/package.sh         assembles the package trees and .tar.gz files under dist/packages/
+scripts/build.sh           static build for linux/amd64, arm64, riscv64, ppc64le,
+                           dist/SHA256SUMS, dist/BUILD-INFO
+scripts/package.sh         assembles package trees, .tar.gz files and .deb files under dist/packages/
 scripts/check-artifact.sh  static-link and empty-environment smoke check for one binary
+scripts/check-package.sh   checksum, tarball-layout and .deb metadata/payload check
 dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
 packaging/README.md        this file; it is shipped inside the package as INSTALL.md
 deploy/systemd/routelatch.service
@@ -29,10 +34,11 @@ deploy/README.md           service lifecycle: install, check, uninstall, crash r
 
 ## Package layout
 
-`scripts/package.sh` produces this tree per architecture:
+`scripts/package.sh` produces this tree per architecture
+(`amd64`, `arm64`, `riscv64`, `ppc64le`):
 
 ```
-routelatch-<version>-linux-<amd64|arm64>/
+routelatch-<version>-linux-<arch>/
   bin/routelatch
   bin/sing-box                          optional: separate GPL-3.0 sidecar (pinned v1.14.4)
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
@@ -52,7 +58,35 @@ routelatch-<version>-linux-<amd64|arm64>/
 ```
 
 and `dist/packages/SHA256SUMS` plus `routelatch-<version>-linux-<arch>.tar.gz`
-for each architecture.
+and `routelatch_<debian-version>_<arch>.deb` for each architecture.
+
+The `.deb` payload maps the tarball root onto `/usr`:
+
+```
+/usr/bin/routelatch
+/usr/bin/sing-box                         optional sidecar, amd64/arm64 only
+/usr/share/doc/routelatch/...             same documents as the tarball
+/usr/share/routelatch/systemd/routelatch.service
+                                          the unchanged source-tree unit
+/usr/lib/systemd/user/routelatch.service  standard user unit for a .deb install
+```
+
+The packaged unit in `/usr/lib/systemd/user` is generated from the one copy in
+`deploy/systemd/routelatch.service` with only `ExecStart` changed to
+`/usr/bin/routelatch run`, because `%h/.local/bin` is not a package path. The
+`.deb` has no `postinst`, `preinst`, `prerm` or `postrm`: it does not enable a
+service, change a desktop proxy setting or touch user configuration. Control
+metadata is `Package: routelatch`, a Debian-normalised version, the target
+architecture, `Depends: ca-certificates` (the static binary uses the host CA
+bundle for TLS) and a description; `scripts/check-package.sh` asserts these.
+The sidecar has to stay next to the main binary for the runtime's lookup, so an
+`amd64`/`arm64` `.deb` installs it as `/usr/bin/sing-box`; a system that already
+provides that path from another package would conflict and is not a supported
+combination.
+
+`DIST=/path/to/output` overrides the `dist/` output directory for
+`build.sh`, `package.sh`, `check-artifact.sh` and `check-package.sh`, so an
+isolated build does not disturb an existing `dist/` or supplied sidecar inputs.
 
 There are no runtime data files in the package. On first run the directories
 `$XDG_CONFIG_HOME/routelatch/` and `$XDG_STATE_HOME/routelatch/` are created
@@ -76,6 +110,21 @@ systemctl --user daemon-reload
 systemctl --user enable --now routelatch.service
 ```
 
+or install the local Debian package (unsigned; verify `SHA256SUMS` first):
+
+```sh
+sudo apt install ./routelatch_<debian-version>_amd64.deb
+```
+
+The `.deb` installs `/usr/bin/routelatch`, the documents under
+`/usr/share/doc/routelatch/`, and a standard systemd user unit. It does not
+start or enable anything; opt in with:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now routelatch.service
+```
+
 `~/.local/bin` must be on `PATH` for the `routelatch` command to resolve.
 Without the service, run the foreground command in your own terminal instead:
 
@@ -91,18 +140,28 @@ changed by installing or starting the service.
 
 ## Architecture and platform
 
-Only `linux/amd64` and `linux/arm64` are built. `uname -m` must report
-`x86_64` or `aarch64`; there are no 32-bit or non-Linux packages. The build
-targets both architectures on one machine, so an arm64 package can be produced
-without an arm64 host — but it also has to be run on arm64 hardware to be
-tested. Only the amd64 artifact was executed during this build.
+`linux/amd64`, `linux/arm64`, `linux/riscv64` and `linux/ppc64le` are built;
+`uname -m` must report `x86_64`, `aarch64`, `riscv64` or `ppc64le`. There are
+no 32-bit or non-Linux packages. The build targets every architecture on one
+machine, so cross-built packages can be produced without matching hardware —
+but they still have to be run on that hardware to be tested.
+
+Only `amd64` is executed in this build. `arm64` packages are cross-built and
+remain runtime-untested; `riscv64` and `ppc64le` are **cross-build-only and
+explicitly runtime-untested**. No clean-machine or real-hardware test is
+claimed for any of them, and the supported runtime matrix for v1 remains
+`amd64`/`arm64`. The optional sing-box sidecar is shipped only for
+`amd64`/`arm64` because upstream release binaries are pinned for those two; on
+`riscv64`/`ppc64le` RouteLatch still supports Xray exits, but hysteria2 exits
+stay `unsupported`/`sidecar_unavailable`.
 
 ## The sing-box sidecar (GPL-3.0, separate executable)
 
 `bin/sing-box` is not built by `scripts/build.sh` and is not linked into
 RouteLatch. It is an optional input: an **already extracted, unmodified upstream
-binary** for each architecture, supplied by the release operator under
-`dist/singbox/` (gitignored together with `dist/`). `scripts/package.sh` pins
+binary** for each sidecar architecture (`amd64`, `arm64`), supplied by the
+release operator under `dist/singbox/` (gitignored together with `dist/`).
+`scripts/package.sh` pins
 upstream tag `v1.14.4` (commit `c005f35300ce76427dc285481ec5695f5b179cd2`) and the
 sidecar's identity is recorded in the package's `SINGBOX-INFO`.
 
@@ -192,6 +251,15 @@ different inputs. An unknown host architecture skips that check with a warning
 (the cross-built architecture is already covered by build.sh's embedded-string
 check).
 
+The `.deb` step pins every payload mtime to `SOURCE_DATE_EPOCH`, passes the same
+epoch to `dpkg-deb`, builds with `--root-owner-group -Zgzip -z9` and fixes the
+tar ownership, so two packaging runs over one build produce byte-identical
+`.deb` files. `scripts/check-package.sh` then runs `sha256sum -c SHA256SUMS`,
+checks the tarball layout, reads `dpkg-deb -f` metadata (name, Debian version,
+architecture, `Depends`, description, maintainer, installed size), compares
+`/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte with the
+dist binaries, and verifies the generated user unit. It installs nothing.
+
 ## Version stamping
 
 `scripts/build.sh` passes
@@ -221,6 +289,13 @@ assertion against `dist/BUILD-INFO` for a shipped artifact.
 `dist/BUILD-INFO` carries the same values plus the Go version and `cgo=0`, and
 is copied into the package docs.
 
+The `.deb` `Version` field is derived deterministically from that value: a
+leading `v` is stripped (`v0.1.0` → `0.1.0`) and a value that would not start
+with a digit gets a `0.0.0+` prefix (`a028469` → `0.0.0+a028469`), because
+Debian requires a version that starts with a digit. Any other character outside
+the Debian version set makes packaging fail rather than silently rewriting the
+stamp.
+
 `VERSION` defaults to `git describe --tags --always --dirty`, which is a commit
 hash while the repository has no tags. Override `VERSION`, `COMMIT` and
 `SOURCE_DATE_EPOCH` for a named build.
@@ -235,7 +310,7 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-Publication is still not settled. Do not publish, release, tag, push or upload
-these packages: that is a separate decision with the project owner, and the
-release checklist still requires the MPL-2.0 source offer and the rest of A14.
-`PACKAGE-NOTES` in every package says it is a local build for that reason.
+The v0.1.0 tarballs are published; the `.deb` files from this step are not.
+Do not publish, release, tag, push or upload these packages: that is a separate
+decision with the project owner. `PACKAGE-NOTES` in every package says it is a
+local build for that reason.

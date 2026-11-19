@@ -40,14 +40,18 @@ jobs:
         # only on an authorized machine.
         run: go test -count=1 ./...
 
-  cross-build-arm64:
-    name: Cross-build linux/arm64
+  cross-build:
+    name: Cross-build linux/${{ matrix.arch }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, riscv64, ppc64le]
     env:
       CGO_ENABLED: "0"
       GOOS: linux
-      GOARCH: arm64
+      GOARCH: ${{ matrix.arch }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -58,13 +62,57 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build every package for arm64
+      - name: Build every package for ${{ matrix.arch }}
         run: go build ./...
 
-      - name: Build the arm64 binary
-        run: go build -trimpath -buildvcs=false -o dist/routelatch-linux-arm64 ./cmd/routelatch
+      - name: Build the ${{ matrix.arch }} binary
+        run: go build -trimpath -buildvcs=false -o "dist/routelatch-linux-${{ matrix.arch }}" ./cmd/routelatch
 
       - name: Check the artifact architecture
         run: |
-          file dist/routelatch-linux-arm64
-          file dist/routelatch-linux-arm64 | grep -q 'ARM aarch64'
+          file "dist/routelatch-linux-${{ matrix.arch }}"
+          case "${{ matrix.arch }}" in
+            arm64) pattern='ARM aarch64' ;;
+            riscv64) pattern='UCB RISC-V' ;;
+            ppc64le) pattern='64-bit PowerPC' ;;
+            *) echo "unexpected architecture"; exit 1 ;;
+          esac
+          file "dist/routelatch-linux-${{ matrix.arch }}" | grep -q "$pattern"
+
+  packages:
+    name: Build and validate tarballs and .deb packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: "0"
+      VERSION: v0.0.0-ci
+      COMMIT: ${{ github.sha }}
+      SOURCE_DATE_EPOCH: "1700000000"
+      REQUIRE_DEB: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the Go version pinned in go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build all architectures
+        run: scripts/build.sh
+
+      - name: Check the amd64 artifact
+        run: scripts/check-artifact.sh
+
+      - name: Package tarballs and .deb files
+        run: scripts/package.sh
+
+      - name: Validate package metadata, payload and checksums
+        run: scripts/check-package.sh
+
+      - name: Check packaging is reproducible
+        run: |
+          cp dist/packages/SHA256SUMS /tmp/SHA256SUMS.first
+          scripts/package.sh
+          diff -u /tmp/SHA256SUMS.first dist/packages/SHA256SUMS

@@ -40,7 +40,9 @@ change the desktop setting, and read the prerequisites in
 [internal/acceptance/README.md](internal/acceptance/README.md) first. CI runs the
 default, offline suite only.
 
-`./scripts/build.sh` produces the static release binaries under `dist/` and
+`./scripts/build.sh` produces the static release binaries under `dist/`,
+`./scripts/package.sh` writes the tarballs and unsigned `.deb` files, and
+`./scripts/check-package.sh` validates their checksums, layout and metadata.
 `./scripts/check-artifact.sh` checks the amd64 artifact. See
 [packaging/README.md](packaging/README.md) for package layout and
 [deploy/README.md](deploy/README.md) for the service unit.

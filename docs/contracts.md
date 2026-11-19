@@ -21,6 +21,8 @@
 | `golang.org/x/net` | `v0.62.0` به‌صورت direct (برای `publicsuffix`؛ `idna` و `proxy` هم از همین ماژول) |
 | وابستگی جدید | ممنوع بدون تغییر قرارداد |
 
+**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمی‌دهند. بستهٔ `.deb` محلی همان بستهٔ tarball را زیر `/usr` نصب می‌کند و sidecar فقط برای `amd64`/`arm64` همراه دارد؛ هیچ `postinst` یا فعال‌سازی سرویس/تنظیم دسکتاپ در آن نیست.
+
 ماژول‌های بالا در `go.mod` پین‌اند؛ `internal/contract/pins.go` با build tag `tools`
 فقط برای این وجود دارد که `go mod tidy` قبل از ورود importکننده‌ها آن‌ها را حذف نکند.
 
@@ -1144,7 +1146,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 
 | معیار | task | check |
 | --- | --- | --- |
-| A01 | T6 | نصب پاک Linux amd64/arm64 بدون runtime دستی؛ artifact خودکفا |
+| A01 | T6 | نصب پاک Linux amd64/arm64 از tarball یا `.deb` محلی، بدون runtime دستی؛ artifact خودکفا |
 | A02 | T3 (+T5 برای ورودی قانون) | جدول §۱.۶ و ماتریس §۲.۵؛ domain/suffix/IP/CIDR و خارج از فهرست |
 | A03 | T3 | pool خالی/مرده/tag غایب: `pool_unavailable`، صفر تماس مستقیم با مقصد تأییدشده، مقصد مستقیم سالم |
 | A04 | T3 | چهار حالت، استثنای محلی، جدول §۲.۶، sweep با counter و `LocalCloseDeadline` |

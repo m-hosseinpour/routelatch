@@ -212,7 +212,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و و در مخزن عمومی وجود
 > ندارند. مرجع معتبر، HEAD انتشارشده است.
-  (۲۰۲۶-۱۱-۱۸؛ HEAD فعلی `f3909b5`. بررسیها روی معادل قبل از بازنویسی `3425c3f` اجرا و روی `3cb7bd7` پس از بازنویسی تأیید شد —
+  (۲۰۲۶-۱۱-۱۹؛ HEAD پیش از commit R12 فاز ۱ `a028469`. بررسی‌ها روی معادل قبل از بازنویسی `3425c3f` اجرا و روی `3cb7bd7` پس از بازنویسی تأیید شد —
 هنگام شروع، `git log` را ببین)
    **بازخوانی سرد ۲۰۲۶-۱۱-۱۸ (ارکستریتور):** `git status` پاک و HEAD واقعی `b01661d` بود — دو commit صرفاً سندپسند (`4106da5` بستن ادعای کهنهٔ انتشار، `b01661d` ثبت R11) بالای `efc73c3` که رکورد به آن اشاره میکرد. تنها HEAD بهروز شد؛ هیچ کد/سرویس/تنظیم میزبان تغییر نکرد. commit بازخوانی: `a18dd97`.)
 
@@ -222,7 +222,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 
 - **R11 انجام شد (۲۰۲۶-۱۱-۱۹):** import `hysteria2://`/`hy2://` و outbound JSON sing-box، فیلدهای typed قرارداد، رانتایم `internal/singbox` با handoff محلی SOCKS5، و اتصال به engine/control — در commit **`84efe5e`**. انطباق GPL جدیگانه و بستهبندی در **`654cbb6`** و هارنس/اثبات ترافیک در **`8d4118b`**. شواهد: `go build ./...` و `go vet ./...` سبز؛ `go test -count=1 ./...` **۱۷/۱۷ پکیج سبز**؛ `go test -race -count=1 ./internal/engine/...` سبز؛ سلول گیتشدهٔ `RL_ACCEPT_HYSTERIA2_TEST=1 go test -count=1 -v -run TestR11Hysteria2RealTraffic ./internal/acceptance/` **pass (~۲۶s)** با باینری رسمی pinشده (archive sha256 `699a1b51…c24968` همخوان با `scripts/package.sh`)، handshake TLS واقعی loopback، echo بایتیکسان با **دقیقاً ۱ تماس مقصد**، exit مرده/نبودن sidecar → 502 با ۰ تماس و بدون direct، مقصد تأییدنشده → direct، quarantine `insecure_tls_removed`، و canary D21 غایب. بازبینی مستقل: کد `approve-with-nits` (نقص مادی نشت process sidecar + ۴ nit رفع و توسط همان بازبین تأیید)، packaging `approve-with-nits` (۴ nit رفع و تأیید)، acceptance `approve-with-nits` (بدون تغییر لازم). **باقی/آزموننشده:** فقط یک مسیر server/cert loopback؛ obfs، QUIC roaming، session طولانی و باینری release واقعی آزموننشده؛ وضعیت CONNECT هنگام exit مرده timing-دپندنت است (۰ تماس در همهٔ اجراها ثابت، immutable payload مبنای pass). باینری آزمون در `/tmp/opencode` است؛ در خود R11 چیزی نصب/تغییر نشد و اعمال در نصب فعلی یک مرحلهٔ جداگانهٔ مجاز است.)
 
-- **R12 — باز (درخواست کاربر ۲۰۲۶-۱۱-۱۹، ثبتشده، شروعنشده):** گسترش ریلیز به **بستههای قابل نصب مستقیم** (`deb`، `rpm`، `exe`/Windows و ...) و پشتیبانی از **معماریهای CPU متعدد** فراتر از `amd64`/`arm64` فعلی. این آیتم **جدای از ریلیز `v0.1.0`** است و نباید با آن اشتباه گرفته شود. پیشنیازها: تصمیم طراحی دربارهٔ کانال توزیع و امضاء/مخزن بسته، فهرست معماریها و policy تست واقعی هرکدام، و برای `exe` بستن milestone Windows (که طبق plan «implementation-ready نیست» و شامل named-pipe/ACL/SCM و تنظیمات دسکتاپ است). **بدون تصمیم + مجوز جدا شروع نمیشود**؛ D-itemها تغییرناپذیراند.)
+- **R12 فاز ۱ انجام شد (۲۰۲۶-۱۱-۱۹):** طبق مجوز و تصمیم کاربر، `.deb` اولویت این فاز بود؛ `scripts/build.sh` حالا چهار معماری `amd64`/`arm64`/`riscv64`/`ppc64le` را cross-build می‌کند و `scripts/package.sh` کنار tarballها `.deb` بدون امضا با `SHA256SUMS` می‌سازد (بدون GPG/مخزن apt). کنترل: `Package: routelatch`، نسخهٔ نرمال‌شدهٔ Debian، `Architecture`، `Depends: ca-certificates` و description؛ payload ریشهٔ بسته را به `/usr` نگاشت می‌کند و postinst/service enable ندارد. `scripts/check-package.sh` metadata/payload/checksum را می‌سنجد و CI job جدید چهار cross-build + package را اجرا/اعتبارسنجی می‌کند. **شواهد:** چهار tarball و چهار `.deb` ساخته شد، `check-artifact.sh` برای amd64 و `check-package.sh` برای هر چهار معماری pass، دو بار packaging همان `SHA256SUMS` را داد، و `go build`/`go vet`/`go test` سبز (۱۷/۱۷). `arm64` همچنان runtime-untested و `riscv64`/`ppc64le` فقط cross-build/runtime-untestedاند؛ sidecar فقط amd64/arm64. **فاز ۲ (بعدی، شروع‌نشده):** RPM؛ `exe`/Windows تا implementation-ready شدن milestone ویندوز وارد نمی‌شود. تگ/ریلیز `v0.1.0` دست‌نخورده است.
 
 - **اولین ریلیز `v0.1.0` و شکست CI (۲۰۲۶-۱۱-۱۹):** تگ `v0.1.0` روی `068e9c2` ساخته و به هر دو remote push شد؛ Release عمومی در `https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.0` با سه دارایی: `routelatch-v0.1.0-linux-amd64.tar.gz` (sha256 `94d25d04…7667cf`)، `routelatch-v0.1.0-linux-arm64.tar.gz` (`7b3dca81…bd96f`) و `SHA256SUMS`. هشarchiveهای sing-box (`699a1b51…`/`436441f7…`) و `sha256sum -c` قبل از آپلود تأیید شدند. **دو اجرای CI روی `068e9c2` شکست خوردند** (`44479272981`، `44479298380`)، ولی نه به علت R11: تست `TestForeignPeerIsRejectedBeforeHandler` flakeای پیشین است. بازبینی/sورس: سرور envelopeٔ `peer_rejected`را مینویسد و بدون خواندن درخواست میبندد؛ write کلاینت با بستن رقابت میکند، `EPIPE` میدهد و `timeoutOr` آنرا به «socket not available» تبدیل میکند (دیال خود سالم بود؛ errno واقعی در CI مشاهده نشد). پیش از رفع ۵/۵۰۰۰ شکست و worktreeهای قبل و بعد از R11 سبز بودند. رفع در **`f3909b5`**: فقط خطای دیال → `ErrNotRunning`؛ کلاینت پاسخ بافرشده را حتی پس از خطای write میخواند تا ردّ peer برگردد. تشخیص socket (`Lstat` + probe خام) و تست رگرسیون اضافه شد؛ assertionها و `handler.calls==0` دستنخوردهاند. بازبینی مستقل `approve-with-nits` (کامنت منسوخ رفع شد). شواهد: `CGO_ENABLED=0 -count=200` در ۲۰ دسته (۴۰۰۰ تکرار)، race ۳۰، Full `go test ./...` ۱۷/۱۷، gofmt/vet سبز. `f3909b5` به هر دو remote push شد؛ اجرای CI جدید `44485453743` روی `f3909b5` **success** تأیید شد (هر دو job: `Build, vet and test` و `Cross-build linux/arm64` سبز). باینری Release مربوط به تگ `068e9c2` است، نه `f3909b5` — پچریلیز جداگانه در صورت درخواست کاربر لازم است.)
 
@@ -354,15 +354,14 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | R8 | **انجام شد (`e098ceb` merge):** README/CI/فایل‌های عمومی، بستهٔ release با checksum/stamp/source offer، اسکن تاریخچه (پاک)، بررسی نام، `docs/release-readiness.md`. | آمادگی انتشار | انجام شد؛ push بعداً با مجوز کاربر انجام شد |
 | R10 | **انجام شد (`c1a98f9`, `cbc6a87`, `3425c3f`):** failover CONNECT پیش از ۲۰۰ با سقف ۳ exit و بافر ۶۴ KiB، پین دستی تکـتلاش، بدون direct و بدون تغییر HTTP ساده/SOCKS5؛ ۱۶/۳۰ → ۹۲/۱۰۰ و smoke ۱۹/۲۰؛ نصب و restart سرویس روزمره | A02/A03/D22 | انجام شد |
 | R11 | **انجام شد (`654cbb6`، `84efe5e`، `8d4118b`):** پشتیبانی واقعی hysteria2/sing-box با رانتایم جدیگانه sing-box `v1.14.4` کنار Xray — import، فیلدهای قرارداد، handoff محلی SOCKS5، انطباق GPL/بستهبندی، و اثبات ترافیک واقعی (۱ تماس مقصد، fail-closed با ۰ تماس، D21). **باقی:** obfs/QUIC roaming/session طولانی و باینری release واقعی آزموننشده | D07/A06/A08 (گسترش دامنه) | انجام شد با تصمیم معماری + مجوز کاربر |
-| R12 | **باز — شروع نشده (درخواست کاربر ۲۰۲۶-۱۱-۱۹):** بستههای قابل نصب مستقیم (`deb`، `rpm`، `exe`/Windows و ...) و معماریهای CPU متعدد در ریلیز. جدای از `v0.1.0`؛ نیاز به تصمیم کانال توزیع/امضاء، فهرست معماریها و تست واقعی، و بستن milestone Windows برای `exe`. **بدون تصمیم + مجوز جدا شروع نمیشود** | A01/A14 (توزیع) | نیاز به طراحی + مجوز |
-| انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD فعلی `f3909b5`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
+| R12 | **فاز ۱ انجام شد (۲۰۲۶-۱۱-۱۹):** `.deb` بدون امضا + `SHA256SUMS` برای amd64/arm64 و cross-build riscv64/ppc64le؛ metadata/payload/checksum با `check-package.sh` و CI آزموده شد؛ tarballها هم چهار معماری. **فاز ۲ (باز):** RPM؛ Windows `exe` خارج از این فاز | A01/A14 (توزیع) | فاز ۱ با مجوز؛ فاز ۲ نیازمند مجوز |
+| انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 
 **قاعدهٔ انتخاب:** R1–R8، R10، R11 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد.
-**R12 تنها task باز است** (بستههای deb/rpm/exe و معماریهای CPU بیشتر) و بدون تصمیم + مجوز
-جدا شروع نمیشود. تگ `v0.1.0` / ریلیز GitHub (فقط tarball) مجاز و توسط کاربر مشخص شد؛
-R12 جدای از آن است.)
-کارهای باقیمانده (اجرای arm64، محیط پاک برای A01، reboot/re-login و GNOME) مجوز جدا
-میخواهند؛ انتشار و push از قبل انجام شد، ولی tag/release مجوز جدا میخواهد.
+**R12 فاز ۱ بسته شد** (`.deb` بدون امضا + checksum و چهار معماری)؛ **تنها فاز باز R12 فاز ۲ (RPM)** است و بدون تصمیم + مجوز جدا شروع نمی‌شود. Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمی‌شود. تگ `v0.1.0` / ریلیز GitHub دست‌نخورده است.
+
+کارهای باقی‌مانده (اجرای arm64، محیط پاک برای A01، reboot/re-login و GNOME) مجوز جدا
+می‌خواهند؛ انتشار و push از قبل انجام شد، ولی tag/release جدید مجوز جدا می‌خواهد.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -372,11 +371,12 @@ R12 جدای از آن است.)
 | WS/gRPC/XHTTP روی TLS | اثبات محلی (R6) | peer loopback pin‌شده، ۱ درخواست مقصد، pin غلط با ۰ داده؛ reuse طولانی‌مدت و h3 آزمون‌نشده |
 | A04، A07، A09، A10 | اثبات محلی + نمونهٔ عمومی محدود (R4) | mode switch زنده+در جریان، rerank/cooldown، مجوز فایل/socket، CLI، launcher env، crash/restart، و ۴ exit عمومی با health/ranking واقعی؛ همهٔ مقاصد/اعضای pool نه |
 | A13 | **اثبات واقعی (R1)** | نصب/فعال‌سازی unit واقعی و lifecycle؛ **اجرا نشد:** reboot/re-login و corrupt-state زیر systemd (offline فقط) |
-| A01 | **پذیرفته‌نشده** | مسیر نصب واقعی و launch آن اثبات شد (R1)؛ ولی محیط پاک/ماشین تازه و اجرای arm64 هنوز نه |
+| A01 | **پذیرفته‌نشده** | مسیر نصب واقعی و launch آن اثبات شد (R1)؛ metadata/payload `.deb` محلی تأیید شد؛ ولی محیط پاک/ماشین تازه و اجرای arm64 هنوز نه |
 | A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **اجرا نشد:** نشست واقعی GNOME |
-| A14 | **مجوز/ممیزی/بسته بسته (R3+R8)** | Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابلانتشار است، و push مجاز است — ./release-readiness.md |
+| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb` با `SHA256SUMS`؛ R12 فاز ۱ بستهٔ `.deb` بدون امضا را محلی تأیید کرد؛ انتشار `.deb`/tag جدید همچنان مجوز جدا می‌خواهد |
+| `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری؛ metadata/payload/checksum با `check-package.sh`، تکرار byte-identical؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | hysteria2/sing-box (R11) | **اثبات محلی با ترافیک واقعی** | هارنس گیتشدهٔ `RL_ACCEPT_HYSTERIA2_TEST=1`: handshake TLS واقعی با باینری pinشده، echo بایتیکسان، ۱ تماس مقصد، fail-closed ۰ تماس، D21؛ فقط loopback — obfs/routing/session طولانی و exit عمومی آزموننشده |
-| wire-level replay، UDP واقعی، arm64 اجرا | **قابل‌آزمون نیست** | خارج از loopback/مجوز؛ arm64 فقط cross-build شده |
+| wire-level replay، UDP واقعی، arm64/riscv64/ppc64le اجرا | **قابل‌آزمون نیست** | خارج از loopback/مجوز؛ هر سه فقط cross-build شده‌اند |
 
 **محدودیت‌های آزمون‌نشدهٔ دیگر که ادعا را محدود می‌کنند:** HTTP CONNECT exit، TLS-pin
 failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، reuse طولانی‌مدت
@@ -389,11 +389,8 @@ failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، 
    «HEAD هنگام ثبت» مقایسه کن و تغییر/دادهٔ کاربر را حفظ کن.
 2. ریلیز `v0.1.0` منتشر و R11 در نصب فعلی اعمال شد (۲۰۲۶-۱۱-۱۹: باینری `83454f6` + sidecar `v1.14.4`
    در `~/.local/bin`، سرویس restart، تنظیمات دسکتاپ و pool دستنخورده؛ backup در
-   `/tmp/opencode/routelatch-pre-r11-20261119-104211/`). تنها task باز R12 است (بستههای
-   deb/rpm/exe و معماریهای CPU بیشتر) و بدون تصمیم + مجوز جدا شروع نمیشود. RouteLatch همین حالا نصب، فعال و به‌عنوان پروکسی دسکتاپ KDE تنظیم شده است (R7)؛ اگر کاربر خواست برگردد،
-   `routelatch desktop proxy restore` مقدار قبلی را بازمی‌گرداند. کارهای بعدی — اجرای
-   arm64 روی سخت‌افزار، ماشین تازه برای A01، reboot/re-login برای A13، نشست GNOME برای
-   A11 و tag/release — مجوز جدا میخواهند؛ push به دو remote قبلاً انجام شد.
+   `/tmp/opencode/routelatch-pre-r11-20261119-104211/`). R12 فاز ۱ انجام شد: `.deb` بدون امضا با `SHA256SUMS`، چهار معماری و اعتبارسنجی metadata/payload. تنها فاز باز R12، **RPM** است و بدون تصمیم + مجوز جدا شروع نمی‌شود؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمی‌شود. RouteLatch همین حالا نصب، فعال و به‌عنوان پروکسی دسکتاپ KDE تنظیم شده است (R7)؛ اگر کاربر خواست برگردد،
+   `routelatch desktop proxy restore` مقدار قبلی را بازمی‌گرداند. کارهای بعدی — اجرای arm64/riscv64/ppc64le روی سخت‌افزار، ماشین تازه برای A01، reboot/re-login برای A13، نشست GNOME برای A11، RPM و tag/release جدید — مجوز جدا می‌خواهند؛ push به دو remote قبلاً انجام شد.
 3. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
    است، چون F1/F8 را فقط آن گرفت)، سپس بازبینی مستقل و commit محلی.
 4. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.

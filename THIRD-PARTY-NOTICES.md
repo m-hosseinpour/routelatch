@@ -6,7 +6,8 @@ listed in this file, each used unmodified under its own license.
 
 This inventory was generated on 2026-11-18 from the modules and packages that the
 pinned toolchain actually links into `./cmd/routelatch` for the Linux builds
-(`GOOS=linux`, `GOARCH=amd64` and `arm64`, `CGO_ENABLED=0`, Go 1.27.4), and from the
+(`GOOS=linux`, `GOARCH=amd64`, `arm64`, `riscv64` and `ppc64le`,
+`CGO_ENABLED=0`, Go 1.27.4), and from the
 license files in the Go module cache. It includes license files of embedded
 components inside linked packages, not just each module's root license. The method,
 the evidence limits and the obligations that follow from these licenses are in the

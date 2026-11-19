@@ -14,7 +14,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 repo=$(pwd)
-artifact=${1:-dist/routelatch-linux-amd64}
+dist=${DIST:-$repo/dist}
+artifact=${1:-$dist/routelatch-linux-amd64}
 http_port=${ROUTELATCH_CHECK_HTTP_PORT:-18317}
 socks_port=${ROUTELATCH_CHECK_SOCKS_PORT:-18318}
 
@@ -23,7 +24,7 @@ if [ ! -x "$artifact" ]; then
 	exit 2
 fi
 
-info="$repo/dist/BUILD-INFO"
+info="$dist/BUILD-INFO"
 version=${VERSION:-$(sed -n 's/^version=//p' "$info" 2>/dev/null || true)}
 commit=${COMMIT:-$(sed -n 's/^commit=//p' "$info" 2>/dev/null || true)}
 build_date=${BUILD_DATE:-$(sed -n 's/^date=//p' "$info" 2>/dev/null || true)}

@@ -36,8 +36,10 @@ sweep finishes.
 
 ## Requirements
 
-- Linux on `x86_64` or `aarch64`. The `amd64` build is the only one executed
-  during testing so far.
+- Linux on `x86_64` or `aarch64` for the supported runtime. Local packaging
+  also cross-builds `riscv64` and `ppc64le`; those two are built but
+  runtime-untested. The `amd64` build is the only one executed during testing
+  so far.
 - Go 1.27.4 (the version pinned in `go.mod`) only if you build from source. Set
   `GOTOOLCHAIN=local`.
 - No root, TUN, firewall change or system-wide proxy setting. TLS verification
@@ -77,12 +79,25 @@ cd routelatch-v0.1.0-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ```
 
-This release ships **only** the two `.tar.gz` files above. Distribution
-packages (`.deb`, `.rpm`), Windows/macOS builds, 32-bit builds and further CPU
-architectures are not part of v0.1.0; they are future work.
+The `v0.1.0` release ships **only** those two `.tar.gz` files. Local packaging
+now also produces unsigned Debian packages for `amd64`, `arm64`, `riscv64` and
+`ppc64le`; they are **not** part of `v0.1.0`, not published and not signed. The
+only integrity check is the generated `SHA256SUMS`, the same trust model as the
+v0.1.0 tarballs:
 
-`~/.local/bin` must be on `PATH`. The systemd user service is optional; install
-it only if you want the service supervised:
+```sh
+sha256sum -c SHA256SUMS
+sudo apt install ./routelatch_<debian-version>_amd64.deb
+```
+
+The `.deb` installs `/usr/bin/routelatch`, its documents under
+`/usr/share/doc/routelatch/` and a systemd user unit. It does not start or
+enable the service; opt in with `systemctl --user enable --now routelatch`.
+`.rpm`, Windows/macOS builds, 32-bit builds and a package repository remain
+future work.
+
+For a tarball install, `~/.local/bin` must be on `PATH`. The systemd user
+service is optional; install it only if you want the service supervised:
 
 ```sh
 install -Dm644 share/routelatch/systemd/routelatch.service \
@@ -109,15 +124,20 @@ under `dist/` (gitignored):
 ```
 dist/routelatch-linux-amd64
 dist/routelatch-linux-arm64
+dist/routelatch-linux-riscv64
+dist/routelatch-linux-ppc64le
 dist/SHA256SUMS
 dist/BUILD-INFO
 ```
 
 `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` can be set for a named build;
 `./scripts/build.sh --reproducible` checks that the same inputs give identical
-bytes. `./scripts/check-artifact.sh` verifies the amd64 binary is statically
-linked and starts with an empty environment. The arm64 artifact is compiled and
-checksummed but cannot be executed on an amd64 host.
+bytes. `./scripts/package.sh` then writes reproducible tarballs and `.deb`
+files under `dist/packages/`, and `./scripts/check-package.sh` checks their
+checksums, layout and metadata. `./scripts/check-artifact.sh` verifies the
+amd64 binary is statically linked and starts with an empty environment. The
+arm64, riscv64 and ppc64le artifacts are compiled and checksummed but cannot be
+executed on an amd64 host; riscv64/ppc64le runtime behavior is not tested.
 
 ## Quick start
 
@@ -247,7 +267,9 @@ other software.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
   is not supported.
-- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1.
+- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No `.rpm`
+  package, apt/dnf repository or package signing yet; `.deb` files are local
+  and unsigned.
 - **No system-wide "covers everything" mode**; `all-proxy` keeps the documented
   loopback/private exception.
 
@@ -261,6 +283,13 @@ run on the current source tree prints **215 PASS, 0 FAIL and 13 NOTE in about
 gated tests stay skipped unless a real desktop or `systemd --user` session is
 available. `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are
 green.
+
+Local packaging was also verified for this phase: four tarballs and four
+unsigned `.deb` files were built, `scripts/check-package.sh` passed for every
+architecture (metadata, payload paths, binary bytes and `SHA256SUMS`), and two
+packaging runs produced identical checksums. Only `amd64` was executed;
+`arm64`/`riscv64`/`ppc64le` were cross-built, and the last two are
+runtime-untested.
 
 Beyond the loopback suite, the Linux build was exercised on real system
 components: a real `systemd --user` service lifecycle (start/stop/restart, port
