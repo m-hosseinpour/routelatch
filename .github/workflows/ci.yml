@@ -171,7 +171,9 @@ jobs:
       - name: Build and inspect binary RPMs from the generated specs
         run: |
           set -eu
-          expected_version=$(printf '%s' "$VERSION" | sed -e 's/^v//' -e 's/-/./g')
+          # The generated spec already carries the one unified version; do not
+          # re-derive it here (that would miss the 0.0.0+ prefix rule).
+          expected_version=$(sed -n 's/^Version:[[:space:]]*//p' dist/packages/routelatch-x86_64.spec)
           top="$PWD/rpmbuild-verify"
           mkdir -p "$top"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           cp dist/packages/*.tar.gz "$top/SOURCES/"

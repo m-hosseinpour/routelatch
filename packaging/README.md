@@ -123,15 +123,20 @@ lays out the prebuilt binary with the standard RPM paths:
 /usr/share/doc/routelatch/...               all other documents (README, INSTALL,
                                             SERVICE, notices, licensing, go.sum,
                                             BUILD-INFO, PACKAGE-NOTES)
-/usr/lib/systemd/user/routelatch.service    the unit, as data only
+/usr/lib/systemd/user/routelatch.service    the unit as data only, with
+                                            ExecStart rewritten to /usr/bin/routelatch run
 /usr/bin/sing-box                           optional sidecar, amd64/arm64 only
 /usr/share/doc/routelatch/SINGBOX-INFO      optional sidecar provenance
 ```
 
-There are no `%pre`/`%post`/`%preun`/`%postun` scriptlets, no `systemctl` call
-and no desktop/user setting change: installing an RPM does not enable a service.
-The sidecar, when present, is a separate GPL-3.0 executable and is not linked
-into RouteLatch.
+The unit's `ExecStart` is rewritten during `%install` from the tarball's
+`%h/.local/bin/routelatch` path to `/usr/bin/routelatch run`, with a grep guard,
+exactly as for the `.deb`; otherwise the documented `systemctl --user enable
+--now routelatch` would start a nonexistent path. There are no
+`%pre`/`%post`/`%preun`/`%postun` scriptlets, no `systemctl` call and no
+desktop/user setting change: installing an RPM does not enable a service. The
+sidecar, when present, is a separate GPL-3.0 executable and is not linked into
+RouteLatch.
 
 No `.rpm` file is produced or checksummed on a host without `rpmbuild`: local
 verification is static spec validation in `scripts/check-package.sh`. CI

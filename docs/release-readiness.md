@@ -117,8 +117,9 @@ matching tarball by SHA-256, sets `Version` to the unified value, `Release: 1`,
 and `AutoReqProv: no`, and has an empty `%build`. Its `%install` puts
 `/usr/bin/routelatch`, the standard bundle of documents under
 `/usr/share/doc/routelatch/`, `LICENSE`/`NOTICE` under
-`/usr/share/licenses/routelatch/` and the unchanged systemd user unit under
-`/usr/lib/systemd/user/`; the optional sing-box sidecar (amd64/arm64 only)
+`/usr/share/licenses/routelatch/` and the systemd user unit under
+`/usr/lib/systemd/user/` with `ExecStart` rewritten to `/usr/bin/routelatch run`
+(the same adaptation the `.deb` uses); the optional sing-box sidecar (amd64/arm64 only)
 goes to `/usr/bin/sing-box`. There are no scriptlets, no service enable and no
 desktop/user setting change.
 

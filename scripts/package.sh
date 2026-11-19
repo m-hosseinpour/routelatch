@@ -443,6 +443,9 @@ install -m 0644 share/doc/routelatch/go.sum %{buildroot}%{_datadir}/doc/routelat
 install -d -m 0755 %{buildroot}%{_datadir}/doc/routelatch/docs
 install -m 0644 share/doc/routelatch/docs/licensing.md %{buildroot}%{_datadir}/doc/routelatch/docs/licensing.md
 install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
+# The tarball unit uses %h/.local/bin; a package installs the binary in /usr/bin.
+sed -i 's|^ExecStart=%h/.local/bin/routelatch run\$|ExecStart=/usr/bin/routelatch run|' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
+grep -q '^ExecStart=/usr/bin/routelatch run\$' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
 EOF
 		if [ "$with_sidecar" = 1 ]; then
 			cat <<'EOF'

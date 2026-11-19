@@ -261,6 +261,10 @@ for arch in $arches; do
 	expect_spec_line 'install -m 0644 share/doc/routelatch/LICENSE %{buildroot}%{_datadir}/licenses/routelatch/LICENSE'
 	expect_spec_line 'install -m 0644 share/doc/routelatch/NOTICE %{buildroot}%{_datadir}/licenses/routelatch/NOTICE'
 	expect_spec_line 'install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service'
+	# The package path is /usr/bin, so the installed unit must be rewritten like
+	# the .deb's; shipping the tarball unit unchanged would break `enable --now`.
+	expect_spec_line "sed -i 's|^ExecStart=%h/.local/bin/routelatch run\$|ExecStart=/usr/bin/routelatch run|' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service"
+	expect_spec_line "grep -q '^ExecStart=/usr/bin/routelatch run\$' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service"
 	expect_spec_line '%license %{_datadir}/licenses/routelatch/LICENSE'
 	expect_spec_line '%license %{_datadir}/licenses/routelatch/NOTICE'
 	for path in \
