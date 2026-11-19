@@ -58,7 +58,11 @@ routelatch-<version>-linux-<arch>/
 ```
 
 and `dist/packages/SHA256SUMS` plus `routelatch-<version>-linux-<arch>.tar.gz`
-and `routelatch_<debian-version>_<arch>.deb` for each architecture.
+and `routelatch_<debian-version>_<debian-arch>.deb` for each architecture.
+Tarballs keep Go/CPU architecture names. The `.deb` file name and its
+`Architecture` field use Debian names, which differ in one case: the `ppc64le`
+build ships as `routelatch_<debian-version>_ppc64el.deb` (`ppc64el` is Debian's
+little-endian 64-bit PowerPC architecture).
 
 The `.deb` payload maps the tarball root onto `/usr`:
 
@@ -87,6 +91,13 @@ combination.
 `DIST=/path/to/output` overrides the `dist/` output directory for
 `build.sh`, `package.sh`, `check-artifact.sh` and `check-package.sh`, so an
 isolated build does not disturb an existing `dist/` or supplied sidecar inputs.
+`ARCHES="amd64"` (or another space-separated subset) limits the four-architecture
+loop for a quick local check; the defaults cover all four architectures.
+
+Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
+generated for these local, unsigned packages; the Apache-2.0 text and the full
+third-party notices ship under `/usr/share/doc/routelatch/`. A future apt
+repository or public distribution phase must add them.
 
 There are no runtime data files in the package. On first run the directories
 `$XDG_CONFIG_HOME/routelatch/` and `$XDG_STATE_HOME/routelatch/` are created
@@ -110,22 +121,33 @@ systemctl --user daemon-reload
 systemctl --user enable --now routelatch.service
 ```
 
-or install the local Debian package (unsigned; verify `SHA256SUMS` first):
+For a tarball install, `~/.local/bin` must be on `PATH` for the `routelatch`
+command to resolve. Or install the local Debian package (unsigned; verify
+`SHA256SUMS` first):
 
 ```sh
 sudo apt install ./routelatch_<debian-version>_amd64.deb
 ```
 
 The `.deb` installs `/usr/bin/routelatch`, the documents under
-`/usr/share/doc/routelatch/`, and a standard systemd user unit. It does not
-start or enable anything; opt in with:
+`/usr/share/doc/routelatch/`, and a standard systemd user unit. On `amd64` and
+`arm64` it also installs the `/usr/bin/sing-box` sidecar described above. It
+does not start or enable anything; opt in with:
 
 ```sh
 systemctl --user daemon-reload
 systemctl --user enable --now routelatch.service
 ```
 
-`~/.local/bin` must be on `PATH` for the `routelatch` command to resolve.
+For a `.deb` install, `/usr/bin` is already on `PATH`, so `routelatch` resolves
+without further setup. To remove the package, disable the service first and use
+the package manager, which also removes its documents and unit:
+
+```sh
+systemctl --user disable --now routelatch.service
+sudo apt remove routelatch
+```
+
 Without the service, run the foreground command in your own terminal instead:
 
 ```sh
@@ -133,9 +155,9 @@ routelatch run
 ```
 
 Check the result with `routelatch status`, `routelatch doctor`, or
-`systemctl --user status routelatch.service`. Uninstall, crash recovery and the
-GNOME/KDE desktop-proxy restore step are documented in `SERVICE.md` (the
-source tree's `deploy/README.md`); the desktop proxy is opt-in and is not
+`systemctl --user status routelatch.service`. Tarball uninstall, crash recovery
+and the GNOME/KDE desktop-proxy restore step are documented in `SERVICE.md`
+(the source tree's `deploy/README.md`); the desktop proxy is opt-in and is not
 changed by installing or starting the service.
 
 ## Architecture and platform
@@ -254,11 +276,17 @@ check).
 The `.deb` step pins every payload mtime to `SOURCE_DATE_EPOCH`, passes the same
 epoch to `dpkg-deb`, builds with `--root-owner-group -Zgzip -z9` and fixes the
 tar ownership, so two packaging runs over one build produce byte-identical
-`.deb` files. `scripts/check-package.sh` then runs `sha256sum -c SHA256SUMS`,
-checks the tarball layout, reads `dpkg-deb -f` metadata (name, Debian version,
-architecture, `Depends`, description, maintainer, installed size), compares
-`/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte with the
-dist binaries, and verifies the generated user unit. It installs nothing.
+`.deb` files. `scripts/check-package.sh` then verifies that `SHA256SUMS` lists
+exactly the expected tarballs and `.deb` files (so a dropped line is not a false
+pass) and runs `sha256sum -c`. For each architecture it also checks the tarball
+layout; reads `dpkg-deb -f` metadata (name, Debian version, architecture,
+`Depends`, description, maintainer, installed size); validates the architecture
+name against the host's Debian architecture list; requires the control archive
+to contain only `control`/`md5sums` (no maintainer scripts); compares the exact
+payload file set, the `0755 root:root` binary mode and the `0644` document mode
+against the documented layout; compares `/usr/bin/routelatch` and an optional
+`/usr/bin/sing-box` byte-for-byte with the dist binaries; and verifies the
+generated user unit. It installs nothing.
 
 ## Version stamping
 
@@ -296,9 +324,11 @@ Debian requires a version that starts with a digit. Any other character outside
 the Debian version set makes packaging fail rather than silently rewriting the
 stamp.
 
-`VERSION` defaults to `git describe --tags --always --dirty`, which is a commit
-hash while the repository has no tags. Override `VERSION`, `COMMIT` and
-`SOURCE_DATE_EPOCH` for a named build.
+`VERSION` defaults to `git describe --tags --always --dirty`, so it is the tag
+when one names the current commit (for example `v0.1.0` at the tag), a
+`tag-N-gHASH` value after later commits, or a bare commit hash when no tag is
+reachable. Override `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` for a named
+build.
 
 ## Licensing and publication
 

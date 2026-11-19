@@ -81,9 +81,9 @@ install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 
 The `v0.1.0` release ships **only** those two `.tar.gz` files. Local packaging
 now also produces unsigned Debian packages for `amd64`, `arm64`, `riscv64` and
-`ppc64le`; they are **not** part of `v0.1.0`, not published and not signed. The
-only integrity check is the generated `SHA256SUMS`, the same trust model as the
-v0.1.0 tarballs:
+`ppc64le` (the PowerPC package uses Debian's name, `ppc64el`); they are **not**
+part of `v0.1.0`, not published and not signed. The only integrity check is the
+generated `SHA256SUMS`, the same trust model as the v0.1.0 tarballs:
 
 ```sh
 sha256sum -c SHA256SUMS

@@ -46,16 +46,21 @@ touched.
 
 `scripts/build.sh` now cross-builds `linux/amd64`, `arm64`, `riscv64` and
 `ppc64le`. `scripts/package.sh` writes, for each architecture, the existing
-tarball plus `routelatch_<debian-version>_<arch>.deb`, and records both in
-`dist/packages/SHA256SUMS`. The `.deb` payload maps the tarball root to `/usr`:
-`/usr/bin/routelatch`, `/usr/share/doc/routelatch/…`, the unchanged unit under
+tarball plus a Debian package, and records both in `dist/packages/SHA256SUMS`.
+Debian package names use Debian architecture names, so the PowerPC build is
+`routelatch_<debian-version>_ppc64el.deb` (Debian calls little-endian 64-bit
+PowerPC `ppc64el`); tarballs keep the Go/CPU name `ppc64le`. The `.deb` payload
+maps the tarball root to `/usr`: `/usr/bin/routelatch`,
+`/usr/share/doc/routelatch/…`, the unchanged unit under
 `/usr/share/routelatch/systemd/`, and a generated standard user unit at
 `/usr/lib/systemd/user/routelatch.service` whose only change is
 `ExecStart=/usr/bin/routelatch run`. Control metadata is `Package: routelatch`,
 a Debian-normalised version (leading `v` stripped; a non-digit value gets a
-`0.0.0+` prefix), the target architecture, `Depends: ca-certificates` and a
-description. There are no maintainer scripts, so installation does not enable a
-service or change desktop/user settings.
+`0.0.0+` prefix), the target Debian architecture, `Depends: ca-certificates`
+and a description. There are no maintainer scripts, so installation does not
+enable a service or change desktop/user settings. Debian Policy `copyright`
+and `changelog.Debian.gz` files are deliberately deferred with the unpublished
+local scope.
 
 Evidence from the local build (`VERSION=v0.1.0-r12.1`, `COMMIT=a028469`,
 `SOURCE_DATE_EPOCH=1700000000`, Go 1.27.4, `CGO_ENABLED=0`):
@@ -63,10 +68,16 @@ Evidence from the local build (`VERSION=v0.1.0-r12.1`, `COMMIT=a028469`,
 - all four binaries built and embedded version/commit/date; only the amd64
   binary was executed;
 - `scripts/check-artifact.sh` passed for amd64;
-- four tarballs and four `.deb` files were produced; `scripts/check-package.sh`
-  passed for every architecture, including `dpkg-deb -f` metadata, payload
-  paths, `/usr/bin/routelatch` bytes against the dist binary, unit checking and
-  `sha256sum -c SHA256SUMS`;
+- four tarballs and four `.deb` files were produced (`amd64`, `arm64`,
+  `riscv64`, `ppc64el`); `scripts/check-package.sh` passed for every
+  architecture: the exact `SHA256SUMS` member set, `sha256sum -c`, tarball
+  layout, `dpkg-deb -f` metadata, a control archive containing only
+  `control`/`md5sums`, the exact payload file set, `0755 root:root` binary and
+  `0644` document modes, `/usr/bin/routelatch` bytes against the dist binary,
+  unit checking, and Debian architecture validation against
+  `dpkg-architecture`;
+- negative checks confirmed the gate fails on a missing `SHA256SUMS` line, an
+  injected maintainer script, an extra payload file and a wrong binary mode;
 - running packaging twice over the same build produced byte-identical
   `SHA256SUMS` (tarball and `.deb`), so the `.deb` is reproducible for the same
   inputs;

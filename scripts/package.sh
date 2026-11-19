@@ -24,6 +24,15 @@ arches=${ARCHES:-"amd64 arm64 riscv64 ppc64le"}
 # project pins their upstream archive digests; it does not invent pins for
 # architectures upstream does not provide.
 singbox_arches="amd64 arm64"
+# Debian architecture names are not always Go's GOARCH: little-endian 64-bit
+# PowerPC is "ppc64el" in Debian and "ppc64le" in Go. The .deb filename and its
+# Architecture field use the Debian name; tarballs keep the Go/CPU name.
+deb_arch_for() {
+	case $1 in
+	ppc64le) echo ppc64el ;;
+	*) echo "$1" ;;
+	esac
+}
 
 if [ ! -f "$info" ]; then
 	echo "missing $info; run scripts/build.sh first" >&2
@@ -291,7 +300,8 @@ EOF
 		# and the sidecar stays next to the main binary so the runtime's sibling
 		# lookup still finds it. A standard user unit is added because the
 		# tarball unit's %h/.local/bin path is not an installed package path.
-		deb="$stage/routelatch_${deb_version}_${arch}.deb"
+		deb_arch=$(deb_arch_for "$arch")
+		deb="$stage/routelatch_${deb_version}_${deb_arch}.deb"
 		deb_root="$stage/.deb-$name"
 		rm -rf "$deb_root"
 		mkdir -p "$deb_root/usr"
@@ -305,12 +315,17 @@ EOF
 			echo "cannot adapt the systemd unit for the .deb; deploy/systemd/routelatch.service changed" >&2
 			exit 1
 		fi
-		installed_size=$(du -sk "$root" | awk '{print $1}')
+		# Measure the installed payload, including the generated unit, so the
+		# estimate is not taken from the slightly smaller tarball tree. Sum file
+		# bytes rather than disk blocks so the value does not depend on the
+		# builder's filesystem block size.
+		installed_size=$(find "$deb_root/usr" -type f -printf '%s\n' |
+			awk '{ total += $1 } END { printf "%d\n", (total + 1023) / 1024 }')
 		mkdir -p "$deb_root/DEBIAN"
 		cat >"$deb_root/DEBIAN/control" <<EOF
 Package: routelatch
 Version: $deb_version
-Architecture: $arch
+Architecture: $deb_arch
 Maintainer: $deb_maintainer
 Installed-Size: $installed_size
 Depends: ca-certificates
@@ -346,6 +361,10 @@ else
 	echo "sing-box sidecar: not included (no usable sidecar inputs in $SINGBOX_BIN_DIR)"
 fi
 if [ "$build_deb" = 1 ]; then
-	echo "Debian packages: routelatch_${deb_version}_<arch>.deb (unsigned; verify with SHA256SUMS)"
+	echo "Debian packages: routelatch_${deb_version}_<debian-arch>.deb (unsigned; verify with SHA256SUMS)"
+	echo "Debian architecture names match GOARCH except ppc64le -> ppc64el."
 fi
-echo "inspect with: tar tzf $stage/routelatch-$version-linux-amd64.tar.gz"
+for arch in $arches; do
+	echo "inspect with: tar tzf $stage/routelatch-$version-linux-$arch.tar.gz"
+	break
+done

@@ -147,7 +147,7 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 
 - Linux `amd64`+`arm64`؛ foreground با فرمان `routelatch run` مبناست و systemd user
   unit افزونهٔ lifecycle است، نه وابستگی policy. root/TUN لازم نیست.
-- آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی ریشهٔ بسته را به `/usr` نگاشت می‌کند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`) و هیچ postinst یا فعال‌سازی سرویسی اجرا نمی‌کند؛ sidecar فقط برای amd64/arm64 قرار می‌گیرد.
+- آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت می‌کند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، یک user unit استاندارد در `/usr/lib/systemd/user` اضافه می‌کند و هیچ postinst یا فعال‌سازی سرویسی اجرا نمی‌کند؛ sidecar فقط برای amd64/arm64 قرار می‌گیرد و `.deb` پاورپی‌سی با نام Debian یعنی `ppc64el` ساخته می‌شود.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
   «پروکسی کل سیستم». شکست خود ابزار `external_tool_failed` (exit `1`) است و نتیجهٔ

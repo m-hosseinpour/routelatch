@@ -21,7 +21,7 @@
 | `golang.org/x/net` | `v0.62.0` به‌صورت direct (برای `publicsuffix`؛ `idna` و `proxy` هم از همین ماژول) |
 | وابستگی جدید | ممنوع بدون تغییر قرارداد |
 
-**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمی‌دهند. بستهٔ `.deb` محلی همان بستهٔ tarball را زیر `/usr` نصب می‌کند و sidecar فقط برای `amd64`/`arm64` همراه دارد؛ هیچ `postinst` یا فعال‌سازی سرویس/تنظیم دسکتاپ در آن نیست.
+**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمی‌دهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند و یک user unit استاندارد در `/usr/lib/systemd/user` اضافه می‌کند؛ sidecar فقط برای `amd64`/`arm64` همراه دارد و بستهٔ پاورپی‌سی با نام Debian یعنی `ppc64el` ساخته می‌شود. هیچ `postinst` یا فعال‌سازی سرویس/تنظیم دسکتاپ در آن نیست.
 
 ماژول‌های بالا در `go.mod` پین‌اند؛ `internal/contract/pins.go` با build tag `tools`
 فقط برای این وجود دارد که `go mod tidy` قبل از ورود importکننده‌ها آن‌ها را حذف نکند.
