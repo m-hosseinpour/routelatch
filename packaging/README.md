@@ -11,18 +11,22 @@ published or downloaded.
 
 The default answer for "how do I get a package" is `scripts/build.sh` followed
 by `scripts/package.sh`. Both are local build steps. The packaging step writes
-reproducible `.tar.gz` files and unsigned Debian `.deb` files; the only trust
-anchor is the generated `SHA256SUMS`, as for the v0.1.0 tarballs. There is no
-GPG signing, apt repository or package-service integration.
+reproducible `.tar.gz` files, unsigned Debian `.deb` files and one RPM `.spec`
+per architecture; the only trust anchor is the generated `SHA256SUMS`, as for
+the v0.1.0 tarballs. There is no GPG signing, apt/dnf repository or
+package-service integration. Debian and RPM use the **same** `Version` string,
+normalised once from `BUILD-INFO` (see "Version stamping"). Binary RPMs are not
+built locally: `rpmbuild` is not assumed to be installed, so CI builds and
+inspects them from the generated specs.
 
 ## Source tree layout
 
 ```
 scripts/build.sh           static build for linux/amd64, arm64, riscv64, ppc64le,
                            dist/SHA256SUMS, dist/BUILD-INFO
-scripts/package.sh         assembles package trees, .tar.gz files and .deb files under dist/packages/
+scripts/package.sh         assembles package trees, .tar.gz files, .deb files and RPM specs under dist/packages/
 scripts/check-artifact.sh  static-link and empty-environment smoke check for one binary
-scripts/check-package.sh   checksum, tarball-layout and .deb metadata/payload check
+scripts/check-package.sh   checksum, tarball-layout, .deb metadata/payload and static RPM spec check
 dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
 packaging/README.md        this file; it is shipped inside the package as INSTALL.md
 deploy/systemd/routelatch.service
@@ -57,12 +61,17 @@ routelatch-<version>-linux-<arch>/
   share/routelatch/systemd/routelatch.service
 ```
 
-and `dist/packages/SHA256SUMS` plus `routelatch-<version>-linux-<arch>.tar.gz`
-and `routelatch_<debian-version>_<debian-arch>.deb` for each architecture.
-Tarballs keep Go/CPU architecture names. The `.deb` file name and its
-`Architecture` field use Debian names, which differ in one case: the `ppc64le`
-build ships as `routelatch_<debian-version>_ppc64el.deb` (`ppc64el` is Debian's
-little-endian 64-bit PowerPC architecture).
+and `dist/packages/SHA256SUMS` plus, for each architecture,
+`routelatch-<version>-linux-<arch>.tar.gz`,
+`routelatch_<package-version>_<debian-arch>.deb` and
+`routelatch-<rpm-arch>.spec`. Tarballs keep Go/CPU architecture names. The
+`.deb` file name and its `Architecture` field use Debian names, which differ in
+one case: the `ppc64le` build ships as
+`routelatch_<package-version>_ppc64el.deb` (`ppc64el` is Debian's little-endian
+64-bit PowerPC architecture). RPM names differ in two cases: `amd64` →
+`x86_64` and `arm64` → `aarch64`; `riscv64` and `ppc64le` keep their names. All
+twelve artifacts per build (4 tarballs + 4 `.deb` + 4 specs) are listed in
+`SHA256SUMS`.
 
 The `.deb` payload maps the tarball root onto `/usr`:
 
@@ -80,9 +89,11 @@ The packaged unit in `/usr/lib/systemd/user` is generated from the one copy in
 `/usr/bin/routelatch run`, because `%h/.local/bin` is not a package path. The
 `.deb` has no `postinst`, `preinst`, `prerm` or `postrm`: it does not enable a
 service, change a desktop proxy setting or touch user configuration. Control
-metadata is `Package: routelatch`, a Debian-normalised version, the target
+metadata is `Package: routelatch`, the shared package version, the target
 architecture, `Depends: ca-certificates` (the static binary uses the host CA
 bundle for TLS) and a description; `scripts/check-package.sh` asserts these.
+The version comes from the single normalisation in "Version stamping", not a
+Debian-only rewriting of the build stamp.
 The sidecar has to stay next to the main binary for the runtime's lookup, so an
 `amd64`/`arm64` `.deb` installs it as `/usr/bin/sing-box`; a system that already
 provides that path from another package would conflict and is not a supported
@@ -93,6 +104,44 @@ combination.
 isolated build does not disturb an existing `dist/` or supplied sidecar inputs.
 `ARCHES="amd64"` (or another space-separated subset) limits the four-architecture
 loop for a quick local check; the defaults cover all four architectures.
+
+## RPM specs (binary RPMs built in CI)
+
+`scripts/package.sh` writes `routelatch-<rpm-arch>.spec` for all four
+architectures and records each spec in `SHA256SUMS`. The spec is generated from
+`BUILD-INFO` and from the tarball just produced, and pins that tarball by
+SHA-256 so a mismatched source cannot silently become an RPM. Its metadata is
+`Name: routelatch`, the unified `Version`, `Release: 1`, `BuildArch: <rpm-arch>`,
+`License: Apache-2.0`, `Requires: ca-certificates`, and `AutoReqProv: no` (the
+binary is static). Its `%build` is empty — nothing is compiled — and `%install`
+lays out the prebuilt binary with the standard RPM paths:
+
+```
+/usr/bin/routelatch
+/usr/share/licenses/routelatch/LICENSE      Apache-2.0 text
+/usr/share/licenses/routelatch/NOTICE       project attribution
+/usr/share/doc/routelatch/...               all other documents (README, INSTALL,
+                                            SERVICE, notices, licensing, go.sum,
+                                            BUILD-INFO, PACKAGE-NOTES)
+/usr/lib/systemd/user/routelatch.service    the unit, as data only
+/usr/bin/sing-box                           optional sidecar, amd64/arm64 only
+/usr/share/doc/routelatch/SINGBOX-INFO      optional sidecar provenance
+```
+
+There are no `%pre`/`%post`/`%preun`/`%postun` scriptlets, no `systemctl` call
+and no desktop/user setting change: installing an RPM does not enable a service.
+The sidecar, when present, is a separate GPL-3.0 executable and is not linked
+into RouteLatch.
+
+No `.rpm` file is produced or checksummed on a host without `rpmbuild`: local
+verification is static spec validation in `scripts/check-package.sh`. CI
+(`rpm-packages` in `.github/workflows/ci.yml`) installs RPM tooling, runs
+`rpmbuild --target <rpm-arch> -bb` from each spec and inspects the results with
+`rpm` (name, version, release, architecture, license, `Requires: ca-certificates`,
+exact installed file list and absence of scriptlets). That CI step is the only
+real RPM build; it is not reproducible locally in this environment and has not
+been executed here. The CI-built RPMs are not published, and the generated specs
+are not a dnf/yum repository.
 
 Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
 generated for these local, unsigned packages; the Apache-2.0 text and the full
@@ -166,7 +215,9 @@ changed by installing or starting the service.
 `uname -m` must report `x86_64`, `aarch64`, `riscv64` or `ppc64le`. There are
 no 32-bit or non-Linux packages. The build targets every architecture on one
 machine, so cross-built packages can be produced without matching hardware —
-but they still have to be run on that hardware to be tested.
+but they still have to be run on that hardware to be tested. RPM names these
+four targets `x86_64`, `aarch64`, `riscv64` and `ppc64le` respectively; the
+`.deb` names differ only for PowerPC (`ppc64el`).
 
 Only `amd64` is executed in this build. `arm64` packages are cross-built and
 remain runtime-untested; `riscv64` and `ppc64le` are **cross-build-only and
@@ -276,17 +327,25 @@ check).
 The `.deb` step pins every payload mtime to `SOURCE_DATE_EPOCH`, passes the same
 epoch to `dpkg-deb`, builds with `--root-owner-group -Zgzip -z9` and fixes the
 tar ownership, so two packaging runs over one build produce byte-identical
-`.deb` files. `scripts/check-package.sh` then verifies that `SHA256SUMS` lists
-exactly the expected tarballs and `.deb` files (so a dropped line is not a false
-pass) and runs `sha256sum -c`. For each architecture it also checks the tarball
-layout; reads `dpkg-deb -f` metadata (name, Debian version, architecture,
-`Depends`, description, maintainer, installed size); validates the architecture
-name against the host's Debian architecture list; requires the control archive
-to contain only `control`/`md5sums` (no maintainer scripts); compares the exact
-payload file set, the `0755 root:root` binary mode and the `0644` document mode
-against the documented layout; compares `/usr/bin/routelatch` and an optional
-`/usr/bin/sing-box` byte-for-byte with the dist binaries; and verifies the
-generated user unit. It installs nothing.
+`.deb` files. The generated specs are plain text derived from the same inputs,
+so they are reproducible too. `scripts/check-package.sh` then verifies that
+`SHA256SUMS` lists exactly the expected tarballs, `.deb` files and specs (so a
+dropped line is not a false pass) and runs `sha256sum -c`. For each architecture
+it also checks the tarball layout; reads `dpkg-deb -f` metadata (name, unified
+version, architecture, `Depends`, description, maintainer, installed size);
+validates the architecture name against the host's Debian architecture list;
+requires the control archive to contain only `control`/`md5sums` (no maintainer
+scripts); compares the exact payload file set, the `0755 root:root` binary mode
+and the `0644` document mode against the documented layout; compares
+`/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte with the
+dist binaries; and verifies the generated user unit. For the RPM spec it checks
+the version/architecture/name/release/license/`Requires`/`Source0` fields, the
+BUILD-INFO stamp comments, the pinned source digest against the actual tarball,
+the `%files` install layout (licenses under `licenses/`, other docs under
+`doc/`), the absence of scriptlets or service enablement, and sidecar presence
+only on `amd64`/`arm64`. Negative checks (wrong version, wrong arch, injected
+`%post`, bad source digest, license in the wrong directory, unexpected sidecar,
+missing spec) all fail the gate. It installs nothing and does not run rpmbuild.
 
 ## Version stamping
 
@@ -317,12 +376,15 @@ assertion against `dist/BUILD-INFO` for a shipped artifact.
 `dist/BUILD-INFO` carries the same values plus the Go version and `cgo=0`, and
 is copied into the package docs.
 
-The `.deb` `Version` field is derived deterministically from that value: a
-leading `v` is stripped (`v0.1.0` → `0.1.0`) and a value that would not start
-with a digit gets a `0.0.0+` prefix (`a028469` → `0.0.0+a028469`), because
-Debian requires a version that starts with a digit. Any other character outside
-the Debian version set makes packaging fail rather than silently rewriting the
-stamp.
+One normalisation produces the package version for **both** formats: a leading
+`v` is stripped and every hyphen becomes a dot (`v0.1.0-r12.1` →
+`0.1.0.r12.1`), a string valid in Debian and RPM. A value that would not start
+with a digit gets a `0.0.0+` prefix (`a028469` → `0.0.0+a028469`), because both
+formats require a version that starts with a digit. Characters outside the
+shared set (`A-Z`, `a-z`, `0-9`, `.`, `+`, `~`) make packaging fail rather than
+silently rewriting the stamp. The `.deb` `Version:` field and the RPM spec
+`Version:` field are set from this single value; CI also asserts that they are
+byte-identical.
 
 `VERSION` defaults to `git describe --tags --always --dirty`, so it is the tag
 when one names the current commit (for example `v0.1.0` at the tag), a
@@ -340,7 +402,8 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-The v0.1.0 tarballs are published; the `.deb` files from this step are not.
-Do not publish, release, tag, push or upload these packages: that is a separate
-decision with the project owner. `PACKAGE-NOTES` in every package says it is a
-local build for that reason.
+The v0.1.0 tarballs are published; the `.deb` files, RPM specs and CI-built
+binary RPMs from this step are not. Do not publish, release, tag, push or upload
+these artifacts: that is a separate decision with the project owner.
+`PACKAGE-NOTES` in every tarball/deb says it is a local build for that reason;
+the generated spec carries the same "local, unsigned" header.

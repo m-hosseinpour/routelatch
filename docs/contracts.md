@@ -21,7 +21,7 @@
 | `golang.org/x/net` | `v0.62.0` به‌صورت direct (برای `publicsuffix`؛ `idna` و `proxy` هم از همین ماژول) |
 | وابستگی جدید | ممنوع بدون تغییر قرارداد |
 
-**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untested‌اند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمی‌دهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند و یک user unit استاندارد در `/usr/lib/systemd/user` اضافه می‌کند؛ sidecar فقط برای `amd64`/`arm64` همراه دارد و بستهٔ پاورپی‌سی با نام Debian یعنی `ppc64el` ساخته می‌شود. هیچ `postinst` یا فعال‌سازی سرویس/تنظیم دسکتاپ در آن نیست.
+**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمیدهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب میکند و یک user unit استاندارد در `/usr/lib/systemd/user` اضافه میکند؛ sidecar فقط برای `amd64`/`arm64` همراه دارد و بستهٔ پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. هیچ `postinst` یا فعالسازی سرویس/تنظیم دسکتاپ در آن نیست. برای RPM یک اسپک در هر معماری (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) ساخته و در SHA256SUMS ثبت میشود؛ Version آن دقیقاً برابر Version `.deb` است (نرمالسازی واحد: `v0.1.0-r12.1` → `0.1.0.r12.1`). `%files` LICENSE/NOTICE را در `/usr/share/licenses/routelatch` و بقیهٔ اسناد را در `/usr/share/doc/routelatch` قرار میدهد و هیچ scriptlet یا %post ندارد. باینری RPM محلی ساخته نمیشود؛ CI آن را با rpmbuild میسازد و با rpm بازرسی میکند.
 
 ماژول‌های بالا در `go.mod` پین‌اند؛ `internal/contract/pins.go` با build tag `tools`
 فقط برای این وجود دارد که `go mod tidy` قبل از ورود importکننده‌ها آن‌ها را حذف نکند.
@@ -1146,7 +1146,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 
 | معیار | task | check |
 | --- | --- | --- |
-| A01 | T6 | نصب پاک Linux amd64/arm64 از tarball یا `.deb` محلی، بدون runtime دستی؛ artifact خودکفا |
+| A01 | T6 | نصب پاک Linux amd64/arm64 از tarball یا `.deb` محلی (و اسپک RPM؛ باینری RPM در CI ساخته میشود)، بدون runtime دستی؛ artifact خودکفا |
 | A02 | T3 (+T5 برای ورودی قانون) | جدول §۱.۶ و ماتریس §۲.۵؛ domain/suffix/IP/CIDR و خارج از فهرست |
 | A03 | T3 | pool خالی/مرده/tag غایب: `pool_unavailable`، صفر تماس مستقیم با مقصد تأییدشده، مقصد مستقیم سالم |
 | A04 | T3 | چهار حالت، استثنای محلی، جدول §۲.۶، sweep با counter و `LocalCloseDeadline` |

@@ -81,20 +81,33 @@ install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 
 The `v0.1.0` release ships **only** those two `.tar.gz` files. Local packaging
 now also produces unsigned Debian packages for `amd64`, `arm64`, `riscv64` and
-`ppc64le` (the PowerPC package uses Debian's name, `ppc64el`); they are **not**
-part of `v0.1.0`, not published and not signed. The only integrity check is the
-generated `SHA256SUMS`, the same trust model as the v0.1.0 tarballs:
+`ppc64le` (the PowerPC package uses Debian's name, `ppc64el`), plus one RPM
+`.spec` per architecture (`x86_64`, `aarch64`, `riscv64`, `ppc64le`). They are
+**not** part of `v0.1.0`, not published and not signed. The only integrity check
+is the generated `SHA256SUMS`, the same trust model as the v0.1.0 tarballs:
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo apt install ./routelatch_<debian-version>_amd64.deb
+sudo apt install ./routelatch_<package-version>_amd64.deb
 ```
 
 The `.deb` installs `/usr/bin/routelatch`, its documents under
 `/usr/share/doc/routelatch/` and a systemd user unit. It does not start or
 enable the service; opt in with `systemctl --user enable --now routelatch`.
-`.rpm`, Windows/macOS builds, 32-bit builds and a package repository remain
-future work.
+
+Debian and RPM use one unified version string derived from `BUILD-INFO` in a
+single step: a leading `v` is stripped and hyphens become dots
+(`v0.1.0-r12.1` → `0.1.0.r12.1`). Both the `.deb` `Version` field and the spec
+`Version:` field carry that exact value.
+
+Binary RPMs are **not** built on a machine without RPM tooling: `package.sh`
+generates and checksums the specs, and CI builds and inspects the real RPMs
+with `rpmbuild`/`rpm`. The spec puts `LICENSE` and `NOTICE` in
+`/usr/share/licenses/routelatch/`, all other documents in
+`/usr/share/doc/routelatch/`, and has no service-enable scriptlets. No RPM is
+published here, and there is no dnf/yum repository or GPG signing.
+Windows/macOS builds, 32-bit builds and a package repository remain future
+work.
 
 For a tarball install, `~/.local/bin` must be on `PATH`. The systemd user
 service is optional; install it only if you want the service supervised:
@@ -132,12 +145,15 @@ dist/BUILD-INFO
 
 `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` can be set for a named build;
 `./scripts/build.sh --reproducible` checks that the same inputs give identical
-bytes. `./scripts/package.sh` then writes reproducible tarballs and `.deb`
-files under `dist/packages/`, and `./scripts/check-package.sh` checks their
-checksums, layout and metadata. `./scripts/check-artifact.sh` verifies the
-amd64 binary is statically linked and starts with an empty environment. The
-arm64, riscv64 and ppc64le artifacts are compiled and checksummed but cannot be
-executed on an amd64 host; riscv64/ppc64le runtime behavior is not tested.
+bytes. `./scripts/package.sh` then writes reproducible tarballs, `.deb` files
+and RPM `.spec` files under `dist/packages/`, and `./scripts/check-package.sh`
+checks their checksums, layout and metadata (including the RPM specs' version,
+architecture, license layout and absence of scriptlets).
+`./scripts/check-artifact.sh` verifies the amd64 binary is statically linked and
+starts with an empty environment. The arm64, riscv64 and ppc64le artifacts are
+compiled and checksummed but cannot be executed on an amd64 host; riscv64 and
+ppc64le are cross-build-only and runtime-untested, and the sidecar is pinned
+only for amd64/arm64.
 
 ## Quick start
 
@@ -267,9 +283,9 @@ other software.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
   is not supported.
-- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No `.rpm`
-  package, apt/dnf repository or package signing yet; `.deb` files are local
-  and unsigned.
+- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No published RPM,
+  apt/dnf repository or package signing yet; local `.deb` files and RPM specs
+  are unsigned. Binary RPMs are built only in CI, not on this host.
 - **No system-wide "covers everything" mode**; `all-proxy` keeps the documented
   loopback/private exception.
 
@@ -284,10 +300,16 @@ gated tests stay skipped unless a real desktop or `systemd --user` session is
 available. `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are
 green.
 
-Local packaging was also verified for this phase: four tarballs and four
-unsigned `.deb` files were built, `scripts/check-package.sh` passed for every
-architecture (metadata, payload paths, binary bytes and `SHA256SUMS`), and two
-packaging runs produced identical checksums. Only `amd64` was executed;
+Local packaging was also verified: four tarballs, four unsigned `.deb` files
+and four RPM `.spec` files were built, `scripts/check-package.sh` passed for
+every architecture (metadata, payload paths, binary bytes, spec version/arch/
+layout and `SHA256SUMS`), and two packaging runs produced identical checksums.
+Negative checks confirmed the RPM gate fails on a wrong version, wrong
+architecture, injected `%post`, bad source digest, wrong license location,
+unexpected sidecar content and a missing spec. A real local RPM build was not
+possible because `rpmbuild`/`rpm` are not installed here; a CI job is configured
+to build and inspect the four binary RPMs from the generated specs, but it has
+not been executed in this environment. Only `amd64` was executed;
 `arm64`/`riscv64`/`ppc64le` were cross-built, and the last two are
 runtime-untested.
 

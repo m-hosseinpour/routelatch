@@ -80,11 +80,13 @@ jobs:
           file "dist/routelatch-linux-${{ matrix.arch }}" | grep -q "$pattern"
 
   packages:
-    name: Build and validate tarballs and .deb packages
+    name: Build and validate tarballs, .deb packages and RPM specs
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       CGO_ENABLED: "0"
+      # Both formats normalise this once to the SAME Version string:
+      # v0.0.0-ci -> 0.0.0.ci (leading v stripped, hyphens become dots).
       VERSION: v0.0.0-ci
       COMMIT: ${{ github.sha }}
       SOURCE_DATE_EPOCH: "1700000000"
@@ -111,8 +113,115 @@ jobs:
       - name: Validate package metadata, payload and checksums
         run: scripts/check-package.sh
 
+      - name: Assert .deb and RPM specs share one unified version
+        run: |
+          set -eu
+          deb=$(find dist/packages -maxdepth 1 -name '*.deb' | sort | head -1)
+          deb_version=$(dpkg-deb -f "$deb" Version)
+          for spec in dist/packages/*.spec; do
+            spec_version=$(sed -n 's/^Version:[[:space:]]*//p' "$spec")
+            [ "$spec_version" = "$deb_version" ] || {
+              echo "unified version mismatch: $deb_version (.deb) vs $spec_version ($spec)"
+              exit 1
+            }
+          done
+          echo "unified package version: $deb_version"
+
       - name: Check packaging is reproducible
         run: |
           cp dist/packages/SHA256SUMS /tmp/SHA256SUMS.first
           scripts/package.sh
           diff -u /tmp/SHA256SUMS.first dist/packages/SHA256SUMS
+
+  rpm-packages:
+    name: Build and inspect RPM packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CGO_ENABLED: "0"
+      VERSION: v0.0.0-ci
+      COMMIT: ${{ github.sha }}
+      SOURCE_DATE_EPOCH: "1700000000"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the Go version pinned in go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The local host has no rpm tooling and does not build binary RPMs; these
+      # generated specs are the RPM artifacts checked by scripts/check-package.sh.
+      # This job is the only place a real RPM is built, so it needs rpmbuild/rpm.
+      - name: Install RPM tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          command -v rpmbuild >/dev/null
+          command -v rpm >/dev/null
+
+      - name: Build binaries, specs and static package checks
+        run: |
+          scripts/build.sh
+          scripts/package.sh
+          scripts/check-package.sh
+
+      - name: Build and inspect binary RPMs from the generated specs
+        run: |
+          set -eu
+          expected_version=$(printf '%s' "$VERSION" | sed -e 's/^v//' -e 's/-/./g')
+          top="$PWD/rpmbuild-verify"
+          mkdir -p "$top"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp dist/packages/*.tar.gz "$top/SOURCES/"
+          for arch in amd64 arm64 riscv64 ppc64le; do
+            case "$arch" in
+              amd64) rpm_arch=x86_64 ;;
+              arm64) rpm_arch=aarch64 ;;
+              *) rpm_arch="$arch" ;;
+            esac
+            cp "dist/packages/routelatch-$rpm_arch.spec" "$top/SPECS/"
+            SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
+              rpmbuild --define "_topdir $top" --target "$rpm_arch" \
+              -bb "$top/SPECS/routelatch-$rpm_arch.spec"
+          done
+
+          cat >"$top/expected-files" <<'EOF'
+          /usr/bin/routelatch
+          /usr/lib/systemd/user/routelatch.service
+          /usr/share/doc/routelatch/BUILD-INFO
+          /usr/share/doc/routelatch/INSTALL.md
+          /usr/share/doc/routelatch/PACKAGE-NOTES
+          /usr/share/doc/routelatch/README.md
+          /usr/share/doc/routelatch/SERVICE.md
+          /usr/share/doc/routelatch/THIRD-PARTY-NOTICES.md
+          /usr/share/doc/routelatch/docs/licensing.md
+          /usr/share/doc/routelatch/go.sum
+          /usr/share/licenses/routelatch/LICENSE
+          /usr/share/licenses/routelatch/NOTICE
+          EOF
+          sort -o "$top/expected-files" "$top/expected-files"
+          count=0
+          for f in $(find "$top/RPMS" -name '*.rpm' | sort); do
+            count=$((count + 1))
+            echo "== $(basename "$f") =="
+            [ "$(rpm -qp --qf '%{NAME}' "$f")" = routelatch ] || { echo "wrong RPM name"; exit 1; }
+            [ "$(rpm -qp --qf '%{VERSION}' "$f")" = "$expected_version" ] || {
+              echo "wrong RPM version: $(rpm -qp --qf '%{VERSION}' "$f")"; exit 1; }
+            [ "$(rpm -qp --qf '%{RELEASE}' "$f")" = 1 ] || { echo "wrong RPM release"; exit 1; }
+            [ "$(rpm -qp --qf '%{LICENSE}' "$f")" = Apache-2.0 ] || { echo "wrong RPM license"; exit 1; }
+            case "$(rpm -qp --qf '%{ARCH}' "$f")" in
+              x86_64 | aarch64 | riscv64 | ppc64le) ;;
+              *) echo "unexpected RPM arch"; exit 1 ;;
+            esac
+            rpm -qR "$f" | grep -Fxq ca-certificates || { echo "missing ca-certificates"; exit 1; }
+            rpm -qpl "$f" | sort | diff -u "$top/expected-files" - ||
+              { echo "unexpected RPM payload layout"; exit 1; }
+            scripts_out=$(rpm -qp --scripts "$f")
+            if printf '%s\n' "$scripts_out" | grep -Eq '^(preinstall|postinstall|preuninstall|postuninstall) scriptlet'; then
+              echo "RPM has maintainer scriptlets"; exit 1
+            fi
+            echo "RPM $(basename "$f") inspected: version/arch/license/requires/layout/scripts OK"
+          done
+          [ "$count" -eq 4 ] || { echo "expected 4 RPMs, built $count"; exit 1; }

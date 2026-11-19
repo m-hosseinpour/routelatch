@@ -57,7 +57,7 @@ maps the tarball root to `/usr`: `/usr/bin/routelatch`,
 `ExecStart=/usr/bin/routelatch run`. Control metadata is `Package: routelatch`,
 a Debian-normalised version (leading `v` stripped; a non-digit value gets a
 `0.0.0+` prefix), the target Debian architecture, `Depends: ca-certificates`
-and a description. There are no maintainer scripts, so installation does not
+and a description. This was the Phase 1 version rule; Phase 2 replaced it with the unified version below. There are no maintainer scripts, so installation does not
 enable a service or change desktop/user settings. Debian Policy `copyright`
 and `changelog.Debian.gz` files are deliberately deferred with the unpublished
 local scope.
@@ -92,8 +92,64 @@ sing-box sidecar is pinned and shipped only for `amd64`/`arm64`; on
 `riscv64`/`ppc64le` hysteria2 exits remain unavailable
 (`sidecar_unavailable`) while Xray exits are unaffected. No clean-machine
 install, real-hardware run, `.rpm`, GPG signature, package repository or
-Windows `exe` is part of this phase. RPM is the documented next phase.
+Windows `exe` is part of this phase. RPM is the documented next phase (see below).
 
+## R12 Phase 2: RPM specs and CI-built binary RPMs (unpublished)
+
+Phase 2 keeps Phase 1's trust model unchanged: unsigned artifacts with
+`SHA256SUMS` as the only anchor, no GPG signing, no apt/dnf repository, no
+AppImage/Flatpak and no Windows executable. It adds one RPM spec per
+architecture to the same packaging pipeline and **one unified version** for
+both formats. `scripts/package.sh` normalises the `BUILD-INFO` version once in
+`scripts/package.sh` (leading `v` stripped, every hyphen becomes a dot:
+`v0.1.0-r12.1` -> `0.1.0.r12.1`) and uses that exact string as the `.deb`
+`Version` and the spec `Version:`; `scripts/check-package.sh` applies the same
+normalisation independently and CI asserts byte-for-byte equality. The local
+`.deb` artifacts were regenerated from scratch in an isolated `DIST`; the
+`v0.1.0` tag, its GitHub Release assets, `dist/singbox`, Git history and every
+unrelated file were left untouched. No versioned package artifact is committed
+to Git.
+
+`scripts/package.sh` writes `routelatch-<rpm-arch>.spec` for `x86_64`
+(amd64), `aarch64` (arm64), `riscv64` and `ppc64le`. Each spec pins the
+matching tarball by SHA-256, sets `Version` to the unified value, `Release: 1`,
+`BuildArch` to the RPM arch, `License: Apache-2.0`, `Requires: ca-certificates`
+and `AutoReqProv: no`, and has an empty `%build`. Its `%install` puts
+`/usr/bin/routelatch`, the standard bundle of documents under
+`/usr/share/doc/routelatch/`, `LICENSE`/`NOTICE` under
+`/usr/share/licenses/routelatch/` and the unchanged systemd user unit under
+`/usr/lib/systemd/user/`; the optional sing-box sidecar (amd64/arm64 only)
+goes to `/usr/bin/sing-box`. There are no scriptlets, no service enable and no
+desktop/user setting change.
+
+Evidence from the local build (`VERSION=v0.1.0-r12.2`, `COMMIT=6a7580f`,
+`SOURCE_DATE_EPOCH=1700000000`, Go 1.27.4, `CGO_ENABLED=0`, isolated `DIST`):
+
+- all four binaries built with matching version/commit/date; only amd64 was
+  executed (`scripts/check-artifact.sh` passed);
+- four tarballs, four `.deb` files and four specs were produced;
+  `scripts/check-package.sh` passed for every architecture, including the
+  exact 12-member `SHA256SUMS` set, the spec metadata/source-digest/`%files`
+  layout checks and all unchanged Phase 1 `.deb` checks;
+- the sidecar path was exercised with the pinned v1.14.4 inputs present and
+  absent; the spec includes sidecar entries only on amd64/arm64;
+- negative checks confirmed the RPM gate fails on a wrong spec version, wrong
+  `BuildArch`, injected `%post`, a wrong `Source0` digest, `LICENSE` in the doc
+  directory, sidecar content on a non-sidecar arch and a missing spec line;
+- two packaging runs over one build produced byte-identical `SHA256SUMS`
+  (tarballs, `.deb` and specs);
+- `go build ./...`, `go vet ./...` and `go test -count=1 ./...` passed
+  (17/17 packages).
+
+Limits: `rpmbuild`, `rpm` and `rpmspec` are **not installed on this host and
+were not installed**; no real binary RPM was built or inspected here. The
+`rpm-packages` CI job was added to install RPM tooling, build each RPM with
+`rpmbuild --target <arch> -bb` from the generated spec and inspect it with
+`rpm` (name, version, release, arch, license, requires, exact file list and no
+scriptlets), but that job has not been executed in this environment. The
+`arm64`/`riscv64`/`ppc64le` binaries remain cross-build-only and
+runtime-untested, the sidecar is pinned only on amd64/arm64, and this phase does
+not publish anything or claim a clean-machine install.
 ## 1. History scan
 
 Method: every reachable object in every ref (`git rev-list --all --objects`),

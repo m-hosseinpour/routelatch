@@ -41,9 +41,13 @@ change the desktop setting, and read the prerequisites in
 default, offline suite only.
 
 `./scripts/build.sh` produces the static release binaries under `dist/`,
-`./scripts/package.sh` writes the tarballs and unsigned `.deb` files, and
-`./scripts/check-package.sh` validates their checksums, layout and metadata.
-`./scripts/check-artifact.sh` checks the amd64 artifact. See
+`./scripts/package.sh` writes the tarballs, unsigned `.deb` files and one RPM
+`.spec` per architecture, and `./scripts/check-package.sh` validates their
+checksums, layout and metadata (including RPM version, arch, license layout and
+no scriptlets). `./scripts/check-artifact.sh` checks the amd64 artifact. Debian
+and RPM share one `Version` derived from `BUILD-INFO` (`v0.1.0-r12.1` →
+`0.1.0.r12.1`). Binary RPMs are not built locally: the CI `rpm-packages` job
+builds and inspects them from the generated specs with `rpmbuild`/`rpm`. See
 [packaging/README.md](packaging/README.md) for package layout and
 [deploy/README.md](deploy/README.md) for the service unit.
 

@@ -1,8 +1,11 @@
 #!/bin/sh
 # Verify the packages scripts/package.sh assembled: the exact checksum member
-# set, tarball layout, .deb control metadata (including Debian architecture
-# names), control archive members, payload file set, modes and the binary bytes
-# in both containers.
+# set (tarballs, .deb files and RPM specs), tarball layout, .deb control
+# metadata (including Debian architecture names), control archive members,
+# payload file set, modes and the binary bytes in both containers. RPM specs
+# are checked statically: Name/Version/Arch/License/Requires/Source0, the
+# source digest pin, the %files install layout and the absence of scriptlets
+# or service enablement. Binary RPMs are built and inspected by CI.
 #
 # It reads BUILD-INFO for the expected version and never installs anything.
 # Usage: scripts/check-package.sh [dist/packages]
@@ -31,13 +34,19 @@ command -v dpkg-deb >/dev/null 2>&1 || fail "dpkg-deb is required to inspect .de
 
 version=$(sed -n 's/^version=//p' "$info")
 [ -n "$version" ] || fail "BUILD-INFO has no version"
-# Must match scripts/package.sh: strip a leading v, then prefix a value that
-# would not start with a digit so it is a valid Debian version.
-deb_version=$(printf '%s' "$version" | sed 's/^v//')
-case $deb_version in
+# Must match scripts/package.sh: strip a leading v, turn every hyphen into a
+# dot (v0.1.0-r12.1 -> 0.1.0.r12.1) and prefix a value that would not start
+# with a digit. The result is the exact Version of both .deb and RPM.
+pkg_version=$(printf '%s' "$version" | sed -e 's/^v//' -e 's/-/./g')
+case $pkg_version in
 [0-9]*) ;;
-*) deb_version="0.0.0+$deb_version" ;;
+*) pkg_version="0.0.0+$pkg_version" ;;
 esac
+case $pkg_version in
+"" | *[!A-Za-z0-9.+~]*) fail "cannot form a package version from '$version'" ;;
+esac
+deb_version=$pkg_version
+rpm_version=$pkg_version
 
 # Must match scripts/package.sh: Debian calls little-endian 64-bit PowerPC
 # "ppc64el" while Go calls it "ppc64le".
@@ -45,6 +54,18 @@ deb_arch_for() {
 	case $1 in
 	ppc64le) echo ppc64el ;;
 	*) echo "$1" ;;
+	esac
+}
+
+# Independent RPM mapping, deliberately written out rather than reused from
+# package.sh so a wrong mapping in the producer is caught here.
+rpm_arch_for_check() {
+	case $1 in
+	amd64) echo x86_64 ;;
+	arm64) echo aarch64 ;;
+	riscv64) echo riscv64 ;;
+	ppc64le) echo ppc64le ;;
+	*) fail "unexpected architecture '$1' (no RPM name known)" ;;
 	esac
 }
 
@@ -66,7 +87,8 @@ check_deb_arch() {
 for arch in $arches; do
 	printf '%s\n' \
 		"routelatch-$version-linux-$arch.tar.gz" \
-		"routelatch_${deb_version}_$(deb_arch_for "$arch").deb" >>"$tmp/sums.expected"
+		"routelatch_${deb_version}_$(deb_arch_for "$arch").deb" \
+		"routelatch-$(rpm_arch_for_check "$arch").spec" >>"$tmp/sums.expected"
 done
 sort -o "$tmp/sums.expected" "$tmp/sums.expected"
 awk '{print $2}' "$stage/SHA256SUMS" | sort >"$tmp/sums.actual"
@@ -80,14 +102,23 @@ expect_file() {
 	printf '%s\n' "$1" | grep -Fxq "$2" || fail "$1 is missing from $3"
 }
 
+# Static spec checks. The spec is the local RPM artifact; CI builds and
+# inspects the binary RPM from it with rpmbuild/rpm.
+expect_spec_line() {
+	grep -Fxq "$1" "$spec" || fail "$spec is missing the line '$1'"
+}
+
 for arch in $arches; do
 	name="routelatch-$version-linux-$arch"
 	deb_arch=$(deb_arch_for "$arch")
+	rpm_arch=$(rpm_arch_for_check "$arch")
 	check_deb_arch "$deb_arch"
 	tar="$stage/$name.tar.gz"
 	deb="$stage/routelatch_${deb_version}_${deb_arch}.deb"
+	spec="$stage/routelatch-$rpm_arch.spec"
 	[ -f "$tar" ] || fail "missing $tar"
 	[ -f "$deb" ] || fail "missing $deb (did package.sh run with dpkg-deb?)"
+	[ -f "$spec" ] || fail "missing $spec (did package.sh run?)"
 	dist_bin="$dist/routelatch-linux-$arch"
 	[ -f "$dist_bin" ] || fail "missing $dist_bin"
 
@@ -204,7 +235,69 @@ for arch in $arches; do
 			fail "$deb bin/sing-box does not match the tarball sidecar"
 	fi
 
-	echo "linux/$arch: tarball and .deb layout, metadata, binary and checksums match"
+	echo "== linux/$arch RPM spec ($rpm_arch) =="
+	expect_spec_line "# CI builds the binary RPM with rpmbuild --target $rpm_arch from this spec."
+	expect_spec_line "# BUILD-INFO version: $version"
+	expect_spec_line "# BUILD-INFO commit: $(sed -n 's/^commit=//p' "$info")"
+	expect_spec_line "# BUILD-INFO date: $(sed -n 's/^date=//p' "$info")"
+	tar_hash=$(sha256sum "$tar" | awk '{print $1}')
+	expect_spec_line "# Source0 SHA-256: $tar_hash"
+	expect_spec_line "Name:           routelatch"
+	expect_spec_line "Version:        $rpm_version"
+	expect_spec_line "Release:        1"
+	expect_spec_line "BuildArch:      $rpm_arch"
+	expect_spec_line "License:        Apache-2.0"
+	expect_spec_line "URL:            https://github.com/m-hosseinpour/routelatch"
+	expect_spec_line "Source0:        $name.tar.gz"
+	expect_spec_line "AutoReqProv:    no"
+	expect_spec_line "Requires:       ca-certificates"
+	expect_spec_line "%global debug_package %{nil}"
+	for section in %description %prep %build %install %files; do
+		expect_spec_line "$section"
+	done
+	# The standard RPM layout puts the license texts in licenses/, every other
+	# document in doc/, and a prebuilt static binary in /usr/bin.
+	expect_spec_line 'install -D -m 0755 bin/routelatch %{buildroot}%{_bindir}/routelatch'
+	expect_spec_line 'install -m 0644 share/doc/routelatch/LICENSE %{buildroot}%{_datadir}/licenses/routelatch/LICENSE'
+	expect_spec_line 'install -m 0644 share/doc/routelatch/NOTICE %{buildroot}%{_datadir}/licenses/routelatch/NOTICE'
+	expect_spec_line 'install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service'
+	expect_spec_line '%license %{_datadir}/licenses/routelatch/LICENSE'
+	expect_spec_line '%license %{_datadir}/licenses/routelatch/NOTICE'
+	for path in \
+		%{_bindir}/routelatch \
+		%{_datadir}/doc/routelatch/README.md \
+		%{_datadir}/doc/routelatch/INSTALL.md \
+		%{_datadir}/doc/routelatch/SERVICE.md \
+		%{_datadir}/doc/routelatch/THIRD-PARTY-NOTICES.md \
+		%{_datadir}/doc/routelatch/PACKAGE-NOTES \
+		%{_datadir}/doc/routelatch/BUILD-INFO \
+		%{_datadir}/doc/routelatch/go.sum \
+		%{_datadir}/doc/routelatch/docs/licensing.md \
+		%{_prefix}/lib/systemd/user/routelatch.service; do
+		expect_spec_line "$path"
+	done
+	if grep -Fq '%{_datadir}/doc/routelatch/LICENSE' "$spec" ||
+		grep -Fq '%{_datadir}/doc/routelatch/NOTICE' "$spec"; then
+		fail "$spec puts LICENSE/NOTICE in the doc directory instead of licenses/"
+	fi
+	# No maintainer scriptlets and no service enable; the unit is data only.
+	if grep -Eiq '^%(pre|post|preun|postun|pretrans|posttrans|triggerin|triggerun|triggerpostun|verifyscript|filetriggerin|filetriggerun|filetriggerpostun|transfiletriggerin|transfiletriggerun|transfiletriggerpostun)([[:space:]]|$)' "$spec"; then
+		fail "$spec contains a maintainer scriptlet"
+	fi
+	if grep -Eiq 'systemctl|%systemd_|enable --now|chkconfig' "$spec"; then
+		fail "$spec enables a service"
+	fi
+	if [ "$sidecar" = 1 ]; then
+		expect_spec_line 'install -D -m 0755 bin/sing-box %{buildroot}%{_bindir}/sing-box'
+		expect_spec_line '%{_bindir}/sing-box'
+		expect_spec_line '%{_datadir}/doc/routelatch/SINGBOX-INFO'
+	else
+		if grep -Fq 'sing-box' "$spec"; then
+			fail "$spec has sidecar content although linux/$arch has no sidecar"
+		fi
+	fi
+
+	echo "linux/$arch: tarball, .deb and RPM spec layout, metadata and checksums match"
 done
 
-echo "PASS: package checksums, tarball layout and .deb metadata/payload are consistent"
+echo "PASS: package checksums, tarball layout, .deb metadata/payload and RPM specs are consistent"
