@@ -1,16 +1,38 @@
 # Release readiness: history, package, name and audit
 
 Status: **no credential, private pool content or binary is in the repository's
-history.** The current tree is clean of absolute personal paths. Publication still
-needs the decisions listed under "Before a public push"; nothing here authorizes a
-push, tag, release or upload.
+history.** The current tree is clean of absolute personal paths.
 
-This is the readiness record for the future public GitHub release (A14's remaining
-gates). It is a dated snapshot: branch `r8-release` (binary/version `110cce3`), based
-on `47ec19a`, with `main` at `c1e60ea` (four later docs/CI commits from a parallel
-worker). Later commits on this branch fix the packaging script and this record;
-they add no history content. Redaction rule used throughout: findings name the
-commit, path and kind, never the matched value.
+The first public release, **v0.1.0**, is tagged on `main` and publishes two Linux
+tarballs as assets on the GitHub Release. The history scan, name check and
+dependency audit recorded below remain historical evidence gathered before the
+release; they are not repeated here. The tag, pushes and release for v0.1.0 were
+explicitly authorized by the project owner.
+
+The sections below were originally a dated readiness snapshot (branch
+`r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
+`c1e60ea`). Redaction rule used throughout: findings name the commit, path and
+kind, never the matched value.
+
+## v0.1.0 release (current)
+
+The first release is tagged `v0.1.0` on `main`. Its two tarballs are attached to
+the GitHub Release for that tag:
+
+- `dist/packages/routelatch-v0.1.0-linux-amd64.tar.gz`
+- `dist/packages/routelatch-v0.1.0-linux-arm64.tar.gz`
+
+Both carry `bin/routelatch`, the systemd user unit, the license/notice files and
+the separate `bin/sing-box` sidecar with `share/doc/routelatch/SINGBOX-INFO`
+(pinned sing-box v1.14.4, GPL-3.0-or-later, used for hysteria2/sing-box exits).
+RouteLatch itself remains Apache-2.0. The authoritative SHA-256 digests are in
+`dist/packages/SHA256SUMS`, which is also attached to the Release; verify a
+download with `sha256sum -c SHA256SUMS` from the directory holding the tarballs.
+
+Scope: this release ships **only** the two Linux `.tar.gz` files. Distribution
+packages (`.deb`, `.rpm`), Windows/macOS builds, 32-bit builds and additional CPU
+architectures are **not** part of v0.1.0 — they are future work. A01 clean-machine
+install, arm64 runtime execution and a real GNOME session are not claimed here.
 
 ## 1. History scan
 
@@ -50,24 +72,26 @@ Decision, not a defect.
 
 ## 2. Release package
 
-Built from the `110cce3` binary with the final packaging script, Go 1.27.4,
-`SOURCE_DATE_EPOCH=1794960000`
-(2026-11-18), `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags "-s -w -X …"`:
+The v0.1.0 tarballs are built from the tagged `main` commit with the final
+packaging script, Go 1.27.4, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags "-s -w -X …"`:
 
-- `dist/packages/routelatch-110cce3-linux-amd64.tar.gz`
-  `2aceb05fbe679a977cc67f7235685a98cc7f459390f53839ca66bd1852ad8315`
-- `dist/packages/routelatch-110cce3-linux-arm64.tar.gz`
-  `77b2aa8e5c0d84626d15eceb43fcd3257569c7949cd2baecb793c3ab35c09df6`
+- `dist/packages/routelatch-v0.1.0-linux-amd64.tar.gz`
+- `dist/packages/routelatch-v0.1.0-linux-arm64.tar.gz`
 
-Each package carries `bin/routelatch` (and, when the R11 sidecar is supplied,
-`bin/sing-box` plus `share/doc/routelatch/SINGBOX-INFO`),
+Their authoritative SHA-256 digests are recorded in `dist/packages/SHA256SUMS`
+and verified with `sha256sum -c`. The earlier pre-sidecar R8 snapshot
+(`routelatch-110cce3-linux-amd64.tar.gz` / `-linux-arm64.tar.gz`, digests
+`2aceb05f…` / `77b2aa8e…`) is historical and is not the shipped release.
+
+Each package carries `bin/routelatch` and, in v0.1.0, `bin/sing-box` plus
+`share/doc/routelatch/SINGBOX-INFO`,
 `share/routelatch/systemd/routelatch.service`,
 and under `share/doc/routelatch/`: `README.md`, `INSTALL.md`, `SERVICE.md`,
 `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md`, `docs/licensing.md`, `go.sum`,
 `BUILD-INFO`, `PACKAGE-NOTES`. `dist/packages/SHA256SUMS` verifies with
-`sha256sum -c`. The checksums above are the historical R8 snapshot without the
-sidecar; rebuilding with the sidecar produces new tarball checksums and the same
-verification flow.
+`sha256sum -c`. The v0.1.0 tarballs include the sidecar, so their digests differ
+from the historical pre-sidecar R8 values; the verification flow is unchanged.
 
 Evidence, not assumption:
 
@@ -187,7 +211,15 @@ packages; `internal/acceptance` 115.7 s, `internal/licensing` ok). The gated
 systemd/desktop acceptance runs were not re-executed; they remain gated and were
 last verified in R1/R2. Package and artifact checks are in §2.
 
-## Before a public push
+## Historical pre-push gates (resolved for v0.1.0)
+
+These were the gates before the v0.1.0 push. v0.1.0 proceeds with the local path
+leak accepted (a local path, no credential or pool data); packaging built from
+the current `main`; the name kept as RouteLatch, with no trademark clearance
+claimed; the committer email taken from the repository's Git configuration; and
+the verified sing-box v1.14.4 sidecar supplied under `dist/singbox/`. The final
+item remains a nice-to-have and is out of scope for v0.1.0. The original list is
+kept below as the decision record.
 
 1. **Decide the history path leak.** Accept it (the string is a local path and
    username, no credential and no pool data) or rewrite history in a fresh copy of

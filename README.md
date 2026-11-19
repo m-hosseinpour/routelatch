@@ -47,22 +47,39 @@ sweep finishes.
 
 ## Install
 
-Prebuilt tarballs for `linux/amd64` and `linux/arm64` are produced by
-`scripts/package.sh`. Source is published on GitHub; no release artifacts or tags are published yet, so
-use a tarball you built yourself or build from source. A package contains the
-binary, the systemd user unit and the license/notice files. A release package can
-also ship a second binary, `bin/sing-box`: the unmodified, GPL-3.0 `sing-box`
-v1.14.4 proxy runtime, distributed as a separate program. Its per-binary SHA-256
-is in `SINGBOX-INFO` and a written source offer is in the notices. RouteLatch
-itself stays Apache-2.0; see [License](#license).
+The first release, `v0.1.0`, publishes two prebuilt tarballs —
+`routelatch-v0.1.0-linux-amd64.tar.gz` and
+`routelatch-v0.1.0-linux-arm64.tar.gz` — as assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.0),
+along with a `SHA256SUMS` file. The same layout is produced locally by
+`scripts/package.sh`. A package contains the binary, the systemd user unit and
+the license/notice files. Both release tarballs also ship a second binary,
+`bin/sing-box`: the unmodified, GPL-3.0 `sing-box` v1.14.4 proxy runtime,
+distributed as a separate program and used for hysteria2/sing-box exits. Its
+per-binary SHA-256 is in `SINGBOX-INFO` and a written source offer is in the
+notices. RouteLatch itself stays Apache-2.0; see [License](#license).
+
+Verify a download before unpacking it. From the directory holding the tarball
+and the release's `SHA256SUMS`:
+
+```sh
+sha256sum -c SHA256SUMS
+```
+
+This prints `OK` for each file whose digest matches; do not install a tarball
+whose check fails.
 
 From a tarball:
 
 ```sh
-tar xzf routelatch-<version>-linux-amd64.tar.gz
-cd routelatch-<version>-linux-amd64
+tar xzf routelatch-v0.1.0-linux-amd64.tar.gz
+cd routelatch-v0.1.0-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ```
+
+This release ships **only** the two `.tar.gz` files above. Distribution
+packages (`.deb`, `.rpm`), Windows/macOS builds, 32-bit builds and further CPU
+architectures are not part of v0.1.0; they are future work.
 
 `~/.local/bin` must be on `PATH`. The systemd user service is optional; install
 it only if you want the service supervised:
