@@ -25,9 +25,10 @@ type Client struct {
 	Timeout time.Duration
 }
 
-// Call sends one request and returns the decoded envelope. A transport failure
-// returns ErrNotRunning; an error envelope is returned with a nil error so the
-// caller can print it and use ExitCodeForEnvelope.
+// Call sends one request and returns the decoded envelope. A failure to reach
+// the socket (absent or refusing dials) returns ErrNotRunning; an error envelope
+// is returned with a nil error so the caller can print it and use
+// ExitCodeForEnvelope.
 func (c *Client) Call(ctx context.Context, req Request) (contract.Envelope, error) {
 	if c.Path == "" {
 		return contract.Envelope{}, ErrNotRunning
@@ -76,15 +77,23 @@ func (c *Client) Call(ctx context.Context, req Request) (contract.Envelope, erro
 		deadline = dl
 	}
 	_ = conn.SetDeadline(deadline)
-	if _, err := conn.Write(append(line, '\n')); err != nil {
-		return contract.Envelope{}, timeoutOr(err, ErrNotRunning)
-	}
+	// The server checks the peer before reading the request: a rejected peer is
+	// answered and disconnected immediately. Our write can therefore fail with
+	// EPIPE/ECONNRESET after the dial succeeded, while the reject envelope is
+	// already buffered. ErrNotRunning means the socket is absent or refusing
+	// dials, so only a dial error may become it; read the response first.
+	_, writeErr := conn.Write(append(line, '\n'))
 	raw, err := readLineLimit(bufio.NewReader(conn), contract.MaxManagementResponse)
 	if err != nil {
 		return contract.Envelope{}, timeoutOr(err, err)
 	}
 	var env contract.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
+		if writeErr != nil {
+			// No usable response arrived and the request could not be sent;
+			// surface the real transport error, not a misleading JSON/timeout.
+			return contract.Envelope{}, writeErr
+		}
 		return contract.Envelope{}, &contract.Failure{
 			Kind: contract.Internal, Path: contract.PathLocal, Op: "control.client",
 			Message: "management response is not valid JSON",

@@ -51,6 +51,16 @@ func testServer(t *testing.T, opts ServerOptions) (*Server, string) {
 	if err := srv.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	// Start binds synchronously, so the socket must already exist as a socket.
+	// Check it here so a missing/wrong-type path is reported verbatim instead of
+	// surfacing later as Client.Call's opaque ErrNotRunning.
+	info, err := os.Lstat(opts.Path)
+	if err != nil {
+		t.Fatalf("management socket %q missing after Start: %v", opts.Path, err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		t.Fatalf("management socket path %q is not a socket: mode %s", opts.Path, info.Mode())
+	}
 	t.Cleanup(func() { _ = srv.Close() })
 	return srv, opts.Path
 }
@@ -88,10 +98,32 @@ func TestForeignPeerIsRejectedBeforeHandler(t *testing.T) {
 		Handler: handler,
 		PeerUID: func(*net.UnixConn) (uint32, error) { return uint32(os.Getuid()) + 1, nil },
 	})
+	// Client.Call collapses every dial error into ErrNotRunning, discarding the
+	// real errno. Probe the socket directly and log any dial failure verbatim so
+	// a CI transport failure (ENOENT/ECONNREFUSED/EACCES) is visible. This does
+	// not gate the test on the probe; it only reports the underlying error.
+	var dialer net.Dialer
+	probe, probeErr := dialer.DialContext(context.Background(), "unix", path)
+	if probeErr != nil {
+		t.Logf("raw unix dial probe to %q failed: %v", path, probeErr)
+	} else {
+		_ = probe.Close()
+	}
+
 	client := &Client{Path: path}
 	env, err := client.Call(context.Background(), Request{Op: OpStatus})
 	if err != nil {
-		t.Fatal(err)
+		// Dial failures map to ErrNotRunning, but write/peer-close errors do not.
+		// Re-probe at the failure point: a real errno here means a transport
+		// problem, while a healthy socket points at the peer-close/write race.
+		// Diagnostic only.
+		var retry net.Dialer
+		conn, derr := retry.DialContext(context.Background(), "unix", path)
+		if conn != nil {
+			_ = conn.Close()
+		}
+		_, lerr := os.Lstat(path)
+		t.Fatalf("client.Call: %v (raw unix dial probe to %q: %v; socket lstat: %v)", err, path, derr, lerr)
 	}
 	if env.OK || env.Error == nil || env.Error.Kind != contract.PeerRejected {
 		t.Fatalf("envelope = %+v, want peer_rejected", env)
@@ -101,6 +133,33 @@ func TestForeignPeerIsRejectedBeforeHandler(t *testing.T) {
 	}
 	if ExitCodeForEnvelope(env) != contract.ExitDenied {
 		t.Fatalf("exit = %d, want 9", ExitCodeForEnvelope(env))
+	}
+}
+
+func TestForeignPeerRejectionIsDeterministic(t *testing.T) {
+	handler := &stubHandler{}
+	_, path := testServer(t, ServerOptions{
+		Handler: handler,
+		PeerUID: func(*net.UnixConn) (uint32, error) { return uint32(os.Getuid()) + 1, nil },
+	})
+	// The server checks the peer before reading the request: on a foreign peer
+	// it writes the reject envelope and closes immediately. The client's write
+	// can therefore race with that close. Exercise the real client/server path
+	// many times against one server so the write-after-close interleaving is
+	// covered; before the client fix this intermittently surfaced as
+	// ErrNotRunning ("socket not available") instead of peer_rejected.
+	for i := 0; i < 5000; i++ {
+		client := &Client{Path: path}
+		env, err := client.Call(context.Background(), Request{Op: OpStatus})
+		if err != nil {
+			t.Fatalf("iteration %d: client.Call: %v", i, err)
+		}
+		if env.OK || env.Error == nil || env.Error.Kind != contract.PeerRejected {
+			t.Fatalf("iteration %d: envelope = %+v, want peer_rejected", i, env)
+		}
+	}
+	if handler.calls.Load() != 0 {
+		t.Fatal("handler ran for a rejected peer")
 	}
 }
 
