@@ -864,8 +864,9 @@ loopback/private/غیرعمومی مجاز می‌مانند. نتیجه در st
 security `none`/`tls`؛ آدرس، پورت، UUID/password، `sni`, `alpn`, `fingerprint`, `flow`،
 مسیر/Host برای ws/xhttp، `serviceName` برای gRPC، `pinnedPeerCertSha256`،
 `verifyPeerCertByName`، و `extra` XHTTP با allow-list زیر.
-`http` و `reality` شناخته می‌شوند ولی تا بسته‌شدن گیت‌های R-2/R-13 به‌صورت `unsupported`
-وارد می‌شوند (نه حذف بی‌صدا). هر `http://`/`https://` با دلیل
+`http` و `reality` شناخته می‌شوند ولی به‌صورت `unsupported` وارد می‌شوند (نه حذف
+بی‌صدا)؛ `reality` خارج از v1 است و پشتیبانی نمی‌شود (`ReasonRealityUnverified`).
+هر `http://`/`https://` با دلیل
 `StatusReason = http_exit_not_verified` و هر scheme ناشناس با
 `StatusReason = protocol_unsupported` ذخیره می‌شود؛ import هرگز رکورد `unknown` برای
 این پروتکل‌ها نمی‌سازد. هر رکورد قدیمی/دست‌ویرایش‌شده‌ای با این پروتکل‌ها، مستقل از
@@ -943,8 +944,8 @@ merge بر اساس `DedupeKey` → commit. اگر یک منبع شکست بخو
   TUIC=8, WireGuard=9, HTTP=10`). پروفایل‌ها در `guiNDB.db` (SQLite) و تنظیمات اپ در
   `guiNConfig.json` هستند.
 - **v1 می‌پذیرد:** فایل متنی لینک‌های share (یک در هر خط، یا blob base64) و خروجی
-  export خود v2rayN. VLESS/Trojan/SOCKS5 نگاشت می‌شوند؛ HTTP/REALITY تا بسته‌شدن
-  گیت‌های R-2/R-13 و بقیهٔ انواع `unsupported` می‌شوند.
+  export خود v2rayN. VLESS/Trojan/SOCKS5 نگاشت می‌شوند؛ HTTP/REALITY و بقیهٔ انواع
+  `unsupported` می‌شوند (`reality` خارج از v1 است).
 - **v1 نمی‌پذیرد:** `guiNDB.db` (نیازمند driver جدید) و `guiNConfig.json` (تنظیمات اپ:
   inbound/routing/TUN و ...). پیام: «لینک‌ها را export کن»؛ exit `7`. هیچ driver یا
   خواندن SQLite اضافه نمی‌شود.
@@ -1187,7 +1188,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 | R-10 | خرابی auth خروجی VLESS/Trojan از شکست مقصد قابل تفکیک نیست؛ رکورد cooling نمی‌شود | انتخاب دستی/rerank با شاهد بایت؛ در milestone بعد شاید handshake adapter اختصاصی |
 | R-11 | `ProofConfirmed` تنها assertion خروجی است؛ سرور early-reply (از جمله SOCKS خود Xray) همان reply را پیش از connect می‌دهد و کلاینت تشخیص نمی‌دهد | برچسب «exit reported success» + حذف رکورد مشکوک؛ تأیید مستقل ممکن نیست |
 | R-12 | هستهٔ pin‌شده `allowInsecure` را حذف کرده؛ رکورد skip-verify همیشه `unsupported` با `insecure_tls_removed` است | تنها pin/name معتبر پذیرفته می‌شود؛ بازگشت رضایت نیازمند R-14 |
-| R-13 | REALITY/ECH در T1 اجرا نشد؛ فیلدهای آن در مدل هست ولی مسیر build/dial تأیید نشده | T3/T4 با fixture کنترل‌شده؛ تا آن زمان `reality` در import `unsupported` |
+| R-13 | REALITY/ECH خارج از v1 است و پشتیبانی نمی‌شود: import آن را `unsupported`/`ReasonRealityUnverified` می‌کند (`internal/imports/record.go:178-179`) و engine با «REALITY is outside v1» رد می‌کند (`internal/engine/config.go:284-289`)؛ فیلدهای آن در مدل مانده‌اند ولی مسیر build/dial عمداً وجود ندارد | تصمیم/milestone تازه لازم است؛ کار باز v1 نیست |
 | R-14 | مسیر رضایت/استثنای TLS ناامن در v1 حذف شده است | فقط با استثنای محدود، قابل‌مشاهده و قابل‌لغو که واقعاً بتواند رکورد را قابل dial کند؛ قرارداد جدید لازم است |
 | R-15 | failover پیش از بایت اول CONNECT فقط ۳ exit و ۶۴KiB را پوشش می‌دهد و زمان‌دار نیست: مقصدی که عمداً ساکت می‌ماند نامتعهد می‌ماند و بایت‌های دیررس همچنان replay می‌شوند؛ مقصدی که روی همهٔ exitها پیش از بایت اول می‌بندد می‌تواند همه را cooling کند؛ replay از دید کلاینت حداکثر یک‌بار است، نه لزوماً از دید مقصد | سقف‌ها تصمیم مهندسی‌اند و با شواهد جدید بازبینی می‌شوند؛ درمان اصلی خرابی ۴۰–۵۰٪ exit، pool سالم‌تر است، نه retry نامحدود |
 

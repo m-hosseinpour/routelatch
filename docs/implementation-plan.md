@@ -168,13 +168,17 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 - **دروازه:** reviewer مستقل باید کل coherent change را با guidance مناسب بررسی کند؛
   یافته‌های مادی رفع و effects بررسی شوند؛ verdict و محدودیت اجرای پلتفرم‌ها گزارش شود.
 
-## Milestoneهای بعدی — هنوز implementation-ready نیستند
+## Milestoneهای بعدی — خارج از v1 (تصمیم کاربر ۲۰۲۶-۱۱-۲۰)
+
+این چهار مورد **کار باز v1 نیستند** و به تصمیم/مجوز تازه و یک milestone جدا نیاز دارند
+(D24؛ «آزمون‌نشده» به‌معنای «در صف v1» نیست):
 
 1. **Windows:** build واقعی، named-pipe/ACL مدیریت، SCM و proxy settings/restore؛
    chmod لینوکس کافی نیست. scope دقیق با کاربر بسته شود.
 2. **UDP و TUN:** semantics جدید، DNS capture/split/FakeDNS در صورت نیاز، IPv6 و
    loop/permissions، crash recovery، per-app coverage و mode-switch session control.
-   وجود TUN در Xray اثبات تکمیل این مرحله نیست.
+   وجود TUN در Xray اثبات تکمیل این مرحله نیست. سیاست فعلی no-UDP/QUIC است
+   (`requirements.md:98`، `architecture.md:60`).
 3. **Android:** `VpnService`/foreground/per-app/protect/socket، VPN coexistence limits،
    یک Go runtime در artifact، policy مشترک و GUI بومی یا چندسکویی پس از تصمیم.
 4. **GUI:** مصرف management contract مشترک؛ انتخاب framework و سرمایه‌گذاری TUI
@@ -212,7 +216,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
 > ندارند. مرجع معتبر، HEAD انتشارشده است.
-  **بازخوانی ۲۰۲۶-۱۱-۲۰ (ارکستریتور):** `git status` پاک، HEAD `db6a50f` و باینری نصبشده `/usr/bin/routelatch` دقیقاً v0.1.2 / commit `88d04b1` (همان اصلاح re-apply دسکتاپ) است؛ sidecar `/usr/bin/sing-box` 1.14.4. سرویس `enabled`/`active` و `status` سالم (targeted/policy 117، pool ۱۷۶ رکورد / ۱۵۷ usable / ۱ healthy). مسیر `~/.local/bin` در یادداشت قدیمیتر مربوط به نصب پیشین است؛ مرجع فعلی `/usr/bin` است.
+  **بازخوانی ۲۰۲۶-۱۱-۲۰ (ارکستریتور):** `git status` پاک، HEAD `75a7183` (یک commit صرفاً سندپسند بالای `db6a50f`) و باینری نصبشده `/usr/bin/routelatch` دقیقاً v0.1.2 / commit `88d04b1` (همان اصلاح re-apply دسکتاپ) است؛ sidecar `/usr/bin/sing-box` 1.14.4 (با `sing-box version`). در همین بازخوانی `systemctl --user is-enabled/is-active routelatch.service` هر دو `enabled`/`active` و `ExecMainStatus=0`/`NRestarts=0` گزارش کردند؛ `status` سالم (targeted/policy 117، pool ۱۷۶ رکورد / ۱۵۷ usable / ۱ healthy). مسیر `~/.local/bin` در یادداشت قدیمیتر مربوط به نصب پیشین است؛ مرجع فعلی `/usr/bin` است.
   (snapshot تاریخی ۲۰۲۶-۱۱-۱۹: HEAD پیش از R12 فاز ۲ `6a7580f` و commitهای فاز ۲ `3839d6a` + اصلاح `505a650`اند. بررسیها روی معادل قبل از بازنویسی `3425c3f` اجرا و روی `3cb7bd7` پس از بازنویسی تأیید شد —
 هنگام شروع، `git log` را ببین)
    **بازخوانی سرد ۲۰۲۶-۱۱-۱۸ (ارکستریتور):** `git status` پاک و HEAD واقعی `b01661d` بود — دو commit صرفاً سندپسند (`4106da5` بستن ادعای کهنهٔ انتشار، `b01661d` ثبت R11) بالای `efc73c3` که رکورد به آن اشاره میکرد. تنها HEAD بهروز شد؛ هیچ کد/سرویس/تنظیم میزبان تغییر نکرد. commit بازخوانی: `a18dd97`.)
@@ -362,11 +366,11 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | R3 | **انجام شد** (`7792cac`، اصلاحیه‌های notices/attribution `4e0dde6`، `61604c5`): D20 با Apache-2.0 بسته شد؛ `LICENSE`/`NOTICE`/`THIRD-PARTY-NOTICES.md` و ممیزی ۶۸ ماژول و ۶ کامپوننت embedشده (amd64+arm64، `go version -m` هم‌خوان) اضافه شدند. صفر مجوز ناشناخته؛ MPL-2.0 فقط dependency بدون تغییر؛ LGPL-3.0 با استثنای لینک استاتیک و متن GPL-3.0؛ جزئیات و محدودیت‌ها در `docs/licensing.md`. **باقی A14:** source offer برای MPL، بستهٔ سورس/انتشار و بازبینی امنیت/نام — بیرون از این تصمیم | A14 (بخش مجوز/ممیزی) | انجام شد — تصمیم شما ثبت شد |
 | R4 | **انجام شد** (`766edcd`, `da333fe`) با pool خصوصی کاربر (فقط‌خواندنی؛ هیچ secret در repo/گزارش): نمونهٔ ۴ لینک از ۱۶۵ خط، import ۳/۳ valid + ۱ `engine_record_rejected` مستند، transport ۳/۳ و health/ranking اندازه‌گیری‌شده، یک درخواست targeted با CONNECT 200 و **۱ تماس مقصد** و IP خروجی ≠ مستقیم، exit مرده → 502 بدون fallback، all-direct/stopped مطابق قرارداد، و grep D21 بدون هیچ hit مقصد. نقص «شواهد downlink واقعی به health نمی‌رسید» رفع شد. **باقی:** مقاصد دلخواه، churn/طولانی‌مدت، و همهٔ اعضای pool | A04/A06 (ردیف عمومی، اثبات محدود) | انجام شد |
 | R5 | **انجام شد** (`640f83c`, `5d328a6`): مسیر import هرگز `unknown` نمی‌سازد (http → `unsupported`/`http_exit_not_verified`، scheme ناشناس → `unsupported`/`protocol_unsupported`) و view/status حالا رکورد undialable را **صرف‌نظر از status ذخیره‌شده** جز `invalid` مشتق می‌کند. `pool list`، `status` و `doctor` از یک مالک واحد (`EffectiveStatus`) می‌خوانند، state بازنویسی نمی‌شود و رکورد پیش از هر dial/probe رد می‌شود. **Residual پذیرفته‌شده:** protocol تهی/صفر عمداً دست‌نخورده است؛ semantics پروتکل‌های پشتیبانی‌شده تغییر نکرده؛ tick چرخش ۳۰ ثانیه‌ای در acceptance درایو نمی‌شود؛ `SyncStatuses` پس از فرمان تغییردهنده ممکن است cooldown منقضی را به `unknown` نرمال کند (bookkeeping قبلی، نه نوشتن مشتق‌سازی) | A06/§5 (کیفیت گزارش) | نه |
-| R6 | **انجام شد** (`a69ae1e`): WS/TLS، gRPC/TLS (`h2`) و XHTTP/TLS (`h2`) با exit pin‌شدهٔ محلی، rule، `pool select` و CONNECT به peer loopback واقعاً آزموده شدند (هر سلول دقیقاً ۱ درخواست مقصد و پاسخ بدون تغییر)؛ pin غلط ۰ داده به مقصد می‌فرستد و سرویس بالا می‌ماند. **هنوز آزمون‌نشده:** REALITY/ECH، mKCP، HTTPUpgrade، h3، mux/XUDP، و رفتار طولانی‌مدت/reuse یک ترنسپورت | T1/T4 دقت ادعا | نه |
+| R6 | **انجام شد** (`a69ae1e`): WS/TLS، gRPC/TLS (`h2`) و XHTTP/TLS (`h2`) با exit pin‌شدهٔ محلی، rule، `pool select` و CONNECT به peer loopback واقعاً آزموده شدند (هر سلول دقیقاً ۱ درخواست مقصد و پاسخ بدون تغییر)؛ pin غلط ۰ داده به مقصد می‌فرستد و سرویس بالا می‌ماند. **خارج از v1، نه آزمون‌نشده:** REALITY/ECH، mKCP، HTTPUpgrade و mux/XUDP پشتیبانی نمی‌شوند و h3 به‌دلیل سیاست no-UDP/QUIC کنار گذاشته شده (بخش «تفکیک محدودیت‌ها»). **کار باز v1:** رفتار طولانی‌مدت/reuse یک ترنسپورت پیاده‌سازی شده ولی هنوز اجرا نشده | T1/T4 دقت ادعا | نه |
 | R7 | **انجام شد — استفادهٔ واقعی و ماندگار:** نصب unit و `enable --now`، pool کاربری import شد، ۳۴ قاعده برای دامنه‌های کاربر، mode `targeted`، پروکسی دسکتاپ KDE روی RouteLatch با مسیر بازگشت. سه بررسی واقعی (approved→exit، unapproved→direct، exit مرده→502) pass. **شروع در login و reboot (۲۰۲۶-۱۱-۲۰) اثبات شد** | A11/A13 در استفادهٔ واقعی + تجربهٔ dogfood | انجام شد با مجوز شما |
 | R8 | **انجام شد (`e098ceb` merge):** README/CI/فایل‌های عمومی، بستهٔ release با checksum/stamp/source offer، اسکن تاریخچه (پاک)، بررسی نام، `docs/release-readiness.md`. | آمادگی انتشار | انجام شد؛ push بعداً با مجوز کاربر انجام شد |
 | R10 | **انجام شد (`c1a98f9`, `cbc6a87`, `3425c3f`):** failover CONNECT پیش از ۲۰۰ با سقف ۳ exit و بافر ۶۴ KiB، پین دستی تکـتلاش، بدون direct و بدون تغییر HTTP ساده/SOCKS5؛ ۱۶/۳۰ → ۹۲/۱۰۰ و smoke ۱۹/۲۰؛ نصب و restart سرویس روزمره | A02/A03/D22 | انجام شد |
-| R11 | **انجام شد (`654cbb6`، `84efe5e`، `8d4118b`):** پشتیبانی واقعی hysteria2/sing-box با رانتایم جدیگانه sing-box `v1.14.4` کنار Xray — import، فیلدهای قرارداد، handoff محلی SOCKS5، انطباق GPL/بستهبندی، و اثبات ترافیک واقعی (۱ تماس مقصد، fail-closed با ۰ تماس، D21). **باقی:** obfs/QUIC roaming/session طولانی و باینری release واقعی آزموننشده | D07/A06/A08 (گسترش دامنه) | انجام شد با تصمیم معماری + مجوز کاربر |
+| R11 | **انجام شد (`654cbb6`، `84efe5e`، `8d4118b`):** پشتیبانی واقعی hysteria2/sing-box با رانتایم جدیگانه sing-box `v1.14.4` کنار Xray — import، فیلدهای قرارداد، handoff محلی SOCKS5، انطباق GPL/بستهبندی، و اثبات ترافیک واقعی (۱ تماس مقصد، fail-closed با ۰ تماس، D21). **باقی (کار باز v1):** obfs آزمون‌نشده است و اسکیمای obfs سمت سرور sing-box 1.14.4 هنوز از منبع رسمی تأیید نشده؛ session طولانی و sidecar بستهٔ واقعی آزمون‌نشده‌اند؛ QUIC roaming در repo قابل بازتولید نیست (نیازمند تغییر مسیر/اینترفیس واقعی) | D07/A06/A08 (گسترش دامنه) | انجام شد با تصمیم معماری + مجوز کاربر |
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM محلی ساخته نمیشود (rpmbuild نصب نیست)؛ jobCI `rpm-packages` آن را میسازد/بازرسی میکند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد؛ jobCI `rpm-packages` اضافه شد ولی محلی اجرا نشد؛ باینری RPM محلی ساخته/بازرسینشده است | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
@@ -375,15 +379,16 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 **قاعدهٔ انتخاب:** R1–R8، R10، R11، R12 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد.
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
-کارهای باقی‌مانده (اجرای arm64، محیط پاک برای A01 و GNOME) مجوز جدا
-می‌خواهند؛ push، تگ و ریلیزهای `v0.1.1` و `v0.1.2` با مجوز صریح کاربر انجام شدند.
+کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
+گروه ج و هر اقدام میزبان به‌جز corrupt-state آفلاین مجوز جدا می‌خواهند. push، تگ و
+ریلیزهای `v0.1.1` و `v0.1.2` با مجوز صریح کاربر انجام شدند.
 
 ### آنچه پذیرفته/اثبات نشده است
 
 | معیار | وضعیت | دلیل/حد شاهد |
 | --- | --- | --- |
 | A02، A03، A05، A06، A08، A12 | اثبات محلی | شمارندهٔ تماس مقصد/خروجی و assertion مستقیم در harness؛ A06 شامل مشتق‌سازی legacy و مسیر import هر دو قاعده |
-| WS/gRPC/XHTTP روی TLS | اثبات محلی (R6) | peer loopback pin‌شده، ۱ درخواست مقصد، pin غلط با ۰ داده؛ reuse طولانی‌مدت و h3 آزمون‌نشده |
+| WS/gRPC/XHTTP روی TLS | اثبات محلی (R6) | peer loopback pin‌شده، ۱ درخواست مقصد، pin غلط با ۰ داده؛ h3 خارج از v1 است (سیاست no-UDP/QUIC) و reuse طولانی‌مدت هنوز آزمون‌نشده |
 | A04، A07، A09، A10 | اثبات محلی + نمونهٔ عمومی محدود (R4) | mode switch زنده+در جریان، rerank/cooldown، مجوز فایل/socket، CLI، launcher env، crash/restart، و ۴ exit عمومی با health/ranking واقعی؛ همهٔ مقاصد/اعضای pool نه |
 | A13 | **اثبات واقعی (R1 + بررسی ۲۰۲۶-۱۱-۲۰)** | نصب/فعال‌سازی unit واقعی و lifecycle، راهاندازی خودکار بعد از reboot با state/pool/desktop-proxy سالم؛ **reboot/re-login (۲۰۲۶-۱۱-۲۰) اثبات شد؛ اجرا نشد:** corrupt-state زیر systemd (offline فقط) |
 | A01 | **پذیرفتهنشده** | مسیر نصب واقعی و launch آن اثبات شد (R1)؛ metadata/payload `.deb` محلی و اسپک RPM (ایستا) تأیید شدند؛ jobCI ساخت/بازرسی RPM سبز (`44682457124`)؛ باینری RPM `0.1.1` با ابزار استخراجشدهٔ محلی rpm 6.0.1 ساخته/بازرسی شد (نصب سیستمی نشد)؛ محیط پاک/ماشین تازه و اجرای arm64/riscv64/ppc64le هنوز نه |
@@ -391,39 +396,73 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیز `v0.1.1` و سپس `v0.1.2` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند |
 | `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری (`amd64`، `arm64`، `riscv64`، `ppc64el`)؛ `check-package.sh` مجموعهٔ دقیق `SHA256SUMS`، control بدون maintainer script، مجموعهٔ دقیق payload، mode/owner و اعتبار نام معماری Debian را میسنجد؛ تکرار بایتیکسان؛ تستهای منفی حذف خط checksum/postinst/فایل اضافه/mode غلط همه fail شدند؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | اسپک/باینری RPM (R12 فاز ۲) | **اسپک: ساخت/اعتبارسنجی محلی؛ باینری: CI فقط** | چهار اسپک (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) با Version برابر `.deb`، منبع pinnشده با SHA256، `%files` شامل LICENSE/NOTICE در `/usr/share/licenses/routelatch/` و بقیه اسناد در `/usr/share/doc/routelatch/`، بدون scriptlet/فعالسازی سرویس؛ تست منفی ۷ حالت fail کرد؛ rpmbuild/rpm/rpmspec بهصورت سیستمی نصب نشدند؛ ابزار استخراجشدهٔ rpm 6.0.1 باینریهای `0.1.1` را محلی ساخت/بازرسی کرد و jobCI `rpm-packages` در اجرای `44682457124` سبز شد |
-| hysteria2/sing-box (R11) | **اثبات محلی با ترافیک واقعی** | هارنس گیتشدهٔ `RL_ACCEPT_HYSTERIA2_TEST=1`: handshake TLS واقعی با باینری pinشده، echo بایتیکسان، ۱ تماس مقصد، fail-closed ۰ تماس، D21؛ فقط loopback — obfs/routing/session طولانی و exit عمومی آزموننشده |
-| wire-level replay، UDP واقعی، arm64/riscv64/ppc64le اجرا و اجرای باینری RPM محلی | **قابلآزمون نیست** | خارج از loopback/مجوز؛ سه معماری فقط cross-build شدهاند و rpmbuild محلی موجود نیست |
+| hysteria2/sing-box (R11) | **اثبات محلی با ترافیک واقعی** | هارنس گیت‌شدهٔ `RL_ACCEPT_HYSTERIA2_TEST=1`: handshake TLS واقعی با باینری pinشده، echo بایتیک‌سان، ۱ تماس مقصد، fail-closed ۰ تماس، D21؛ فقط loopback. **باز v1:** obfs (اسکیمای سمت سرور تأییدنشده)، session طولانی و sidecar بستهٔ واقعی آزمون‌نشده‌اند؛ QUIC roaming در repo بازتولیدپذیر نیست؛ مقصد/exit عمومی در گروه ج است |
+| wire-level replay، UDP واقعی، مقاصد دلخواه، churn و خروجی‌های عمومی واقعی (گروه ج) | **اثبات‌نشده — نیازمند درخواست جدا/مجوز بعدی** | در این چرخه مجاز نیست (D24)؛ استفادهٔ خواندنی از pool خصوصی و آزمون خروجی عمومی درخواست جدا می‌خواهد |
+| اجرای runtime روی arm64/riscv64/ppc64le و اجرای باینری RPM محلی | **در این محیط قابل‌آزمون نیست** | سه معماری فقط cross-build شده‌اند؛ `check-package.sh` ایستا است و RPM را فقط CI می‌سازد (`.github/workflows/ci.yml:147-173,199,239-250`)؛ اجرای محلی RPM به container/network و مجوز جدا نیاز دارد |
 
-**محدودیت‌های آزمون‌نشدهٔ دیگر که ادعا را محدود می‌کنند:** HTTP CONNECT exit، TLS-pin
-failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، reuse طولانی‌مدت
-ترنسپورت، tick چرخش ۳۰ ثانیه‌ای (فقط در unit/code-path دیده شده) و رفتار با exit عمومی
-کند/ناپایدار. اینها مجوز ضعیف‌کردن D-item نیستند.
+**تفکیک محدودیت‌ها (بازبینی و تصمیم کاربر، ۲۰۲۶-۱۱-۲۰):** سه حالت زیر از هم جدا می‌شوند و فقط ردیف (ب) «کار باز v1» است.
+
+**الف) خارج از v1 — پشتیبانی نمی‌شود (نه «آزمون‌نشده»):**
+- **REALITY/ECH:** importer امنیت reality را `unsupported`/`ReasonRealityUnverified` برمی‌گرداند (`internal/imports/record.go:178-179`) و engine با پیام «REALITY is outside v1» رد می‌کند (`internal/engine/config.go:284-289`)؛ peer محلی فقط بلوک TLS ساده می‌سازد (`internal/acceptance/exit_test.go:98-113`).
+- **mKCP:** در allowlist ترنسپورت نیست (`internal/imports/record.go:170-171`، `internal/engine/config.go:239-240`)؛ `kcp` نگاشت نمی‌شود (`record.go:283-288`) و peer generator برای آن panic می‌کند (`exit_test.go:73-97`)؛ UDP/QUIC هم سیاستاً ممنوع است (`docs/requirements.md:98`، `docs/architecture.md:60`).
+- **HTTPUpgrade:** همان حذف از allowlist (`record.go:170-171,283-288`)؛ سلول peer ندارد.
+- **XHTTP روی h3/QUIC:** محصول ALPN دلخواه را می‌پذیرد (`internal/engine/config.go:238-241,330-332,403-425`) و ALPN peer پارامتری است (`exit_test.go:88-94,108-112`)، پس فقط یک سلول fixture کم است؛ ولی UDP/QUIC سیاستاً خارج از v1 است (`docs/requirements.md:98`، `docs/architecture.md:60`) و اجراشده فقط h2 بوده (`internal/acceptance/transports_test.go:37`). بنابراین policy-excluded است، نه untested.
+- **mux/XUDP:** عمداً حذف شده (`internal/imports/importer.go:80,91`، `internal/imports/sanitize.go:164-166`) و در قرارداد sidecar فیلدی ندارد (`internal/contract/sidecar.go:7-17`، `internal/singbox/config.go:62-70`).
+- **Windows، UDP/TUN، Android، GUI:** خارج از v1 با تصمیم کاربر (D24)؛ نیازمند milestone و تصمیم تازه‌اند.
+
+**ب) پیاده‌سازی‌شده ولی هنوز اجرا نشده (کار باز v1، به ترتیب):**
+1. **reuse طولانی‌مدت ترنسپورت:** پیاده‌سازی آماده است و فقط تست می‌خواهد؛ origin جریانی موجود است (`internal/acceptance/origin_test.go:72-90`) و شمارش reuse در `internal/acceptance/peers_test.go:90-94,124` ممکن است. **تصمیم باز:** تعریف «طولانی‌مدت» و assertion آن هنوز تعیین نشده است.
+2. **hysteria2 obfs:** محصول salamander/gecko را می‌پذیرد (`internal/imports/link.go:290-294`، `internal/engine/config.go:367-374`، `internal/singbox/config.go:185-186,232-240`)؛ fixture سرور بلوک obfs ندارد (`internal/acceptance/r11_hysteria2_test.go:247-260`) و اسکیمای دقیق obfs سمت سرور sing-box 1.14.4 هنوز از منبع رسمی تأیید نشده است.
+3. **session طولانی hysteria2:** آزمون‌نشده ولی شدنی است؛ به یک origin/exit محلی با عمر طولانی نیاز دارد.
+4. **sidecar بستهٔ منتشرشده به‌جای باینری آزمون `/tmp`:** مسیر `RL_ACCEPT_SINGBOX_EXEC` وجود دارد (`r11_hysteria2_test.go:75-86`) و `scripts/package.sh:197,237` آرشیو pinشده را نصب می‌کند؛ ولی `dist/BUILD-INFO` محلی v0.1.0/`068e9c2` است و ریلیزهای منتشرشده v0.1.1/v0.1.2‌اند، پس artifact منتشرشدهٔ محلی تأییدنشده است.
+5. **corrupt-state زیر systemd:** فقط آفلاین؛ در همین چرخه با unit موقت و ایزولهٔ `systemd --user` مجاز است و ماشین باید کامل بازگردانده شود (همان انضباط R1). تنها اقدام میزبانِ مجاز این چرخه است.
+6. **tick چرخش ۳۰ ثانیه‌ای:** فقط در unit/code-path دیده شده و در acceptance درایو نمی‌شود.
+
+**ج) اثبات‌نشده — محدود به محیط/مجوز (شامل اجراشده ولی محدود):**
+- **گروه ج:** استفادهٔ خواندنی از pool خصوصی، مقاصد دلخواه، churn، خروجی‌های عمومی واقعی، UDP واقعی و wire-level replay. تصمیم کاربر (۲۰۲۶-۱۱-۲۰): در این چرخه مجاز نیست و «کار باز v1» شمرده نمی‌شود.
+- **A04/A06 در مقیاس:** آزمون در مقیاس در این چرخه مجاز نیست.
+- **A01 (محیط پاک):** پذیرفته‌نشده و به ماشین/VM تازه نیاز دارد.
+- **اجرای runtime روی arm64/riscv64/ppc64le:** فقط cross-build شده‌اند.
+- **نشست GNOME برای A11:** KDE اثبات شده، GNOME نه.
+- **اجرای محلی باینری RPM:** هیچ مسیر repo ندارد؛ `scripts/check-package.sh` ایستا است و RPM را فقط CI می‌سازد (`.github/workflows/ci.yml:147-173,199,239-250`)؛ نیازمند container و شبکه است و **هنوز مجاز نیست**.
+- **QUIC roaming و رفتار با exit عمومی کند/ناپایدار:** QUIC roaming به تغییر واقعی مسیر/اینترفیس شبکه نیاز دارد و در repo بازتولیدپذیر نیست؛ گروه ج هم مجوز ندارد.
+
+این موارد مجوز ضعیف‌کردن D-item نیستند.
 
 ### نقطهٔ شروع جلسهٔ بعد
 
 1. `AGENTS.md` و همین بخش را بخوان؛ `git status` و `git log --oneline -5` را با
    «HEAD هنگام ثبت» مقایسه کن و تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت نصب و انتشار (بازخوانی ۲۰۲۶-۱۱-۲۰): HEAD `db6a50f`، درخت پاک و باینری نصبشده
-   `/usr/bin/routelatch` دقیقاً v0.1.2 / commit `88d04b1` (اصلاح re-apply دسکتاپ)؛ sidecar
-   `/usr/bin/sing-box` 1.14.4، سرویس `enabled`/`active`. تمام کارهای R1–R12 و ریلیزهای
-   `v0.1.0`/`v0.1.1`/`v0.1.2` بستهاند و push به دو remote (`github`، `origin`/forgejo)
-   انجام شده است. مسیرهای `~/.local/bin` و HEADهای قدیمیتر در یادداشتهای بالا snapshot
-   تاریخیاند. RouteLatch بهعنوان پروکسی دسکتاپ KDE تنظیم شده (R7)؛
-   `routelatch desktop proxy restore` مقدار قبلی را بازمیگرداند. **باقی و نیازمند مجوز/
-   محیط جدا:** اجرای arm64/riscv64/ppc64le روی سختافزار، ماشین تازه برای A01، نشست
-   GNOME برای A11، corrupt-state تحت systemd (فقط offline) و هرگونه tag/release یا
-   تغییر تنظیمات دسکتاپ میزبان.
-3. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
+2. وضعیت (بازخوانی ۲۰۲۶-۱۱-۲۰): HEAD `75a7183`، درخت پاک؛ `/usr/bin/routelatch` با
+   `routelatch version` برابر v0.1.2 / `88d04b1` و sidecar `/usr/bin/sing-box` 1.14.4؛
+   سرویس `enabled`/`active` با `ExecMainStatus=0`/`NRestarts=0`. کارهای R1–R12 و
+   ریلیزهای `v0.1.0`/`v0.1.1`/`v0.1.2` بسته‌اند و push به دو remote (`github`،
+   `origin`/forgejo) انجام شده است. `dist/BUILD-INFO` محلی v0.1.0/`068e9c2` است، پس
+   بستهٔ منتشرشدهٔ محلی تأییدنشده است (بخش ب/۴). RouteLatch به‌عنوان پروکسی دسکتاپ KDE
+   تنظیم شده (R7) و `routelatch desktop proxy restore` مقدار قبلی را بازمی‌گرداند.
+3. **تصمیم‌های کاربر (۲۰۲۶-۱۱-۲۰، D24):** ادامهٔ v1 شامل همه‌چیز جز گروه ج است. گروه ج
+   (pool خصوصی در مقیاس واقعی، مقاصد دلخواه، churn، خروجی‌های عمومی واقعی، UDP واقعی و
+   wire-level replay) در این چرخه مجاز نیست و «اثبات‌نشده — نیازمند درخواست جدا/مجوز
+   بعدی» می‌ماند. Windows، UDP/TUN، Android و GUI «خارج از v1»اند و تصمیم/milestone
+   تازه می‌خواهند. تنها اقدام میزبانِ مجاز این چرخه: corrupt-state آفلاین زیر unit موقت و
+   ایزولهٔ `systemd --user` و سپس بازگردانی کامل ماشین.
+4. **ترتیب کارهای باز v1:** (۱) corrupt-state آفلاین زیر systemd (تنها اقدام مجاز میزبان)؛
+   (۲) تست reuse طولانی‌مدت ترنسپورت و تعیین تعریف/assertion آن با کاربر؛ (۳) hysteria2
+   obfs پس از تأیید اسکیمای سمت سرور از منبع رسمی؛ (۴) session طولانی hysteria2؛
+   (۵) تأیید sidecar از بستهٔ منتشرشده؛ (۶) A01 روی ماشین تازه؛ (۷) GNOME برای A11؛
+   (۸) اجرای محلی RPM و (۹) اجرای runtime سه معماری — دو مورد آخر بدون مجوز جدا شروع
+   نمی‌شوند. جزئیات و شاهدها در «تفکیک محدودیت‌ها».
+5. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
    است، چون F1/F8 را فقط آن گرفت)، سپس بازبینی مستقل و commit محلی.
-4. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.
+6. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.
    اگر دروازه‌ای شکست، تصمیم وابسته را باز کن و تضمین D-item را ضعیف نکن.
-5. پایان هر task: ردیف وضعیت، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
+7. پایان هر task: ردیف وضعیت، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
 
 ### مسائل و حدود مجوز
 
-- **تصمیمهای کاربر ثبتشده (۲۰۲۶-۱۱-۱۸):** مسیر `/home/...` که در تاریخچهٔ `spike/` مانده
-  با بازنویسی در یک کپی پاک میشود (تاریخچهای را که product نگه میدارد بازنویسی نمیکنیم)؛
-  بررسی رسمی نام/علامت فعلاً لازم نیست و نام حفظ میشود؛ ایمیل committer قابلانتشار است؛
+- **تصمیم‌های کاربر ثبت‌شده (۲۰۲۶-۱۱-۱۸):** مسیر `/home/...` که در تاریخچهٔ `spike/` مانده
+  با بازنویسی در یک کپی پاک می‌شود (تاریخچه‌ای را که product نگه می‌دارد بازنویسی نمی‌کنیم)؛
+  بررسی رسمی نام/علامت فعلاً لازم نیست و نام حفظ می‌شود؛ ایمیل committer قابل‌انتشار است؛
   و push مجاز است. شاهد کامل در `docs/release-readiness.md`.
 - **remoteها:** `origin` = forgejo `routelatch.git`، و دومین remote = GitHub
   `m-hosseinpour/routelatch.git`؛ **فقط GitHub عمومی است**.
@@ -431,6 +470,12 @@ failure بیرونی، REALITY/ECH، mKCP، HTTPUpgrade، XHTTP h3، mux/XUDP، 
   شدند. D22 (نقطهٔ تعهد CONNECT) با موافقت کاربر ثبت شد.
 - **مجاز بدون درخواست تازه:** build/test محلی، دریافت وابستگی عمومی، commit محلی،
   تغییر کد/مستندات پروژه.
-- **نیازمند درخواست جدا:** نصب/فعالسازی سرویس (برای R7 انجام شد)، تغییر proxy/DNS/تنظیمات
-  دسکتاپ، استفاده از اطلاعات اتصال خصوصی، آزمون خروجیهای عمومی، tag/release، و
-  دستکاری پروژهها/دادهٔ قبلی. push به دو remote فوق مجاز است.
+- **نیازمند درخواست جدا:** نصب/فعال‌سازی سرویس (برای R7 انجام شد)، تغییر proxy/DNS/تنظیمات
+  دسکتاپ، استفاده از اطلاعات اتصال خصوصی، آزمون خروجی‌های عمومی، tag/release، و
+  دستکاری پروژه‌ها/دادهٔ قبلی. push به دو remote فوق مجاز است.
+- **تصمیم‌های کاربر (۲۰۲۶-۱۱-۲۰):** ادامهٔ v1 بدون گروه ج؛ گروه ج (pool خصوصی در مقیاس
+  واقعی، مقاصد دلخواه، churn، خروجی‌های عمومی واقعی، UDP واقعی، wire-level replay)
+  «اثبات‌نشده — نیازمند درخواست جدا/مجوز بعدی» است و کار باز این چرخه نیست. Windows،
+  UDP/TUN، Android و GUI «خارج از v1»اند. تنها اقدام میزبانِ مجاز این چرخه، آزمون
+  corrupt-state به‌صورت آفلاین زیر unit موقت و ایزولهٔ `systemd --user` و سپس بازگردانی
+  کامل ماشین است؛ هیچ اقدام میزبان دیگری مجاز نیست.

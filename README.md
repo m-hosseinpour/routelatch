@@ -326,13 +326,21 @@ exits, WS/gRPC/XHTTP transports over TLS, and automatic start-up after a real
 reboot with state and desktop-proxy settings intact. The desktop-proxy test
 changes a real desktop setting and is opt-in, like the systemd test.
 
-Not verified yet, and therefore not claimed:
+Three different kinds of gap are kept separate:
 
-- clean-machine install (A01) and arm64 execution at runtime;
-- a real GNOME session (the desktop test ran on KDE);
-- REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP;
-- wire-level replay and real UDP;
-- long-lived transport reuse, pool churn and slow/unstable public exits.
+- **Outside v1 by design, not untested:** REALITY/ECH, mKCP, HTTPUpgrade and
+  mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
+  no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
+  need a new decision.
+- **Implemented but not yet exercised:** long-lived transport reuse, hysteria2
+  `obfs` (the server-side schema is not yet verified), long hysteria2 sessions,
+  a sidecar taken from a shipped artifact rather than the test binary, and
+  corrupt-state recovery under `systemd --user` (offline only).
+- **Not yet proven because of the environment or missing authorization:**
+  clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
+  GNOME session (the desktop test ran on KDE), local execution of a locally
+  built RPM, and the real public-exit scale (private pool, arbitrary
+  destinations, churn) that has not been authorized.
 
 The project is a working Linux v1, not a finished multi-platform product.
 
