@@ -325,9 +325,11 @@ Plasma desktop-proxy set/restore/conflict/crash recovery, a limited
 public-exit case across four exits, WS/gRPC/XHTTP transports over TLS, a
 gated 30s single-tunnel WS/TLS reuse check, a gated hysteria2 traffic check
 plus a separate `RL_ACCEPT_HYSTERIA2_OBFS_TEST` cell that covers both `obfs`
-types (salamander and gecko), and automatic start-up after a real reboot with
-state and desktop-proxy settings intact. The desktop-proxy test changes a real
-desktop setting and is opt-in, like the systemd test.
+types (salamander and gecko), a rerun of both gated hysteria2 cells against
+the `bin/sing-box` sidecar from the published v0.1.2 linux-amd64 tarball
+(byte-identical to the pinned official archive), and automatic start-up after
+a real reboot with state and desktop-proxy settings intact. The desktop-proxy
+test changes a real desktop setting and is opt-in, like the systemd test.
 
 Three different kinds of gap are kept separate:
 
@@ -335,9 +337,8 @@ Three different kinds of gap are kept separate:
   mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
   no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
   need a new decision.
-- **Implemented but not yet exercised:** long hysteria2 sessions, a sidecar
-  taken from a shipped artifact rather than the test binary, and corrupt-state
-  recovery under `systemd --user` (offline only).
+- **Implemented but not yet exercised:** long hysteria2 sessions and
+  corrupt-state recovery under `systemd --user` (offline only).
 - **Not yet proven because of the environment or missing authorization:**
   clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
   GNOME session (the desktop test ran on KDE), local execution of a locally
