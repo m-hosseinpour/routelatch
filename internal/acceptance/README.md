@@ -89,6 +89,27 @@ dead-exit and absent-sidecar 502 paths (0 destination contacts), an unapproved
 destination going direct, and the D21 canary in state, sidecar config, service
 streams and CLI output.
 
+### Gated long-reuse transport check (R6)
+
+The default R6 matrix sends one request per transport cell. The long-duration
+cell is skipped by default because it holds one tunnel idle for half a minute:
+
+```sh
+RL_ACCEPT_LONG_REUSE_TEST=1 go test -count=1 -v -run TestTransportLongReuse ./internal/acceptance/
+```
+
+It opens one CONNECT tunnel over the proven WS/TLS exit and sends three
+keep-alive HTTP requests across ~32s, with a 30s idle gap. It asserts a
+byte-identical origin echo with exactly one destination request per attempt,
+the same client exit connection alive and carrying every request (no silent
+client re-dial), one destination connection, no direct delivery (the fixture
+destination does not resolve on the host), and a working service after the gap.
+The product's first eligible transport health probe (the 30s ticker's first
+rotation; later rotations are 10 minutes apart) opens one additional
+short-lived exit connection with no destination traffic; the check attributes
+that accept by its timestamp, separates it from the client tunnel and requires
+it to close. "Long duration" for the v1 record is defined by these parameters.
+
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
@@ -117,9 +138,9 @@ streams and CLI output.
   fails with `ENETUNREACH` and no packet leaves the machine.
 
 No public exit, credential, service installation or system setting is used by
-the default suite. The two real-system checks above are gated and skipped unless
-their environment variable is set; only the gated desktop check can change a
-desktop proxy setting.
+the default suite. The real-system and long-reuse checks above are gated and
+skipped unless their environment variable is set; only the gated desktop check
+can change a desktop proxy setting.
 
 ## Commands exercised
 
@@ -151,6 +172,7 @@ desktop proxy setting.
 | A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
+| R6 (gated long reuse) | `RL_ACCEPT_LONG_REUSE_TEST=1`: one client CONNECT tunnel over WS/TLS carries 3 requests across 32.0s (30.0s idle), each body byte-identical to the origin echo and each causing exactly 1 destination request; the client's exit connection stays alive and carries all three (1 client connection), 1 destination connection, no direct delivery (the fixture name does not resolve on the host), no 502/timeout; the first eligible 30s rotation probe's extra short-lived exit connection contacts no destination and closes. |
 | R11 | Default-on fake-sidecar cell: `hysteria2://` and a sing-box hysteria2 outbound JSON import through the real CLI, a skip-verify link is quarantined `insecure_tls_removed`; the generated handoff pins one hysteria2 outbound with `insecure:false`, no `resolve` rules and a block final; with no executable the stored exit is `unsupported`/`sidecar_unavailable` and gives 502 with 0 destination contacts while Xray still imports and dials. The gated real-traffic cell (opt-in above) adds a digest-verified v1.14.4 binary, a real TLS handshake to a loopback hysteria2 server, a byte-identical echo with exactly 1 destination contact, the dead-exit 502, direct-vs-approved routing and the D21 canary in state, sidecar config, streams and CLI output. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
@@ -254,8 +276,10 @@ them until the suite is updated.
   local pinned exit, with the ALPN above and one VLESS stream per test
   request. REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP are
   not exercised. One core per process is kept throughout, so these cells do not
-  test multiple embedded cores, transport reuse counts, or long-lived gRPC/XHTTP
-  session behavior.
+  test multiple embedded cores. Transport reuse counts and a long-lived
+  WS/TLS tunnel are covered only by the gated
+  `RL_ACCEPT_LONG_REUSE_TEST=1` check; long-lived gRPC/XHTTP session behavior
+  remains unexercised.
 * The product's own goroutine count is not externally observable; descriptors are
   the proxy. Traffic ports are chosen with a bind-close-rebind probe, so a
   concurrent process taking a port between probe and bind surfaces as a startup

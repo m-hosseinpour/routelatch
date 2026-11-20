@@ -318,13 +318,14 @@ not been executed in this environment. Only `amd64` was executed;
 `arm64`/`riscv64`/`ppc64le` were cross-built, and the last two are
 runtime-untested.
 
-Beyond the loopback suite, the Linux build was exercised on real system
-components: a real `systemd --user` service lifecycle (start/stop/restart, port
-collision, SIGKILL restart), real KDE Plasma desktop-proxy
-set/restore/conflict/crash recovery, a limited public-exit case across four
-exits, WS/gRPC/XHTTP transports over TLS, and automatic start-up after a real
-reboot with state and desktop-proxy settings intact. The desktop-proxy test
-changes a real desktop setting and is opt-in, like the systemd test.
+Beyond the default suite, the Linux build was exercised on real system
+components and gated loopback checks: a real `systemd --user` service
+lifecycle (start/stop/restart, port collision, SIGKILL restart), real KDE
+Plasma desktop-proxy set/restore/conflict/crash recovery, a limited
+public-exit case across four exits, WS/gRPC/XHTTP transports over TLS, a
+gated 30s single-tunnel WS/TLS reuse check, and automatic start-up after a
+real reboot with state and desktop-proxy settings intact. The desktop-proxy
+test changes a real desktop setting and is opt-in, like the systemd test.
 
 Three different kinds of gap are kept separate:
 
@@ -332,10 +333,10 @@ Three different kinds of gap are kept separate:
   mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
   no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
   need a new decision.
-- **Implemented but not yet exercised:** long-lived transport reuse, hysteria2
-  `obfs` (the server-side schema is not yet verified), long hysteria2 sessions,
-  a sidecar taken from a shipped artifact rather than the test binary, and
-  corrupt-state recovery under `systemd --user` (offline only).
+- **Implemented but not yet exercised:** hysteria2 `obfs` (the server-side
+  schema is not yet verified), long hysteria2 sessions, a sidecar taken from a
+  shipped artifact rather than the test binary, and corrupt-state recovery under
+  `systemd --user` (offline only).
 - **Not yet proven because of the environment or missing authorization:**
   clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
   GNOME session (the desktop test ran on KDE), local execution of a locally
