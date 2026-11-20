@@ -4,19 +4,81 @@ Status: **no credential, private pool content or binary is in the repository's
 history.** The current tree is clean of absolute personal paths.
 
 The first public release, **v0.1.0**, is tagged on `main` and publishes two Linux
-tarballs as assets on the GitHub Release. The current release, **v0.1.1**, adds
-four-architecture tarballs, Debian packages and RPM packages; its evidence is in
-"v0.1.1 release (current)" below. The history scan, name check and dependency
-audit recorded below remain historical evidence gathered before the first release;
-they are not repeated here. The tags, pushes and releases were explicitly
-authorized by the project owner.
+tarballs as assets on the GitHub Release. **v0.1.1** added four-architecture
+tarballs, Debian packages and RPM packages. The current release, **v0.1.2**, is a
+patch of the desktop-proxy `set` behaviour with the same 17-asset layout; its
+evidence is in "v0.1.2 release (current)" below. The v0.1.1 and v0.1.0 sections,
+history scan, name check and dependency audit remain historical evidence; they
+are not repeated here. The tags, pushes and releases were explicitly authorized
+by the project owner.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
 `c1e60ea`). Redaction rule used throughout: findings name the commit, path and
 kind, never the matched value.
 
-## v0.1.1 release (current)
+## v0.1.2 release (current)
+
+Tag `v0.1.2` is an annotated tag (tag object `3d1c181a9d163f90f3074a7a32bb876fa630e4a4`) on
+`main` commit `88d04b1a17058cd3680c9f7d3666662dc48a00d2` (`88d04b1`). The commit and
+tag were pushed to both `github` and `origin` (forgejo). The public GitHub Release
+is <https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.2>; the repository
+is public and the release is neither a draft nor a prerelease. This patch fixes
+`desktop proxy set` after a manual desktop-proxy edit: it re-applies, records only
+the user-edited keys as new restore points, and leaves untouched keys with their
+original values so `desktop proxy restore` still undoes the whole proxy.
+
+The release publishes **17 unsigned assets** in the same layout as v0.1.1: four
+Linux tarballs, four `.deb` files, four RPM specs, four binary RPMs
+(`routelatch-0.1.2-1.<arch>.rpm`) and one `SHA256SUMS`.
+
+Evidence: the tarballs, `.deb` files and specs were built in an isolated `DIST`
+with `VERSION=v0.1.2`, `COMMIT=88d04b1`, `SOURCE_DATE_EPOCH=1700000000`,
+Go 1.27.4 and `CGO_ENABLED=0`; `scripts/check-artifact.sh` and
+`scripts/check-package.sh` passed, a second packaging run produced a byte-identical
+`SHA256SUMS`, and `sha256sum -c` passed. The pinned sing-box v1.14.4 sidecar was
+verified against the official archive digests and is included only for
+amd64/arm64. The four binary RPMs were built from the v0.1.2 specs with an
+**extracted, not installed** rpm 6.0.1 toolchain under `/tmp/opencode` and
+inspected for `Name`, `Version=0.1.2`, `Release=1`, `Arch`, `License=Apache-2.0`,
+`Requires: ca-certificates`, the exact file list and the absence of scriptlets.
+Green GitHub Actions run `44736109624` on `88d04b1` (all six jobs, including
+`rpm-packages`) is the CI gate; its own artifacts carry the CI-only `0.0.0.ci`
+stamp and were not shipped. The first asset upload via Python's `urllib` timed out
+before any asset was stored; the release was kept and all 17 assets were then
+uploaded with streaming `curl` (the failed attempt created no partial asset set).
+The final public API check confirmed all 17 asset names, sizes and `sha256:`
+digests match the local files exactly, with no extras, and that the annotated tag
+points at `88d04b1`.
+
+Authoritative digests (also in the uploaded `SHA256SUMS`, whose own SHA-256 is
+`83b51b5b4f4b4d963b259de26c292963fb22276237df32908bc16ab1ea503bf2`):
+
+```
+fedcfbe29e66366603f1548aa03234a3dc7797465429db1d8d8c45366cab44c6  routelatch-0.1.2-1.aarch64.rpm
+b10d9075d462ffcf4092998869532dfeafb07c600c1628025c1f3b458e706ca8  routelatch-0.1.2-1.ppc64le.rpm
+b9d9af54080f45bbed0caf38e08e5379bd680a0b30590d6e04a30205ef6daeb2  routelatch-0.1.2-1.riscv64.rpm
+5ed731097096a91a8dddd5fcf831cdf94061f6efb2e4d864ebf4115bb47756a1  routelatch-0.1.2-1.x86_64.rpm
+9d1ffeeedfb585752a06f5acadeb3e3d3dc78224379cda0cc6211d78f7384899  routelatch-aarch64.spec
+c3cdc123c135085e4e80c32df6d1436c18bca248fe93621f264ab84b0a343d92  routelatch-ppc64le.spec
+cb9fcb93af83aaa6d8f1a9f20939c8cf53e67b65dde930f60b81f11115bef380  routelatch-riscv64.spec
+fd6158bb7bb8973a9350e8419f6826066c276673c539e28ad7388d24ecb5de6e  routelatch-v0.1.2-linux-amd64.tar.gz
+e14119d5f69728ac8a89a2a0360bc89b3e71f5b570eb9d4c4842326379ffebb0  routelatch-v0.1.2-linux-arm64.tar.gz
+40799f0a09118cc3e3b534dd82c43a2a3e73441b58558d3e965b750eaca5e108  routelatch-v0.1.2-linux-ppc64le.tar.gz
+5cbd780ccc5454288bec4c94f22e4a2ae6feeb4f049a4ae6eb066b7885630bb7  routelatch-v0.1.2-linux-riscv64.tar.gz
+79196d11b063f9a1c671aec8881eb378a430243549c4d589f55015e6fa5ae7a7  routelatch-x86_64.spec
+aa5f7d16020fdf0de852d879d6dfdcdebca6c436f97e0216a4e2c9e5c1fa7b15  routelatch_0.1.2_amd64.deb
+df524e16b3c2e1206681681dc977617686e02c72ff32b192991838e71ace4f1b  routelatch_0.1.2_arm64.deb
+9217ec9f5ec5948598aee2a143ec9a7516ce4b838e12337750eb2f2f920e7f98  routelatch_0.1.2_ppc64el.deb
+15a8c85e31e037f427622d0c2c5f5b0c3a3a84bf4fae7604a25fbe97ba0586af  routelatch_0.1.2_riscv64.deb
+```
+
+Limits: `arm64` is cross-built and runtime-untested; `riscv64` and `ppc64le` are
+cross-build-only and runtime-untested. The sidecar is pinned only for
+amd64/arm64. No clean-machine install, GPG signature or package repository is
+claimed.
+
+## v0.1.1 release (historical)
 
 Tag `v0.1.1` is an annotated tag (tag object `28d1cf89`) on `main` commit
 `2f6381430be9b39aeb736cd77566986a16354fa7` (`2f63814`). The commit and tag were
