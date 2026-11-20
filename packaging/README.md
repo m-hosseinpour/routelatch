@@ -16,8 +16,8 @@ per architecture; the only trust anchor is the generated `SHA256SUMS`, as for
 the v0.1.0 tarballs. There is no GPG signing, apt/dnf repository or
 package-service integration. Debian and RPM use the **same** `Version` string,
 normalised once from `BUILD-INFO` (see "Version stamping"). Binary RPMs are not
-built locally: `rpmbuild` is not assumed to be installed, so CI builds and
-inspects them from the generated specs.
+built by `scripts/package.sh`: `rpmbuild` is not assumed to be installed, so CI
+builds and inspects them from the generated specs.
 
 ## Source tree layout
 
@@ -111,10 +111,14 @@ loop for a quick local check; the defaults cover all four architectures.
 architectures and records each spec in `SHA256SUMS`. The spec is generated from
 `BUILD-INFO` and from the tarball just produced, and pins that tarball by
 SHA-256 so a mismatched source cannot silently become an RPM. Its metadata is
-`Name: routelatch`, the unified `Version`, `Release: 1`, `BuildArch: <rpm-arch>`,
-`License: Apache-2.0`, `Requires: ca-certificates`, and `AutoReqProv: no` (the
-binary is static). Its `%build` is empty — nothing is compiled — and `%install`
-lays out the prebuilt binary with the standard RPM paths:
+`Name: routelatch`, the unified `Version`, `Release: 1`, `License: Apache-2.0`,
+`Requires: ca-certificates`, and `AutoReqProv: no` (the binary is static). The
+spec deliberately has **no `BuildArch`**: the architecture comes only from
+`rpmbuild --target <rpm-arch>`. A foreign `BuildArch` makes
+`rpmbuild --target` fail on a different host with
+`error: No compatible architectures found for build`. Its `%build` is empty —
+nothing is compiled — and `%install` lays out the prebuilt binary with the
+standard RPM paths:
 
 ```
 /usr/bin/routelatch
@@ -143,10 +147,11 @@ verification is static spec validation in `scripts/check-package.sh`. CI
 (`rpm-packages` in `.github/workflows/ci.yml`) installs RPM tooling, runs
 `rpmbuild --target <rpm-arch> -bb` from each spec and inspects the results with
 `rpm` (name, version, release, architecture, license, `Requires: ca-certificates`,
-exact installed file list and absence of scriptlets). That CI step is the only
-real RPM build; it is not reproducible locally in this environment and has not
-been executed here. The CI-built RPMs are not published, and the generated specs
-are not a dnf/yum repository.
+exact installed file list and absence of scriptlets). That CI step has been
+green (`rpm-packages` in run `44682457124`). The v0.1.1 and v0.1.2 release RPMs
+were built separately from these specs with an extracted, not installed,
+rpm 6.0.1 toolchain. The CI-built RPMs carry a CI-only version and are not
+published, and the generated specs are not a dnf/yum repository.
 
 Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
 generated for these local, unsigned packages; the Apache-2.0 text and the full
@@ -407,8 +412,9 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-The v0.1.0 tarballs are published; the `.deb` files, RPM specs and CI-built
-binary RPMs from this step are not. Do not publish, release, tag, push or upload
-these artifacts: that is a separate decision with the project owner.
-`PACKAGE-NOTES` in every tarball/deb says it is a local build for that reason;
-the generated spec carries the same "local, unsigned" header.
+The v0.1.0 release published two tarballs; `v0.1.1` and `v0.1.2` each published
+all 17 assets (four tarballs, four `.deb` files, four RPM specs, four binary RPMs
+and `SHA256SUMS`). Building a package still does not publish it: do not publish,
+release, tag, push or upload new artifacts without a separate decision from the
+project owner. `PACKAGE-NOTES` in every tarball/deb says it is a local build for
+that reason; the generated spec carries the same "local, unsigned" header.

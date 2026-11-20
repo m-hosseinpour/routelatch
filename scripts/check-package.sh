@@ -250,7 +250,9 @@ for arch in $arches; do
 	expect_spec_line "Source0:        $name.tar.gz"
 	# A foreign BuildArch makes rpmbuild fail with "No compatible architectures
 	# found for build" on a different host; --target alone must set the arch.
-	if grep -Eq '^BuildArch:[[:space:]]' "$spec"; then
+	# RPM tags are case-insensitive and may be indented, so match the tag name
+	# loosely and reject "BuildArch:", "buildarch=", "BUILDARCH :", etc.
+	if grep -Eiq '^[[:space:]]*BuildArch[[:space:]]*([=:]|$)' "$spec"; then
 		fail "$spec sets BuildArch, which prevents cross-architecture RPM builds"
 	fi
 	expect_spec_line "# No BuildArch: the arch comes from --target so foreign arches build on any host."
