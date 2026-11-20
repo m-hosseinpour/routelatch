@@ -238,7 +238,9 @@ them until the suite is updated.
 * **A12:** redirects, `101` upgrades, slowloris/size limits and real IPv6 egress
   are not exercised; UDP is asserted only as an explicit refusal.
 * **A13 / platform:** systemd lifecycle is covered by the gated test above and
-  the R1 install run. A real reboot/re-login is not executed, and linger was
+  the R1 install run. The harness does not execute a real reboot/re-login (a
+  separate post-reboot observation on 2026-11-20 confirmed automatic login
+  start-up; see `docs/implementation-plan.md`), and linger was
   already enabled on the R1 machine, so only `enable`'s symlink and the
   `WantedBy=default.target` configuration were inspected for login start-up.
   Windows, Android and TUN are out of scope.

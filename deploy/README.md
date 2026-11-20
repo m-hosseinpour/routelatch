@@ -48,9 +48,12 @@ followed by the unit's on-failure restart with a byte-identical `state.json`, an
 a foreign listener on the configured HTTP port makes startup exit 6 without a
 fallback listener while `RestartPreventExitStatus` stops the restart loop.
 Listeners were loopback-only and the management socket was `0600` in a `0700`
-runtime directory. A reboot or re-login was **not** performed; the linger and
-`WantedBy=default.target` configuration was inspected, not observed across a
-session restart.
+runtime directory. That R1 run did **not** perform a reboot or re-login; the
+linger and `WantedBy=default.target` configuration was inspected, not observed
+across a session restart. A later reboot on 2026-11-20 did observe the enabled
+unit starting automatically at login, with mode, rules, pool and desktop-proxy
+settings intact (see `docs/implementation-plan.md`); the gated test itself still
+never reboots the machine.
 
 The same supervision is reproducible with the gated acceptance check:
 

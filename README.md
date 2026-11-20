@@ -317,13 +317,13 @@ Beyond the loopback suite, the Linux build was exercised on real system
 components: a real `systemd --user` service lifecycle (start/stop/restart, port
 collision, SIGKILL restart), real KDE Plasma desktop-proxy
 set/restore/conflict/crash recovery, a limited public-exit case across four
-exits, and WS/gRPC/XHTTP transports over TLS. The desktop-proxy test changes a
-real desktop setting and is opt-in, like the systemd test.
+exits, WS/gRPC/XHTTP transports over TLS, and automatic start-up after a real
+reboot with state and desktop-proxy settings intact. The desktop-proxy test
+changes a real desktop setting and is opt-in, like the systemd test.
 
 Not verified yet, and therefore not claimed:
 
 - clean-machine install (A01) and arm64 execution at runtime;
-- start-up after a reboot or re-login;
 - a real GNOME session (the desktop test ran on KDE);
 - REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP;
 - wire-level replay and real UDP;
