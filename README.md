@@ -320,7 +320,11 @@ runtime-untested.
 
 Beyond the default suite, the Linux build was exercised on real system
 components and gated loopback checks: a real `systemd --user` service
-lifecycle (start/stop/restart, port collision, SIGKILL restart), real KDE
+lifecycle (start/stop/restart, port collision, SIGKILL restart), a corrupt
+state under an isolated temporary `systemd --user` unit (truncated JSON, a
+newer schema and an unreadable file each fail closed with exit 10 and no
+listener; the file stays untouched and the documented `restore`/`chmod`
+recovery works), real KDE
 Plasma desktop-proxy set/restore/conflict/crash recovery, a limited
 public-exit case across four exits, WS/gRPC/XHTTP transports over TLS, a
 gated 30s single-tunnel WS/TLS reuse check, a gated hysteria2 traffic check
@@ -337,8 +341,7 @@ Three different kinds of gap are kept separate:
   mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
   no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
   need a new decision.
-- **Implemented but not yet exercised:** long hysteria2 sessions and
-  corrupt-state recovery under `systemd --user` (offline only).
+- **Implemented but not yet exercised:** long hysteria2 sessions.
 - **Not yet proven because of the environment or missing authorization:**
   clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
   GNOME session (the desktop test ran on KDE), local execution of a locally

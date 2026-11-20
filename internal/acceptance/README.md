@@ -39,6 +39,24 @@ on-failure restart with byte-identical state and no silent direct, and a clean
 exit 0 stop. Only run it where installing a user service is authorized; a
 reboot/re-login is never performed.
 
+### Gated corrupt-state check (A13, docs/contracts.md §4.5)
+
+The same gated cell family covers startup with a damaged `state.json`:
+
+```sh
+ROUTELATCH_SYSTEMD_TEST=1 go test -count=1 -v -run TestA13SystemdCorruptState ./internal/acceptance/
+```
+
+It runs the shipped unit with an isolated data dir and ports, seeds one rule and
+takes an offline backup, then repeats three cases: truncated JSON, valid JSON
+with an unknown newer `schema_version`, and a `chmod 000` file. For each it
+asserts the unit fails with `ExecMainStatus=10` and `NRestarts=0`, neither
+traffic listener is bound (no direct fallback), offline `status` exits 3,
+offline `doctor` exits 10 with `state_corrupt`, the file stays byte-identical
+and mode-unchanged, and `systemctl status` shows the reason. It then proves the
+documented recovery — offline `restore` from the backup, or an explicit
+`chmod 600` for the unreadable case — brings the same unit and state back.
+
 ### Gated real-desktop check (R2)
 
 The desktop adapter also has a gated test that changes this machine's **real**
@@ -193,6 +211,7 @@ can change a desktop proxy setting.
 | A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
 | A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
+| A13 (gated corrupt state) | `ROUTELATCH_SYSTEMD_TEST=1`: the same shipped unit, isolated data dir and random ports, seeds a rule and an offline backup, then for truncated JSON, `schema_version: 99` and `chmod 000` state fails closed with `ExecMainStatus=10`/`NRestarts=0`/`MainPID=0`, binds neither listener, reports `state_corrupt` from offline `doctor` (exit 10), leaves bytes and mode untouched with no automatic `.bak` restore, and shows the reason in `systemctl status`; offline `restore` (or an explicit `chmod 600` for the unreadable case) then starts the same unit with the backed-up rule. |
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
 | R6 (gated long reuse) | `RL_ACCEPT_LONG_REUSE_TEST=1`: one client CONNECT tunnel over WS/TLS carries 3 requests across 32.0s (30.0s idle), each body byte-identical to the origin echo and each causing exactly 1 destination request; the client's exit connection stays alive and carries all three (1 client connection), 1 destination connection, no direct delivery (the fixture name does not resolve on the host), no 502/timeout; the first eligible 30s rotation probe's extra short-lived exit connection contacts no destination and closes. |
