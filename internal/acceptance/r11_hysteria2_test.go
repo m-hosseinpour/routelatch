@@ -235,6 +235,8 @@ func r11MakeCerts(t *testing.T, dir string) r11Certs {
 type r11Server struct {
 	cmd  *exec.Cmd
 	logs *safeBuffer
+	done chan struct{}
+	err  error
 	once sync.Once
 }
 
@@ -243,19 +245,31 @@ type r11Server struct {
 // so a successful tunnel proves RouteLatch sent the unresolved hostname.
 func r11StartServer(t *testing.T, binary string, port uint16, certs r11Certs) *r11Server {
 	t.Helper()
+	return r11StartServerWithObfs(t, binary, port, certs, "", "")
+}
+
+// r11StartServerWithObfs is r11StartServer plus the inbound obfs block. sing-box
+// 1.14.4 takes obfs as a top-level sibling of users/tls on the hysteria2
+// inbound; obfsType "" leaves the inbound unobfuscated.
+func r11StartServerWithObfs(t *testing.T, binary string, port uint16, certs r11Certs, obfsType, obfsPassword string) *r11Server {
+	t.Helper()
+	inbound := map[string]any{
+		"type": "hysteria2", "tag": "hy-in", "listen": "127.0.0.1", "listen_port": port,
+		"users": []any{map[string]any{"password": r11Password}},
+		"tls": map[string]any{
+			"enabled": true, "certificate_path": certs.certPath, "key_path": certs.keyPath,
+		},
+	}
+	if obfsType != "" {
+		inbound["obfs"] = map[string]any{"type": obfsType, "password": obfsPassword}
+	}
 	cfg := map[string]any{
 		"log": map[string]any{"level": "warn"},
 		"dns": map[string]any{"rules": []any{map[string]any{
 			"domain": []string{r11DestHost}, "action": "predefined",
 			"answer": []string{r11DestHost + ". 3600 IN A 127.0.0.1"},
 		}}},
-		"inbounds": []any{map[string]any{
-			"type": "hysteria2", "tag": "hy-in", "listen": "127.0.0.1", "listen_port": port,
-			"users": []any{map[string]any{"password": r11Password}},
-			"tls": map[string]any{
-				"enabled": true, "certificate_path": certs.certPath, "key_path": certs.keyPath,
-			},
-		}},
+		"inbounds":  []any{inbound},
 		"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}},
 	}
 	raw, err := json.MarshalIndent(cfg, "", "  ")
@@ -275,14 +289,26 @@ func r11StartServer(t *testing.T, binary string, port uint16, certs r11Certs) *r
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("r11 start server: %v", err)
 	}
-	s := &r11Server{cmd: cmd, logs: logs}
+	s := &r11Server{cmd: cmd, logs: logs, done: make(chan struct{})}
+	go func() {
+		s.err = cmd.Wait()
+		close(s.done)
+	}()
 	t.Cleanup(s.stop)
 	// hysteria2 is QUIC/UDP: a loopback TCP dial would never answer, so the
-	// readiness check is a short grace period plus a live-process check. The
-	// real handshake below is the authoritative proof that the server is up.
-	time.Sleep(700 * time.Millisecond)
-	if s.cmd.ProcessState != nil {
-		t.Fatalf("r11 hysteria2 server exited during startup (config %s): logs=%s", path, logs.String())
+	// readiness check is a short grace period plus a real process-exit check.
+	// The real handshake below is the authoritative proof that the server is up.
+	select {
+	case <-s.done:
+		t.Fatalf("r11 hysteria2 server exited during startup (config %s): %v: logs=%s", path, s.err, logs.String())
+	case <-time.After(700 * time.Millisecond):
+	}
+	// A process that exits exactly at the grace boundary can lose the select
+	// race; recheck so a bind failure is never mistaken for a live server.
+	select {
+	case <-s.done:
+		t.Fatalf("r11 hysteria2 server exited during startup (config %s): %v: logs=%s", path, s.err, logs.String())
+	default:
 	}
 	return s
 }
@@ -293,7 +319,7 @@ func (s *r11Server) stop() {
 	}
 	s.once.Do(func() {
 		_ = s.cmd.Process.Kill()
-		_ = s.cmd.Wait()
+		<-s.done
 	})
 }
 

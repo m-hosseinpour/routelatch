@@ -89,6 +89,29 @@ dead-exit and absent-sidecar 502 paths (0 destination contacts), an unapproved
 destination going direct, and the D21 canary in state, sidecar config, service
 streams and CLI output.
 
+### Gated hysteria2 obfs check (R11)
+
+A second R11 cell proves that both allowed hysteria2 obfuscators carry real
+traffic. It reuses the same pinned binary, loopback-only server and local CA,
+and is skipped by default:
+
+```sh
+RL_ACCEPT_HYSTERIA2_OBFS_TEST=1 go test -count=1 -v -run TestR11Hysteria2ObfsRealTraffic ./internal/acceptance/
+```
+
+It imports one `hysteria2://` link with `obfs=salamander` and one with
+`obfs=gecko` through the normal CLI, asserts the generated sidecar config
+carries the top-level `obfs` block with the imported password, and drives a
+CONNECT through the sidecar to a loopback echo peer (byte-identical echo,
+exactly one destination contact). Two negative cases — a wrong obfs password
+and a wrong obfs type — must fail as a pool timeout (`504 deadline exceeded`)
+or an empty sidecar handoff, with zero destination contacts, no direct
+fallback, and the service still up and readable. Those two shapes exclude the
+frontend's own `502 dns failure`, which is what a direct fallback of the
+unresolved fixture name would produce. The server fixture places `obfs` beside
+`users`/`tls` on the hysteria2 inbound; that shape is checked with the pinned
+binary's `sing-box check` before traffic runs.
+
 ### Gated long-reuse transport check (R6)
 
 The default R6 matrix sends one request per transport cell. The long-duration
@@ -173,7 +196,7 @@ can change a desktop proxy setting.
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
 | R6 (gated long reuse) | `RL_ACCEPT_LONG_REUSE_TEST=1`: one client CONNECT tunnel over WS/TLS carries 3 requests across 32.0s (30.0s idle), each body byte-identical to the origin echo and each causing exactly 1 destination request; the client's exit connection stays alive and carries all three (1 client connection), 1 destination connection, no direct delivery (the fixture name does not resolve on the host), no 502/timeout; the first eligible 30s rotation probe's extra short-lived exit connection contacts no destination and closes. |
-| R11 | Default-on fake-sidecar cell: `hysteria2://` and a sing-box hysteria2 outbound JSON import through the real CLI, a skip-verify link is quarantined `insecure_tls_removed`; the generated handoff pins one hysteria2 outbound with `insecure:false`, no `resolve` rules and a block final; with no executable the stored exit is `unsupported`/`sidecar_unavailable` and gives 502 with 0 destination contacts while Xray still imports and dials. The gated real-traffic cell (opt-in above) adds a digest-verified v1.14.4 binary, a real TLS handshake to a loopback hysteria2 server, a byte-identical echo with exactly 1 destination contact, the dead-exit 502, direct-vs-approved routing and the D21 canary in state, sidecar config, streams and CLI output. |
+| R11 | Default-on fake-sidecar cell: `hysteria2://` and a sing-box hysteria2 outbound JSON import through the real CLI, a skip-verify link is quarantined `insecure_tls_removed`; the generated handoff pins one hysteria2 outbound with `insecure:false`, no `resolve` rules and a block final; with no executable the stored exit is `unsupported`/`sidecar_unavailable` and gives 502 with 0 destination contacts while Xray still imports and dials. The gated real-traffic cell (opt-in above) adds a digest-verified v1.14.4 binary, a real TLS handshake to a loopback hysteria2 server, a byte-identical echo with exactly 1 destination contact, the dead-exit 502, direct-vs-approved routing and the D21 canary in state, sidecar config, streams and CLI output. The gated obfs cell (also opt-in above) proves both `salamander` and `gecko` through the same real path and fails closed on a wrong password or type. |
 | Resources | Product descriptors return to idle baseline after ten tunnels (9→9/9→10, tolerance +2); the test process's goroutines return to exact baseline (3→3) after fixtures and service stop. |
 
 ## Findings in the product
@@ -271,7 +294,8 @@ them until the suite is updated.
   and the fail-closed exclusion with a fake sidecar. The gated run cannot use a
   public hysteria2 exit or a system CA, the pinned leaf is a locally generated
   certificate trusted only via `SSL_CERT_FILE`, and only one loopback server and
-  one destination peer are exercised (no obfs, bandwidth negotiation or roaming).
+  one destination peer are exercised (bandwidth negotiation and roaming are
+  not; the obfs variants have their own gated cell above).
 * **Transport limits:** WS/gRPC/XHTTP are runtime-verified only over TLS against a
   local pinned exit, with the ALPN above and one VLESS stream per test
   request. REALITY/ECH, mKCP, HTTPUpgrade, XHTTP over h3/QUIC, and mux/XUDP are
