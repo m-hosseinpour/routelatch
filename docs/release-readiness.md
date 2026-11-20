@@ -4,17 +4,85 @@ Status: **no credential, private pool content or binary is in the repository's
 history.** The current tree is clean of absolute personal paths.
 
 The first public release, **v0.1.0**, is tagged on `main` and publishes two Linux
-tarballs as assets on the GitHub Release. The history scan, name check and
-dependency audit recorded below remain historical evidence gathered before the
-release; they are not repeated here. The tag, pushes and release for v0.1.0 were
-explicitly authorized by the project owner.
+tarballs as assets on the GitHub Release. The current release, **v0.1.1**, adds
+four-architecture tarballs, Debian packages and RPM packages; its evidence is in
+"v0.1.1 release (current)" below. The history scan, name check and dependency
+audit recorded below remain historical evidence gathered before the first release;
+they are not repeated here. The tags, pushes and releases were explicitly
+authorized by the project owner.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
 `c1e60ea`). Redaction rule used throughout: findings name the commit, path and
 kind, never the matched value.
 
-## v0.1.0 release (current)
+## v0.1.1 release (current)
+
+Tag `v0.1.1` is an annotated tag (tag object `28d1cf89`) on `main` commit
+`2f6381430be9b39aeb736cd77566986a16354fa7` (`2f63814`). The commit and tag were
+pushed to both `github` and `origin` (forgejo). The public GitHub Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.1>; the repository
+is public and the release is neither a draft nor a prerelease. The tag still
+points at the intended commit.
+
+The release publishes **17 unsigned assets**: four Linux tarballs
+(`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb` files (`amd64`, `arm64`,
+`riscv64`, `ppc64el`), four RPM specs (`x86_64`, `aarch64`, `riscv64`, `ppc64le`),
+four binary RPMs (`routelatch-0.1.1-1.<arch>.rpm`) and one `SHA256SUMS`.
+
+Evidence: the tarballs, `.deb` files and specs were built in an isolated `DIST`
+with `VERSION=v0.1.1`, `COMMIT=2f63814`, `SOURCE_DATE_EPOCH=1700000000`,
+Go 1.27.4 and `CGO_ENABLED=0`; `scripts/check-artifact.sh` and
+`scripts/check-package.sh` passed, and `sha256sum -c` passed for both dist and
+package checksum files. The pinned sing-box v1.14.4 sidecar was verified against
+the official archive digests and is included only for amd64/arm64. The four binary
+RPMs were built from those v0.1.1 specs with an **extracted, not installed**
+rpm 6.0.1 toolchain in `/tmp/opencode` (five Debian packages downloaded with
+`apt-get download`, unpacked under `/tmp/opencode/rpm-tools`); each was inspected
+for `Name`, `Version=0.1.1`, `Release=1`, `Arch`, `License=Apache-2.0`,
+`Requires: ca-certificates`, the exact file list and the absence of scriptlets.
+Green GitHub Actions run `44682457124` on `d443bd0` (all six jobs, including
+`rpm-packages`) is the CI gate behind the specs; its artifacts carry the CI-only
+stamp `0.0.0.ci`, so those validation RPMs were **not** shipped as release assets.
+
+**Correction to the first upload.** The first upload of this release was
+incomplete/wrong: it contained four `0.0.0.ci` validation RPMs, and a mid-upload
+observation showed the riscv64 tarball and the `.deb` set as missing. The five
+wrong assets (four CI RPMs and `SHA256SUMS`) were deleted from this release only;
+the four v0.1.1 RPMs and a regenerated `SHA256SUMS` were uploaded in their place,
+and the still-uploading tarballs/`.deb` files were allowed to finish. The final
+public API check confirmed all 17 asset names, sizes and `sha256:` digests match
+the local set exactly, with no extra assets; the release note was corrected to
+remove the CI-version claim. No v0.1.0 tag, release or asset was touched.
+
+Authoritative digests (also in the uploaded `SHA256SUMS`, whose own SHA-256 is
+`812c6898f930c025d782b9b2df8f055d198f7aa499df82a3b7bf6e24626919f7`):
+
+```
+451744c7bd64ba3a3db4708e285855bdfbfbaa374a31cae0374e7adc3dbf29a2  routelatch-0.1.1-1.aarch64.rpm
+a657bb49cb97d182721bc7f7033fba774861836915a139973e5857bfc13f16b7  routelatch-0.1.1-1.ppc64le.rpm
+a8cb5c7ee679a9a5f68a728d4ed916e98340ed48b03001867a0f25b59ff2fb5c  routelatch-0.1.1-1.riscv64.rpm
+a3af653cabc7a4725b350a23f9a26d628226ba9fca73e7b62e866d09f56b1750  routelatch-0.1.1-1.x86_64.rpm
+7992590e8e5e5d96e75885f7cb2ee7798c6874630667ffe27854f01cae1ddead  routelatch-aarch64.spec
+b83f8d278114240b46caf51daa74c2ca7caf55579225ddaabe21462168e79e8a  routelatch-ppc64le.spec
+b4cabb155302da0297823e3404e2f8e9c6af0104c7d99d27f8e0375ee939e029  routelatch-riscv64.spec
+dfda483bc24109991fe7a63edfc037289545c0d6e0a8d70ba586b6775306f48b  routelatch-v0.1.1-linux-amd64.tar.gz
+8ee99120323c66f38a5a60f04515043e1a397806d8772cd2c51a4d3727dbbf7f  routelatch-v0.1.1-linux-arm64.tar.gz
+d7c395eac912bbd549612e653ad0d73cc5fd24fd37bade8aa26a27e9ebaf1490  routelatch-v0.1.1-linux-ppc64le.tar.gz
+936107cb18e9747de5858169faac2e5279a5f6922782231c0cd575186a0ef526  routelatch-v0.1.1-linux-riscv64.tar.gz
+895745b76dff016646a592b0157ccc6166fe1c52bdcbc4c4877b9aafda88ebf2  routelatch-x86_64.spec
+9576b1c27257c5fdc9328330dea323c595b9d8556e11c275a7f897adb70be657  routelatch_0.1.1_amd64.deb
+bf54b4f8c8224107af127fb4c9535654aadecefbcee180eb6573f7a5602cb1ad  routelatch_0.1.1_arm64.deb
+7965016798381240092940e504f36d1e2741c0018f46461384d130509a7830ce  routelatch_0.1.1_ppc64el.deb
+e12643b109cef6ba51626dff3a6745fb7ff75a2e7259af7e372d03df54570d89  routelatch_0.1.1_riscv64.deb
+```
+
+Limits: `arm64` is cross-built and runtime-untested; `riscv64` and `ppc64le` are
+cross-build-only and runtime-untested. The sidecar is pinned only for
+amd64/arm64. No clean-machine install, GPG signature or package repository is
+claimed.
+
+## v0.1.0 release (historical)
 
 The first release is tagged `v0.1.0` on `main`. Its two tarballs are attached to
 the GitHub Release for that tag:
