@@ -245,10 +245,15 @@ for arch in $arches; do
 	expect_spec_line "Name:           routelatch"
 	expect_spec_line "Version:        $rpm_version"
 	expect_spec_line "Release:        1"
-	expect_spec_line "BuildArch:      $rpm_arch"
 	expect_spec_line "License:        Apache-2.0"
 	expect_spec_line "URL:            https://github.com/m-hosseinpour/routelatch"
 	expect_spec_line "Source0:        $name.tar.gz"
+	# A foreign BuildArch makes rpmbuild fail with "No compatible architectures
+	# found for build" on a different host; --target alone must set the arch.
+	if grep -Eq '^BuildArch:[[:space:]]' "$spec"; then
+		fail "$spec sets BuildArch, which prevents cross-architecture RPM builds"
+	fi
+	expect_spec_line "# No BuildArch: the arch comes from --target so foreign arches build on any host."
 	expect_spec_line "AutoReqProv:    no"
 	expect_spec_line "Requires:       ca-certificates"
 	expect_spec_line "%global debug_package %{nil}"

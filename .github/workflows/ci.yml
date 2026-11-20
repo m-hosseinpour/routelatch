@@ -133,6 +133,17 @@ jobs:
           scripts/package.sh
           diff -u /tmp/SHA256SUMS.first dist/packages/SHA256SUMS
 
+      - name: Upload tarballs, .deb files and RPM specs
+        uses: actions/upload-artifact@v4
+        with:
+          name: routelatch-packages
+          path: |
+            dist/packages/*.tar.gz
+            dist/packages/*.deb
+            dist/packages/*.spec
+            dist/packages/SHA256SUMS
+          if-no-files-found: error
+
   rpm-packages:
     name: Build and inspect RPM packages
     runs-on: ubuntu-latest
@@ -227,3 +238,14 @@ jobs:
             echo "RPM $(basename "$f") inspected: version/arch/license/requires/layout/scripts OK"
           done
           [ "$count" -eq 4 ] || { echo "expected 4 RPMs, built $count"; exit 1; }
+          ( cd "$top/RPMS" && sha256sum $(find . -name '*.rpm' | sort) > SHA256SUMS )
+          echo "wrote $top/RPMS/SHA256SUMS"
+
+      - name: Upload binary RPMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: routelatch-rpms
+          path: |
+            rpmbuild-verify/RPMS/**/*.rpm
+            rpmbuild-verify/RPMS/SHA256SUMS
+          if-no-files-found: error

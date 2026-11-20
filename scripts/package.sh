@@ -37,8 +37,10 @@ deb_arch_for() {
 	esac
 }
 # RPM architecture names differ from Go's GOARCH for the two architectures
-# below; ppc64le and riscv64 keep their Go names. The spec's BuildArch and the
-# CI rpmbuild --target both use this value.
+# below; ppc64le and riscv64 keep their Go names. The CI rpmbuild --target uses
+# this value. The spec deliberately has no BuildArch: rpmbuild rejects a foreign
+# BuildArch on a different host ("No compatible architectures found for build"),
+# while --target alone tags the binary RPM with the requested architecture.
 rpm_arch_for() {
 	case $1 in
 	amd64) echo x86_64 ;;
@@ -394,6 +396,7 @@ EOF
 # Local, unsigned build: SHA256SUMS is the only trust anchor. No GPG signing,
 # no package repository, no service enable and no maintainer scriptlets.
 # CI builds the binary RPM with rpmbuild --target $rpm_arch from this spec.
+# No BuildArch: the arch comes from --target so foreign arches build on any host.
 Name:           routelatch
 Version:        $rpm_version
 Release:        1
@@ -401,7 +404,6 @@ Summary:        Targeted proxy client for Linux
 License:        Apache-2.0
 URL:            https://github.com/m-hosseinpour/routelatch
 Source0:        $name.tar.gz
-BuildArch:      $rpm_arch
 AutoReqProv:    no
 Requires:       ca-certificates
 %global debug_package %{nil}
