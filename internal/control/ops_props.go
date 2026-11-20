@@ -311,7 +311,7 @@ func (s *Service) desktopStatus(ctx context.Context) (DesktopData, error) {
 			out.Notice = "could not verify the desktop proxy ownership; check the desktop settings tool and the recorded state"
 		case len(changed) > 0:
 			out.Conflict = changed
-			out.Notice = "the desktop setting changed since RouteLatch applied it; run 'routelatch desktop proxy restore'"
+			out.Notice = "the desktop setting changed since RouteLatch applied it; run 'routelatch desktop proxy set' to re-apply or 'routelatch desktop proxy restore' to revert"
 		}
 	}
 	return out, nil

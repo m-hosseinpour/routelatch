@@ -222,7 +222,12 @@ only for amd64/arm64.
 
    `set` and `restore` are explicit commands; starting or stopping the service
    never changes desktop or network settings. `status` reports `conflict` when
-   a key was changed outside RouteLatch.
+   a key was changed outside RouteLatch. You can run `set` again after such an
+   edit: it re-applies RouteLatch's values and records the keys you changed by
+   hand as their new restore point. Other keys keep their original restore
+   values, so `restore` undoes the proxy completely and returns only the edited
+   keys to what you had set by hand. A change of desktop environment or
+   listener addresses still needs `restore` first.
 
 Check health and configuration with `routelatch status`, `routelatch doctor`,
 `routelatch pool list` and `routelatch config get`. The full command list is in

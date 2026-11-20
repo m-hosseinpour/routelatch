@@ -29,8 +29,9 @@ type ApplyOptions struct {
 	Kind    Kind
 	Targets Targets
 	// Previous is the state currently recorded in the store. Apply refuses to
-	// overwrite an ownership marker for another environment, and is a no-op if
-	// the same environment is already recorded.
+	// overwrite an ownership marker for another environment or different
+	// listeners; with the same environment and listeners it is a no-op unless
+	// the user edited an applied value, in which case it re-applies.
 	Previous contract.DesktopProxyState
 	// Save, when set, is called after previous values are captured and before
 	// any desktop key is written. The caller must persist the marker so a crash
@@ -188,6 +189,11 @@ func (a *DesktopAdapter) clock() func() time.Time {
 // the rollback itself fails, Apply returns a marker for the keys that may still
 // hold RouteLatch values: the caller must persist it even though the error is
 // non-nil, so an offline restore can finish the job.
+//
+// If Previous is already applied and its values still hold, Apply is a no-op.
+// If the user changed any of them, Apply re-applies and records those edited
+// values as the new restore point; an explicit set is permission to take
+// ownership back.
 func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract.DesktopProxyState, error) {
 	if err := opts.Targets.Validate(); err != nil {
 		return contract.DesktopProxyState{}, err
@@ -210,8 +216,8 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 				"the desktop proxy is already applied with different listener values; run `routelatch desktop proxy restore` first")
 		}
 		// Re-verify both the service identity and the desktop values. Returning
-		// success without either check would hide a dead/foreign listener or a
-		// user edit behind a stale marker.
+		// success without either check would present a dead listener or a stale
+		// marker as valid ownership.
 		if err := verifyServiceHealth(ctx, a.Health, opts.Targets, "platform.desktop.apply"); err != nil {
 			return contract.DesktopProxyState{}, err
 		}
@@ -219,24 +225,33 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 		if err != nil {
 			return contract.DesktopProxyState{}, err
 		}
-		for _, layout := range layoutsFor(opts.Kind) {
-			var previousKey contract.DesktopKey
-			for _, key := range opts.Previous.Keys {
-				if key.Name == layout.name {
-					previousKey = key
-					break
-				}
-			}
-			current, err := a.readValue(ctx, tools, layout)
-			if err != nil {
-				return contract.DesktopProxyState{}, commandFailure("platform.desktop.apply", err)
-			}
-			if current != previousKey.Applied {
-				return contract.DesktopProxyState{}, localFailure(contract.Unsupported, "platform.desktop.apply",
-					"the desktop proxy setting changed since RouteLatch applied it; run `routelatch desktop proxy restore` first")
-			}
+		layouts := layoutsFor(opts.Kind)
+		current, edited, err := a.readAppliedState(ctx, tools, layouts, opts.Previous)
+		if err != nil {
+			return contract.DesktopProxyState{}, err
 		}
-		return opts.Previous, nil
+		if !anyEdited(edited) {
+			return opts.Previous, nil
+		}
+		// An explicit `set` is permission to take ownership back. Only the keys
+		// the user edited become the new restore point; untouched keys keep the
+		// values RouteLatch replaced at the first apply, or `restore` could not
+		// undo the proxy for them.
+		if err := validateRestoreValues(current, tools.kind); err != nil {
+			return contract.DesktopProxyState{}, err
+		}
+		values, err := valuesFor(opts.Kind, opts.Targets)
+		if err != nil {
+			return contract.DesktopProxyState{}, err
+		}
+		restorePoint := reapplyRestorePoint(layouts, opts.Previous, current, edited)
+		marker := a.markerFor(opts, layouts, values, restorePoint)
+		if err := a.saveMarker(ctx, opts, marker); err != nil {
+			return contract.DesktopProxyState{}, err
+		}
+		// Rollback goes back to the live snapshot, not to the restore point:
+		// a failed re-apply must leave the user's edit exactly where it was.
+		return a.writeValues(ctx, tools, layouts, values, current, restorePoint, opts, &marker)
 	}
 	if len(opts.Previous.Keys) != 0 {
 		return contract.DesktopProxyState{}, localFailure(contract.StateCorrupt, "platform.desktop.apply",
@@ -259,25 +274,106 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 		return contract.DesktopProxyState{}, err
 	}
 
-	previous := make([]string, len(layouts))
+	previous, err := a.readCurrentValues(ctx, tools, layouts)
+	if err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	marker := a.markerFor(opts, layouts, values, previous)
+	if err := a.saveMarker(ctx, opts, marker); err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	return a.writeValues(ctx, tools, layouts, values, previous, previous, opts, &marker)
+}
+
+// readCurrentValues reads every managed key so its current value can become
+// the restore point of a new ownership marker.
+func (a *DesktopAdapter) readCurrentValues(ctx context.Context, tools desktopTools, layouts []keyLayout) ([]string, error) {
+	values, err := a.readValues(ctx, tools, layouts)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRestoreValues(values, tools.kind); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func (a *DesktopAdapter) readValues(ctx context.Context, tools desktopTools, layouts []keyLayout) ([]string, error) {
+	values := make([]string, len(layouts))
 	for i, layout := range layouts {
 		value, err := a.readValue(ctx, tools, layout)
 		if err != nil {
-			return contract.DesktopProxyState{}, commandFailure("platform.desktop.apply", err)
+			return nil, commandFailure("platform.desktop.apply", err)
 		}
-		if value == "" && tools.kind == KindGNOME {
-			return contract.DesktopProxyState{}, localFailure(contract.ExternalToolFailed, "platform.desktop.apply",
+		values[i] = value
+	}
+	return values, nil
+}
+
+func validateRestoreValues(values []string, kind Kind) error {
+	for _, value := range values {
+		if value == "" && kind == KindGNOME {
+			return localFailure(contract.ExternalToolFailed, "platform.desktop.apply",
 				"gsettings returned an empty value for a key that always has one; nothing was changed")
 		}
 		if value != "" {
 			if err := validateStoredValue(value); err != nil {
-				return contract.DesktopProxyState{}, localFailure(contract.Unsupported, "platform.desktop.apply",
+				return localFailure(contract.Unsupported, "platform.desktop.apply",
 					"the current desktop setting contains a value RouteLatch cannot safely restore; nothing was changed")
 			}
 		}
-		previous[i] = value
 	}
+	return nil
+}
 
+// readAppliedState reads the live values and marks which ones the user edited
+// since the last apply. It returns the live snapshot so a re-apply can use it
+// as the rollback target without a second (possibly racy) read.
+func (a *DesktopAdapter) readAppliedState(ctx context.Context, tools desktopTools, layouts []keyLayout, state contract.DesktopProxyState) ([]string, []bool, error) {
+	applied := make(map[string]string, len(state.Keys))
+	for _, key := range state.Keys {
+		applied[key.Name] = key.Applied
+	}
+	current, err := a.readValues(ctx, tools, layouts)
+	if err != nil {
+		return nil, nil, err
+	}
+	edited := make([]bool, len(layouts))
+	for i, layout := range layouts {
+		edited[i] = current[i] != applied[layout.name]
+	}
+	return current, edited, nil
+}
+
+// reapplyRestorePoint keeps the original pre-RouteLatch value for keys the
+// user never edited: their current value is RouteLatch's own, so replacing the
+// restore point with it would leave nothing to restore. Only edited keys use
+// the live value, which is what the user will expect `restore` to return to.
+func reapplyRestorePoint(layouts []keyLayout, state contract.DesktopProxyState, current []string, edited []bool) []string {
+	original := make(map[string]string, len(state.Keys))
+	for _, key := range state.Keys {
+		original[key.Name] = key.Previous
+	}
+	point := make([]string, len(layouts))
+	for i, layout := range layouts {
+		point[i] = original[layout.name]
+		if edited[i] {
+			point[i] = current[i]
+		}
+	}
+	return point
+}
+
+func anyEdited(edited []bool) bool {
+	for _, yes := range edited {
+		if yes {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *DesktopAdapter) markerFor(opts ApplyOptions, layouts []keyLayout, values map[string]string, previous []string) contract.DesktopProxyState {
 	marker := contract.DesktopProxyState{
 		Applied:     true,
 		Environment: string(opts.Kind),
@@ -288,40 +384,51 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 	for i, layout := range layouts {
 		marker.Keys[i] = contract.DesktopKey{Name: layout.name, Applied: values[layout.name], Previous: previous[i]}
 	}
-	if opts.Save != nil {
-		if err := opts.Save(ctx, marker); err != nil {
-			return contract.DesktopProxyState{}, saveFailure(err)
-		}
-	}
+	return marker
+}
 
+func (a *DesktopAdapter) saveMarker(ctx context.Context, opts ApplyOptions, marker contract.DesktopProxyState) error {
+	if opts.Save == nil {
+		return nil
+	}
+	if err := opts.Save(ctx, marker); err != nil {
+		return saveFailure(err)
+	}
+	return nil
+}
+
+// writeValues writes the target values, verifies each read-back and rolls
+// every touched key back to rollback on the first failure. restorePoint is the
+// value recorded as Previous in the marker; on a re-apply it differs from
+// rollback, because untouched keys must keep their original restore value.
+func (a *DesktopAdapter) writeValues(ctx context.Context, tools desktopTools, layouts []keyLayout, values map[string]string, rollback, restorePoint []string, opts ApplyOptions, marker *contract.DesktopProxyState) (contract.DesktopProxyState, error) {
 	keys := make([]contract.DesktopKey, 0, len(layouts))
 	for i, layout := range layouts {
 		want := values[layout.name]
 		if err := a.writeValue(ctx, tools, layout, want); err != nil {
-			rbErr := a.rollback(ctx, tools, layouts, previous, i)
+			rbErr := a.rollback(ctx, tools, layouts, rollback, i)
 			if rbErr != nil {
-				return a.recoveryState(opts, keys, layouts, values, previous, i), applyFailure(err, rbErr)
+				return a.recoveryState(opts, keys, layouts, values, restorePoint, i), applyFailure(err, rbErr)
 			}
 			return contract.DesktopProxyState{}, applyFailure(err, nil)
 		}
 		got, err := a.readValue(ctx, tools, layout)
 		if err != nil || got != want {
-			rbErr := a.rollback(ctx, tools, layouts, previous, i)
+			rbErr := a.rollback(ctx, tools, layouts, rollback, i)
 			if err != nil {
 				err = errors.Join(err, errors.New("value read-back failed"))
 			} else {
 				err = errors.New("desktop setting did not retain the applied value")
 			}
 			if rbErr != nil {
-				return a.recoveryState(opts, keys, layouts, values, previous, i), applyFailure(err, rbErr)
+				return a.recoveryState(opts, keys, layouts, values, restorePoint, i), applyFailure(err, rbErr)
 			}
 			return contract.DesktopProxyState{}, applyFailure(err, nil)
 		}
-		keys = append(keys, contract.DesktopKey{Name: layout.name, Applied: got, Previous: previous[i]})
+		keys = append(keys, contract.DesktopKey{Name: layout.name, Applied: got, Previous: restorePoint[i]})
 		marker.Keys[i].Applied = got
 	}
-
-	return marker, nil
+	return *marker, nil
 }
 
 func saveFailure(err error) *contract.Failure {

@@ -572,9 +572,19 @@ func TestKDEApplyVerifiesButDoesNotWriteWhenAlreadyApplied(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 	f.clearCalls()
-	again, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets, Previous: state})
+	saved := false
+	again, err := adapter.Apply(context.Background(), ApplyOptions{
+		Kind: KindKDE, Targets: testTargets, Previous: state,
+		Save: func(context.Context, contract.DesktopProxyState) error {
+			saved = true
+			return nil
+		},
+	})
 	if err != nil {
 		t.Fatalf("second Apply: %v", err)
+	}
+	if saved {
+		t.Fatal("no-op Apply rewrote the ownership marker")
 	}
 	for _, call := range f.calls {
 		if strings.HasPrefix(call.name, "kwriteconfig") && (len(call.args) == 0 || call.args[0] != "--help") {
@@ -586,7 +596,7 @@ func TestKDEApplyVerifiesButDoesNotWriteWhenAlreadyApplied(t *testing.T) {
 	}
 }
 
-func TestKDEApplyRefusesWhenUserChangedAnAppliedKey(t *testing.T) {
+func TestKDEApplyReappliesOverUserEditAndSnapshotsIt(t *testing.T) {
 	f := kdeSystem()
 	adapter := newAdapter(f)
 	state, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
@@ -594,16 +604,206 @@ func TestKDEApplyRefusesWhenUserChangedAnAppliedKey(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 	f.values["httpProxy"] = "http://user-proxy 9999"
+	f.clearCalls()
+
+	var saved contract.DesktopProxyState
+	savedBeforeWrite := false
+	again, err := adapter.Apply(context.Background(), ApplyOptions{
+		Kind: KindKDE, Targets: testTargets, Previous: state,
+		Save: func(_ context.Context, marker contract.DesktopProxyState) error {
+			saved = marker
+			// The ownership marker must be recorded before a single key is
+			// written, exactly as in a fresh apply. Count all writes, not just
+			// the edited key (ReversedException is written first).
+			savedBeforeWrite = true
+			for _, call := range f.calls {
+				if call.name == "kwriteconfig6" && !contains(call.args, "--help") {
+					savedBeforeWrite = false
+				}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("re-apply after a user edit: %v", err)
+	}
+	if !savedBeforeWrite {
+		t.Fatal("ownership was saved after the desktop was already written")
+	}
+	want, err := valuesFor(KindKDE, testTargets)
+	if err != nil {
+		t.Fatalf("valuesFor: %v", err)
+	}
+	const key = "kioslaverc:Proxy Settings/httpProxy"
+	if got := f.values["httpProxy"]; got != want[key] {
+		t.Fatalf("httpProxy = %q after re-apply, want %q", got, want[key])
+	}
+	if !saved.Applied || len(saved.Keys) != len(state.Keys) || !again.Applied {
+		t.Fatalf("markers = %#v / %#v, want applied with all keys", saved, again)
+	}
+	for _, k := range saved.Keys {
+		if k.Name == key {
+			if k.Previous != "http://user-proxy 9999" {
+				t.Fatalf("restore point = %q, want the user's edited value", k.Previous)
+			}
+			if k.Applied != want[key] {
+				t.Fatalf("recorded applied value = %q, want %q", k.Applied, want[key])
+			}
+		}
+	}
+	// Keys the user never edited still hold RouteLatch's value, so their
+	// original restore point must be kept or restore cannot undo the proxy.
+	original := make(map[string]string, len(state.Keys))
+	for _, k := range state.Keys {
+		original[k.Name] = k.Previous
+	}
+	for _, k := range saved.Keys {
+		if k.Name != key && k.Previous != original[k.Name] {
+			t.Fatalf("%s restore point = %q, want original %q", k.Name, k.Previous, original[k.Name])
+		}
+	}
+	wrote := false
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && contains(call.args, "httpProxy") {
+			wrote = true
+		}
+	}
+	if !wrote {
+		t.Fatalf("re-apply did not write httpProxy: %v", f.calls)
+	}
+}
+
+func TestKDERestoreAfterReapplyReturnsEveryKey(t *testing.T) {
+	f := kdeSystem()
+	adapter := newAdapter(f)
+	state, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	f.values["httpProxy"] = "http://user-proxy 9999"
+	again, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets, Previous: state})
+	if err != nil {
+		t.Fatalf("re-apply: %v", err)
+	}
+	result, err := adapter.Restore(context.Background(), again)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := f.values["httpProxy"]; got != "http://user-proxy 9999" {
+		t.Fatalf("edited key = %q after restore, want the user's value", got)
+	}
+	for key, want := range map[string]string{
+		"ProxyType": "0", "ReversedException": "true", "NoProxyFor": "intranet",
+	} {
+		if got := f.values[key]; got != want {
+			t.Fatalf("%s = %q after restore, want original %q", key, got, want)
+		}
+	}
+	for _, key := range []string{"httpsProxy", "socksProxy"} {
+		if got, ok := f.values[key]; ok {
+			t.Fatalf("%s = %q after restore, want it deleted", key, got)
+		}
+	}
+	if result.State.Applied || len(result.State.Keys) != 0 {
+		t.Fatalf("state after restore = %#v, want cleared", result.State)
+	}
+}
+
+func TestKDEApplyReapplyRollsBackToTheUserEditOnFailure(t *testing.T) {
+	f := kdeSystem()
+	adapter := newAdapter(f)
+	state, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	f.values["httpProxy"] = "http://user-proxy 9999"
+	// The last managed key fails, so rollback must walk back over httpProxy.
+	f.alwaysWriteErr["ProxyType"] = errors.New("write failed")
+	f.clearCalls()
+	marker, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets, Previous: state})
+	if err == nil {
+		t.Fatal("re-apply reported success after a failed write")
+	}
+	wrote := false
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && contains(call.args, "httpProxy") {
+			wrote = true
+		}
+	}
+	if !wrote {
+		t.Fatalf("the re-apply path never wrote the edited key: %v", f.calls)
+	}
+	if !strings.Contains(err.Error(), "restore") {
+		t.Fatalf("error = %v, want a message pointing at restore", err)
+	}
+	if got := f.values["httpProxy"]; got != "http://user-proxy 9999" {
+		t.Fatalf("rollback lost the user's value: %q", got)
+	}
+	if marker.Applied && len(marker.Keys) == 0 {
+		t.Fatalf("incomplete rollback lost the ownership record: %#v", marker)
+	}
+}
+
+func TestKDEApplyReapplyRefusesUnrestorableUserValue(t *testing.T) {
+	f := kdeSystem()
+	adapter := newAdapter(f)
+	state, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	f.values["httpProxy"] = "http://user-proxy 9999\nbad"
+	f.clearCalls()
 	_, err = adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets, Previous: state})
 	if err == nil {
-		t.Fatal("Apply reported success over a user-edited setting")
+		t.Fatal("re-apply snapshotted a value it cannot safely restore")
 	}
-	var failure *contract.Failure
-	if !errors.As(err, &failure) || !strings.Contains(failure.Message, "restore") {
-		t.Fatalf("error = %v, want a restore-first message", err)
+	// The old restore-first refusal also returned an error; the re-apply path
+	// must have reached validation of the user's value specifically.
+	if !strings.Contains(err.Error(), "cannot safely restore") {
+		t.Fatalf("error = %v, want the value-validation failure", err)
+	}
+	if f.values["httpProxy"] != "http://user-proxy 9999\nbad" {
+		t.Fatalf("refused re-apply changed the desktop: %q", f.values["httpProxy"])
+	}
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && !contains(call.args, "--help") {
+			t.Fatalf("refused re-apply wrote a setting: %v", call)
+		}
+	}
+}
+
+func TestKDEApplyReapplyAbortsWhenOwnershipCannotBeSaved(t *testing.T) {
+	f := kdeSystem()
+	adapter := newAdapter(f)
+	state, err := adapter.Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	f.values["httpProxy"] = "http://user-proxy 9999"
+	f.clearCalls()
+	saved := false
+	_, err = adapter.Apply(context.Background(), ApplyOptions{
+		Kind: KindKDE, Targets: testTargets, Previous: state,
+		Save: func(context.Context, contract.DesktopProxyState) error {
+			saved = true
+			return errors.New("store failed")
+		},
+	})
+	if err == nil {
+		t.Fatal("re-apply ignored a failed ownership save")
+	}
+	// The old restore-first refusal returned an error without calling Save;
+	// reaching Save is what makes this a failed re-apply.
+	if !saved {
+		t.Fatal("re-apply was refused before attempting to save ownership")
 	}
 	if f.values["httpProxy"] != "http://user-proxy 9999" {
-		t.Fatalf("Apply overwrote the user's value: %q", f.values["httpProxy"])
+		t.Fatalf("failed save still overwrote the desktop: %q", f.values["httpProxy"])
+	}
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && !contains(call.args, "--help") {
+			t.Fatalf("re-apply wrote before the save succeeded: %v", call)
+		}
 	}
 }
 
