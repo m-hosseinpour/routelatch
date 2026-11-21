@@ -176,3 +176,77 @@ func TestBuildCountsDerivedUnsupported(t *testing.T) {
 		t.Fatal("an empty protocol keeps its previous handling (out of scope)")
 	}
 }
+
+// TestEffectiveStatusDerivesStoredGeckoWithoutObfsPassword covers the stored
+// legacy record that predates the import gate: a gecko obfs block without a
+// password is never dialable because sing-box refuses the generated config.
+// The view reports the importer's verdict whatever the stored status says,
+// without touching state, and a healthy gecko or an hysteria2 record without
+// obfs keeps its previous handling.
+func TestEffectiveStatusDerivesStoredGeckoWithoutObfsPassword(t *testing.T) {
+	now := t0()
+	bad := func(id string, order int, status contract.RecordStatus, reason string) contract.Record {
+		rec := record(id, order, status)
+		rec.Protocol = contract.ProtocolHysteria2
+		rec.Credentials = contract.Credentials{Password: "auth-secret"}
+		rec.Hysteria2Obfs = "gecko"
+		rec.StatusReason = reason
+		return rec
+	}
+	healthyBad := bad("x-hy-bad-healthy", 0, contract.RecordHealthy, "")
+	coolingBad := bad("x-hy-bad-cooling", 1, contract.RecordCooling, "cooling:timeout")
+	storedUnsupportedBad := bad("x-hy-bad-unsupported", 2, contract.RecordUnsupported, "sidecar_unavailable")
+	invalidBad := bad("x-hy-bad-invalid", 3, contract.RecordInvalid, "missing_obfs_password")
+	good := bad("x-hy-gecko-ok", 4, contract.RecordUnknown, "")
+	good.Hysteria2ObfsPassword = "obfs-secret"
+	noObfs := record("x-hy-no-obfs", 5, contract.RecordUnknown)
+	noObfs.Protocol = contract.ProtocolHysteria2
+	noObfs.Credentials = contract.Credentials{Password: "auth-secret"}
+
+	state := contract.State{
+		Records: []contract.Record{healthyBad, coolingBad, storedUnsupportedBad, invalidBad, good, noObfs},
+		Health: []contract.ExitHealth{
+			health("x-hy-bad-healthy", contract.HealthHealthy, 10, 3),
+			{Exit: "x-hy-bad-cooling", Status: contract.HealthCooling, CooldownUntil: now.Add(time.Minute), LastFailureKind: contract.ExitUnreachable},
+		},
+	}
+	p := Build(state, now)
+	for id, want := range map[contract.RecordID]contract.RecordStatus{
+		"x-hy-bad-healthy":     contract.RecordUnsupported,
+		"x-hy-bad-cooling":     contract.RecordUnsupported,
+		"x-hy-bad-unsupported": contract.RecordUnsupported,
+		"x-hy-bad-invalid":     contract.RecordInvalid,
+		"x-hy-gecko-ok":        contract.RecordUnknown,
+		"x-hy-no-obfs":         contract.RecordUnknown,
+	} {
+		rec, ok := p.Record(contract.ExitID(id))
+		if !ok {
+			t.Fatalf("record %s missing", id)
+		}
+		if rec.Status != want {
+			t.Errorf("%s status=%s, want %s", id, rec.Status, want)
+		}
+		if rec.Status == contract.RecordUnsupported && rec.StatusReason != contract.ReasonMissingObfsPassword {
+			t.Errorf("%s reason=%q, want %q", id, rec.StatusReason, contract.ReasonMissingObfsPassword)
+		}
+	}
+	counts := p.Counts()
+	if counts.Total != 6 || counts.Unsupported != 3 || counts.Invalid != 1 ||
+		counts.Unknown != 2 || counts.Healthy != 0 || counts.Cooling != 0 || counts.Usable != 2 {
+		t.Fatalf("counts=%+v", counts)
+	}
+	if p.Usable("x-hy-bad-healthy") || p.Usable("x-hy-bad-cooling") {
+		t.Fatal("a stored gecko record without an obfs password must not be usable")
+	}
+	if !p.Usable("x-hy-gecko-ok") || !p.Usable("x-hy-no-obfs") {
+		t.Fatal("healthy gecko and no-obfs hysteria2 records must stay usable")
+	}
+	for _, rec := range []contract.Record{healthyBad, coolingBad, storedUnsupportedBad} {
+		if Dialable(rec) {
+			t.Fatalf("%s must not be dialable", rec.ID)
+		}
+	}
+	if !Dialable(good) || !Dialable(noObfs) {
+		t.Fatal("gecko with a password and hysteria2 without obfs must stay dialable")
+	}
+}

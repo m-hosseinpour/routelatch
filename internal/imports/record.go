@@ -162,7 +162,7 @@ func validateNode(n node, rej *rejection) (contract.RecordStatus, string) {
 		// obfuscator without one is unusable and must not reach the engine.
 		// salamander keeps its established reason; gecko, accepted before this
 		// gate existed, gets the specific one.
-		if n.hyObfs == "gecko" && n.hyObfsPassword == "" {
+		if contract.Hysteria2ObfsPasswordMissing(n.hyObfs, n.hyObfsPassword) {
 			return contract.RecordInvalid, ReasonMissingObfsPassword
 		}
 		if n.hyUpMbps > maxHyMbps || n.hyDownMbps > maxHyMbps {

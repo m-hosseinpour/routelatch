@@ -69,6 +69,33 @@ func baseOptions(records []contract.Record, dial func(context.Context, string, s
 	}
 }
 
+func TestTransportProbeSkipsStoredGeckoWithoutObfsPassword(t *testing.T) {
+	bad := rec("x-hy-bad", contract.TransportRaw, contract.SecurityTLS)
+	bad.Protocol = contract.ProtocolHysteria2
+	bad.Credentials = contract.Credentials{Password: "auth-secret"}
+	bad.Hysteria2Obfs = "gecko" // no obfs password: undialable legacy record
+
+	dialed := false
+	e := NewEngine(baseOptions([]contract.Record{bad}, func(context.Context, string, string) (net.Conn, error) {
+		dialed = true
+		return nil, errors.New("a probe reached an undialable record")
+	}))
+	defer e.Close()
+
+	m, err := e.RunMeasurement(context.Background(), contract.ProbeRequest{
+		Kind: contract.ProbeTransport, Exit: "x-hy-bad", Trigger: contract.TriggerRotate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dialed {
+		t.Fatal("an undialable hysteria2 record was probed")
+	}
+	if m.Result.Outcome != contract.OutcomeRejected || m.Result.Failure != contract.Unsupported {
+		t.Fatalf("outcome=%s failure=%s, want rejected/unsupported", m.Result.Outcome, m.Result.Failure)
+	}
+}
+
 func TestTransportProbeSuccessSendsNoData(t *testing.T) {
 	client, server := net.Pipe()
 	defer server.Close()

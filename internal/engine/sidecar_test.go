@@ -12,6 +12,7 @@ import (
 
 	"routelatch/internal/contract"
 	"routelatch/internal/engine"
+	"routelatch/internal/singbox"
 )
 
 // fakeSidecar is a local stand-in for the separate executable. It implements
@@ -242,6 +243,91 @@ func TestHysteria2SidecarHandoff(t *testing.T) {
 	_ = res.Conn.Close()
 	if atyp, host := fake.destination(); atyp != 0x03 || host != "destination.example" {
 		t.Fatalf("destination was resolved locally: atyp=%#x host=%q", atyp, host)
+	}
+}
+
+// validatingSidecar feeds the engine's exit list through the real config
+// builder, so a record sing-box would refuse is an error at Sync just like the
+// pinned binary refusing the document at startup.
+type validatingSidecar struct {
+	*fakeSidecar
+}
+
+func (v *validatingSidecar) Sync(ctx context.Context, exits []contract.SidecarExit) error {
+	if len(exits) > 0 {
+		if _, err := singbox.Generate(exits); err != nil {
+			return err
+		}
+	}
+	return v.fakeSidecar.Sync(ctx, exits)
+}
+
+// TestStoredGeckoWithoutObfsPasswordDoesNotBreakTheGroup is the pre-fix
+// regression: one stored record that predates the import gate used to make the
+// generated sidecar config invalid, which excluded every hysteria2 exit. The
+// engine now drops only that record, and the healthy exits still configure.
+func TestStoredGeckoWithoutObfsPasswordDoesNotBreakTheGroup(t *testing.T) {
+	fake := &validatingSidecar{fakeSidecar: newFakeSidecar(t)}
+	bad := hysteria2Record("x-hy-bad")
+	bad.Hysteria2Obfs = "gecko" // no password: legacy stored record
+	good := hysteria2Record("x-hy-good")
+	good.Hysteria2Obfs = "gecko"
+	good.Hysteria2ObfsPassword = "obfs-secret"
+	plain := hysteria2Record("x-hy-plain")
+
+	e, err := engine.Start(engine.Options{
+		Exits: []contract.Record{bad, good, plain}, PolicyVersion: 1, Sidecar: fake,
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = e.Stop(context.Background()) }()
+
+	if excluded := e.Excluded(); len(excluded) != 0 {
+		t.Fatalf("unexpected exclusions: %+v", excluded)
+	}
+	if e.HasExit("x-hy-bad") || !e.HasExit("x-hy-good") || !e.HasExit("x-hy-plain") {
+		t.Fatalf("bad=%v good=%v plain=%v", e.HasExit("x-hy-bad"), e.HasExit("x-hy-good"), e.HasExit("x-hy-plain"))
+	}
+	exits := fake.syncedExits()
+	if len(exits) != 2 {
+		t.Fatalf("sidecar exits=%+v, want the two healthy records", exits)
+	}
+	for _, exit := range exits {
+		if exit.Tag == "rl-x-hy-bad" {
+			t.Fatalf("the undialable record reached the sidecar: %+v", exits)
+		}
+	}
+	if _, err := e.Dial(context.Background(), dialRequest("x-hy-bad", ipDestination(80), 1)); failureKind(t, err) != contract.PoolUnavailable {
+		t.Fatal("a dropped legacy record must fail closed")
+	}
+}
+
+func TestAddExitRejectsStoredGeckoWithoutObfsPassword(t *testing.T) {
+	fake := &validatingSidecar{fakeSidecar: newFakeSidecar(t)}
+	good := hysteria2Record("x-hy-good")
+	good.Hysteria2Obfs = "gecko"
+	good.Hysteria2ObfsPassword = "obfs-secret"
+	e, err := engine.Start(engine.Options{
+		Exits: []contract.Record{good}, PolicyVersion: 1, Sidecar: fake,
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = e.Stop(context.Background()) }()
+	before := fake.syncedExits()
+
+	bad := hysteria2Record("x-hy-bad")
+	bad.Hysteria2Obfs = "gecko" // no password: legacy stored record
+	if _, err := e.AddExit(bad); failureKind(t, err) != contract.Unsupported {
+		t.Fatalf("AddExit kind=%s, want unsupported", failureKind(t, err))
+	}
+	if e.HasExit("x-hy-bad") {
+		t.Fatal("the refused record was registered as an exit")
+	}
+	after := fake.syncedExits()
+	if len(before) != 1 || len(after) != 1 || after[0].Tag != before[0].Tag {
+		t.Fatalf("the healthy group was regenerated: before=%+v after=%+v", before, after)
 	}
 }
 

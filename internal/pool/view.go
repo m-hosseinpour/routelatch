@@ -76,15 +76,20 @@ func (p *Pool) Usable(exit contract.ExitID) bool {
 }
 
 // Dialable is defense in depth for records that predate a validation change:
-// a skip-verify record without a pin and a REALITY record are never dialable in
-// v1 even if their cached status says unknown. It also refuses a protocol v1
-// cannot dial, so a legacy unknown-scheme record never reaches the engine or a
-// probe; the view derives that record as unsupported (EffectiveStatus).
+// a skip-verify record without a pin, a REALITY record and a hysteria2 gecko
+// record without an obfs password are never dialable in v1 even if their
+// cached status says unknown. It also refuses a protocol v1 cannot dial, so a
+// legacy unknown-scheme record never reaches the engine or a probe; the view
+// derives that record as unsupported (EffectiveStatus).
 func Dialable(rec contract.Record) bool {
 	if rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "" && rec.VerifyPeerCertByName == "" {
 		return false
 	}
 	if rec.Security == contract.SecurityReality {
+		return false
+	}
+	if rec.Protocol == contract.ProtocolHysteria2 &&
+		contract.Hysteria2ObfsPasswordMissing(rec.Hysteria2Obfs, rec.Hysteria2ObfsPassword) {
 		return false
 	}
 	if rec.Protocol != "" && !rec.Protocol.Supported() {
@@ -139,16 +144,22 @@ func (p *Pool) Counts() Counts {
 //
 // A legacy or hand-edited state record can hold any status for a protocol v1
 // can never dial. The view derives the importer's verdict there — http becomes
-// unsupported/http_exit_not_verified and any other scheme outside the v1 set
-// becomes unsupported/protocol_unsupported — so counts, warnings and doctor
-// agree without rewriting state. The derived verdict wins over every stored
-// status except invalid, which is a stricter safety state: a legacy cooling or
-// healthy value, a stale reason, and an engine_record_rejected reason from a
-// pre-R5 start must not hide the record from the unsupported count. A supported
-// protocol keeps every stored status exactly as before.
+// unsupported/http_exit_not_verified, any other scheme outside the v1 set
+// becomes unsupported/protocol_unsupported, and a hysteria2 gecko record with
+// no obfs password becomes unsupported/missing_obfs_password — so counts,
+// warnings and doctor agree without rewriting state. The derived verdict wins
+// over every stored status except invalid, which is a stricter safety state: a
+// legacy cooling or healthy value, a stale reason, and an engine_record_rejected
+// or sidecar_unavailable reason from before this rule must not hide the record
+// from the unsupported count. A supported protocol with usable settings keeps
+// every stored status exactly as before.
 func EffectiveStatus(rec contract.Record, h contract.ExitHealth, now time.Time) (contract.RecordStatus, string) {
 	if rec.Status == contract.RecordInvalid {
 		return contract.RecordInvalid, nonEmpty(rec.StatusReason, "invalid")
+	}
+	if rec.Protocol == contract.ProtocolHysteria2 &&
+		contract.Hysteria2ObfsPasswordMissing(rec.Hysteria2Obfs, rec.Hysteria2ObfsPassword) {
+		return contract.RecordUnsupported, contract.ReasonMissingObfsPassword
 	}
 	if rec.Protocol == contract.ProtocolHTTP {
 		return contract.RecordUnsupported, contract.ReasonHTTPExitNotVerified

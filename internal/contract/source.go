@@ -56,6 +56,14 @@ const (
 	ReasonHTTPExitNotVerified = "http_exit_not_verified"
 )
 
+// ReasonMissingObfsPassword is the stable reason for a hysteria2 gecko record
+// whose obfs block carries no password. The pinned sing-box v1.14.4 refuses
+// that config ("missing obfs password"), so the importer rejects new records
+// and the pool view derives the same verdict for a stored one. It lives here,
+// once, because both sides and the sidecar config builder must agree
+// (docs/contracts.md §5.3–5.4).
+const ReasonMissingObfsPassword = "missing_obfs_password"
+
 // RecordID is stable while the record's connection settings are unchanged.
 type RecordID string
 

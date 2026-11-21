@@ -832,15 +832,20 @@ unsupported/quarantined هشدار می‌دهد. حذف آن فقط با فرم
 رکورد خراب وابسته نیست.
 
 **وضعیت مشتق‌شده برای رکورد قدیمی یا دست‌ویرایش‌شده.** state قدیمی یا ویرایش دستی
-می‌تواند برای پروتکلی که v1 هرگز نمی‌تواند dial کند هر statusی داشته باشد. نمای pool
+می‌تواند برای رکوردی که v1 نمی‌تواند dial کند هر statusی داشته باشد. نمای pool
 هنگام خواندن و گزارش، وضعیت را مشتق می‌کند: `http` → `unsupported` با
-`StatusReason = http_exit_not_verified`، و هر پروتکل غیرخالی خارج از
-`{vless, trojan, socks5, http}` → `unsupported` با
-`StatusReason = protocol_unsupported`. این حکم مشتق‌شده بر **هر** status ذخیره‌شده
+`StatusReason = http_exit_not_verified`، هر پروتکل غیرخالی خارج از
+`{vless, trojan, socks5, hysteria2, http}` → `unsupported` با
+`StatusReason = protocol_unsupported`، و یک رکورد ذخیره‌شدهٔ `hysteria2` با
+`obfs = gecko` و رمز obfs خالی (که پیش از دروازهٔ import وارد شده) →
+`unsupported` با `StatusReason = missing_obfs_password`. این حکم مشتق‌شده بر **هر**
+status ذخیره‌شده
 اولویت دارد — از جمله `unknown`/فیلد خالی، `cooling` (با cooldown منقضی یا فعال)،
-`healthy`، و `unsupported` با دلیل کهنه مثل `engine_record_rejected` — و تنها استثنا
+`healthy`، و `unsupported` با دلیل کهنه مثل `engine_record_rejected` یا
+`sidecar_unavailable` — و تنها استثنا
 `invalid` است که وضعیت ایمنی سخت‌گیرانه‌تری است و همان `invalid` می‌ماند. برای
-پروتکل‌های پشتیبانی‌شده (`vless`/`trojan`/`socks5`) هیچ‌چیز تغییر نمی‌کند و statusهای
+پروتکل‌های پشتیبانی‌شده (`vless`/`trojan`/`socks5`/`hysteria2`) با تنظیمات قابل dial
+هیچ‌چیز تغییر نمی‌کند و statusهای
 ذخیره‌شده همان معنای قبلی را دارند. این کار **فقط در view** انجام می‌شود و state را
 بازنویسی نمی‌کند: `pool list`، شمارندهٔ هشدار `status` و `doctor` همگی همین وضعیت را
 می‌شمارند، رکورد از شمار `unknown`/`healthy`/`cooling` خارج و در شمار `unsupported` می‌آید، و
@@ -904,7 +909,11 @@ security/sockopt خودش است. موفقیت config builder شاهد sandbox �
 hysteria2 را با رمز خالی obfs با خطای «missing obfs password» رد می‌کند و چنین
 رکوردی نباید به engine برسد. `salamander` بدون رمز رفتار پیشین خود را نگه می‌دارد
 (`invalid` با `invalid_obfs`) و نوع obfs ناشناخته هم همان `invalid_obfs` است. همین
-دروازه برای outbound JSON هیستریا۲ (بخش ۵.۸) هم اعمال می‌شود.
+دروازه برای outbound JSON هیستریا۲ (بخش ۵.۸) هم اعمال می‌شود. اگر رکورد gecko بدون
+رمز پیش از این دروازه در state ذخیره شده باشد، نمای pool آن را
+`unsupported`/`missing_obfs_password` مشتق می‌کند (بخش ۵.۳)، probe و dial نمی‌شود،
+از کانفیگ sidecar کنار گذاشته می‌شود و exitهای سالم hysteria2 کار خود را ادامه
+می‌دهند؛ state بازنویسی نمی‌شود.
 
 ### ۵.۵ TLS ناامن (D18) و pin
 

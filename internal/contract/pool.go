@@ -41,6 +41,16 @@ func (p Protocol) RequiresSidecar() bool {
 	return p == ProtocolHysteria2
 }
 
+// Hysteria2ObfsPasswordMissing reports whether an accepted hysteria2
+// obfuscator carries no password. sing-box v1.14.4 refuses a gecko obfs block
+// without a password ("missing obfs password"), so such a record is never
+// dialable. The importer, the pool view, the probe guard, the engine's
+// sidecar preparation and the sidecar config builder call this one predicate
+// so their verdicts cannot drift.
+func Hysteria2ObfsPasswordMissing(obfs, password string) bool {
+	return obfs == "gecko" && password == ""
+}
+
 // ProofClass is the strength of the evidence a pool dial carries. It is the
 // single place where the T1 handshake gate lives (docs/contracts.md §2.1–2.2).
 type ProofClass string

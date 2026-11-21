@@ -240,6 +240,12 @@ func validateExit(exit contract.SidecarExit) error {
 	if exit.Obfs == "salamander" && exit.ObfsPassword == "" {
 		return bad()
 	}
+	// The pinned sing-box rejects a gecko obfs block without a password, so a
+	// config with such an exit must fail generation instead of starting a
+	// process that immediately exits.
+	if contract.Hysteria2ObfsPasswordMissing(exit.Obfs, exit.ObfsPassword) {
+		return bad()
+	}
 	return nil
 }
 

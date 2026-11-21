@@ -20,6 +20,37 @@ func testExit(tag string) contract.SidecarExit {
 	}
 }
 
+func TestGenerateAcceptsGeckoWithPassword(t *testing.T) {
+	exit := testExit("rl-gecko")
+	exit.Obfs = "gecko"
+	gen, err := Generate([]contract.SidecarExit{exit})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	var doc struct {
+		Outbounds []struct {
+			Tag  string `json:"tag"`
+			Obfs *struct {
+				Type     string `json:"type"`
+				Password string `json:"password"`
+			} `json:"obfs"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(gen.Raw, &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, out := range doc.Outbounds {
+		if out.Tag != "rl-gecko" {
+			continue
+		}
+		if out.Obfs == nil || out.Obfs.Type != "gecko" || out.Obfs.Password != "river" {
+			t.Fatalf("obfs block=%+v", out.Obfs)
+		}
+		return
+	}
+	t.Fatal("gecko outbound missing")
+}
+
 func keysOf(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
@@ -164,6 +195,7 @@ func TestGenerateValidation(t *testing.T) {
 		{"control char in server", contract.SidecarExit{Tag: "t", Server: "h\r\n", Port: 443, Password: "p", ServerName: "h"}},
 		{"bad obfs", func() contract.SidecarExit { e := testExit("t"); e.Obfs = "tls"; return e }()},
 		{"obfs without password", func() contract.SidecarExit { e := testExit("t"); e.ObfsPassword = ""; return e }()},
+		{"gecko without password", func() contract.SidecarExit { e := testExit("t"); e.Obfs = "gecko"; e.ObfsPassword = ""; return e }()},
 		{"oversized bandwidth", func() contract.SidecarExit { e := testExit("t"); e.UpMbps = maxMbps + 1; return e }()},
 	}
 	for _, tc := range cases {

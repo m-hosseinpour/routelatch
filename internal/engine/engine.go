@@ -306,15 +306,26 @@ const sidecarSyncTimeout = 15 * time.Second
 // exits in accepted. It returns the list the pinned core must still serve and
 // whether this call actually started the runtime, so Start can guarantee a
 // Stop on every later failure path.
+//
+// A stored gecko record without an obfs password predates the import gate. The
+// pool view derives it as unsupported/missing_obfs_password, and this loop
+// drops it before config generation so one such record cannot invalidate the
+// whole hysteria2 group. It is deliberately not added to e.excluded: the view
+// owns the derived verdict, and reporting it as an engine exclusion would make
+// control rewrite the stored state.
 func (e *Engine) prepareSidecar(accepted []*exitSpec) ([]*exitSpec, bool) {
 	kept := accepted[:0]
 	hy := make([]*exitSpec, 0, len(accepted))
 	for _, spec := range accepted {
-		if spec.sidecar {
-			hy = append(hy, spec)
-		} else {
+		if !spec.sidecar {
 			kept = append(kept, spec)
+			continue
 		}
+		if contract.Hysteria2ObfsPasswordMissing(spec.record.Hysteria2Obfs, spec.record.Hysteria2ObfsPassword) {
+			delete(e.exits, spec.exit.ID)
+			continue
+		}
+		hy = append(hy, spec)
 	}
 	if len(hy) == 0 {
 		return kept, false
@@ -666,6 +677,19 @@ func (e *Engine) prepareAddExit(rec contract.Record) (*exitSpec, []contract.Side
 			}
 		}
 		return cur, nil, false, nil
+	}
+	// A stored gecko record without an obfs password predates the import gate.
+	// Refuse it before prepareExit commits it and before Sync can stop the
+	// running sidecar: the rest of the hysteria2 group must keep its handoffs.
+	if rec.Protocol == contract.ProtocolHysteria2 &&
+		contract.Hysteria2ObfsPasswordMissing(rec.Hysteria2Obfs, rec.Hysteria2ObfsPassword) {
+		return nil, nil, false, &contract.Failure{
+			Kind:    contract.Unsupported,
+			Path:    contract.PathLocal,
+			Exit:    exitID,
+			Op:      "engine.add_exit",
+			Message: "the hysteria2 record has no obfs password for its obfuscator",
+		}
 	}
 	spec, ob, err := prepareExit(rec)
 	if err != nil {

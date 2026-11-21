@@ -1,13 +1,17 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"os"
+	"strings"
 	"sync"
 	"testing"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/engine"
+	"routelatch/internal/singbox"
 )
 
 // stubSidecar records what the engine asked it to run. It never starts a real
@@ -140,6 +144,193 @@ func TestInjectedSidecarReachesEngine(t *testing.T) {
 	_ = svc.Close(context.Background())
 	if _, _, stopped := fake.snapshot(); !stopped {
 		t.Fatal("sidecar was not stopped with the engine")
+	}
+}
+
+func warningsContain(warnings []string, want string) bool {
+	for _, warning := range warnings {
+		if warning == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestStoredGeckoWithoutObfsPasswordIsIsolated proves the product path: a
+// stored gecko record with no obfs password is reported as unsupported with the
+// importer's reason and never reaches the sidecar config, while the healthy
+// hysteria2 records keep configuring; the stored state is not rewritten.
+func TestStoredGeckoWithoutObfsPasswordIsIsolated(t *testing.T) {
+	clearSidecarEnv(t)
+	st, paths := newServiceStore(t)
+	freePortConfig(t, st)
+	storedGecko := func(id, password string) contract.Record {
+		rec := hysteria2TestRecord(id)
+		rec.Hysteria2Obfs = "gecko"
+		rec.Hysteria2ObfsPassword = password
+		return rec
+	}
+	bad := storedGecko("x-hy-bad", "") // legacy record: sing-box refuses this config
+	good := storedGecko("x-hy-good", "obfs-secret")
+	plain := hysteria2TestRecord("x-hy-plain") // obfs remains optional
+	storeTestRecords(t, st, bad, good, plain)
+
+	fake := &stubSidecar{}
+	svc, err := NewService(context.Background(), Options{
+		Store: st, Paths: paths, LogOutput: io.Discard, Sidecar: fake,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Close(context.Background()) })
+	before, err := os.ReadFile(paths.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("StartNetwork: %v", err)
+	}
+	if excluded := svc.engine.Excluded(); len(excluded) != 0 {
+		t.Fatalf("an engine exclusion would rewrite state: %+v", excluded)
+	}
+	if svc.engine.HasExit("x-hy-bad") || !svc.engine.HasExit("x-hy-good") || !svc.engine.HasExit("x-hy-plain") {
+		t.Fatalf("bad=%v good=%v plain=%v", svc.engine.HasExit("x-hy-bad"),
+			svc.engine.HasExit("x-hy-good"), svc.engine.HasExit("x-hy-plain"))
+	}
+
+	exits, synced, _ := fake.snapshot()
+	if synced == 0 {
+		t.Fatal("the sidecar was never configured")
+	}
+	seen := make(map[string]bool, len(exits))
+	for _, exit := range exits {
+		seen[exit.Tag] = true
+	}
+	if seen["rl-x-hy-bad"] || !seen["rl-x-hy-good"] || !seen["rl-x-hy-plain"] {
+		t.Fatalf("sidecar exits=%+v", exits)
+	}
+	gen, err := singbox.Generate(exits)
+	if err != nil {
+		t.Fatalf("generated sidecar config is invalid: %v", err)
+	}
+	if bytes.Contains(gen.Raw, []byte("rl-x-hy-bad")) {
+		t.Fatal("the undialable record is in the generated config")
+	}
+
+	rows, err := svc.listPool(context.Background(), 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawBad, sawGood bool
+	for _, row := range rows.Records {
+		switch row.ID {
+		case "x-hy-bad":
+			sawBad = true
+			if row.Status != contract.RecordUnsupported || row.Reason != contract.ReasonMissingObfsPassword {
+				t.Fatalf("bad row status=%s reason=%q, want unsupported/%s", row.Status, row.Reason, contract.ReasonMissingObfsPassword)
+			}
+		case "x-hy-good":
+			sawGood = true
+			if row.Status != contract.RecordUnknown || row.Reason != "" {
+				t.Fatalf("good row status=%s reason=%q, want unknown with no reason", row.Status, row.Reason)
+			}
+		}
+	}
+	if !sawBad || !sawGood {
+		t.Fatalf("rows=%+v", rows.Records)
+	}
+	if rows.Counts.Total != 3 || rows.Counts.Unsupported != 1 || rows.Counts.Unknown != 2 || rows.Counts.Usable != 2 {
+		t.Fatalf("counts=%+v", rows.Counts)
+	}
+
+	status, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Pool.Total != 3 || status.Pool.Usable != 2 {
+		t.Fatalf("status pool=%+v", status.Pool)
+	}
+	if !warningsContain(status.Warnings, "1 record(s) are unsupported or quarantined") {
+		t.Fatalf("status warnings=%v", status.Warnings)
+	}
+	doc, err := svc.doctor(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var quarantined *Check
+	for i := range doc.Checks {
+		if doc.Checks[i].Name == "quarantined_records" {
+			quarantined = &doc.Checks[i]
+			break
+		}
+	}
+	if quarantined == nil || quarantined.Status != "warn" || !strings.Contains(quarantined.Detail, "1 unsupported") {
+		t.Fatalf("doctor quarantined check=%+v", quarantined)
+	}
+
+	after, err := os.ReadFile(paths.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the stored state was rewritten; the derived view must not persist its verdict")
+	}
+}
+
+// TestOnlyStoredGeckoWithoutObfsPasswordFailsClosed proves the all-bad case:
+// no sidecar config is generated from an undialable group, no direct fallback
+// appears, and the documented no-usable-exit warning is reported without a
+// state rewrite.
+func TestOnlyStoredGeckoWithoutObfsPasswordFailsClosed(t *testing.T) {
+	clearSidecarEnv(t)
+	st, paths := newServiceStore(t)
+	freePortConfig(t, st)
+	bad := hysteria2TestRecord("x-hy-bad")
+	bad.Hysteria2Obfs = "gecko"
+	storeTestRecords(t, st, bad)
+
+	fake := &stubSidecar{}
+	svc, err := NewService(context.Background(), Options{
+		Store: st, Paths: paths, LogOutput: io.Discard, Sidecar: fake,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Close(context.Background()) })
+	before, err := os.ReadFile(paths.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.StartNetwork(context.Background()); err != nil {
+		t.Fatalf("StartNetwork: %v", err)
+	}
+	if _, synced, _ := fake.snapshot(); synced != 0 {
+		t.Fatalf("sidecar syncs=%d, want none: the only exit is undialable", synced)
+	}
+	if svc.engine.HasExit("x-hy-bad") {
+		t.Fatal("the undialable record was registered as a live exit")
+	}
+	rows, err := svc.listPool(context.Background(), 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows.Counts.Total != 1 || rows.Counts.Unsupported != 1 || rows.Counts.Usable != 0 {
+		t.Fatalf("counts=%+v", rows.Counts)
+	}
+	status, err := svc.status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !warningsContain(status.Warnings, "pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'") {
+		t.Fatalf("status warnings=%v", status.Warnings)
+	}
+	after, err := os.ReadFile(paths.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the stored state was rewritten")
 	}
 }
 

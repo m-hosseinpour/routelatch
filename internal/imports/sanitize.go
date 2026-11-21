@@ -43,7 +43,7 @@ const (
 	ReasonDuplicateHeader      = "duplicate_or_invalid_header"
 	ReasonNoCredential         = "missing_credential"
 	ReasonInvalidObfs          = "invalid_obfs"
-	ReasonMissingObfsPassword  = "missing_obfs_password"
+	ReasonMissingObfsPassword  = contract.ReasonMissingObfsPassword
 	ReasonECHUnsupported       = "ech_unsupported"
 	ReasonSingBoxField         = "singbox_field_rejected"
 )
