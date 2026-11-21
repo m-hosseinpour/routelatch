@@ -148,9 +148,9 @@ verification is static spec validation in `scripts/check-package.sh`. CI
 `rpmbuild --target <rpm-arch> -bb` from each spec and inspects the results with
 `rpm` (name, version, release, architecture, license, `Requires: ca-certificates`,
 exact installed file list and absence of scriptlets). That CI step has been
-green (`rpm-packages` in run `44682457124`). The v0.1.1 and v0.1.2 release RPMs
-were built separately from these specs with an extracted, not installed,
-rpm 6.0.1 toolchain. The CI-built RPMs carry a CI-only version and are not
+green (`rpm-packages` in run `44682457124`). The v0.1.1, v0.1.2 and v0.1.3
+release RPMs were built separately from these specs with an extracted, not
+installed, rpm 6.0.1 toolchain. The CI-built RPMs carry a CI-only version and are not
 published, and the generated specs are not a dnf/yum repository.
 
 Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
@@ -412,9 +412,9 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-The v0.1.0 release published two tarballs; `v0.1.1` and `v0.1.2` each published
-all 17 assets (four tarballs, four `.deb` files, four RPM specs, four binary RPMs
-and `SHA256SUMS`). Building a package still does not publish it: do not publish,
+The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2` and `v0.1.3` each
+published all 17 assets (four tarballs, four `.deb` files, four RPM specs, four
+binary RPMs and `SHA256SUMS`). Building a package still does not publish it: do not publish,
 release, tag, push or upload new artifacts without a separate decision from the
 project owner. `PACKAGE-NOTES` in every tarball/deb says it is a local build for
 that reason; the generated spec carries the same "local, unsigned" header.

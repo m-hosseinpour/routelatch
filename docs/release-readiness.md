@@ -5,9 +5,10 @@ history.** The current tree is clean of absolute personal paths.
 
 The first public release, **v0.1.0**, is tagged on `main` and publishes two Linux
 tarballs as assets on the GitHub Release. **v0.1.1** added four-architecture
-tarballs, Debian packages and RPM packages. The current release, **v0.1.2**, is a
-patch of the desktop-proxy `set` behaviour with the same 17-asset layout; its
-evidence is in "v0.1.2 release (current)" below. The v0.1.1 and v0.1.0 sections,
+tarballs, Debian packages and RPM packages. **v0.1.2** patched the desktop-proxy
+`set` behaviour. The current release, **v0.1.3**, is a patch of import
+validation and derived status with the same 17-asset layout; its evidence is in
+"v0.1.3 release (current)" below. The v0.1.2, v0.1.1 and v0.1.0 sections, the
 history scan, name check and dependency audit remain historical evidence; they
 are not repeated here. The tags, pushes and releases were explicitly authorized
 by the project owner.
@@ -17,7 +18,104 @@ The sections below were originally a dated readiness snapshot (branch
 `c1e60ea`). Redaction rule used throughout: findings name the commit, path and
 kind, never the matched value.
 
-## v0.1.2 release (current)
+## v0.1.3 release (current)
+
+Tag `v0.1.3` is an annotated tag (tag object `6f226688c8e48ecbc7570383b6e86df259b7b58c`) on
+`main` commit `a32b033daca0ed2e964ad4870f5511ff0bc0a2c7` (`a32b033`). The
+commit and tag were pushed to both `github` and `origin` (forgejo); both remotes
+report the same tag object and the same peeled commit. The public GitHub Release
+is <https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.3>; the
+repository is public and the release is neither a draft nor a prerelease. This
+patch rejects a `hysteria2` exit that sets `obfs: gecko` without an
+`obfs-password`, and derives stored records in that shape to
+`unsupported`/`missing_obfs_password` instead of handing them to the pool or the
+sidecar runtime. It adds no user-facing capability and changes no public
+contract or stored-state format. The cycle also added gated acceptance cells for
+long-duration transport reuse, hysteria2 obfs (including the negative cases),
+corrupt state under a temporary `systemd --user` unit, the shipped-sidecar proof
+against the published v0.1.2 tarball, and amd64 RPM payload execution.
+
+The release publishes **17 unsigned assets** in the same layout as v0.1.1 and
+v0.1.2: four Linux tarballs, four `.deb` files, four RPM specs, four binary RPMs
+(`routelatch-0.1.3-1.<arch>.rpm`) and one `SHA256SUMS`.
+
+Evidence: the tarballs, `.deb` files and specs were built from a clean
+`git archive a32b033` export in an isolated `DIST` with `VERSION=v0.1.3`,
+`COMMIT=a32b033`, `SOURCE_DATE_EPOCH=1700000000`, Go 1.27.4 and
+`CGO_ENABLED=0`; `scripts/check-artifact.sh` passed for amd64 and
+`scripts/check-package.sh` passed once over all four architectures. A second
+packaging run produced a byte-identical `SHA256SUMS`
+(`7658f5a07be21fc2bcbe27b5c24eb58e6b273900c4c75197a298cfb74e314588`; both
+runs), and `sha256sum -c` passed for `dist/SHA256SUMS` and
+`dist/packages/SHA256SUMS`. A separate packaging run without the sidecar inputs
+also passed `scripts/check-package.sh`, and the shipped tarballs carry
+`bin/sing-box` plus `SINGBOX-INFO` only on amd64/arm64. The pinned sing-box
+v1.14.4 archives were verified against the digests pinned in
+`scripts/package.sh` (amd64 `699a1b51…c24968`, arm64 `436441f7…3ec26`), and each
+archive was extracted and compared byte for byte with the supplied binary
+before use. The four binary RPMs were built from the v0.1.3 specs inside a
+disposable `ubuntu:26.04` container with rpm 6.0.1 (nothing installed on the
+host, where `rpmbuild`/`rpm` remain absent), using `rpmbuild --target <arch>
+-bb`. Each was inspected for `Name`, `Version=0.1.3`, `Release=1`, the expected
+`Arch`, `License=Apache-2.0`, `Requires: ca-certificates`, the exact file list
+(14 files with the sidecar on x86_64/aarch64, 13 without it on
+riscv64/ppc64le), no scriptlets, no triggers and no `/etc/systemd` entry; the
+x86_64 RPM was installed with `rpm -i --nodeps` in the same container and its
+`/usr/bin/routelatch version` reported `v0.1.3`/`a32b033`, with
+`/usr/bin/sing-box version` reporting 1.14.4/`c005f353`, before removal. Green
+GitHub Actions run `44883729124` on `a32b033` (all six jobs, including
+`rpm-packages`) is the CI gate; its own artifacts carry the CI-only `0.0.0.ci`
+stamp and were not shipped.
+
+Three operational pitfalls were hit and corrected without weakening a gate. The
+direct `go.dev` toolchain download from this network returned an HTML 404 page
+instead of the archive, so Go 1.27.4 came from the aliyun mirror and its
+SHA-256 matched the digest published at `go.dev/dl` (`7226736c…b24840`). A
+first `rpmbuild` invocation pointed `_topdir` at `/work/rpmbuild` while the
+disposable container mounts this directory at `/work`, which made `%setup`
+report the existing source as missing; it was corrected to the mount root, and
+no RPM from the failed invocation was used. The first asset upload attempt was
+rejected with HTTP 422 because curl defaulted to
+`Content-Type: application/x-www-form-urlencoded`; it created no assets. A
+single proxied upload stream sustained only about 40 KB/s, so the remaining
+assets were uploaded over direct connections four at a time; one 31.9 MB RPM
+returned HTTP 408 ("Upload body timed out due to inactivity") and succeeded on
+its second attempt, and a failed attempt left no asset behind.
+
+The final public API check confirmed all 17 asset names, sizes and `sha256:`
+digests match the local files exactly, with no extras, and that the annotated
+tag points at `a32b033`.
+
+Authoritative digests (also in the uploaded `SHA256SUMS`, whose own SHA-256 is
+`936da687019ce3339fbb518d5a7e43e8c7b16810d7c06340d17619118d351df8`):
+
+```
+e75785a12553b79e7c5efb79c4c58afdbdbbc66c1a538520ab33a720d4ed5e86  routelatch-0.1.3-1.aarch64.rpm
+901072a4353e9c2c0788efcaa65ab710951f0ab83f1cfcaaff73d4508199b34d  routelatch-0.1.3-1.ppc64le.rpm
+fb26c4a34e7e8b4b0f335110cdb2d8182c48c20d6b17c7bd77db02fe1db16f39  routelatch-0.1.3-1.riscv64.rpm
+29fd4487ab2563e43a53aa74b0875eaf0c550b8d6469ea57f999e12d1d09456c  routelatch-0.1.3-1.x86_64.rpm
+58511d9357442d0e5fe8631a2a20b6f088d6ff04574e128f1d3b8b65543feb9f  routelatch-aarch64.spec
+1d3cf6d905d78ae0ec4b56f91ed36d0b728aaa0ed546e249f92bf4288670c717  routelatch-ppc64le.spec
+519c42e3fc5632cb7a232a1ba6f4bdda633bfd9af29a7a3550db3df02db3e3f8  routelatch-riscv64.spec
+ba493b8d1279b0591b624042446e8128dcc5832759e3c2ad1abace404ebd3b83  routelatch-v0.1.3-linux-amd64.tar.gz
+a67e41f9939fbadd7aeed8e86d1451d1a1bcab9d44ae0ded7188b706f7739189  routelatch-v0.1.3-linux-arm64.tar.gz
+8cf955b6812fe990482492440002e5859c31b432d216df2868b6489800f98bca  routelatch-v0.1.3-linux-ppc64le.tar.gz
+ffbe0015e1646a8ea36bcfaaf822b091599be147b9c7db4060c38f87d7ea8d7e  routelatch-v0.1.3-linux-riscv64.tar.gz
+831fbf8b54c7f4eaf272c820bc44946ff6cc3e3af9d2900827b398a71a4376c8  routelatch-x86_64.spec
+3bfee2b4942df60c35573723a7c3677ccc0bca10e28762dc98121ab9b6532196  routelatch_0.1.3_amd64.deb
+e11787f25f5235b169d25d3ec85d87430b2040046e398d2a7eb78b7dcd9717ce  routelatch_0.1.3_arm64.deb
+df9497c91df59515de3b7bb38817d2c8c3ef2a966c20925ae4c7ec7a0eac832f  routelatch_0.1.3_ppc64el.deb
+e7c16ce5a713e4aa4ed37c42db55951bb4cdcb864b5c6b5e0d13b057ea331a68  routelatch_0.1.3_riscv64.deb
+```
+
+Limits: `amd64` is runtime-exercised; `arm64` is cross-built and
+runtime-untested; `riscv64` and `ppc64le` are cross-build-only and
+runtime-untested. No GNOME session was proven. Real-scale pool and public-exit
+proofs remain deferred to the later group-C batch. The sidecar is pinned only
+for amd64/arm64. No clean-machine install, GPG signature or package repository
+is claimed.
+
+## v0.1.2 release (historical)
 
 Tag `v0.1.2` is an annotated tag (tag object `3d1c181a9d163f90f3074a7a32bb876fa630e4a4`) on
 `main` commit `88d04b1a17058cd3680c9f7d3666662dc48a00d2` (`88d04b1`). The commit and

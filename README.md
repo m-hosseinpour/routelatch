@@ -49,13 +49,14 @@ sweep finishes.
 
 ## Install
 
-The current release, `v0.1.2`, publishes 17 unsigned assets on the
-[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.2):
+The current release, `v0.1.3`, publishes 17 unsigned assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.3):
 four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
 packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
-`.spec` files, four binary RPMs (`routelatch-0.1.2-1.<arch>.rpm`) and a
-`SHA256SUMS` file. `v0.1.1` has the same 17-asset layout; the first release,
-`v0.1.0`, published only the `amd64` and `arm64` tarballs plus `SHA256SUMS`.
+`.spec` files, four binary RPMs (`routelatch-0.1.3-1.<arch>.rpm`) and a
+`SHA256SUMS` file. `v0.1.1` and `v0.1.2` have the same 17-asset layout; the
+first release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
+`SHA256SUMS`.
 Local packaging produces the same layout with `scripts/package.sh`, which writes
 the specs but not the binary RPMs. A package contains the binary, the systemd
 user unit and the license/notice files. The `amd64` and `arm64` tarballs also
@@ -78,8 +79,8 @@ file whose check fails.
 From a tarball:
 
 ```sh
-tar xzf routelatch-v0.1.2-linux-amd64.tar.gz
-cd routelatch-v0.1.2-linux-amd64
+tar xzf routelatch-v0.1.3-linux-amd64.tar.gz
+cd routelatch-v0.1.3-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ```
 
@@ -87,8 +88,8 @@ Or install a package (all release packages are **unsigned**; the only
 integrity check is the generated `SHA256SUMS`):
 
 ```sh
-sudo apt install ./routelatch_0.1.2_amd64.deb
-sudo rpm -i routelatch-0.1.2-1.x86_64.rpm
+sudo apt install ./routelatch_0.1.3_amd64.deb
+sudo rpm -i routelatch-0.1.3-1.x86_64.rpm
 ```
 
 Packages install `/usr/bin/routelatch`, its documents under
@@ -103,9 +104,9 @@ the spec `Version:` field carry that exact value.
 
 `package.sh` generates and checksums the specs, while a binary RPM needs
 `rpmbuild`. CI builds and inspects all four binary RPMs with `rpmbuild`/`rpm`;
-the published `v0.1.1` and `v0.1.2` RPMs were built separately from the same
-specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs carry
-a CI-only stamp and are not shipped. The spec has no service-enable scriptlets
+the published `v0.1.1`, `v0.1.2` and `v0.1.3` RPMs were built separately from the
+same specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs
+carry a CI-only stamp and are not shipped. The spec has no service-enable scriptlets
 and no `BuildArch`: the architecture comes from `rpmbuild --target`. There is no
 dnf/yum repository and no GPG signing. Windows/macOS builds, 32-bit builds and a
 package repository remain future work.
