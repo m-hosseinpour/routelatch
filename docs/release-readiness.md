@@ -78,6 +78,16 @@ cross-build-only and runtime-untested. The sidecar is pinned only for
 amd64/arm64. No clean-machine install, GPG signature or package repository is
 claimed.
 
+**Local RPM build and payload run (post-v0.1.2, 2026-11-21).** At commit
+`42b9e4e`, an `x86_64` RPM `routelatch-0.1.2.8.g42b9e4e-1.x86_64.rpm` was built inside a
+disposable `ubuntu:26.04` container with `rpmbuild` 6.0.1; RPM tooling was not
+installed on the host, where `rpmbuild`/`rpm` remain absent. The package (14
+files, no scriptlets, no service enablement) was inspected, its payload binary
+executed (`routelatch version` → `v0.1.2-8-g42b9e4e`, `doctor` exit 0), and
+`rpm -i --nodeps` succeeded inside the container. Not exercised: a real systemd
+service start under an RPM install and every non-amd64 architecture; the package
+is unsigned.
+
 ## v0.1.1 release (historical)
 
 Tag `v0.1.1` is an annotated tag (tag object `28d1cf89`) on `main` commit
@@ -166,7 +176,7 @@ install, arm64 runtime execution and a real GNOME session are not claimed here.
 A later, **unpublished** local `.deb` build is recorded in "R12 Phase 1" below;
 it does not change the tag, its assets or this release's scope.
 
-## R12 Phase 1: local Debian packages (unpublished)
+## R12 Phase 1: local Debian packages (historical snapshot; unpublished at the time)
 
 Phase 1 adds a reproducible, locally verified Debian package to the same
 packaging pipeline; it does **not** publish anything, sign anything or add an
@@ -224,7 +234,11 @@ sing-box sidecar is pinned and shipped only for `amd64`/`arm64`; on
 install, real-hardware run, `.rpm`, GPG signature, package repository or
 Windows `exe` is part of this phase. RPM is the documented next phase (see below).
 
-## R12 Phase 2: RPM specs and CI-built binary RPMs (unpublished)
+## R12 Phase 2: RPM specs and CI-built binary RPMs (historical snapshot; unpublished at the time)
+
+Snapshot of Phase 2 as it stood on 2026-11-19 (commit `6a7580f`). The limits in
+this section describe that state; later local and CI RPM builds and the published
+v0.1.1/v0.1.2 RPMs are recorded above and in the implementation plan.
 
 Phase 2 keeps Phase 1's trust model unchanged: unsigned artifacts with
 `SHA256SUMS` as the only anchor, no GPG signing, no apt/dnf repository, no

@@ -46,8 +46,10 @@ default, offline suite only.
 checksums, layout and metadata (including RPM version, arch, license layout and
 no scriptlets). `./scripts/check-artifact.sh` checks the amd64 artifact. Debian
 and RPM share one `Version` derived from `BUILD-INFO` (`v0.1.0-r12.1` →
-`0.1.0.r12.1`). Binary RPMs are not built locally: the CI `rpm-packages` job
-builds and inspects them from the generated specs with `rpmbuild`/`rpm`. See
+`0.1.0.r12.1`). `package.sh` does not build binary RPMs: the CI `rpm-packages`
+job builds and inspects them from the generated specs with `rpmbuild`/`rpm`, and
+local binary RPM builds used an extracted rpm 6.0.1 toolchain or a disposable
+container without installing RPM tooling on the host. See
 [packaging/README.md](packaging/README.md) for package layout and
 [deploy/README.md](deploy/README.md) for the service unit.
 
