@@ -18,6 +18,16 @@ The sections below were originally a dated readiness snapshot (branch
 `c1e60ea`). Redaction rule used throughout: findings name the commit, path and
 kind, never the matched value.
 
+**No `v0.1.4` exists.** An annotated `v0.1.4` tag (tag object `8e224a7`) and its
+public GitHub Release (id `453655267`, 15 of 17 assets uploaded) were created on
+2026-11-21 for the documentation-and-evidence group-C batch (`1be8e9f`,
+`79c0e53`) and withdrawn the same day at the project owner's request, because a
+release that adds no user-facing value must not be published. The release was
+deleted through the API (HTTP 204) and the tag was deleted locally and on both
+remotes. `git tag -l v0.1.4` is empty, neither remote lists the tag, both `main`
+heads point at `79c0e53`, and `v0.1.0`–`v0.1.3` are unchanged. That batch was
+pushed only; **`v0.1.3` remains the current release.**
+
 ## v0.1.3 release (current)
 
 Tag `v0.1.3` is an annotated tag (tag object `6f226688c8e48ecbc7570383b6e86df259b7b58c`) on
