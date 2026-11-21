@@ -344,12 +344,17 @@ Three different kinds of gap are kept separate:
   no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
   need a new decision.
 - **Implemented but not yet exercised:** long hysteria2 sessions.
-- **Not yet proven because of the environment or missing authorization:**
-  clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
-  GNOME session (the desktop test ran on KDE), a real install plus running
-  service under an RPM (the payload ran in a disposable container without
-  systemd), and the real public-exit scale (private pool, arbitrary
-  destinations, churn) that has not been authorized.
+- **Deferred by user decision (2026-11-21), or not yet proven by us:**
+  arm64/riscv64/ppc64le runtime execution (deferred; only amd64 is exercised, the
+  others are cross-build only, so near-term product evolution stays on amd64), a
+  real GNOME session (deferred, low priority; the desktop test ran on KDE), a
+  real install plus running service under an RPM (the payload ran in a disposable
+  container without systemd), and real public-exit scale (A04/A06 at scale plus
+  the other items in the remaining evidence group), which is authorized as the
+  next batch on an isolated instance but not executed yet. A01 clean-machine
+  install was accepted on 2026-11-21 from user attestation: they removed the local
+  build and installed the released v0.1.2 `.deb`, which worked. We did not run a
+  clean-environment test ourselves.
 
 The project is a working Linux v1, not a finished multi-platform product.
 

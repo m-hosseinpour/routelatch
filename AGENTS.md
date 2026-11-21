@@ -85,7 +85,19 @@ Review consequential behavior, security, public contracts, and persisted-data ch
 independently before declaring completion; follow the applicable review guidance.
 Report unverified behavior and unresolved findings rather than calling them passed.
 
+Deliver a completed batch: once a group of related commits is verified — for example
+the units of one orchestrated session — push to the configured remotes, create an
+annotated tag, and publish the release without waiting for a separate request. This is
+a user decision dated 2026-11-21. Choose the version by the nature of the batch: patch
+for fixes, tests, and documentation-only changes; minor for a new user-facing capability
+or a compatible contract extension; major for a breaking contract, data-format, or
+behaviour change; a mixed batch takes the highest applicable level. Publication still
+requires the existing gates: a green CI run on the tagged commit, reproducible artifacts
+with checksums, updated notes and notices, no secrets or private connection data, and
+no new remotes or change of publication destination.
+
 Commit coherent, verified local changes, including documentation, with the applicable
 harness attribution rules. Obtain a valid user committer email if unavailable; do not
-guess one. Do not add remotes, push, publish, or select a release license without
-authorization. Check the plan's publication gates before distributing artifacts.
+guess one. Do not add remotes, change the publication destination, or select a release
+license without authorization. Check the plan's publication gates before distributing
+artifacts.
