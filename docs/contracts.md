@@ -897,6 +897,15 @@ constraint با verification روشن**، نه استثنای ناامن.
 `h2Params` و هر کلید ناشناس رد می‌شوند: `downloadSettings` یک StreamConfig کامل با
 security/sockopt خودش است. موفقیت config builder شاهد sandbox نیست.
 
+**obfs هیستریا۲:** `obfs` اختیاری است و نبودنش رکورد را تغییر نمی‌دهد. از دو نوع
+پذیرفته‌شده، `salamander` و `gecko`، هر دو به `obfs-password` غیرخالی نیاز دارند؛
+`gecko` بدون رمز یا با رمز خالی همان‌جا در import با `invalid` و
+`StatusReason = missing_obfs_password` رد می‌شود، چون sing-box v1.14.4 کانفیگ
+hysteria2 را با رمز خالی obfs با خطای «missing obfs password» رد می‌کند و چنین
+رکوردی نباید به engine برسد. `salamander` بدون رمز رفتار پیشین خود را نگه می‌دارد
+(`invalid` با `invalid_obfs`) و نوع obfs ناشناخته هم همان `invalid_obfs` است. همین
+دروازه برای outbound JSON هیستریا۲ (بخش ۵.۸) هم اعمال می‌شود.
+
 ### ۵.۵ TLS ناامن (D18) و pin
 
 هیچ واحد/فرمان/فیلد رضایتی در v1 وجود ندارد. دلیل: هستهٔ pin‌شده `allowInsecure` را

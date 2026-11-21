@@ -43,6 +43,7 @@ const (
 	ReasonDuplicateHeader      = "duplicate_or_invalid_header"
 	ReasonNoCredential         = "missing_credential"
 	ReasonInvalidObfs          = "invalid_obfs"
+	ReasonMissingObfsPassword  = "missing_obfs_password"
 	ReasonECHUnsupported       = "ech_unsupported"
 	ReasonSingBoxField         = "singbox_field_rejected"
 )
@@ -432,6 +433,8 @@ func reasonText(reason string) string {
 		return "ECH is not verified in this build; remove the ech parameter"
 	case ReasonInvalidObfs:
 		return "hysteria2 obfs must be salamander or gecko"
+	case ReasonMissingObfsPassword:
+		return "hysteria2 gecko obfs requires a non-empty obfs password"
 	case ReasonSingBoxField:
 		return "the sing-box outbound carries a field RouteLatch does not own"
 	default:

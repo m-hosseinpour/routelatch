@@ -157,6 +157,14 @@ func validateNode(n node, rej *rejection) (contract.RecordStatus, string) {
 			(n.hyObfs == "salamander" && n.hyObfsPassword == "") {
 			return contract.RecordInvalid, ReasonInvalidObfs
 		}
+		// sing-box v1.14.4 refuses a hysteria2 obfs block without a password
+		// for gecko as well ("missing obfs password"), so an accepted
+		// obfuscator without one is unusable and must not reach the engine.
+		// salamander keeps its established reason; gecko, accepted before this
+		// gate existed, gets the specific one.
+		if n.hyObfs == "gecko" && n.hyObfsPassword == "" {
+			return contract.RecordInvalid, ReasonMissingObfsPassword
+		}
 		if n.hyUpMbps > maxHyMbps || n.hyDownMbps > maxHyMbps {
 			return contract.RecordInvalid, ReasonValueTooLong
 		}

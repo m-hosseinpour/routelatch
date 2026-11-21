@@ -139,7 +139,7 @@ type Record struct {
 	// password lives in Credentials.Password. Bandwidth is normally left zero
 	// so RouteLatch applies its own default; a trusted caller may set it.
 	Hysteria2Obfs         string       `json:"hysteria2_obfs,omitempty"`          // "salamander" | "gecko" | ""
-	Hysteria2ObfsPassword string       `json:"hysteria2_obfs_password,omitempty"` // salamander obfs password (secret)
+	Hysteria2ObfsPassword string       `json:"hysteria2_obfs_password,omitempty"` // obfs password for salamander or gecko (secret)
 	Hysteria2UpMbps       uint32       `json:"hysteria2_up_mbps,omitempty"`
 	Hysteria2DownMbps     uint32       `json:"hysteria2_down_mbps,omitempty"`
 	Status                RecordStatus `json:"status"`

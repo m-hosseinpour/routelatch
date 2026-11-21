@@ -93,6 +93,61 @@ func TestHysteria2URIInvalidAndQuarantine(t *testing.T) {
 	}
 }
 
+// TestHysteria2ObfsPasswordRequired pins the import gate for the two accepted
+// obfuscators. sing-box v1.14.4 rejects a hysteria2 obfs block without a
+// password ("missing obfs password") for both salamander and gecko, so an
+// accepted obfs type without one must never become a usable record.
+func TestHysteria2ObfsPasswordRequired(t *testing.T) {
+	// obfs stays optional: a link without it is unchanged.
+	plain, _ := importOne(t, "hysteria2://pw@example.com:443#plain")
+	if plain.Status != contract.RecordUnknown || plain.StatusReason != "" ||
+		plain.Hysteria2Obfs != "" || plain.Hysteria2ObfsPassword != "" {
+		t.Fatalf("no-obfs link: %+v", plain)
+	}
+
+	for _, tc := range []struct{ link, obfs string }{
+		{"hysteria2://pw@example.com:443?obfs=salamander&obfs-password=river#salamander", "salamander"},
+		{"hysteria2://pw@example.com:443?obfs=gecko&obfs-password=river#gecko", "gecko"},
+		// The camelCase alias must be recognized, not silently read as empty.
+		{"hysteria2://pw@example.com:443?obfs=gecko&obfsPassword=river#gecko-alias", "gecko"},
+	} {
+		r, _ := importOne(t, tc.link)
+		if r.Status != contract.RecordUnknown || r.StatusReason != "" {
+			t.Fatalf("%s: status=%s reason=%s", tc.obfs, r.Status, r.StatusReason)
+		}
+		if r.Hysteria2Obfs != tc.obfs || r.Hysteria2ObfsPassword != "river" {
+			t.Fatalf("%s fields: %+v", tc.obfs, r)
+		}
+	}
+
+	// gecko without a password (absent or empty) is unusable.
+	for _, link := range []string{
+		"hysteria2://pw@example.com:443?obfs=gecko#gecko-no-pw",
+		"hysteria2://pw@example.com:443?obfs=gecko&obfs-password=#gecko-empty-pw",
+		"hy2://pw@example.com?obfs=gecko#gecko-no-pw-hy2",
+		"hysteria2://pw@example.com:443?obfs=gecko&obfsPassword=#gecko-empty-alias",
+	} {
+		r, _ := importOne(t, link)
+		if r.Status != contract.RecordInvalid || r.StatusReason != ReasonMissingObfsPassword {
+			t.Fatalf("%s: status=%s reason=%s want invalid/%s", link, r.Status, r.StatusReason, ReasonMissingObfsPassword)
+		}
+	}
+
+	// salamander already required a password before this gate; its stable
+	// reason stays invalid_obfs rather than the new gecko-specific reason.
+	r, _ := importOne(t, "hysteria2://pw@example.com:443?obfs=salamander#salamander-no-pw")
+	if r.Status != contract.RecordInvalid || r.StatusReason != ReasonInvalidObfs {
+		t.Fatalf("salamander without password: status=%s reason=%s", r.Status, r.StatusReason)
+	}
+
+	// The sing-box hysteria2 outbound reader shares the same gate.
+	json := `{"type":"hysteria2","server":"hy.example.com","server_port":443,"password":"pw","tls":{},"obfs":{"type":"gecko"}}`
+	r, _ = importOne(t, json)
+	if r.Status != contract.RecordInvalid || r.StatusReason != ReasonMissingObfsPassword {
+		t.Fatalf("gecko outbound without password: status=%s reason=%s", r.Status, r.StatusReason)
+	}
+}
+
 func TestHysteria2PinInsecureNoticeIsHonest(t *testing.T) {
 	// A valid hex pin keeps verification on, so the record imports as unknown
 	// and is not marked insecure. The engine later refuses every hysteria2 pin
