@@ -49,65 +49,66 @@ sweep finishes.
 
 ## Install
 
-The first release, `v0.1.0`, publishes two prebuilt tarballs —
-`routelatch-v0.1.0-linux-amd64.tar.gz` and
-`routelatch-v0.1.0-linux-arm64.tar.gz` — as assets on the
-[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.0),
-along with a `SHA256SUMS` file. The same layout is produced locally by
-`scripts/package.sh`. A package contains the binary, the systemd user unit and
-the license/notice files. Both release tarballs also ship a second binary,
-`bin/sing-box`: the unmodified, GPL-3.0 `sing-box` v1.14.4 proxy runtime,
-distributed as a separate program and used for hysteria2/sing-box exits. Its
-per-binary SHA-256 is in `SINGBOX-INFO` and a written source offer is in the
-notices. RouteLatch itself stays Apache-2.0; see [License](#license).
+The current release, `v0.1.2`, publishes 17 unsigned assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.2):
+four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
+packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
+`.spec` files, four binary RPMs (`routelatch-0.1.2-1.<arch>.rpm`) and a
+`SHA256SUMS` file. `v0.1.1` has the same 17-asset layout; the first release,
+`v0.1.0`, published only the `amd64` and `arm64` tarballs plus `SHA256SUMS`.
+Local packaging produces the same layout with `scripts/package.sh`, which writes
+the specs but not the binary RPMs. A package contains the binary, the systemd
+user unit and the license/notice files. The `amd64` and `arm64` tarballs also
+ship a second binary, `bin/sing-box`: the unmodified, GPL-3.0 `sing-box` v1.14.4
+proxy runtime, distributed as a separate program and used for hysteria2/sing-box
+exits. Its per-binary SHA-256 is in `SINGBOX-INFO` and a written source offer is
+in the notices. RouteLatch itself stays Apache-2.0; see [License](#license).
 
-Verify a download before unpacking it. From the directory holding the tarball
-and the release's `SHA256SUMS`:
+Verify a download before unpacking it. From the directory holding the downloaded
+file and the release's `SHA256SUMS`:
 
 ```sh
-sha256sum -c SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
 ```
 
-This prints `OK` for each file whose digest matches; do not install a tarball
-whose check fails.
+This prints `OK` for each file present in the directory whose digest matches,
+skips missing files and exits non-zero if a present file fails. Do not install a
+file whose check fails.
 
 From a tarball:
 
 ```sh
-tar xzf routelatch-v0.1.0-linux-amd64.tar.gz
-cd routelatch-v0.1.0-linux-amd64
+tar xzf routelatch-v0.1.2-linux-amd64.tar.gz
+cd routelatch-v0.1.2-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ```
 
-The `v0.1.0` release ships **only** those two `.tar.gz` files. Local packaging
-now also produces unsigned Debian packages for `amd64`, `arm64`, `riscv64` and
-`ppc64le` (the PowerPC package uses Debian's name, `ppc64el`), plus one RPM
-`.spec` per architecture (`x86_64`, `aarch64`, `riscv64`, `ppc64le`). They are
-**not** part of `v0.1.0`, not published and not signed. The only integrity check
-is the generated `SHA256SUMS`, the same trust model as the v0.1.0 tarballs:
+Or install a package (all release packages are **unsigned**; the only
+integrity check is the generated `SHA256SUMS`):
 
 ```sh
-sha256sum -c SHA256SUMS
-sudo apt install ./routelatch_<package-version>_amd64.deb
+sudo apt install ./routelatch_0.1.2_amd64.deb
+sudo rpm -i routelatch-0.1.2-1.x86_64.rpm
 ```
 
-The `.deb` installs `/usr/bin/routelatch`, its documents under
-`/usr/share/doc/routelatch/` and a systemd user unit. It does not start or
-enable the service; opt in with `systemctl --user enable --now routelatch`.
+Packages install `/usr/bin/routelatch`, its documents under
+`/usr/share/doc/routelatch/` (the RPM keeps `LICENSE` and `NOTICE` in
+`/usr/share/licenses/routelatch/`) and a systemd user unit. They do not start
+or enable the service; opt in with `systemctl --user enable --now routelatch`.
 
 Debian and RPM use one unified version string derived from `BUILD-INFO` in a
 single step: a leading `v` is stripped and hyphens become dots
-(`v0.1.0-r12.1` → `0.1.0.r12.1`). Both the `.deb` `Version` field and the spec
-`Version:` field carry that exact value.
+(`v0.1.2-8-g42b9e4e` → `0.1.2.8.g42b9e4e`). Both the `.deb` `Version` field and
+the spec `Version:` field carry that exact value.
 
-Binary RPMs are **not** built on a machine without RPM tooling: `package.sh`
-generates and checksums the specs, and CI builds and inspects the real RPMs
-with `rpmbuild`/`rpm`. The spec puts `LICENSE` and `NOTICE` in
-`/usr/share/licenses/routelatch/`, all other documents in
-`/usr/share/doc/routelatch/`, and has no service-enable scriptlets. No RPM is
-published here, and there is no dnf/yum repository or GPG signing.
-Windows/macOS builds, 32-bit builds and a package repository remain future
-work.
+`package.sh` generates and checksums the specs, while a binary RPM needs
+`rpmbuild`. CI builds and inspects all four binary RPMs with `rpmbuild`/`rpm`;
+the published `v0.1.1` and `v0.1.2` RPMs were built separately from the same
+specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs carry
+a CI-only stamp and are not shipped. The spec has no service-enable scriptlets
+and no `BuildArch`: the architecture comes from `rpmbuild --target`. There is no
+dnf/yum repository and no GPG signing. Windows/macOS builds, 32-bit builds and a
+package repository remain future work.
 
 For a tarball install, `~/.local/bin` must be on `PATH`. The systemd user
 service is optional; install it only if you want the service supervised:
@@ -288,9 +289,9 @@ other software.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
   is not supported.
-- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No published RPM,
-  apt/dnf repository or package signing yet; local `.deb` files and RPM specs
-  are unsigned. Binary RPMs are built only in CI, not on this host.
+- **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No apt/dnf
+  repository or package signing; the published `.deb` and RPM files are
+  unsigned.
 - **No system-wide "covers everything" mode**; `all-proxy` keeps the documented
   loopback/private exception.
 
@@ -299,23 +300,23 @@ other software.
 The current acceptance suite
 ([`internal/acceptance/`](internal/acceptance/README.md)) drives the shipped
 binary as a real process against loopback-only fixture exits and peers. A full
-run on the current source tree prints **215 PASS, 0 FAIL and 13 NOTE in about
-115 s**. The 13 NOTE lines are gated or impossible checks, not passes; the
-gated tests stay skipped unless a real desktop or `systemd --user` session is
-available. `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are
-green.
+run at `15d2acb` prints **222 PASS, 0 FAIL and 13 NOTE in about 122 s**. The 13
+NOTE lines are gated or impossible checks, not passes; the gated tests stay
+skipped unless a real desktop or `systemd --user` session is available.
+`go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
-Local packaging was also verified: four tarballs, four unsigned `.deb` files
-and four RPM `.spec` files were built, `scripts/check-package.sh` passed for
-every architecture (metadata, payload paths, binary bytes, spec version/arch/
-layout and `SHA256SUMS`), and two packaging runs produced identical checksums.
-Negative checks confirmed the RPM gate fails on a wrong version, wrong
-architecture, injected `%post`, bad source digest, wrong license location,
-unexpected sidecar content and a missing spec. A real local RPM build was not
-possible because `rpmbuild`/`rpm` are not installed here; a CI job is configured
-to build and inspect the four binary RPMs from the generated specs, but it has
-not been executed in this environment. Only `amd64` was executed;
-`arm64`/`riscv64`/`ppc64le` were cross-built, and the last two are
+Local packaging was also verified: four tarballs, four unsigned `.deb` files,
+four RPM `.spec` files and four binary RPMs were built,
+`scripts/check-package.sh` passed for every architecture (metadata, payload
+paths, binary bytes, spec version/arch/layout and `SHA256SUMS`), and two
+packaging runs produced identical checksums. Negative checks confirmed the RPM
+gate fails on a wrong version, wrong architecture, injected `%post`, bad source
+digest, wrong license location, unexpected sidecar content and a missing spec.
+For `x86_64`/`amd64`, an RPM built from the generated spec was installed in a
+disposable container with no scriptlets and no service enablement (the
+container lacked `ca-certificates`, so the dependency check was skipped), and
+its `routelatch` and `sing-box` payload binaries were executed. Only `amd64`
+was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 
 Beyond the default suite, the Linux build was exercised on real system
@@ -331,8 +332,9 @@ gated 30s single-tunnel WS/TLS reuse check, a gated hysteria2 traffic check
 plus a separate `RL_ACCEPT_HYSTERIA2_OBFS_TEST` cell that covers both `obfs`
 types (salamander and gecko), a rerun of both gated hysteria2 cells against
 the `bin/sing-box` sidecar from the published v0.1.2 linux-amd64 tarball
-(byte-identical to the pinned official archive), and automatic start-up after
-a real reboot with state and desktop-proxy settings intact. The desktop-proxy
+(byte-identical to the pinned official archive), an `x86_64` RPM payload
+install-and-execute check, and automatic start-up after a real reboot with
+state and desktop-proxy settings intact. The desktop-proxy
 test changes a real desktop setting and is opt-in, like the systemd test.
 
 Three different kinds of gap are kept separate:
@@ -344,8 +346,9 @@ Three different kinds of gap are kept separate:
 - **Implemented but not yet exercised:** long hysteria2 sessions.
 - **Not yet proven because of the environment or missing authorization:**
   clean-machine install (A01), arm64/riscv64/ppc64le runtime execution, a real
-  GNOME session (the desktop test ran on KDE), local execution of a locally
-  built RPM, and the real public-exit scale (private pool, arbitrary
+  GNOME session (the desktop test ran on KDE), a real install plus running
+  service under an RPM (the payload ran in a disposable container without
+  systemd), and the real public-exit scale (private pool, arbitrary
   destinations, churn) that has not been authorized.
 
 The project is a working Linux v1, not a finished multi-platform product.
