@@ -21,7 +21,7 @@
 | `golang.org/x/net` | `v0.62.0` به‌صورت direct (برای `publicsuffix`؛ `idna` و `proxy` هم از همین ماژول) |
 | وابستگی جدید | ممنوع بدون تغییر قرارداد |
 
-**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمیدهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند و هیچ user unit یا postinst ندارد؛ سرویس فقط با `routelatch service install` (user unit، D26) به‌صورت opt-in ساخته می‌شود و فعال‌سازی سرویس/تنظیم دسکتاپ در نصب نیست. برای RPM یک اسپک در هر معماری (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) ساخته و در SHA256SUMS ثبت میشود؛ Version آن دقیقاً برابر Version `.deb` است (نرمالسازی واحد: `v0.1.0-r12.1` → `0.1.0.r12.1`). `%files` LICENSE/NOTICE را در `/usr/share/licenses/routelatch` و بقیهٔ اسناد را در `/usr/share/doc/routelatch` قرار میدهد و هیچ scriptlet یا %post ندارد. باینری RPM روی host ساخته نمی‌شود (rpmbuild نصب نیست)؛ ساخت/بازرسی محلی فقط در container یک‌بارمصرف انجام شده است و CI نیز آن را با rpmbuild می‌سازد و با rpm بازرسی می‌کند.
+**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمیدهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند؛ بستهٔ فعلی R12 unit دارد و از R13 طبق D26 هیچ user unit/postinst نخواهد داشت. سرویس فقط با `routelatch service install` (user unit، D26) به‌صورت opt-in ساخته می‌شود و فعال‌سازی سرویس/تنظیم دسکتاپ در نصب نیست. برای RPM یک اسپک در هر معماری (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) ساخته و در SHA256SUMS ثبت میشود؛ Version آن دقیقاً برابر Version `.deb` است (نرمالسازی واحد: `v0.1.0-r12.1` → `0.1.0.r12.1`). `%files` LICENSE/NOTICE را در `/usr/share/licenses/routelatch` و بقیهٔ اسناد را در `/usr/share/doc/routelatch` قرار میدهد و هیچ scriptlet یا %post ندارد. باینری RPM روی host ساخته نمی‌شود (rpmbuild نصب نیست)؛ ساخت/بازرسی محلی فقط در container یک‌بارمصرف انجام شده است و CI نیز آن را با rpmbuild می‌سازد و با rpm بازرسی می‌کند.
 
 ماژول‌های بالا در `go.mod` پین‌اند؛ `internal/contract/pins.go` با build tag `tools`
 فقط برای این وجود دارد که `go mod tidy` قبل از ورود importکننده‌ها آن‌ها را حذف نکند.
@@ -1109,7 +1109,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | --- | --- | --- | --- |
 | `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?`؛ `--headless`: `listeners` در shutdown | 0، 2، 4، 6، 7، 10 | «شروع اپ/سرویس» |
 | `autostart enable\|disable\|status` | `path, enabled, managed` | 0، 1، 2، 6، 7 | — |
-| `service install\|uninstall\|status` | `unit, enabled, active, linger` | 0، 1، 2، 6، 7، 9، 10 | — |
+| `service install\|uninstall\|status` | `unit, enabled, active, linger, managed` | 0، 1، 2، 6، 7، 9، 10 | — |
 | `version` | `version, commit, build_date` | 0 | — |
 | `status` | `mode, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
@@ -1167,7 +1167,9 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 
 منو فقط پوستهٔ همین فرمان‌هاست: هر عمل یک فرمان با همان JSON و همان exit code را
 صدا می‌زند. عمل مخرب (حذف قانون/pool، restore، توقف) تأیید صریح می‌خواهد و
-پیش‌فرض «نه» است. منو هیچ منطق مسیری جدا ندارد.
+پیش‌فرض «نه» است. منو هیچ منطق مسیری جدا ندارد. پس از R13 منو باید دو ورودی
+جدا داشته باشد: «Start app (tray)» → `run` و «Start headless (foreground)» →
+`run --headless`؛ نگاشت قدیمی «Start the service» → `run` کافی نیست (A10/A15).
 
 ### ۷.۴ امنیت خروجی
 
@@ -1189,61 +1191,99 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 ### ۷.۵ مدل اجرا، tray، autostart و service (D26)
 
 این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. پیاده‌سازی در R13 باز است؛ تا آن
-زمان `run` فعلی foreground می‌ماند و بستهٔ منتشرشده unit دارد.
+زمان `run` فعلی foreground می‌ماند و بستهٔ منتشرشده (R12) unit دارد.
 
 **`run` پیش‌فرض (حالت اپ).** یک launcher detached، tray/GUI را بالا می‌آورد و engine
 را به‌صورت child با `run --headless` اجرا می‌کند. launcher با `setsid` از ترمینال
 جدا می‌شود و از طریق pipe فقط پس از آمادگی listenerها و ثبت tray برمی‌گردد؛ اگر
 engine یا tray شکست بخورد، child متوقف و exit code خطا به فراخواننده برمی‌گردد.
-پس از موفقیت، بستن ترمینال پروسه را متوقف نمی‌کند. فراخوانی دوباره وقتی اپ در حال
-اجراست، instance دوم نمی‌سازد: `ok=true`، `already_running=true` و exit `0`. اگر
-یک engine `--headless` (بدون tray) lock را در اختیار دارد، `run` پیش‌فرض exit `4`
-با پیام «ابتدا نمونهٔ headless را متوقف کنید یا `--headless` اجرا کنید» می‌دهد.
-اگر tray/StatusNotifier در دسترس نباشد، قبل از شروع engine با `unsupported`/exit `7`
-و دلیل پایدار `tray_unavailable` متوقف می‌شود و `--headless` را پیشنهاد می‌دهد؛
-fallback بی‌صدا وجود ندارد. `run` بدون `--headless` داخل systemd (`INVOCATION_ID`)
-نیز با usage error رد می‌شود؛ unitها باید `--headless` داشته باشند.
-`--json` در حالت پیش‌فرض یک envelope زمان startup با `pid`، listenerها، log path و
-`already_running?` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را دارد.
-log/نوتیفیکیشن tray نباید مقصد، credential یا URL منبع داشته باشد (D21).
+پس از موفقیت، بستن ترمینال پروسه را متوقف نمی‌کند.
 
-**`autostart enable|disable|status`.** فقط Linux/XDG؛ فایل
-`~/.config/autostart/routelatch.desktop` با `Exec=<absolute> run`، `Terminal=false`،
-`NoDisplay=true` و یک marker مالکیت (`X-RouteLatch-Autostart=true`) نوشته می‌شود.
-`enable` idempotent است: فایل مالک با محتوای درست را بازنویسی/restart نمی‌کند و
-فایل موجود غیرمالک را overwrite نمی‌کند (exit `6`). `enable` خود اپ را start نمی‌کند
-و `disable` اپ در حال اجرا را stop نمی‌کند؛ فقط entry ورود بعدی را تغییر می‌دهند.
-`disable` فقط فایل مالک را حذف می‌کند؛ `status` فقط خواندنی است. گزینهٔ headless برای autostart وجود ندارد؛
-کاربری که tray نمی‌خواهد از `run --headless` یا `service` استفاده می‌کند. نصب بسته
-هیچ فایل autostart نمی‌سازد.
+مالکیت app با یک marker در runtime همان data directory ثبت می‌شود (پیشنهادی:
+`RuntimeDir/app.owner`، حالت `0600`، شامل `pid`، `data_dir` و `started_at`).
+`pid` در خروجی startup همان PID supervisor/tray است. ترتیب بررسی launcher:
+(۱) marker زندهٔ app → `ok=true`، `already_running=true`، exit `0` و بدون instance
+دوم؛ (۲) engine lock بدون marker app → نمونهٔ `--headless` است و exit `4` با پیام
+«ابتدا نمونهٔ headless را متوقف کنید یا `--headless` اجرا کنید»؛ (۳) نبود
+tray/StatusNotifier → `unsupported`/exit `7` با دلیل پایدار `tray_unavailable` و
+پیشنهاد `--headless`؛ (۴) شروع. marker کهنه با PID مرده نادیده/پاک می‌شود.
+fallback بی‌صدا وجود ندارد. `--json` در حالت پیش‌فرض یک envelope زمان startup با
+`pid`، listenerها، log path و `already_running?` می‌دهد؛ `--headless --json` رفتار
+blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL
+منبع داشته باشد (D21).
+
+`--headless` هیچ‌گاه tray را باز نمی‌کند و داخل systemd/ترمینال بلاک می‌ماند؛ unitها
+باید `--headless` داشته باشند. plain `run` عمداً detach می‌شود و برای unit مناسب
+نیست؛ هیچ heuristic مبتنی بر `INVOCATION_ID` برای رد کردن آن لازم نیست (این متغیر
+می‌تواند به فرزندان session گرافیکی هم ارث برسد). Quit یا SIGTERM supervisor باید
+child را با SIGTERM متوقف کند، تا پایان shutdown صبر و سپس در صورت نیاز kill/reap
+کند؛ مرگ غیرمنتظرهٔ supervisor هم باید child را متوقف کند (parent-death/watchdog),
+تا listener/management/پروکسی یتیم نماند.
+
+**`autostart enable|disable|status`.** فقط Linux/XDG؛ فایل در
+`$XDG_CONFIG_HOME/autostart/routelatch.desktop` (fallback `~/.config/autostart/...`)
+با `Type=Application`، `Name=RouteLatch`، `Comment`، `Exec="<absolute>" run` (با
+quoting صحیح Desktop Entry برای مسیر دارای فاصله)، `Terminal=false`،
+`NoDisplay=true` و marker مالکیت (`X-RouteLatch-Autostart=true`) نوشته می‌شود.
+`enable` idempotent است: فایل مالک با محتوای درست را بازنویسی/restart نمی‌کند؛
+فایل مالکِ کهنه را با محتوای جدید update می‌کند؛ فایل موجود غیرمالک را overwrite
+نمی‌کند و exit `6` می‌دهد. `enable` خود اپ را start نمی‌کند و `disable` اپ در حال
+اجرا را stop نمی‌کند؛ فقط entry ورود بعدی را تغییر می‌دهند. `disable` فقط فایل مالک
+را حذف می‌کند و برای فایل غیرمالک exit `6` می‌دهد؛ `status` فقط خواندنی است و
+`managed` را نشان می‌دهد. `enable` اگر StatusNotifier host نباشد با
+`unsupported`/exit `7` و دلیل `tray_unavailable` refuse می‌کند؛ autostart اصلاً
+حالت headless ندارد. اگر managed service unit وجود داشته باشد، `enable` برای
+جلوگیری از دو supervisor هم‌زمان exit `6` می‌دهد. نصب بسته هیچ فایل autostart
+نمی‌سازد.
 
 **`service install|uninstall|status`.** فقط Linux با systemd user manager. `install`
-unit را در `~/.config/systemd/user/routelatch.service` می‌نویسد:
-`Type=simple`، `ExecStart=<absolute> run --headless`، `Restart=on-failure`،
-`RestartSec=2s`، `RestartPreventExitStatus=4 6 7 10`، `KillSignal=SIGTERM`،
-`KillMode=mixed`، `TimeoutStopSec=20s`، `WantedBy=default.target`. اگر `--data-dir`
-به فرمان داده شده باشد، همان در `ExecStart` unit می‌آید. unit هیچ `User=`/`Group=`
-ندارد و root لازم نیست. `install` idempotent است: اگر unit نیست، اتمیک می‌نویسد،
+unit را در `$XDG_CONFIG_HOME/systemd/user/routelatch.service` (fallback
+`~/.config/systemd/user/...`) می‌نویسد، با یک marker مالکیت در فایل
+(`# Managed by RouteLatch service install`). محتوای unit:
+`Type=simple`، `ExecStart=<absolute> [--data-dir <abs>] run --headless`،
+`Restart=on-failure`، `RestartSec=2s`، `RestartPreventExitStatus=4 6 7 10`،
+`KillSignal=SIGTERM`، `KillMode=mixed`، `TimeoutStopSec=20s`،
+`WantedBy=default.target`. unit هیچ `User=`/`Group=` ندارد و root لازم نیست.
+`install` idempotent است: اگر unit نیست، اتمیک می‌نویسد،
 `systemctl --user daemon-reload` و `enable --now` می‌زند و فعال‌شدن را verify
 می‌کند؛ اگر همان unit هست، بدون بازنویسی/restart فقط enabled/active را همگرا
 می‌کند؛ اگر محتوا متفاوت است، بدون `--force` بازنویسی نمی‌کند و exit `6` می‌دهد.
-`--force` unit را به‌روزرسانی می‌کند، daemon-reload و enable می‌زند و فقط اگر unit
-فعال باشد `try-restart` می‌کند. در هر دو حالت اگر `Linger=no` باشد، فقط دستور
-`sudo loginctl enable-linger <user>` را چاپ می‌کند و خودش sudo اجرا نمی‌کند.
-اجرای فرمان با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود (exit `9`)؛
-فقط کاربر هدف باید آن را اجرا کند. اگر systemd user manager در دسترس نباشد،
-`unsupported`/exit `7` است. `uninstall` stop/disable، حذف unit مالک و daemon-reload
-را idempotent انجام می‌دهد و state/config/linger را حذف نمی‌کند. `status` فقط
-خواندنی است. بسته هیچ unit/postinst ندارد و این فرمان تنها مسیر ساخت سرویس است.
+`--force` unit را به‌روزرسانی می‌کند، daemon-reload و enable می‌زند و اگر unit از
+قبل active بود restart/try-restart می‌کند؛ اگر inactive بود `enable --now` آن را
+start می‌کند. اگر `Linger=no` باشد، فقط دستور `sudo loginctl enable-linger <user>`
+را چاپ می‌کند و خودش sudo اجرا نمی‌کند. اجرای فرمان با
+`SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود (exit `9`)؛ فقط کاربر هدف
+باید آن را اجرا کند. اگر systemd user manager در دسترس نباشد، `unsupported`/exit
+`7` است. `install` اگر app/engine با همان data-dir در حال اجرا باشد، بدون
+نوشتن/فعال‌سازی unit با exit `6` refuse می‌کند (preflight). اگر managed autostart
+وجود داشته باشد، `install` هم برای جلوگیری از دو supervisor exit `6` می‌دهد.
+`uninstall` stop/disable، حذف فقط unit مالک و daemon-reload را idempotent انجام
+می‌دهد و state/config/linger را حذف نمی‌کند؛ unit غیرمالک را حذف نمی‌کند و exit `6`
+می‌دهد. `status` فقط خواندنی است و `managed` را نشان می‌دهد. بسته هیچ unit/postinst
+ندارد (از R13 به بعد) و این فرمان تنها مسیر ساخت سرویس است.
 
-**مرزها.** یک engine در هر کاربر: tray child و unit سرویس هر دو از همان state lock
-استفاده می‌کنند و هم‌زمان اجرا نمی‌شوند. restart همیشه در سطح process است (tray child
-یا systemd)؛ restart درون‌process ممنوع می‌ماند. tray supervisor خروج غیرمنتظره child
-را با backoff و سقف (پیشنهاد: ۵ بار در ۶۰ ثانیه) restart می‌کند؛ exitهای مستند
-4/6/7/10 بدون restart گزارش می‌شوند و child متوقف می‌ماند. پروکسی دسکتاپ همچنان opt-in است و
-توقف/Quit اپ آن را خودکار restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد.
-GUI آینده همان `run` پیش‌فرض را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
+**مرزها و migration.** invariant سخت «یک engine در هر data directory» است، نه هر
+کاربر؛ app و service به‌صورت پیش‌فرض همان data-dir XDG را دارند. `--data-dir`
+سفارشی یک instance جدا می‌سازد و ممکن است با portهای instance دیگر تصادم کند؛
+`service install` فقط lock همان data-dir را preflight می‌کند. `autostart` و
+`service` برای یک کاربر هم‌زمان فعال نمی‌شوند؛ اگر هر دو به‌صورت دستی وجود داشته
+باشند، `status` باید تعارض را گزارش کند و کاربر باید یکی را انتخاب/حذف کند.
+restart همیشه در سطح process است (tray child یا systemd)؛ restart درون‌process ممنوع
+می‌ماند. tray supervisor خروج غیرمنتظره child را با backoff و سقف (پیشنهاد: ۵ بار
+در ۶۰ ثانیه) restart می‌کند؛ exitهای مستند 4/6/7/10 بدون restart گزارش می‌شوند و
+child متوقف می‌ماند. پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن را خودکار
+restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان `run` پیش‌فرض
+را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
 
+**Migration از unit فعلی.** پیش از upgrade، unit قدیمی باید
+`systemctl --user disable --now routelatch.service` شود و unit/symlink باقی‌مانده در
+`$XDG_CONFIG_HOME/systemd/user` حذف یا با `service install` مدیریت شود؛ سپس بستهٔ
+جدید نصب و `autostart enable` یا `service install` انتخاب شود. اسکریپت‌ها/تست‌های
+داخلی که foreground می‌خواهند باید `run --headless` را صدا بزنند. upgrade با unit
+کهنه و بدون migration باید در R13-E آزموده شود؛ `run` بدون `--headless` در unit
+جدید عمداً پشتیبانی نمی‌شود.
+
+## ۸. پوشش پذیرش
 ## ۸. پوشش پذیرش
 
 | معیار | task | check |
@@ -1286,6 +1326,7 @@ GUI آینده همان `run` پیش‌فرض را GUI+tray می‌کند و ف�
 | R-16 | tray پیش‌فرض به StatusNotifier host وابسته است؛ GNOME بدون extension و SSH/بدون display آن را ندارند و `run` پیش‌فرض در این محیط‌ها fail می‌شود | `--headless` یا سرویس opt-in؛ fallback بی‌صدا عمداً وجود ندارد (D26) |
 | R-17 | بدون سرویس نصب‌شده، crash recovery فقط best-effort و وابسته به زنده‌بودن tray است؛ قبل از login/بعد از logout هم اجرا نمی‌شود | سرویس systemd user opt-in + linger برای VPS؛ مدل دسکتاپ فقط autostart بعد از login |
 | R-18 | `service install` فقط systemd user unit می‌سازد؛ system unit، OpenRC و سرویس‌های OSهای دیگر پشتیبانی نمی‌شوند و linger نیاز به اقدام root/polkit دارد | تصمیم/پیاده‌سازی milestone بعد؛ مستند به‌عنوان مرز v1 |
+| R-19 | lock فقط per data directory است؛ app/service با `--data-dir` متفاوت می‌توانند هم‌زمان اجرا شوند و بر سر port تصادم کنند. `autostart`/`service` فقط setupهای managed را از هم منع می‌کنند، نه فایل‌های دستی را | app و service پیش‌فرض همان data-dir را دارند؛ data-dir سفارشی یک instance جدا و پیشرفته است؛ تعارض port با exit 6 گزارش می‌شود |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است

@@ -157,23 +157,31 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   `run` پیش‌فرض GUI+tray می‌شود و `--headless` دست‌نخورده می‌ماند (D26).
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط پس از bind listenerها و
   ثبت tray برمی‌گردد؛ خطای startup با exit code به فراخواننده می‌رسد. engine child
-  state lock و management socket قبل را دارد (یک engine در هر کاربر). restart فقط با
-  جایگزینی process انجام می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع
-  می‌ماند (R-4). بستن ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
+  state lock و management socket قبل را دارد؛ invariant دقیق «یک engine در هر data
+  directory» است، نه هر کاربر. app-mode یک marker مالکیت/`pid` در runtime همان
+  data-dir می‌نویسد تا plain `run` بین app در حال اجرا و engine `--headless` فرق
+  بگذارد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
+  watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
+  می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
+  ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
 - tray با StatusNotifierItem/D-Bus و کتابخانهٔ pure Go هدف‌گذاری می‌شود تا
   `CGO_ENABLED=0` حفظ شود. GNOME بدون extension و SSH/بدون display tray ندارند؛
   `run` پیش‌فرض در این محیط‌ها با پیام روشن fail می‌شود و `--headless` پیشنهاد
   می‌دهد؛ fallback بی‌صدا وجود ندارد. KDE مسیر آزمون اولیه است؛ سایر DEها تا آزمون
   واقعی ادعا نمی‌شوند.
 - شروع در login با XDG autostart است، نه unit: `routelatch autostart enable` یک فایل
-  `~/.config/autostart/routelatch.desktop` با `Exec=<absolute> run` می‌سازد. نصب
-  بسته autostart نمی‌سازد؛ linger/start-before-login بخشی از مدل دسکتاپ نیست.
+  `$XDG_CONFIG_HOME/autostart/routelatch.desktop` (fallback `~/.config/autostart`)
+  با `Exec=<absolute> run` می‌سازد. نصب بسته autostart نمی‌سازد؛ linger/start-before-login
+  بخشی از مدل دسکتاپ نیست.
 - برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
-  **user unit** با `ExecStart=<absolute> run --headless` می‌سازد، enable/start
-  می‌کند و اگر linger خاموش باشد فقط `sudo loginctl enable-linger <user>` را چاپ
-  می‌کند؛ خودش sudo نمی‌زند. unit نصب‌شده بخشی از بسته نیست و بسته هیچ postinst/unit
-  ندارد. جزئیات قرارداد در `docs/contracts.md §۷.۵` است.
-- آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، هیچ unit/postinst یا فعالسازی سرویسی ندارد؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند، و انتشار آن مجوز جدا می‌خواهد. نصب واقعی تحت RPM و اجرای سرویس opt-in روی معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
+  **user unit** در `$XDG_CONFIG_HOME/systemd/user` (fallback `~/.config/systemd/user`)
+  با `ExecStart=<absolute> run --headless` می‌سازد، enable/start می‌کند و اگر linger
+  خاموش باشد فقط `sudo loginctl enable-linger <user>` را چاپ می‌کند؛ خودش sudo
+  نمی‌زند. unit با یک marker مالکیت مشخص می‌شود؛ uninstall فقط unit مالک را حذف
+  می‌کند. `autostart` و `service` برای یک کاربر هم‌زمان فعال نمی‌شوند و install هر
+  کدام دیگری را detect و refuse می‌کند. unit نصب‌شده بخشی از بسته نیست و بستهٔ فعلی
+  R12 unit دارد؛ حذف آن در R13 انجام می‌شود. جزئیات در `docs/contracts.md §۷.۵` است.
+- آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، در R12 unit را دارد و از R13 طبق D26 هیچ unit/postinst یا فعالسازی سرویسی ندارد؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند، و انتشار آن مجوز جدا می‌خواهد. نصب واقعی تحت RPM و اجرای سرویس opt-in روی معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
   «پروکسی کل سیستم». شکست خود ابزار `external_tool_failed` (exit `1`) است و نتیجهٔ

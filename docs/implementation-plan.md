@@ -219,7 +219,11 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 
 **وضعیت:** تصمیم D26 ثبت شد و مستندات طراحی (`requirements.md`، `architecture.md`،
 `contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
-میزبان تغییر نکرده است. HEAD پیش از commit این مستندات: `de70f20`.
+میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
+`5dbc070`. بازبینی مستقل دور اول **Not ready** بود (current-state unit، singleton
+per-data-dir/app marker، tray lifetime، autostart/service coexistence، migration،
+unit ownership و چند nit)؛ اصلاحات مستندات در همین کار اعمال می‌شوند و دور بازبینی
+متمرکز بعد از commit اصلاحات انجام می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -232,11 +236,11 @@ tray/autostart/service روی میزبان و نصب/فعال‌سازی سرو�
 
 | ID | task | نتیجه | وابستگی | check اصلی |
 | --- | --- | --- | --- | --- |
-| R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher |
-| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ singleton/لاگ/نوتیفیکیشن/`--json`/systemd guard؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run no-op؛ port/corrupt/state؛ `check-artifact.sh` |
-| R13-C | **autostart** | `autostart enable\|disable\|status` با XDG `.desktop`، idempotent، بدون overwrite فایل غیرمالک، بدون side effect نصب | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ disable؛ foreign-file conflict؛ اجرای واقعی KDE (گیت‌شده) |
-| R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy، ensure enabled/active، linger hint، بدون sudo، `--force` برای update | R13-B | fake systemctl/loginctl؛ temp HOME؛ unit content؛ second-run no-op؛ differing unit؛ gated real user manager |
-| R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README/INSTALL/SERVICE/APP، migration از unit قدیمی؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ migration متن؛ CI |
+| R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد؛ parent-death/child lifetime قابل پیاده‌سازی باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher؛ parent-death prototype |
+| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ marker مالکیت app/`pid`، singleton per data-dir، Quit/مرگ supervisor → توقف child، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run no-op؛ app-vs-headless؛ data-dir متفاوت؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
+| R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، بررسی tray host، و منع هم‌زمان با service | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ stale/foreign conflict؛ tray-unavailable؛ service-coexistence؛ اجرای واقعی KDE (گیت‌شده) |
+| R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy، ensure enabled/active، linger hint، بدون sudo، `--force` با start/restart صحیح، marker مالکیت، preflight lock/autostart | R13-B | fake systemctl/loginctl؛ temp XDG؛ unit content/marker؛ second-run no-op؛ differing/foreign unit؛ force inactive/active؛ install-while-running؛ autostart conflict؛ gated real user manager |
+| R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README، `packaging/README.md` (INSTALL)، `deploy/README.md` (SERVICE)، `CONTRIBUTING.md` و `internal/acceptance/README.md`؛ migration از unit قدیمی؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ stale-unit upgrade؛ اسکریپت‌ها/تست‌ها به `run --headless`؛ CI |
 | R13-F | **acceptance/review/release** | A13/A15 و harness؛ بازنشستگی تست‌های systemd-first یا تبدیل آن‌ها به service opt-in؛ بازبینی مستقل؛ تصمیم انتشار جدا | R13-E | `gofmt`/`go vet`/`go build`؛ `go test -count=1 ./...`؛ تست‌های گیت‌شده؛ package checks؛ verdict بازبین |
 
 **ترتیب:** R13-A اول؛ سپس B. پس از B، C و D می‌توانند مستقل/موازی باشند. E بعد از
@@ -247,11 +251,17 @@ C/D و F بعد از E. B1 (افزودن `run --headless` و مهاجرت تست
 `tray`/`gui` فرمان جدا نیستند؛ tray در حالت پیش‌فرض اجباری است و fallback بی‌صدا
 ندارد؛ service فرمان opt-in است و بسته unit ندارد؛ نبود tray `unsupported`/`7` +
 دلیل `tray_unavailable` است؛ `service install --force` unit را update و enable
-می‌کند و فقط اگر unit فعال باشد `try-restart` می‌زند؛ اجرای service با `SUDO_USER`/`PKEXEC_UID`
-برای کاربر دیگر refuse می‌شود.
+می‌کند و اگر قبلاً active بود restart و اگر inactive بود start می‌کند؛ اجرای service
+با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود. invariant سخت
+«یک engine در هر data directory» است، نه هر کاربر؛ app-mode یک marker مالکیت/`pid`
+در runtime همان data-dir می‌نویسد؛ Quit/مرگ supervisor child را متوقف می‌کند؛
+مسیرهای XDG (`$XDG_CONFIG_HOME` با fallback `~/.config`) مبنا هستند؛ `autostart` و
+`service` برای یک کاربر هم‌زمان فعال نمی‌شوند؛ unit/autostart مالک با marker از
+غیرمالک جدا می‌شوند.
 
 **تصمیم‌های باز تا R13-A/B:** انتخاب library tray و مجوز/پایداری آن؛ جزئیات تشخیص
-دقیق user manager/linger روی توزیع‌های مختلف؛ مرز GUI آینده.
+دقیق user manager/linger روی توزیع‌های مختلف؛ سیاست دادهٔ marker کهنه (پاک خودکار در
+برابر گزارش)؛ مرز GUI آینده.
 
 **قدم بعدی:** R13-A — یک prototype کوچک از `gogpu/systray` و `deedles.dev/tray` روی
 KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم cgo با کاربر.
@@ -260,9 +270,11 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 
 - **R13 — تصمیم مدل اجرا ثبت شد (۲۰۲۶-۱۱-۲۳، ارکستریتور؛ فقط مستندات):** D26 برای
   app/tray، `run --headless`، `autostart` و systemd user service opt-in ثبت شد؛
-  A13/A15 و قراردادهای §۷.۵ به‌روز شدند. HEAD پیش از commit مستندات `de70f20` است.
-  هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرد. کار باز: R13-A تا R13-F.
-  قدم بعدی: spike tray pure-Go روی KDE.
+  A13/A15 و قراردادهای §۷.۵ به‌روز شدند. HEAD پیش از commit مستندات `de70f20` و
+  commit D26 `5dbc070` است؛ بازبینی مستقل دور اول `Not ready` و اصلاحات در همین
+  واحد در حال اعمال است. هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرد.
+  کار باز: R13-A تا R13-F. قدم بعدی: commit اصلاحات + بازبینی متمرکز، سپس spike
+  tray pure-Go روی KDE.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
@@ -553,8 +565,9 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 
 1. `AGENTS.md` و همین بخش (مخصوصاً R13) را بخوان؛ `git status` و
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`؛ D26 ثبت شده و
-   هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
+   `5dbc070` و commit اصلاحات بازبینی پس از آن در `git log`؛ D26 ثبت شده و هیچ
+   کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛

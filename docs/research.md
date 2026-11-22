@@ -120,7 +120,7 @@ proxy، firewall redirect و virtual interface را توضیح می‌دهد. پ
 | نامزد | شاهد/نسخه | نتیجه | محدودیت |
 | --- | --- | --- | --- |
 | `gogpu/systray` | [README](https://github.com/gogpu/systray)، releases تا `v0.3.0` (2026-08-30) | MIT، pure Go/zero CGO، پیاده‌سازی Linux با StatusNotifierItem/D-Bus، منو، آیکن PNG و نوتیفیکیشن | پروژهٔ جوان است (اولین انتشار 2026-04)؛ API/پایداری و رفتار DEها باید با prototype سنجیده شود |
-| `deedles.dev/tray` | [pkg.go.dev](https://pkg.go.dev/deedles.dev/tray)، [GitHub](https://github.com/DeedleFake/tray)، `v0.1.10` | MIT، pure Go، پیاده‌سازی مینیمال StatusNotifierItem | سطح API کوچک‌تر؛ نوتیفیکیشن/منوی پیشرفته و maturity باید بررسی شود |
+| `deedles.dev/tray` | [pkg.go.dev](https://pkg.go.dev/deedles.dev/tray)، [GitHub](https://github.com/DeedleFake/tray)، آخرین tag بررسی‌شده `v0.2.0` (2026-10-28؛ tag در GitHub API تأیید شد) | MIT، pure Go، پیاده‌سازی مینیمال StatusNotifierItem | سطح API کوچک‌تر؛ نوتیفیکیشن/منوی پیشرفته و maturity باید بررسی شود؛ نسخهٔ نهایی باید در R13-A pin شود |
 | `fyne-io/systray` | [README](https://github.com/fyne-io/systray) | fork از getlantern با پشتیبانی Linux از طریق D-Bus/SNI | README صریحاً cgo لازم دارد؛ با build فعلی `CGO_ENABLED=0` سازگار نیست |
 | `getlantern/systray` | [README](https://github.com/getlantern/systray) | tray cross-platform شناخته‌شده | cgo/GTK روی Linux؛ گزینهٔ static نیست |
 
