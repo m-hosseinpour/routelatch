@@ -158,9 +158,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط پس از bind listenerها و
   ثبت tray برمی‌گردد؛ خطای startup با exit code به فراخواننده می‌رسد. engine child
   state lock و management socket قبل را دارد؛ invariant دقیق «یک engine در هر data
-  directory» است، نه هر کاربر. app-mode یک marker مالکیت/`pid` در runtime همان
-  data-dir می‌نویسد تا plain `run` بین app در حال اجرا و engine `--headless` فرق
-  بگذارد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
+  directory» است، نه هر کاربر. app-mode یک `flock` روی `RuntimeDir/app.lock` و یک
+  marker تشخیصی/`pid` در همان runtime می‌نویسد تا plain `run` بین app در حال اجرا
+  و engine `--headless` فرق بگذارد؛ liveness را lock تعیین می‌کند، نه PID. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
   می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
   ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.

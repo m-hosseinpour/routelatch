@@ -1107,9 +1107,9 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
-| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?`؛ `--headless`: `listeners` در shutdown | 0، 2، 4، 6، 7، 10 | «شروع اپ/سرویس» |
-| `autostart enable\|disable\|status` | `path, enabled, managed` | 0، 1، 2، 6، 7 | — |
-| `service install\|uninstall\|status` | `unit, enabled, active, linger, managed` | 0، 1، 2، 6، 7، 9، 10 | — |
+| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?`؛ `--headless`: `listeners` در shutdown | 0، 2، 4، 6، 7، 10 | «شروع اپ (tray)» / «شروع headless» |
+| `autostart enable\|disable\|status` | `path, enabled, managed, conflict?` | 0، 1، 2، 6، 7 | — |
+| `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 9، 10 | — |
 | `version` | `version, commit, build_date` | 0 | — |
 | `status` | `mode, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
@@ -1199,18 +1199,24 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 engine یا tray شکست بخورد، child متوقف و exit code خطا به فراخواننده برمی‌گردد.
 پس از موفقیت، بستن ترمینال پروسه را متوقف نمی‌کند.
 
-مالکیت app با یک marker در runtime همان data directory ثبت می‌شود (پیشنهادی:
-`RuntimeDir/app.owner`، حالت `0600`، شامل `pid`، `data_dir` و `started_at`).
-`pid` در خروجی startup همان PID supervisor/tray است. ترتیب بررسی launcher:
-(۱) marker زندهٔ app → `ok=true`، `already_running=true`، exit `0` و بدون instance
-دوم؛ (۲) engine lock بدون marker app → نمونهٔ `--headless` است و exit `4` با پیام
-«ابتدا نمونهٔ headless را متوقف کنید یا `--headless` اجرا کنید»؛ (۳) نبود
-tray/StatusNotifier → `unsupported`/exit `7` با دلیل پایدار `tray_unavailable` و
-پیشنهاد `--headless`؛ (۴) شروع. marker کهنه با PID مرده نادیده/پاک می‌شود.
-fallback بی‌صدا وجود ندارد. `--json` در حالت پیش‌فرض یک envelope زمان startup با
-`pid`، listenerها، log path و `already_running?` می‌دهد؛ `--headless --json` رفتار
-blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL
-منبع داشته باشد (D21).
+مالکیت app با یک **OS lock** در runtime همان data directory ثبت می‌شود
+(پیشنهادی: `RuntimeDir/app.lock`، flock، و `RuntimeDir/app.owner` با حالت `0600`
+برای `pid`/`data_dir`/`started_at` فقط جهت تشخیص). liveness را kernel/flock تعیین
+می‌کند، نه PID؛ `pid` در خروجی startup همان PID supervisor/tray است. ترتیب بررسی
+launcher: (۱) تلاش non-blocking برای گرفتن `app.lock`؛ اگر قفل در اختیار دیگری است،
+`ok=true`، `already_running=true` و exit `0` (حتی اگر marker هنوز نوشته نشده یا
+خراب باشد؛ lock مرجع است)؛ (۲) اگر قفل آزاد است ولی engine lock در اختیار یک
+`--headless` است و app marker زنده ندارد، exit `4` با پیام «ابتدا نمونهٔ headless را
+متوقف کنید یا `--headless` اجرا کنید»؛ (۳) نبود tray/StatusNotifier →
+`unsupported`/exit `7` با دلیل پایدار `tray_unavailable` و پیشنهاد `--headless`؛
+(۴) شروع، نگه‌داشتن lock تا خروج supervisor و نوشتن اتمیک marker پس از readiness.
+marker کهنه فقط اگر regular file، مالک uid جاری و داخل همان RuntimeDir باشد
+پاک/بازنویسی می‌شود؛ symlink/non-regular/مالک دیگر/`data_dir` متفاوت دنبال یا حذف
+نمی‌شود و فقط هشدار `app_marker_invalid` می‌دهد. دو `run` هم‌زمان با flock سریال
+می‌شوند؛ بازنده instance دوم نمی‌سازد. fallback بی‌صدا وجود ندارد. `--json` در
+حالت پیش‌فرض یک envelope زمان startup با `pid`، listenerها، log path و
+`already_running?` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را
+دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL منبع داشته باشد (D21).
 
 `--headless` هیچ‌گاه tray را باز نمی‌کند و داخل systemd/ترمینال بلاک می‌ماند؛ unitها
 باید `--headless` داشته باشند. plain `run` عمداً detach می‌شود و برای unit مناسب
@@ -1229,8 +1235,9 @@ quoting صحیح Desktop Entry برای مسیر دارای فاصله)، `Termi
 فایل مالکِ کهنه را با محتوای جدید update می‌کند؛ فایل موجود غیرمالک را overwrite
 نمی‌کند و exit `6` می‌دهد. `enable` خود اپ را start نمی‌کند و `disable` اپ در حال
 اجرا را stop نمی‌کند؛ فقط entry ورود بعدی را تغییر می‌دهند. `disable` فقط فایل مالک
-را حذف می‌کند و برای فایل غیرمالک exit `6` می‌دهد؛ `status` فقط خواندنی است و
-`managed` را نشان می‌دهد. `enable` اگر StatusNotifier host نباشد با
+را حذف می‌کند و برای فایل غیرمالک exit `6` می‌دهد؛ `status` فقط خواندنی است،
+`managed` را نشان می‌دهد و اگر managed service هم وجود داشته باشد با
+`conflict=service` و exit `0` هشدار می‌دهد (setup commands در این حالت exit `6`). `enable` اگر StatusNotifier host نباشد با
 `unsupported`/exit `7` و دلیل `tray_unavailable` refuse می‌کند؛ autostart اصلاً
 حالت headless ندارد. اگر managed service unit وجود داشته باشد، `enable` برای
 جلوگیری از دو supervisor هم‌زمان exit `6` می‌دهد. نصب بسته هیچ فایل autostart
@@ -1250,17 +1257,35 @@ unit را در `$XDG_CONFIG_HOME/systemd/user/routelatch.service` (fallback
 می‌کند؛ اگر محتوا متفاوت است، بدون `--force` بازنویسی نمی‌کند و exit `6` می‌دهد.
 `--force` unit را به‌روزرسانی می‌کند، daemon-reload و enable می‌زند و اگر unit از
 قبل active بود restart/try-restart می‌کند؛ اگر inactive بود `enable --now` آن را
-start می‌کند. اگر `Linger=no` باشد، فقط دستور `sudo loginctl enable-linger <user>`
-را چاپ می‌کند و خودش sudo اجرا نمی‌کند. اجرای فرمان با
-`SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود (exit `9`)؛ فقط کاربر هدف
-باید آن را اجرا کند. اگر systemd user manager در دسترس نباشد، `unsupported`/exit
-`7` است. `install` اگر app/engine با همان data-dir در حال اجرا باشد، بدون
-نوشتن/فعال‌سازی unit با exit `6` refuse می‌کند (preflight). اگر managed autostart
-وجود داشته باشد، `install` هم برای جلوگیری از دو supervisor exit `6` می‌دهد.
-`uninstall` stop/disable، حذف فقط unit مالک و daemon-reload را idempotent انجام
-می‌دهد و state/config/linger را حذف نمی‌کند؛ unit غیرمالک را حذف نمی‌کند و exit `6`
-می‌دهد. `status` فقط خواندنی است و `managed` را نشان می‌دهد. بسته هیچ unit/postinst
-ندارد (از R13 به بعد) و این فرمان تنها مسیر ساخت سرویس است.
+start می‌کند. `--force` می‌تواند unit قدیمی/بدون marker را در مسیر هدف، فقط اگر
+regular file و مالک کاربر باشد، adopt و با marker فعلی جایگزین کند؛ symlink یا
+non-regular را overwrite نمی‌کند و exit `6` می‌دهد.
+
+پیش از preflight، `install` ابتدا target managed unit را مشخص می‌کند: اگر همان unit
+managed خودش active است، engine آن **مجاز** است و install/`--force` همان unit را
+همگرا/restart می‌کند؛ فقط اگر app یا headless engine دیگری با همان data-dir در حال
+اجرا باشد (یعنی engine مالک این unit نیست)، بدون نوشتن/فعال‌سازی unit با exit `6`
+refuse می‌کند. اگر managed autostart وجود داشته باشد، `install` هم برای جلوگیری از
+دو supervisor exit `6` می‌دهد. `ExecStart` و `--data-dir` با quoting/escape صحیح
+systemd نوشته می‌شوند (از جمله `%` → `%%` و `$` → `$$`) تا مسیرهای دارای
+فاصله/کاراکتر ویژه معتبر بمانند.
+
+اگر `enable --now` یا verification شکست بخورد، `install` موفقیت اعلام نمی‌کند:
+unit تازه stop/disable و حذف می‌شود، daemon-reload می‌زند و برای `--force` unit
+قبلی (اگر وجود داشت) restore/restart می‌شود؛ خروجی برای bind/port documented
+`6` و برای شکست ابزار `1` (`external_tool_failed`) است. اگر `Linger=no` باشد،
+فقط دستور `sudo loginctl enable-linger <user>` را چاپ می‌کند و خودش sudo اجرا
+نمی‌کند. اجرای فرمان با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود
+(exit `9`)؛ فقط کاربر هدف باید آن را اجرا کند. اگر systemd user manager در دسترس
+نباشد، `unsupported`/exit `7` است.
+
+`uninstall` **اول** marker/ownership را بررسی می‌کند: unit غیرمالک را نه stop/disable
+می‌کند، نه حذف؛ exit `6` و بدون تغییر. فقط unit مالک را stop/disable، حذف و
+daemon-reload می‌کند (idempotent) و state/config/linger را حذف نمی‌کند. `status`
+فقط خواندنی است، `managed` را نشان می‌دهد و اگر managed autostart هم وجود داشته
+باشد با `conflict=autostart` و exit `0` هشدار می‌دهد (setup commands در این حالت
+exit `6`). بسته هیچ unit/postinst ندارد (از R13 به بعد) و این فرمان تنها مسیر ساخت
+سرویس است.
 
 **مرزها و migration.** invariant سخت «یک engine در هر data directory» است، نه هر
 کاربر؛ app و service به‌صورت پیش‌فرض همان data-dir XDG را دارند. `--data-dir`
@@ -1275,15 +1300,22 @@ child متوقف می‌ماند. پروکسی دسکتاپ همچنان opt-in 
 restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان `run` پیش‌فرض
 را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
 
-**Migration از unit فعلی.** پیش از upgrade، unit قدیمی باید
-`systemctl --user disable --now routelatch.service` شود و unit/symlink باقی‌مانده در
-`$XDG_CONFIG_HOME/systemd/user` حذف یا با `service install` مدیریت شود؛ سپس بستهٔ
-جدید نصب و `autostart enable` یا `service install` انتخاب شود. اسکریپت‌ها/تست‌های
-داخلی که foreground می‌خواهند باید `run --headless` را صدا بزنند. upgrade با unit
-کهنه و بدون migration باید در R13-E آزموده شود؛ `run` بدون `--headless` در unit
-جدید عمداً پشتیبانی نمی‌شود.
-
-## ۸. پوشش پذیرش
+**Migration از unit فعلی.** قبل از upgrade، unit قدیمی
+`systemctl --user disable --now routelatch.service` می‌شود. برای نصب tarball، فایل
+markerless `$XDG_CONFIG_HOME/systemd/user/routelatch.service` و symlinkهای
+`default.target.wants` باید حذف شوند؛ برای نصب بسته، unit در
+`/usr/lib/systemd/user/routelatch.service` با upgrade حذف می‌شود، ولی باید بررسی و
+در صورت باقی‌ماندن symlink/user unit پاک شود. سپس `systemctl --user daemon-reload`،
+نصب بستهٔ جدید و انتخاب `autostart enable` یا `service install` انجام می‌شود. اگر
+unit قدیمی فراموش شود، engine آن lock همان data-dir را نگه می‌دارد و plain `run`
+با exit `4` رد می‌شود؛ ابتدا باید stop/disable شود.
+`service install --force` می‌تواند unit قدیمی markerless را فقط در صورت regular
+file/مالکیت کاربر adopt کند؛ بدون `--force` unit متفاوت exit `6` می‌دهد. اسکریپت‌ها
+و تست‌های داخلی که foreground می‌خواهند باید `run --headless` را صدا بزنند.
+R13-E باید upgrade با unit کهنه را با نتیجهٔ قابل مشاهده بیازمايد: unit قدیمی
+stop/disabled می‌ماند، بستهٔ جدید هیچ unit در `/usr/lib` ندارد، هیچ restart loop،
+orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌شده (`autostart` یا `service`)
+سالم بالا می‌آید. `run` بدون `--headless` در unit جدید عمداً پشتیبانی نمی‌شود.
 ## ۸. پوشش پذیرش
 
 | معیار | task | check |
