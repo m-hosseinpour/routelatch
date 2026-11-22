@@ -9,6 +9,13 @@ the user's install steps. **The build never installs anything** — no service i
 enabled, no desktop proxy or network setting is touched, and nothing is
 published or downloaded.
 
+**Planned runtime model (D26, 2026-11-23):** the next release removes the
+packaged systemd user unit. `routelatch run` becomes the app/tray mode,
+`run --headless` the foreground/server mode, and `routelatch autostart ...` /
+`routelatch service install` become explicit opt-ins. The current package layout
+and install steps below still describe the shipped artifacts until R13 lands;
+see `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
+
 The default answer for "how do I get a package" is `scripts/build.sh` followed
 by `scripts/package.sh`. Both are local build steps. The packaging step writes
 reproducible `.tar.gz` files, unsigned Debian `.deb` files and one RPM `.spec`

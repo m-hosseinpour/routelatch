@@ -145,9 +145,35 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 
 ## ۷. سرویس، پلتفرم و استفاده
 
-- Linux `amd64`+`arm64`؛ foreground با فرمان `routelatch run` مبناست و systemd user
-  unit افزونهٔ lifecycle است، نه وابستگی policy. root/TUN لازم نیست.
-- آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، یک user unit استاندارد در `/usr/lib/systemd/user` اضافه میکند و هیچ postinst یا فعالسازی سرویسی اجرا نمیکند؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند، و انتشار آن مجوز جدا می‌خواهد. نصب واقعی همراه سرویس تحت RPM و اجرای معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
+> **وضعیت:** این بخش مدل اجرای تصمیم‌شده در D26 (۲۰۲۶-۱۱-۲۳) را توصیف می‌کند.
+> پیاده‌سازی در R13 باز است؛ بسته‌های منتشرشده تا آن زمان همان unit و `run`
+> foreground را دارند و README/INSTALL/SERVICE رفتار فعلی را توصیف می‌کنند.
+
+- Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
+  ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child
+  `routelatch run --headless` اجرا و supervise می‌کند. `--headless` تنها حالت
+  جایگزین است: engine foreground بدون tray/GUI برای ترمینال، SSH، container، تست و
+  systemd. فرمان جدا برای `tray`/`gui` وجود ندارد؛ اگر GUI بعداً اضافه شود، همان
+  `run` پیش‌فرض GUI+tray می‌شود و `--headless` دست‌نخورده می‌ماند (D26).
+- launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط پس از bind listenerها و
+  ثبت tray برمی‌گردد؛ خطای startup با exit code به فراخواننده می‌رسد. engine child
+  state lock و management socket قبل را دارد (یک engine در هر کاربر). restart فقط با
+  جایگزینی process انجام می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع
+  می‌ماند (R-4). بستن ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
+- tray با StatusNotifierItem/D-Bus و کتابخانهٔ pure Go هدف‌گذاری می‌شود تا
+  `CGO_ENABLED=0` حفظ شود. GNOME بدون extension و SSH/بدون display tray ندارند؛
+  `run` پیش‌فرض در این محیط‌ها با پیام روشن fail می‌شود و `--headless` پیشنهاد
+  می‌دهد؛ fallback بی‌صدا وجود ندارد. KDE مسیر آزمون اولیه است؛ سایر DEها تا آزمون
+  واقعی ادعا نمی‌شوند.
+- شروع در login با XDG autostart است، نه unit: `routelatch autostart enable` یک فایل
+  `~/.config/autostart/routelatch.desktop` با `Exec=<absolute> run` می‌سازد. نصب
+  بسته autostart نمی‌سازد؛ linger/start-before-login بخشی از مدل دسکتاپ نیست.
+- برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
+  **user unit** با `ExecStart=<absolute> run --headless` می‌سازد، enable/start
+  می‌کند و اگر linger خاموش باشد فقط `sudo loginctl enable-linger <user>` را چاپ
+  می‌کند؛ خودش sudo نمی‌زند. unit نصب‌شده بخشی از بسته نیست و بسته هیچ postinst/unit
+  ندارد. جزئیات قرارداد در `docs/contracts.md §۷.۵` است.
+- آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، هیچ unit/postinst یا فعالسازی سرویسی ندارد؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند، و انتشار آن مجوز جدا می‌خواهد. نصب واقعی تحت RPM و اجرای سرویس opt-in روی معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
   «پروکسی کل سیستم». شکست خود ابزار `external_tool_failed` (exit `1`) است و نتیجهٔ
@@ -165,5 +191,6 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 TUN و UDP semantics جدا دارند (capture، DNS، privilege، teardown) و registry اتصال
 v1 را به‌طور خودکار به دست نمی‌آورند؛ D13 روی TUN دروازهٔ فنی جدید است. Windows به
 named-pipe/ACL و SCM نیاز دارد. Android `VpnService` بومی و یک Go runtime در artifact
-می‌خواهد. GUI مصرف‌کنندهٔ همین management contract است؛ انتخاب framework سرمایه‌گذاری
-جدید و خارج از v1 است.
+می‌خواهد. GUI بعداً همان `run` پیش‌فرض را به GUI+tray تبدیل می‌کند و `--headless`
+دست‌نخورده می‌ماند؛ فرمان `gui` جدا وجود ندارد. انتخاب framework سرمایه‌گذاری جدید و
+خارج از v1 است (D24/D26).

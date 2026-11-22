@@ -9,6 +9,12 @@ R1/R2/R4 اثبات شده‌اند. A01 در ۲۰۲۶-۱۱-۲۱ با شهادت
 `T1` در `spike/`، قراردادهای ساخت در `contracts.md` و `internal/contract/`، و
 آزمون پذیرش در `internal/acceptance/` هستند.
 
+**مدل اجرای بعدی (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
+`run --headless` engine foreground می‌شود؛ بستهٔ بعدی unit ندارد و `autostart`/`service
+install` opt-in خواهند بود. این تصمیم در [نیازمندی‌ها](requirements.md) و
+[قراردادها](contracts.md) ثبت شده و پیاده‌سازی آن R13 در [پلن](implementation-plan.md)
+است؛ بسته‌ها و سندهای نصب فعلی تا پایان R13 همان رفتار foreground/unit را دارند.
+
 | سند | مرجع اصلی برای |
 | --- | --- |
 | [نیازمندی‌ها](requirements.md) | تصمیم‌های کاربر، رفتار محصول و معیارهای پذیرش |

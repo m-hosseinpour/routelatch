@@ -138,16 +138,18 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 
 ## T6 — نصب، سرویس و اتصال برنامه‌ها
 
-- **نتیجه:** A01/A09/A11/A13 روی ماتریس منتخب Linux.
+- **نتیجه:** A01/A09/A11/A13/A15 روی ماتریس منتخب Linux؛ A13/A15 در R13 (D26).
 - **وابستگی:** T2–T5.
 - **دامنهٔ پیشنهادی:** `cmd/routelatch/`, `internal/platform/`, `deploy/`, packaging و README.
-- **کار:** foreground و systemd user unit؛ wrapper مستقل، health identity و env cleanup؛
-  desktop proxy opt-in، حفظ مقدار قبلی، ownership-aware restore و offline recovery.
+- **کار:** `run --headless` foreground؛ `run` پیش‌فرض app/tray با supervisor child
+  (D26)؛ XDG autostart؛ systemd user unit فقط opt-in با linger؛ wrapper مستقل، health
+  identity و env cleanup؛ desktop proxy opt-in، حفظ مقدار قبلی، ownership-aware restore
+  و offline recovery.
 - **کار:** self-contained binary/package؛ version/upgrade policy pinned، private state
   directories، log rotation/retention، config migration و backup قابل بازگشت.
 - **آزمون:** ماشین/محیط پاک بدون skill/websearch/runtime دستی (این آزمون را ما اجرا
   نکردیم؛ A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته شد — ردیف A01 در «آنچه
-  پذیرفته/اثبات نشده است»)؛ login lifecycle و restart؛
+  پذیرفته/اثبات نشده است»)؛ autostart/login، tray/child restart و service opt-in؛
   foreign listener، config corrupted، permissions ضعیف، graceful shutdown؛ inactive
   launcher هیچ silent direct injection نکند؛ set/restore و user-edited settings؛
   محیط فرزند launcher با HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/NO_PROXY ارث‌رسیده و
@@ -190,7 +192,7 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 
 | معیار | task و check یکپارچه |
 | --- | --- |
-| A01/A13 | T6، نصب روی artifact رسمی و lifecycle در T7؛ A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته شد، بدون آزمون محیط پاک توسط ما |
+| A01/A13/A15 | T6/R13، نصب روی artifact رسمی و lifecycle در T7؛ A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته شد، بدون آزمون محیط پاک توسط ما؛ A13/A15 مدل D26 در R13 باز است |
 | A02/A03/A04 | T1/T3، counters عدم bypass و mode races در T7 |
 | A05 | T1 پیش‌نیاز feedback؛ T5/T7 پذیرش proposal/approval/disable/no replay |
 | A06/A07 | T4، refresh failures و pool churn در T7 |
@@ -213,7 +215,54 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ، خروجی عمومی و انتشار همیشه مجوز جدا می‌خواهند.
 
+### R13 — مدل اجرای app/tray و سرویس اختیاری (شروع ۲۰۲۶-۱۱-۲۳)
+
+**وضعیت:** تصمیم D26 ثبت شد و مستندات طراحی (`requirements.md`، `architecture.md`،
+`contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
+میزبان تغییر نکرده است. HEAD پیش از commit این مستندات: `de70f20`.
+
+**هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
+`run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
+`autostart` و `service install` idempotent باشند؛ بسته هیچ unit/postinst نداشته باشد؛
+نبود tray صریح fail شود.
+
+**مرز و ریسک:** این تغییر behavior/نصب/قرارداد عمومی را عوض می‌کند و در صورت انتشار
+breaking است (نه patch). تا پایان R13 هیچ release/tag انجام نمی‌شود. اجرای واقعی
+tray/autostart/service روی میزبان و نصب/فعال‌سازی سرویس مجوز جدا می‌خواهد.
+
+| ID | task | نتیجه | وابستگی | check اصلی |
+| --- | --- | --- | --- | --- |
+| R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher |
+| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ singleton/لاگ/نوتیفیکیشن/`--json`/systemd guard؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run no-op؛ port/corrupt/state؛ `check-artifact.sh` |
+| R13-C | **autostart** | `autostart enable\|disable\|status` با XDG `.desktop`، idempotent، بدون overwrite فایل غیرمالک، بدون side effect نصب | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ disable؛ foreign-file conflict؛ اجرای واقعی KDE (گیت‌شده) |
+| R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy، ensure enabled/active، linger hint، بدون sudo، `--force` برای update | R13-B | fake systemctl/loginctl؛ temp HOME؛ unit content؛ second-run no-op؛ differing unit؛ gated real user manager |
+| R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README/INSTALL/SERVICE/APP، migration از unit قدیمی؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ migration متن؛ CI |
+| R13-F | **acceptance/review/release** | A13/A15 و harness؛ بازنشستگی تست‌های systemd-first یا تبدیل آن‌ها به service opt-in؛ بازبینی مستقل؛ تصمیم انتشار جدا | R13-E | `gofmt`/`go vet`/`go build`؛ `go test -count=1 ./...`؛ تست‌های گیت‌شده؛ package checks؛ verdict بازبین |
+
+**ترتیب:** R13-A اول؛ سپس B. پس از B، C و D می‌توانند مستقل/موازی باشند. E بعد از
+C/D و F بعد از E. B1 (افزودن `run --headless` و مهاجرت تست‌ها/اسکریپت‌ها) و B2
+(تغییر پیش‌فرض به app/tray) در یک batch و بدون release میانی انجام شوند.
+
+**تصمیم‌های قطعی:** user unit + linger برای VPS؛ `autostart enable` وجود دارد؛
+`tray`/`gui` فرمان جدا نیستند؛ tray در حالت پیش‌فرض اجباری است و fallback بی‌صدا
+ندارد؛ service فرمان opt-in است و بسته unit ندارد؛ نبود tray `unsupported`/`7` +
+دلیل `tray_unavailable` است؛ `service install --force` unit را update و enable
+می‌کند و فقط اگر unit فعال باشد `try-restart` می‌زند؛ اجرای service با `SUDO_USER`/`PKEXEC_UID`
+برای کاربر دیگر refuse می‌شود.
+
+**تصمیم‌های باز تا R13-A/B:** انتخاب library tray و مجوز/پایداری آن؛ جزئیات تشخیص
+دقیق user manager/linger روی توزیع‌های مختلف؛ مرز GUI آینده.
+
+**قدم بعدی:** R13-A — یک prototype کوچک از `gogpu/systray` و `deedles.dev/tray` روی
+KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم cgo با کاربر.
+
 ### وضعیت فعلی
+
+- **R13 — تصمیم مدل اجرا ثبت شد (۲۰۲۶-۱۱-۲۳، ارکستریتور؛ فقط مستندات):** D26 برای
+  app/tray، `run --headless`، `autostart` و systemd user service opt-in ثبت شد؛
+  A13/A15 و قراردادهای §۷.۵ به‌روز شدند. HEAD پیش از commit مستندات `de70f20` است.
+  هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرد. کار باز: R13-A تا R13-F.
+  قدم بعدی: spike tray pure-Go روی KDE.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
@@ -413,12 +462,13 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | R11 | **انجام شد (`654cbb6`، `84efe5e`، `8d4118b`):** پشتیبانی واقعی hysteria2/sing-box با رانتایم جدیگانه sing-box `v1.14.4` کنار Xray — import، فیلدهای قرارداد، handoff محلی SOCKS5، انطباق GPL/بستهبندی، و اثبات ترافیک واقعی (۱ تماس مقصد، fail-closed با ۰ تماس، D21). obfs salamander/gecko با ترافیک واقعی اثبات شد (`internal/acceptance/r11_obfs_test.go`). sidecar بستهٔ منتشرشدهٔ v0.1.2 (amd64) آزموده شد (بخش ب/۴). **باقی (کار باز v1):** session طولانی؛ QUIC roaming در repo قابل بازتولید نیست (نیازمند تغییر مسیر/اینترفیس واقعی) | D07/A06/A08 (گسترش دامنه) | انجام شد با تصمیم معماری + مجوز کاربر |
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
+| R13 | **شروع شد — تصمیم/مستندات انجام شد (۲۰۲۶-۱۱-۲۳)؛ پیاده‌سازی باز:** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ A13/A15 و §۷.۵ به‌روز شدند؛ R13-A (spike tray) تا R13-F در بخش R13. هیچ کد/بسته/unit/سرویس تغییر نکرده است | A13/A15 | تصمیم ثبت شد؛ اجرای tray/service/autostart روی میزبان با مجوز جدا |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 
-**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد.
+**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 تنها کار باز v1 است** (R13-A تا R13-F).
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -436,10 +486,11 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 | A02، A03، A05، A06، A08، A12 | اثبات محلی + گروه ج بخش ۱–۳ برای A06 | شمارندهٔ تماس مقصد/خروجی و assertion مستقیم در harness؛ A06 شامل مشتق‌سازی legacy و مسیر import هر دو قاعده؛ گروه ج بخش ۱ (۲۰۲۶-۱۱-۲۱) import کامل pool (۱۷۶ رکورد، ۱۹ unsupported با تفکیک دلیل) و `refresh --all` با حفظ last-good در دو منبع ازکارافتاده را روی نمونهٔ ایزوله اثبات کرد؛ بخش ۲ (۲۰۲۶-۱۱-۲۱) چهار مقصد GETمحور را روی ۶ exit با شمارش تونل، مقایسهٔ بدنه و health مشتق‌شده اثبات کرد (حدود در همان ردیف)؛ بخش ۳ (۲۰۲۶-۱۱-۲۱) روی یک عضو TLS واقعی: pin غلط ۰ درخواست در سمت مقصد و `cooling:exit_unreachable` داد و کنترل با pin حذف‌شده ۱ درخواست/۲۰۰ داد (۱ عضو، بدون تعمیم) |
 | WS/gRPC/XHTTP روی TLS | اثبات محلی (R6) | peer loopback pin‌شده، ۱ درخواست مقصد، pin غلط با ۰ داده؛ h3 خارج از v1 است (سیاست no-UDP/QUIC)؛ reuse طولانی‌مدت WS/TLS در سلول گیت‌شدهٔ `RL_ACCEPT_LONG_REUSE_TEST=1` آزموده شد (۳ درخواست/۳۲٫۰s، شکاف ۳۰٫۰s، ۱ اتصال مشتری زنده در کل پنجره) |
 | A04، A07، A09، A10 | اثبات محلی + نمونهٔ عمومی محدود (R4) + گروه ج بخش ۱–۳ (۲۰۲۶-۱۱-۲۱) | mode switch زنده+در جریان، rerank/cooldown، مجوز فایل/socket، CLI، launcher env، crash/restart، و ۴ exit عمومی با health/ranking واقعی؛ **گروه ج بخش ۱:** کل pool (۱۷۶ رکورد)، ۱۵۷ transport probe بدون تکرار، cooldown سقف ۹۰۰s، یک batch در اولین tick و یک batch پس از gate ۱۰ دقیقه‌ای، انتخاب خودکار بدون تغییر (ترنسپورت healthy نمی‌سازد)، mode switch با listener/state سالم و شاهد `kept=1/closed=0` برای یک اتصال loopback؛ گروه ج بخش ۲ (۲۰۲۶-۱۱-۲۱) گذار targeted↔all-direct را با CONNECT زندهٔ pool و مستقیم سنجید: هر دو `closed count=1 pending=0 kept=0` و `open 1→0`، بدون fallback؛ فقط ۶ exit/۴ مقصد |
-| A13 | **اثبات واقعی (R1 + بررسی ۲۰۲۶-۱۱-۲۰ + corrupt-state ۲۰۲۶-۱۱-۲۱)** | نصب/فعال‌سازی unit واقعی و lifecycle، راه‌اندازی خودکار بعد از reboot با state/pool/desktop-proxy سالم؛ **corrupt-state (JSON بریده/نسخهٔ جدید/غیرقابل‌خواندن) زیر unit موقت `systemd --user` انجام شد (ب/۵): `ExecMainStatus=10`/`NRestarts=0`، فایل و mode دست‌نخورده، بدون listener و بدون direct، و بازیابی مستند `restore`/`chmod` عملی بود. باقی:** فقط همین host/amd64 و unit موقت، نه نصب واقعی کاربر |
+| A13 | **اثبات مدل قبلی (R1 + بررسی ۲۰۲۶-۱۱-۲۰ + corrupt-state ۲۰۲۶-۱۱-۲۱)؛ مدل D26/R13 پیاده‌سازی نشده** | نصب/فعال‌سازی unit واقعی و lifecycle، راه‌اندازی خودکار بعد از reboot با state/pool/desktop-proxy سالم؛ **corrupt-state (JSON بریده/نسخهٔ جدید/غیرقابل‌خواندن) زیر unit موقت `systemd --user` انجام شد (ب/۵): `ExecMainStatus=10`/`NRestarts=0`، فایل و mode دست‌نخورده، بدون listener و بدون direct، و بازیابی مستند `restore`/`chmod` عملی بود. باقی:** فقط همین host/amd64 و unit موقت، نه نصب واقعی کاربر |
 | A01 | **پذیرفته و بسته (شهادت کاربر، ۲۰۲۶-۱۱-۲۱)** | معیار با شهادت کاربر برآورده شد، نه با اجرای ما: کاربر build محلی را از این ماشین برداشت و `.deb` منتشرشدهٔ `v0.1.2` را روی آن نصب کرد و طبق انتظار کار کرد. ما محیط پاک را نیازمودیم و ادعای آزمون آن را نمی‌کنیم؛ شاهدهای محلی همچنان مسیر نصب واقعی/launch (R1)، metadata/payload `.deb`، اسپک RPM و اجرای payload `0.1.2.8.g42b9e4e`/amd64 در container یک‌بارمصرف‌اند. آزمون آیندهٔ VPS به تصمیم کاربر است و کار باز پذیرش شمرده نمی‌شود |
 | A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **GNOME به‌تعویق‌افتاد (اولویت پایین، تصمیم کاربر ۲۰۲۶-۱۱-۲۱):** نشست واقعی GNOME آزموده نشده و این یک محدودیت شناخته‌شده است، نه کار معلق این چرخه |
 | A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیز `v0.1.1`، `v0.1.2` و `v0.1.3` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند |
+| A15 | **پیاده‌سازی نشده (R13-A تا R13-F)** | `run` پیش‌فرض detached/tray/readiness، `--headless` foreground، autostart و service idempotent، حذف unit از بسته، fail صریح نبود tray؛ هیچ‌کدام هنوز پیاده‌سازی/آزمون نشده‌اند |
 | `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری (`amd64`، `arm64`، `riscv64`، `ppc64el`)؛ `check-package.sh` مجموعهٔ دقیق `SHA256SUMS`، control بدون maintainer script، مجموعهٔ دقیق payload، mode/owner و اعتبار نام معماری Debian را میسنجد؛ تکرار بایتیکسان؛ تستهای منفی حذف خط checksum/postinst/فایل اضافه/mode غلط همه fail شدند؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | اسپک/باینری RPM (R12 فاز ۲) | **اسپک: ساخت/اعتبارسنجی محلی؛ باینری: ساخت/بازرسی و اجرای payload روی amd64** | چهار اسپک (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) با Version برابر `.deb`، منبع pin‌شده با SHA256، `%files` شامل LICENSE/NOTICE در `/usr/share/licenses/routelatch/` و بقیه اسناد در `/usr/share/doc/routelatch/`، بدون scriptlet/فعال‌سازی سرویس؛ تست منفی ۷ حالت fail کرد؛ rpmbuild/rpm/rpmspec به‌صورت سیستمی نصب نشدند؛ rpm 6.0.1 استخراج‌شده باینری‌های `0.1.1` را ساخت/بازرسی کرد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد؛ jobCI `rpm-packages` در اجرای `44682457124` سبز شد |
 | hysteria2/sing-box (R11) | **اثبات محلی با ترافیک واقعی** | هارنس گیت‌شدهٔ `RL_ACCEPT_HYSTERIA2_TEST=1`: handshake TLS واقعی با باینری pinشده، echo بایتیک‌سان، ۱ تماس مقصد، fail-closed ۰ تماس، D21؛ فقط loopback. obfs salamander/gecko با سلول گیت‌شدهٔ `RL_ACCEPT_HYSTERIA2_OBFS_TEST=1` اثبات شد؛ **باز v1:** session طولانی؛ sidecar بستهٔ منتشرشدهٔ v0.1.2/amd64 آزموده شد (بخش ب/۴)؛ QUIC roaming در repo بازتولیدپذیر نیست؛ مقصد/exit عمومی در گروه ج است |
@@ -492,58 +543,34 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 ### تصمیم‌های باز (پیاده‌سازی‌نشده یا تازه‌بسته‌شده — نیازمند تصمیم/مجوز)
 
 1. **وضعیت مؤثر برای رکوردهای ذخیره‌شدهٔ gecko بدون رمز obfs — انجام شد (۲۰۲۶-۱۱-۲۱):** قاعدهٔ مشتق‌سازی R5 حالا این رکورد را هم می‌گیرد. `EffectiveStatus` (مالک واحد) یک رکورد `hysteria2` با `obfs = gecko` و رمز خالی را صرف‌نظر از status ذخیره‌شده (جز `invalid`) به `unsupported` با دلیل پایدار **`missing_obfs_password`** مشتق می‌کند — همان رشته‌ای که import در `15d2acb` برمی‌گرداند. شرط یک‌بار در `contract.Hysteria2ObfsPasswordMissing` تعریف شده و import، view، probe و سازندهٔ کانفیگ sidecar همگی از همان استفاده می‌کنند. `pool.Dialable` این رکورد را رد می‌کند (پس `dialableRecords` آن را به engine نمی‌دهد)، probe انتقالی آن را بدون dial رد می‌کند، و `engine.prepareSidecar` هم به‌عنوان defense-in-depth آن را پیش از تولید کانفیگ کنار می‌گذارد، بدون افزودن به `Excluded` تا state بازنویسی نشود؛ مسیر `AddExit` هم همین رکورد را پیش از commit/Sync با خطای `unsupported` رد می‌کند تا گروه سالم handoff خود را از دست ندهد. exitهای سالم hysteria2 (gecko با رمز و hysteria2 بدون obfs) دست‌نخورده می‌مانند؛ اگر فقط رکورد خراب باشد sidecar کانفیگی نمی‌سازد و مسیر مستند «هیچ exit قابل استفاده نیست» (`pool_unavailable`، بدون direct) برقرار است؛ `singbox.Generate` هنوز هر exit غیرقابل استفاده را رد می‌کند. **شواهد:** تست‌های `TestEffectiveStatusDerivesStoredGeckoWithoutObfsPassword` (pool)، `TestStoredGeckoWithoutObfsPasswordDoesNotBreakTheGroup` و `TestAddExitRejectsStoredGeckoWithoutObfsPassword` (engine با `singbox.Generate` واقعی)، `TestStoredGeckoWithoutObfsPasswordIsIsolated` و `TestOnlyStoredGeckoWithoutObfsPasswordFailsClosed` (control؛ شامل برابری بایت‌به‌بایت state)، `TestTransportProbeSkipsStoredGeckoWithoutObfsPassword` (probes)، و `TestGenerateValidation`/`TestGenerateAcceptsGeckoWithPassword` (singbox) پیش از رفع روی HEAD `c5d48b4` (با تنها shim ثابت/helper قرارداد) fail دادند و پس از رفع pass شدند. `gofmt -l` روی فایل‌های تغییرکرده خالی؛ `go vet ./...` و `go build ./...` exit 0؛ `go test -count=1 ./...` سبز (۱۷/۱۷ پکیج، acceptance **۱۱۷٫۲۶۱s**، گیت‌ها خاموش). **بازبینی مستقل:** دور اول `Ready with nits` (یادداشت کهنهٔ پلن، نبود گارد `AddExit`، کامنت قرارداد) و پس از رفع، دور تأیید **Ready**؛ تست‌های هدفمند و `-race` روی دو تست engine gecko سبز. **باقی:** اگر گروه hysteria2 پیش از این رفع یک‌بار به‌خاطر همین رکورد fail کرده باشد، رکوردهای سالم آن گروه در state با `unsupported`/`sidecar_unavailable` ذخیره شده‌اند و طبق قاعدهٔ «پروتکل پشتیبانی‌شده status ذخیره‌شده را نگه می‌دارد» تا refresh/import دوباره خودکار برنمی‌گردند؛ این تغییر عمداً state را بازنویسی یا مهاجرت نمی‌کند. commit محلی همین تغییر (پیام: `fix(pool): derive stored gecko without obfs password as unsupported`).
-2. **مورد دیگری در این بررسی یافت نشد.** این ادعا فقط تا همین بررسی اعتبار دارد.
+2. **R13 — انتخاب فنی tray (۲۰۲۶-۱۱-۲۳):** library/implementation tray هنوز انتخاب و
+   pin نشده؛ R13-A باید pure-Go بودن، static build، منو/نوتیفیکیشن، رفتار KDE و
+   نبود watcher در GNOME/SSH را اثبات کند. اگر گزینهٔ قابل اتکا پیدا نشد، تغییر
+   به cgo/باینری جدا یا تعویق tray تصمیم کاربر است؛ fallback بی‌صدا مجاز نیست.
+3. **مورد دیگری در این بررسی یافت نشد.** این ادعا فقط تا همین بررسی اعتبار دارد.
 
 ### نقطهٔ شروع جلسهٔ بعد
 
-1. `AGENTS.md` و همین بخش را بخوان؛ `git status` و `git log --oneline -5` را با
-   «HEAD هنگام ثبت» مقایسه کن و تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت (۲۰۲۶-۱۱-۲۲، پس از انتشار `v0.1.3`، **گروه ج بخش ۱–۳** و اثبات D22 روی pool
-   واقعی؛ HEAD پیش از commit مستندات همین تغییر: `9b1993f`؛ batch گروه ج فقط push شد و
-   `v0.1.4` پس‌گرفته شد، پس آخرین ریلیز `v0.1.3` است):
-   `/usr/bin/routelatch` طبق آخرین بررسی ۲۰۲۶-۱۱-۲۰ برابر v0.1.2 / `88d04b1` و sidecar
-   `/usr/bin/sing-box` 1.14.4 است؛ سرویس `enabled`/`active` با
-   `ExecMainStatus=0`/`NRestarts=0` (آخرین خواندن). این چرخه reuse طولانی‌مدت ترنسپورت،
-   hysteria2 obfs، sidecar بستهٔ منتشرشده، corrupt-state زیر systemd، اجرای payload RPM
-   روی amd64، دو اصلاح import/status مشتق، بهداشت مستندات/checker و بخش ۳ گروه ج (شکست pin عمومی روی یک عضو واقعی؛ replay واقعی در آن تاریخ اثبات‌نشده بود و در ۲۰۲۶-۱۱-۲۲ اثبات شد) را بست؛ جزئیات و
-   commitها در «وضعیت فعلی» و «تفکیک محدودیت‌ها». A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته
-   شد؛ runtime سه معماری و GNOME به‌تعویق افتادند. کارهای R1–R12 و ریلیزهای
-   `v0.1.0`/`v0.1.1`/`v0.1.2`/`v0.1.3` بسته‌اند و push به دو remote (`github`، `origin`/forgejo)
-   انجام شده است. `dist/BUILD-INFO` محلی v0.1.0/`068e9c2` است، پس بستهٔ محلی `dist/`
-   (v0.1.0/`068e9c2`) تأییدنشده می‌ماند؛ ولی artifact منتشرشدهٔ v0.1.2/amd64 جداگانه
-   دانلود و با `SHA256SUMS` و digest رسمی تأیید شد (بخش ب/۴). نسخهٔ منتشرشدهٔ `v0.1.3` در این batch روی ماشین نصب نشد و نصب فعلی همان v0.1.2 است. RouteLatch به‌عنوان پروکسی
-   دسکتاپ KDE تنظیم شده (R7) و `routelatch desktop proxy restore` مقدار قبلی را
-   بازمی‌گرداند.
-3. **تصمیم‌های کاربر (به‌روزشده ۲۰۲۶-۱۱-۲۱):** D24 (۲۰۲۶-۱۱-۲۰) ادامهٔ v1 را بدون
-   گروه ج تعریف کرد. در ۲۰۲۶-۱۱-۲۱ کاربر گروه ج را به‌عنوان batch بعدی پس از این
-   انتشار مجاز کرد: A04/A06 در مقیاس واقعی با اشتراک پرداختی نیمه‌خصوصی (او pool
-   خصوصی ندارد) به‌همراه بقیهٔ اعضای گروه ج تا حد امکان؛ فقط‌خواندنی، بدون هیچ
-   لینک/credential/دادهٔ اتصال خصوصی در repo، fixture، لاگ یا گزارش، و بدون بار سنگین
-   روی نودهای مشترک. اجرا فقط روی نمونهٔ ایزوله با data-dir و portهای اختصاصی تا سرویس
-   زنده و تنظیم پروکسی دسکتاپ کاربر دست‌نخورده بماند. **سقف churn و بار بخش ۱ (تثبیت‌شده در
-   ۲۰۲۶-۱۱-۲۱):** حداکثر **یک transport probe به‌ازای هر عضو pool**، **هیچ ترافیک
-   مقصدی**، و churn فقط با mode switch/refresh روی نمونهٔ ایزوله؛ سقف بخش ۲: فهرست کوچک پایدار GETمحور (github، wikipedia، example و trace)،
-   حداکثر ۲ درخواست به‌ازای هر exit، بدون loop/ترافیک پایدار (بدون تماس مقصد در بخش ۱). UDP واقعی موضوعیت ندارد چون v1 پشتیبانی UDP ندارد.
-   Windows، UDP/TUN، Android و GUI «خارج از v1»اند و
-   تصمیم/milestone تازه می‌خواهند. A01 با شهادت کاربر بسته شد؛ runtime سه معماری و GNOME
-   به‌تعویق افتادند. corrupt-state آفلاین زیر unit موقت در ۲۰۲۶-۱۱-۲۱ انجام و مجوزش
-   مصرف شد؛ سایر اقدام‌های میزبان همچنان مجوز جدا می‌خواهند.
-4. **ترتیب کار:** انتشار `v0.1.3` انجام شد (push/tag/release با مجوز ۲۰۲۶-۱۱-۲۱ و
-   دروازه‌های انتشار؛ جزئیات در `docs/release-readiness.md`). **گروه ج بخش ۱–۳ انجام شدند
-   (۲۰۲۶-۱۱-۲۱)**؛ شکست TLS-pin در برابر یک endpoint عمومی روی یک عضو واقعی اثبات شد (بدون تعمیم) و HTTP CONNECT از خروجی
-   عمومی در بخش ۲ پوشش داده شد؛ **D22 روی pool واقعی در ۲۰۲۶-۱۱-۲۲ اثبات شد** (یک مقصد/دو exit،
-   بدون تعمیم؛ gate و مقصد شمارندهٔ تحت کنترل کاربر، با همان قواعد فقط‌خواندنی/بدون secret و روی
-   نمونهٔ ایزوله). session طولانی hysteria2 همچنان آزمون‌نشده است. کارهای به‌تعویق‌افتاده
-   (runtime سه معماری، GNOME، نصب واقعی + سرویس تحت RPM) فقط با درخواست/تصمیم تازه
-   شروع می‌شوند. reuse طولانی‌مدت ترنسپورت (بخش ب/۱)، hysteria2 obfs (بخش ب/۲)،
-   corrupt-state زیر systemd (بخش ب/۵)، تأیید sidecar بستهٔ منتشرشده (بخش ب/۴)، اجرای
-   payload RPM روی amd64، رفع `missing_obfs_password` و اصلاح status مشتق بسته شدند.
-   جزئیات و شاهدها در «تفکیک محدودیت‌ها» و بخش «تصمیم‌های باز».
-5. برای هر تغییر: آزمون واحد + به‌روزرسانی harness (جریان کامل بخشی از تعریف «انجام‌شده»
-   است، چون F1/F8 را فقط آن گرفت)، سپس بازبینی مستقل و commit محلی.
-6. شواهد و اعداد را از `spike/*/FINDINGS.md` و `docs/contracts.md` بردار، نه از حافظه.
-   اگر دروازه‌ای شکست، تصمیم وابسته را باز کن و تضمین D-item را ضعیف نکن.
-7. پایان هر task: ردیف وضعیت، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
+1. `AGENTS.md` و همین بخش (مخصوصاً R13) را بخوان؛ `git status` و
+   `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`؛ D26 ثبت شده و
+   هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
+   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
+   بسته‌اند؛ R13 تنها کار باز v1 است.
+3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
+   `--headless` تنها حالت جایگزین؛ فرمان `tray`/`gui` جدا نیست؛ `autostart` XDG؛
+   `service install` فقط systemd user unit + linger؛ بسته هیچ unit/postinst ندارد.
+4. ترتیب: R13-A (spike tray pure-Go) → R13-B (runtime) → R13-C/D (autostart/service)
+   → R13-E (packaging/docs/migration) → R13-F (acceptance/review/release). C و D
+   بعد از B مستقل‌اند؛ E بعد از C/D؛ B1/B2 بدون release میانی.
+5. برای هر تغییر: تست واحد + harness جریان کامل؛ `gofmt -l`، `go vet ./...`،
+   `go build ./...`، `go test -count=1 ./...`؛ تست‌های گیت‌شدهٔ tray/service فقط با
+   مجوز میزبان؛ بازبینی مستقل؛ commit محلی. نصب/فعال‌سازی سرویس، تغییر autostart،
+   تغییر پروکسی دسکتاپ و اجرای tray واقعی روی میزبان مجوز جدا می‌خواهند.
+6. شواهد را از `docs/contracts.md` و `spike/*/FINDINGS.md` بردار، نه از حافظه. اگر
+   spike tray شکست خورد، تصمیم cgo/کتابخانه/تعویق tray را با کاربر باز کن و تضمین
+   static یا «همیشه tray» را بی‌صدا ضعیف نکن.
+7. پایان هر task: ردیف R13، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
 
 ### مسائل و حدود مجوز
 

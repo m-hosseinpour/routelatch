@@ -105,6 +105,14 @@ this revision also installs `/usr/bin/rlch` as a symlink to the main binary.
 Packages do not start or enable the service; opt in with
 `systemctl --user enable --now routelatch`.
 
+**Planned runtime model (D26):** the next release makes plain `routelatch run`
+the app/tray mode and `routelatch run --headless` the foreground/server mode;
+packages will no longer ship a systemd unit, and `autostart`/`service install`
+become explicit opt-ins. The current packages and instructions on this page
+still use the user unit until R13 is implemented; see
+[docs/requirements.md](docs/requirements.md) and
+[docs/implementation-plan.md](docs/implementation-plan.md).
+
 Debian and RPM use one unified version string derived from `BUILD-INFO` in a
 single step: a leading `v` is stripped and hyphens become dots
 (`v0.1.2-8-g42b9e4e` → `0.1.2.8.g42b9e4e`). Both the `.deb` `Version` field and

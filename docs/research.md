@@ -111,6 +111,26 @@ proxy، firewall redirect و virtual interface را توضیح می‌دهد. پ
 تفاوت استفادهٔ برنامه‌ها از تنظیمات proxy را نشان می‌دهد. طرح: core قابل حمل، lifecycle
 بومی. هیچ Windows runtime check، Android build یا آزمایش systemd hardening انجام نشد.
 
+## نامزدهای tray/StatusNotifierItem (بررسی ۲۰۲۶-۱۱-۲۳)
+
+هدف این بررسی، امکان‌سنجی یک tray بدون شکستن باینری static (`CGO_ENABLED=0`) بود.
+هیچ کتابخانه‌ای در این تاریخ انتخاب، pin یا روی میزبان اجرا نشد؛ R13-A باید prototype
+و آزمون واقعی KDE را انجام دهد.
+
+| نامزد | شاهد/نسخه | نتیجه | محدودیت |
+| --- | --- | --- | --- |
+| `gogpu/systray` | [README](https://github.com/gogpu/systray)، releases تا `v0.3.0` (2026-08-30) | MIT، pure Go/zero CGO، پیاده‌سازی Linux با StatusNotifierItem/D-Bus، منو، آیکن PNG و نوتیفیکیشن | پروژهٔ جوان است (اولین انتشار 2026-04)؛ API/پایداری و رفتار DEها باید با prototype سنجیده شود |
+| `deedles.dev/tray` | [pkg.go.dev](https://pkg.go.dev/deedles.dev/tray)، [GitHub](https://github.com/DeedleFake/tray)، `v0.1.10` | MIT، pure Go، پیاده‌سازی مینیمال StatusNotifierItem | سطح API کوچک‌تر؛ نوتیفیکیشن/منوی پیشرفته و maturity باید بررسی شود |
+| `fyne-io/systray` | [README](https://github.com/fyne-io/systray) | fork از getlantern با پشتیبانی Linux از طریق D-Bus/SNI | README صریحاً cgo لازم دارد؛ با build فعلی `CGO_ENABLED=0` سازگار نیست |
+| `getlantern/systray` | [README](https://github.com/getlantern/systray) | tray cross-platform شناخته‌شده | cgo/GTK روی Linux؛ گزینهٔ static نیست |
+
+نکات محیطی: KDE Plasma مسیر آزمون اولیه است. GNOME به‌طور پیش‌فرض
+StatusNotifierItem را نشان نمی‌دهد و به extension (مثل AppIndicator) نیاز دارد؛
+SSH/بدون display هم tray ندارد. XEmbed قدیمی انتخاب نمی‌شود. `--headless` تنها
+fallback صریح است و fallback بی‌صدا مجاز نیست (D26/R-16). قبل از انتخاب نهایی باید
+license/deps، cross-build چهار معماری، ثبت SNI، منو و رفتار parent-death بررسی و
+نسخه pin شود.
+
 ## فرض‌های اصلاح‌شده و پوشش باقی‌مانده
 
 - فرض «Xray برای TUN موتور دیگری لازم دارد» با شواهد جدید اصلاح شد؛ Android همچنان

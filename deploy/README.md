@@ -1,5 +1,11 @@
 # Deploy: systemd user service
 
+> **Planned runtime model (D26, 2026-11-23):** the next release removes this
+> packaged unit. `routelatch run` becomes the app/tray mode and `run --headless`
+> the foreground/server mode; `autostart` and `service install` are explicit
+> opt-ins. The unit flow below still describes the current package until R13
+> lands. See `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
+
 This directory contains the **systemd user** unit for `routelatch run`, the
 foreground service command defined in `docs/contracts.md` §7.1. The process is
 the base; the unit only adds start, stop and restart behavior. It does not
