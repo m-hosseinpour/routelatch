@@ -44,6 +44,7 @@ deploy/README.md           service lifecycle: install, check, uninstall, crash r
 ```
 routelatch-<version>-linux-<arch>/
   bin/routelatch
+  bin/rlch                              short command symlink -> routelatch
   bin/sing-box                          optional: separate GPL-3.0 sidecar (pinned v1.14.4)
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
@@ -77,6 +78,7 @@ The `.deb` payload maps the tarball root onto `/usr`:
 
 ```
 /usr/bin/routelatch
+/usr/bin/rlch                             symlink -> routelatch (short command)
 /usr/bin/sing-box                         optional sidecar, amd64/arm64 only
 /usr/share/doc/routelatch/...             same documents as the tarball
 /usr/share/routelatch/systemd/routelatch.service
@@ -122,6 +124,7 @@ standard RPM paths:
 
 ```
 /usr/bin/routelatch
+/usr/bin/rlch                               symlink -> routelatch (short command)
 /usr/share/licenses/routelatch/LICENSE      Apache-2.0 text
 /usr/share/licenses/routelatch/NOTICE       project attribution
 /usr/share/doc/routelatch/...               all other documents (README, INSTALL,
@@ -172,6 +175,8 @@ cd routelatch-<version>-linux-amd64
 
 # binary for this user only
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
+# short command; the same relative link is inside newer tarballs as bin/rlch
+ln -sf routelatch "$HOME/.local/bin/rlch"
 
 # optional systemd user service; same unit as deploy/systemd/routelatch.service
 install -Dm644 share/routelatch/systemd/routelatch.service \
@@ -181,26 +186,27 @@ systemctl --user enable --now routelatch.service
 ```
 
 For a tarball install, `~/.local/bin` must be on `PATH` for the `routelatch`
-command to resolve. Or install the local Debian package (unsigned; verify
-`SHA256SUMS` first):
+and `rlch` commands to resolve. Or install the local Debian package (unsigned;
+verify `SHA256SUMS` first):
 
 ```sh
 sudo apt install ./routelatch_<debian-version>_amd64.deb
 ```
 
-The `.deb` installs `/usr/bin/routelatch`, the documents under
-`/usr/share/doc/routelatch/`, and a standard systemd user unit. On `amd64` and
-`arm64` it also installs the `/usr/bin/sing-box` sidecar described above. It
-does not start or enable anything; opt in with:
+The `.deb` installs `/usr/bin/routelatch`, its `/usr/bin/rlch` symlink, the
+documents under `/usr/share/doc/routelatch/`, and a standard systemd user unit.
+On `amd64` and `arm64` it also installs the `/usr/bin/sing-box` sidecar described
+above. It does not start or enable anything; opt in with:
 
 ```sh
 systemctl --user daemon-reload
 systemctl --user enable --now routelatch.service
 ```
 
-For a `.deb` install, `/usr/bin` is already on `PATH`, so `routelatch` resolves
-without further setup. To remove the package, disable the service first and use
-the package manager, which also removes its documents and unit:
+For a `.deb` install, `/usr/bin` is already on `PATH`, so `routelatch` and its
+`rlch` symlink resolve without further setup. To remove the package, disable the
+service first and use the package manager, which also removes its documents and
+unit:
 
 ```sh
 systemctl --user disable --now routelatch.service
@@ -346,13 +352,14 @@ version, architecture, `Depends`, description, maintainer, installed size);
 validates the architecture name against the host's Debian architecture list;
 requires the control archive to contain only `control`/`md5sums` (no maintainer
 scripts); compares the exact payload file set, the `0755 root:root` binary mode
-and the `0644` document mode against the documented layout; compares
-`/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte with the
-dist binaries; and verifies the generated user unit. For the RPM spec it checks
-the version/architecture/name/release/license/`Requires`/`Source0` fields, the
-BUILD-INFO stamp comments, the pinned source digest against the actual tarball,
-the `%files` install layout (licenses under `licenses/`, other docs under
-`doc/`), the absence of scriptlets or service enablement, and sidecar presence
+and the `0644` document mode against the documented layout; requires `bin/rlch`
+in the tarball and `/usr/bin/rlch` in the `.deb` to be relative symlinks to
+`routelatch`; compares `/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte
+with the dist binaries; and verifies the generated user unit. For the RPM spec it
+checks the version/architecture/name/release/license/`Requires`/`Source0`
+fields, the BUILD-INFO stamp comments, the pinned source digest against the
+actual tarball, the `%files` install layout (licenses under `licenses/`, other
+docs under `doc/`), the absence of scriptlets or service enablement, and sidecar presence
 only on `amd64`/`arm64`. Negative checks (wrong version, wrong arch, injected
 `%post`, bad source digest, license in the wrong directory, unexpected sidecar,
 missing spec) all fail the gate. It installs nothing and does not run rpmbuild.

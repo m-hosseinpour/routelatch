@@ -82,7 +82,13 @@ From a tarball:
 tar xzf routelatch-v0.1.3-linux-amd64.tar.gz
 cd routelatch-v0.1.3-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
+ln -sf routelatch "$HOME/.local/bin/rlch"
 ```
+
+The last command creates `rlch`, a short alias for `routelatch`. Package builds
+from this revision also ship that link; the manual `ln -s` works with an older
+binary too. The published v0.1.3 assets predate the alias unless you create it
+yourself.
 
 Or install a package (all release packages are **unsigned**; the only
 integrity check is the generated `SHA256SUMS`):
@@ -94,8 +100,10 @@ sudo rpm -i routelatch-0.1.3-1.x86_64.rpm
 
 Packages install `/usr/bin/routelatch`, its documents under
 `/usr/share/doc/routelatch/` (the RPM keeps `LICENSE` and `NOTICE` in
-`/usr/share/licenses/routelatch/`) and a systemd user unit. They do not start
-or enable the service; opt in with `systemctl --user enable --now routelatch`.
+`/usr/share/licenses/routelatch/`) and a systemd user unit. A package built from
+this revision also installs `/usr/bin/rlch` as a symlink to the main binary.
+Packages do not start or enable the service; opt in with
+`systemctl --user enable --now routelatch`.
 
 Debian and RPM use one unified version string derived from `BUILD-INFO` in a
 single step: a leading `v` is stripped and hyphens become dots
@@ -158,6 +166,10 @@ ppc64le are cross-build-only and runtime-untested, and the sidecar is pinned
 only for amd64/arm64.
 
 ## Quick start
+
+Every command below is written as `routelatch`. A build from this revision also
+installs `rlch` as a shorter name for the same program and options; use whichever
+you prefer.
 
 1. Start the service in the foreground and keep the terminal open (Ctrl-C stops
    it cleanly):

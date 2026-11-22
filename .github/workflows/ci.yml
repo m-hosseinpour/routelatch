@@ -202,6 +202,7 @@ jobs:
 
           cat >"$top/expected-files" <<'EOF'
           /usr/bin/routelatch
+          /usr/bin/rlch
           /usr/lib/systemd/user/routelatch.service
           /usr/share/doc/routelatch/BUILD-INFO
           /usr/share/doc/routelatch/INSTALL.md
@@ -231,6 +232,9 @@ jobs:
             rpm -qR "$f" | grep -Fxq ca-certificates || { echo "missing ca-certificates"; exit 1; }
             rpm -qpl "$f" | sort | diff -u "$top/expected-files" - ||
               { echo "unexpected RPM payload layout"; exit 1; }
+            rpm -qp --qf '[%{FILENAMES}\t%{FILEMODES:perms}\t%{FILELINKTOS}\n]' "$f" |
+              grep -Fxq $'/usr/bin/rlch\tlrwxrwxrwx\troutelatch' ||
+              { echo "/usr/bin/rlch is not a symlink to routelatch"; exit 1; }
             scripts_out=$(rpm -qp --scripts "$f")
             if printf '%s\n' "$scripts_out" | grep -Eq '^(preinstall|postinstall|preuninstall|postuninstall) scriptlet'; then
               echo "RPM has maintainer scriptlets"; exit 1

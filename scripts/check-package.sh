@@ -130,6 +130,7 @@ for arch in $arches; do
 	fi
 	for path in \
 		bin/routelatch \
+		bin/rlch \
 		share/doc/routelatch/README.md \
 		share/doc/routelatch/INSTALL.md \
 		share/doc/routelatch/SERVICE.md \
@@ -143,6 +144,12 @@ for arch in $arches; do
 		share/routelatch/systemd/routelatch.service; do
 		expect_file "$tar_files" "$name/$path" "$tar"
 	done
+	# tar -t output is "mode owner/group size date time path -> target"; require
+	# the exact relative link, not a second copy of the binary.
+	tar_link_mode=$(tar -tvzf "$tar" |
+		awk -v path="$name/bin/rlch" '$NF == "routelatch" && $(NF-2) == path {print $1}')
+	[ "$tar_link_mode" = lrwxrwxrwx ] ||
+		fail "$tar bin/rlch is not a symlink to routelatch"
 	tar_bin_hash=$(tar -xOzf "$tar" "$name/bin/routelatch" | sha256sum | awk '{print $1}')
 	dist_bin_hash=$(sha256sum "$dist_bin" | awk '{print $1}')
 	[ "$tar_bin_hash" = "$dist_bin_hash" ] ||
@@ -185,6 +192,7 @@ for arch in $arches; do
 	{
 		for path in \
 			usr/bin/routelatch \
+			usr/bin/rlch \
 			usr/share/doc/routelatch/README.md \
 			usr/share/doc/routelatch/INSTALL.md \
 			usr/share/doc/routelatch/SERVICE.md \
@@ -211,6 +219,10 @@ for arch in $arches; do
 	printf '%s\n' "$deb_listing" |
 		grep -Eq '^-rwxr-xr-x root/root +[0-9]+ .* \./usr/bin/routelatch$' ||
 		fail "$deb /usr/bin/routelatch is not a 0755 root:root file"
+	deb_link_mode=$(printf '%s\n' "$deb_listing" |
+		awk '$NF == "routelatch" && $(NF-2) == "./usr/bin/rlch" {print $1}')
+	[ "$deb_link_mode" = lrwxrwxrwx ] ||
+		fail "$deb /usr/bin/rlch is not a symlink to routelatch"
 	printf '%s\n' "$deb_listing" |
 		grep -Eq '^-rw-r--r-- root/root +[0-9]+ .* \./usr/share/doc/routelatch/README.md$' ||
 		fail "$deb /usr/share/doc/routelatch/README.md is not a 0644 root:root file"
@@ -265,6 +277,7 @@ for arch in $arches; do
 	# The standard RPM layout puts the license texts in licenses/, every other
 	# document in doc/, and a prebuilt static binary in /usr/bin.
 	expect_spec_line 'install -D -m 0755 bin/routelatch %{buildroot}%{_bindir}/routelatch'
+	expect_spec_line 'ln -s routelatch %{buildroot}%{_bindir}/rlch'
 	expect_spec_line 'install -m 0644 share/doc/routelatch/LICENSE %{buildroot}%{_datadir}/licenses/routelatch/LICENSE'
 	expect_spec_line 'install -m 0644 share/doc/routelatch/NOTICE %{buildroot}%{_datadir}/licenses/routelatch/NOTICE'
 	expect_spec_line 'install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service'
@@ -276,6 +289,7 @@ for arch in $arches; do
 	expect_spec_line '%license %{_datadir}/licenses/routelatch/NOTICE'
 	for path in \
 		%{_bindir}/routelatch \
+		%{_bindir}/rlch \
 		%{_datadir}/doc/routelatch/README.md \
 		%{_datadir}/doc/routelatch/INSTALL.md \
 		%{_datadir}/doc/routelatch/SERVICE.md \

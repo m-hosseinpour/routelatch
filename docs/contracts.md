@@ -1075,6 +1075,11 @@ state. پیشنهادها و شواهدشان هم فقط در حافظه‌ان
 فرمان foreground **`run`** است و همان `ExecStart` واحد systemd؛ تا SIGINT/پایان سرویس
 بلاک می‌ماند. `run` هیچ listener جایگزین یا proxy دسکتاپ خودکار نمی‌سازد.
 
+`rlch` یک نام کوتاه نصب‌شده است (symlink به `routelatch`)، نه فرمان تازه؛
+`argv[0]` نام فراخوانی‌شده را نشان می‌دهد، ولی گزینه‌ها/آرگومان‌ها، stdout/stderr،
+JSON، exit code و معنای همهٔ فرمان‌های جدول یکی است. `routelatch` نام قراردادی و
+مسیر `ExecStart` می‌ماند؛ اسکریپت‌ها و سرویس‌ها از نام اصلی استفاده می‌کنند.
+
 ```json
 { "schema_version": 1, "ok": true, "command": "status", "data": { "...": "..." } }
 { "schema_version": 1, "ok": false, "command": "pool refresh",

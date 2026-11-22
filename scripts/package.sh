@@ -159,6 +159,9 @@ for arch in $arches; do
 	fi
 	mkdir -p "$root/bin" "$root/share/doc/routelatch/docs" "$root/share/routelatch/systemd"
 	install -m 0755 "$bin" "$root/bin/routelatch"
+	# The short command is a relative symlink so the tarball works under any
+	# prefix and the package does not carry a second copy of the binary.
+	ln -s routelatch "$root/bin/rlch"
 	# A package must never ship a binary whose stamp disagrees with BUILD-INFO.
 	# Only the host architecture can run here; build.sh already proved the other
 	# architecture embeds the same strings. Compare all three stamped values, not
@@ -431,6 +434,7 @@ EOF
 %install
 rm -rf %{buildroot}
 install -D -m 0755 bin/routelatch %{buildroot}%{_bindir}/routelatch
+ln -s routelatch %{buildroot}%{_bindir}/rlch
 install -d -m 0755 %{buildroot}%{_datadir}/licenses/routelatch
 install -m 0644 share/doc/routelatch/LICENSE %{buildroot}%{_datadir}/licenses/routelatch/LICENSE
 install -m 0644 share/doc/routelatch/NOTICE %{buildroot}%{_datadir}/licenses/routelatch/NOTICE
@@ -461,6 +465,7 @@ EOF
 %license %{_datadir}/licenses/routelatch/LICENSE
 %license %{_datadir}/licenses/routelatch/NOTICE
 %{_bindir}/routelatch
+%{_bindir}/rlch
 %{_datadir}/doc/routelatch/README.md
 %{_datadir}/doc/routelatch/INSTALL.md
 %{_datadir}/doc/routelatch/SERVICE.md

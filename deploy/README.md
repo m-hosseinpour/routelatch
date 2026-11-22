@@ -18,6 +18,7 @@ itself never does it.
 
 ```sh
 install -Dm755 routelatch "$HOME/.local/bin/routelatch"
+ln -sf routelatch "$HOME/.local/bin/rlch"
 install -Dm644 deploy/systemd/routelatch.service \
     "$HOME/.config/systemd/user/routelatch.service"
 systemctl --user daemon-reload
@@ -96,6 +97,7 @@ not a running service.
 routelatch desktop proxy restore
 systemctl --user disable --now routelatch.service
 rm "$HOME/.config/systemd/user/routelatch.service"
+rm -f "$HOME/.local/bin/rlch"
 rm "$HOME/.local/bin/routelatch"
 systemctl --user daemon-reload
 ```

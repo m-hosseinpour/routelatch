@@ -131,3 +131,25 @@ proxy، firewall redirect و virtual interface را توضیح می‌دهد. پ
   بالا snapshot تاریخ خودش است.
 - بررسی نام `RouteLatch` فقط یک جست‌وجوی اولیه بود؛ برخورد واضح پروژهٔ proxy در
   نتایج مشاهده نشد. تضمین یکتایی، availability رجیستری یا علامت تجاری نیست.
+
+## بررسی نام کوتاه `rlch` (۲۰۲۶-۱۱-۲۲)
+
+این بررسی فقط برای انتخاب نام نصب‌شدهٔ کوتاه بود و ادعای یکتایی جهانی یا علامت
+تجاری نمی‌کند. هر دو نام `rlch` و `rtlch` جست‌وجو شدند؛ `rlch` انتخاب شد چون
+پیشوند `rtl` با ابزارهای `rtl-sdr` و معنای right-to-left شلوغ است.
+
+| منبع | روش/URL | نتیجه برای نام دقیق |
+| --- | --- | --- |
+| Debian stable و sid | `https://deb.debian.org/debian/dists/{stable,sid}/main/Contents-amd64.gz`، سپس `zgrep` برای مسیرهای دقیق `/rlch` و `/rtlch` | هیچ باینری هم‌نام |
+| Ubuntu noble | `https://archive.ubuntu.com/ubuntu/dists/noble/Contents-amd64.gz`، سپس `zgrep` | هیچ باینری هم‌نام |
+| Arch رسمی | `https://archlinux.org/packages/search/json/?q=rlch` (و `rtlch`) | ۰ بسته |
+| AUR | `https://aur.archlinux.org/rpc/v5/search/rlch` (و `rtlch`) | نام دقیق پیدا نشد؛ جست‌وجوی fuzzy فقط `r-urlchecker` را دید |
+| Fedora/EPEL | `https://packages.fedoraproject.org/search?query=rlch` برای Fedora 43/44/45، Rawhide و EPEL 8/9/10 | ۰ بسته |
+| npm | `https://registry.npmjs.org/rlch` (و `rtlch`) | 404 |
+| PyPI | `https://pypi.org/pypi/rlch/json` (و `rtlch`) | 404 |
+| crates.io | `https://crates.io/api/v1/crates/rlch` (و `rtlch`) | 404 |
+
+محدودیت‌ها: `Contents-all` دبیان به‌دلیل timeout و `Contents-all` اوبونتو با 404
+بررسی نشد؛ فقط لیست‌های `Contents-amd64` دبیان/اوبونتو و نام بسته‌های Arch/Fedora
+دیده شدند. این بررسی مخازن شخصی، PPA، COPR، Homebrew و همهٔ توزیع‌ها را پوشش نمی‌دهد.
+`rlch` در GitHub یک نام کاربری است، نه یک دستور نصب‌شده.
