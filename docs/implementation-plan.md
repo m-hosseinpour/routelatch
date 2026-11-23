@@ -300,6 +300,22 @@ service/cmd، `scripts/check-artifact.sh`، و `systemd-analyze verify` روی u
 (سرویس زندهٔ میزبان دست‌نخورده)، branchهای PID/starttime فقط unit-tested، و
 گیت‌شدهٔ status واقعی پیش‌فرض skip است.
 
+**R13-E انجام شد (۲۰۲۶-۱۱-۲۴):** در `e6d0100`، unit از tarball/`.deb`/RPM/CI/
+checker حذف شد و فایل منبع `deploy/systemd/routelatch.service` هم حذف شد؛
+`README`، `packaging/README` (INSTALL)، `deploy/README` (SERVICE)،
+`CONTRIBUTING`، `internal/acceptance/README` و `docs/README` مدل اجرای D26
+(app/tray، `--headless`، autostart پیش‌فرض‌محور، `service install`، pidfd/
+seccomp و migration از unit قدیمی) را توصیف می‌کنند. تست lifecycle قدیمی
+systemd بازنشسته شد، corrupt-state به `run --headless` آفلاین تبدیل شد، و یک
+تست migration برای unit تاریخی R12 از مسیر `service install --force` اضافه
+شد. checks: full tests با **۲۷۴ PASS / ۰ FAIL / ۱۵ NOTE** (~۱۲۰s)، build
+چهارمعماری و `package.sh`/`check-package.sh` در `DIST` ایزوله،
+`check-artifact.sh`، `sh -n`، YAML parse، و grep بدون `deploy/systemd` در
+مستندات عمومی. **آزمون‌نشده:** `service install`/uninstall/rollback/linger
+و autostart واقعی در login (فقط fake-manager و status خواندنی)؛ سلول
+default+data-dir به‌خاطر engine زندهٔ R12 در host NOTE می‌شود؛
+`docs/release-readiness.md` snapshot تاریخی می‌ماند.
+
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
 `autostart` و `service install` idempotent باشند؛ بسته هیچ unit/postinst نداشته باشد؛
@@ -356,16 +372,16 @@ exitهای `1/4/6/7/9/10` child را terminal map می‌کند، و در هر �
 (شامل start/restart) با snapshot و precedence `MainPID`/starttime محتوا و
 enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-follow را می‌سنجد.
 
-**تصمیم‌های باز تا R13-E:** آزمون واقعی user manager/linger روی توزیع‌های
-مختلف (R13-F)؛ مرز GUI آینده. انتخاب/pin library tray، اجرای R13-B/C/D بسته
-شدند.
+**تصمیم‌های باز تا R13-F:** آزمون واقعی user manager/linger روی توزیع‌های
+مختلف؛ مرز GUI آینده؛ و تصمیم release/tag جدا. انتخاب/pin library tray و
+اجرای R13-B/C/D/E بسته شدند.
 
-**قدم بعدی:** R13-E (بسته‌بندی/مستندات/migration) روی runtime و service نهایی؛
-سپس R13-F (acceptance/review).
+**قدم بعدی:** R13-F — اجرای full/gated checks و package checks، بازبینی مستقل
+کل change R13، و تصمیم release/tag جدا (بدون انتشار در این واحد).
 
 ### وضعیت فعلی
 
-- **R13 — R13-A/B/C/D بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
+- **R13 — R13-A/B/C/D/E بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
   `deedles.dev/tray v0.2.0` (MIT) را pin کرد (`77a5d22`؛ Plasma 6.6.7، build
   استاتیک چهار معماری، pidfd parent-death؛ تأیید بصری/GNOME/SSH/runtime دو
@@ -375,12 +391,14 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
   پیاده شد: autostart، helper `internal/systemd`، probe احرازشده با deadline،
   رد `--data-dir`، و gated KDE واقعی **PASS**. R13-D در `ea18f31` پیاده شد:
   `service install/uninstall/status`، unit دقیق، base pinning، readiness،
-  rollback، force/adoption و تعارض‌ها. بازبینی‌های B/C/D ابتدا **Not ready**
-  (یا یافتهٔ مادی) و پس از اصلاح **Ready** بودند؛ full tests/-race/
-  check-artifact سبز. tray واقعی KDE، بستن ترمینال واقعی، pidfd
-  ENOSYS/EPERM، نصب/rollback واقعی systemd و runtime غیر-amd64 هنوز
-  آزمون‌نشده‌اند. هیچ سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار
-  باز: R13-E تا R13-F؛ قدم بعدی R13-E.
+  rollback، force/adoption و تعارض‌ها. R13-E در `e6d0100` unit را از
+  بسته‌ها/CI/checker حذف و README/INSTALL/SERVICE/migration را به‌روز کرد
+  (۲۷۴ PASS/۰ FAIL/۱۵ NOTE). بازبینی‌های B/C/D ابتدا **Not ready** (یا یافتهٔ
+  مادی) و پس از اصلاح **Ready** بودند؛ full tests/-race/check-artifact سبز.
+  tray واقعی KDE، بستن ترمینال واقعی، pidfd ENOSYS/EPERM، نصب/rollback واقعی
+  systemd، autostart واقعی در login و runtime غیر-amd64 هنوز آزمون‌نشده‌اند.
+  هیچ سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار باز: R13-F؛ قدم
+  بعدی R13-F.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
