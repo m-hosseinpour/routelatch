@@ -222,8 +222,8 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
 `a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`؛ دور هفتم
-`53ebf68`؛ دور هشتم `eddcc4e`؛ دور نهم `58c4430`؛ دور دهم `2d5db69`. بازبینی‌های
-دور اول تا دهم **Not ready** بودند
+`53ebf68`؛ دور هشتم `eddcc4e`؛ دور نهم `58c4430`؛ دور دهم `2d5db69`؛ دور یازدهم
+`7407a6d`. بازبینی‌های دور اول تا دهم **Not ready** بودند
 (current-state unit، singleton/app marker، tray lifetime، coexistence، migration،
 ownership، startup-in-progress، readiness/rollback، managed-path symlink،
 adoption، دادهٔ run، lock legacy migration، attribution marker، readiness
@@ -237,8 +237,9 @@ stopping-write failure، startup pidfd failure/ESRCH، انتشار R-21 به au
 docs، استثنای SIGKILL خام در خطای pidfd supervisor، ترتیب آزادکردن lock در
 پنجرهٔ fail-closed و پوشش second-run stopping). اصلاحات دور یازدهم استثنای
 صراحتاً محدود SIGKILL، تفکیک singleton `app.lock` از readiness `app.owner` در
-پنجرهٔ fail-closed و افزودن stopping به تست مستقیم second-run را اضافه می‌کند.
-verdict دور یازدهم پس از commit ثبت می‌شود.
+پنجرهٔ fail-closed و افزودن stopping به تست مستقیم second-run را اضافه می‌کند
+(commit `7407a6d`). بازبینی متمرکز یازدهم در حال اجراست؛ verdict نهایی پس از آن
+ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -605,8 +606,8 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
    `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6`،
    دور چهارم `b623567`، دور پنجم `f9bcd45`، دور ششم `5a28874`، دور هفتم
-   `53ebf68`، دور هشتم `eddcc4e`، دور نهم `58c4430` و دور دهم `2d5db69` (و
-   verdict دور دهم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
+   `53ebf68`، دور هشتم `eddcc4e`، دور نهم `58c4430`، دور دهم `2d5db69` و دور
+   یازدهم `7407a6d` (و verdict دور یازدهم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
    کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
