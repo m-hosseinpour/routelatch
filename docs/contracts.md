@@ -1235,8 +1235,11 @@ probe/نگه می‌دارد. این مجموعه به data directory انتخا
   `$XDG_RUNTIME_DIR/routelatch/state.lock` اگر set باشد و
   `/run/user/<uid>/routelatch/state.lock` اگر متفاوت/قابل دسترسی است.
 
-مسیرها ابتدا absolute/canonical و بر اساس device/inode dedupe می‌شوند؛ هر inode
-فقط یک‌بار و با `O_CREAT|O_NOFOLLOW` و `0600` باز می‌شود. اگر یکی در اختیار
+مسیرها ابتدا absolute/Clean می‌شوند (بدون `EvalSymlinks`) و هر مسیر با `lstat`
+بررسی می‌شود؛ symlink/non-regular/مالک دیگر بدون follow رد می‌شود. سپس هر مسیر
+با `O_CREAT|O_NOFOLLOW` و `0600` باز و با `fstat` همان fd بر اساس `(dev,ino)`
+dedupe می‌شود؛ هیچ `stat`/`EvalSymlinks` پیرو برای dedupe استفاده نمی‌شود. اگر
+یکی در اختیار
 دیگری باشد — حتی engine قدیمی در mode `stopped` — همه آزاد و exit `4` با پیام
 «نمونهٔ قدیمی RouteLatch را stop/upgrade کنید» داده می‌شود. اگر مسیر legacy وجود
 دارد ولی بازکردنش (مثلاً به‌خاطر مجوز) ممکن نیست، socket متناظر با deadline
@@ -1254,26 +1257,43 @@ pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و ن�
 `O_CREAT|O_EXCL|O_NOFOLLOW` و `0600` ساخته می‌شود و در اجراهای بعدی همان inode با
 `O_NOFOLLOW` باز می‌شود. رکورد آن شامل `state=starting|ready`، `generation`،
 `pid`، `started_at`، `data_dir` مطلق، `listeners` و `log_path` است. هر نوشتن با
-`ftruncate(0)`، `pwrite` کل رکورد در offset صفر و `fsync` انجام می‌شود؛ خواننده
-فقط یک JSON کامل و معتبر را می‌پذیرد و رکورد ناقص/بدون newline را
-`starting`/نامعتبر می‌شمارد.
+`ftruncate(0)`، `pwrite` کل رکورد در offset صفر و `fsync` انجام می‌شود؛ رکورد
+دقیقاً یک `\n` پایانی دارد (compact JSON + یک newline). خواننده فقط رکوردی را
+می‌پذیرد که JSON کامل و معتبر با همان یک newline پایانی باشد؛ نبود newline،
+بایت اضافه یا بریدگی → `starting`/نامعتبر.
 
 ترتیب startup: supervisor `app.lock` را می‌گیرد؛ سپس `app.owner` را
 باز/می‌سازد و **پیش از گرفتن flock آن** رکورد `starting` را می‌نویسد تا هیچ
 `ready` قبلی معتبر نماند؛ بعد `flock(LOCK_EX)` را با retry کوتاه می‌گیرد و تا
 خروج نگه می‌دارد. سپس engine lock/tray را preflight می‌کند، engine child را با
-`CLOEXEC` (بدون ارث‌بردن lockها) اجرا می‌کند و فقط پس از اینکه management socket
-`status.ready=true` داد **و** tray ثبت شد، رکورد را به `ready` تغییر می‌دهد؛
+`CLOEXEC` (بدون ارث‌بردن lockها) اجرا می‌کند، PID آن و هر sidecar شناخته‌شده را
+برای teardown نگه می‌دارد و از طریق pipe readiness گزارش می‌کند (هیچ فرزندی
+نباید بدون گزارش PID از process group خارج شود)، و فقط پس از
+اینکه management socket `status.ready=true` داد **و** tray ثبت شد، رکورد را به
+`ready` تغییر می‌دهد؛
 listenerها فقط اگر mode ذخیره‌شده `stopped` نباشد لازم‌اند. اگر نوشتن یا گرفتن
 flock شکست بخورد، startup abort و lockها آزاد می‌شوند.
 
 **liveness و `already_running`.** liveness را flock تعیین می‌کند، نه `pid`.
-supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `app.owner` را بررسی و در صورت
-حذف/خرابی با همان قاعدهٔ no-follow بازسازی می‌کند. اگر مسیر به
-symlink/non-regular/مالک دیگر تبدیل شود یا بازسازی سه بار متوالی شکست بخورد،
-supervisor برای اینکه appی بدون marker معتبر نماند fail-closed متوقف می‌شود،
-child را می‌بندد و lockها را آزاد می‌کند (دلیل `app_marker_invalid` یا
-`app_marker_write_failed`)؛ مسیر غیرمجاز overwrite نمی‌شود.
+supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `app.owner` را با `lstat` و
+مقایسهٔ inode با fd خودش بررسی می‌کند:
+
+- اگر فایل همان inode قفل‌شده است، فقط محتوای ناقص/خراب را با نوشتن کامل
+  `ready` بازنویسی می‌کند (fd و flock دست‌نخورده).
+- اگر مسیر حذف شده است، یک inode تازه با `O_CREAT|O_EXCL|O_NOFOLLOW` می‌سازد،
+  `starting` را می‌نویسد، `flock(LOCK_EX)` را با retry کوتاه می‌گیرد، `ready` را
+  می‌نویسد و **تنها پس از قفل‌شدن inode تازه** fd قدیمی را می‌بندد. ترتیب
+  create→write→flock→ready→close-old باید حفظ شود تا هرگز مسیر بدون flock
+  نماند؛ در فاصلهٔ کوتاه بین حذف و قفل تازه، `run` جدید `6` می‌گیرد.
+- اگر مسیر به symlink/non-regular/مالک دیگر تبدیل شده یا inode آن با fd فرق
+  دارد (جایگزینی/بازسازی توسط دیگری)، adopt/overwrite نمی‌کند و fail-closed
+  می‌شود.
+- اگر نوشتن یا گرفتن flock روی inode تازه سه بار متوالی شکست بخورد، supervisor
+  برای اینکه appی بدون marker قفل‌شده نماند fail-closed متوقف می‌شود، child را
+  می‌بندد و lockها را آزاد می‌کند (دلیل `app_marker_invalid` یا
+  `app_marker_write_failed`).
+
+پس از یک چرخهٔ repair موفق، `run` بعدی باید `0` بگیرد (نه `6`).
 
 `run` جدید: اگر `app.lock` آزاد است آن را می‌گیرد و ادامه می‌دهد. اگر در اختیار
 دیگری است، `app.owner` را با `O_NOFOLLOW` باز می‌کند (نبودن فایل → exit `6`
@@ -1306,11 +1326,15 @@ fail-closed می‌شود.
 supervisor فرزند مستقیم launcher است (بدون double-fork) تا `waitpid` معنا داشته
 باشد. در timeout، pipe readiness بسته می‌شود، به process group supervisor
 `SIGTERM` فرستاده می‌شود، تا ۵s برای خروج supervisor/child صبر می‌شود و در صورت
-نیاز `SIGKILL` می‌شود. launcher با `waitpid` خروج supervisor خودش را تأیید می‌کند و
-exit `8` فقط یعنی «supervisor/childی که همین invocation ساخته بود دیگر زنده
-نیست»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run` هم‌زمان می‌تواند پس از
-آزادشدن آن app جدید بسازد. اگر خروج supervisor قابل تأیید نباشد، exit `1` با
-`teardown_incomplete` گزارش می‌شود، نه `8`. دو `run` هم‌زمان: دومی با `app.lock`
+نیاز `SIGKILL` می‌شود. launcher با `waitpid` خروج supervisor خودش را تأیید
+می‌کند، سپس با `kill(-pgid, 0)` و بررسی `/proc` مطمئن می‌شود process group
+supervisor خالی است و PIDs فرزندان (engine و sidecar) که supervisor برای teardown
+گزارش کرده هم دیگر وجود ندارند؛ هر باقی‌مانده با SIGTERM/SIGKILL پاک و دوباره
+بررسی می‌شود (processهای zombie با وضعیت `Z` باقی‌مانده حساب نمی‌شوند). exit `8`
+فقط یعنی «supervisor/childی که همین invocation ساخته بود
+دیگر زنده نیست»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run` هم‌زمان
+می‌تواند پس از آزادشدن آن app جدید بسازد. اگر خروج supervisor/گروه/فرزندان قابل
+تأیید نباشد، exit `1` با `teardown_incomplete` گزارش می‌شود، نه `8`. دو `run` هم‌زمان: دومی با `app.lock`
 سریال می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت پیش‌فرض یک
 envelope زمان startup با `pid`، listenerها، log path و `already_running?` یا
 `state/reason` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را دارد.
@@ -1401,16 +1425,19 @@ active، `MainPID`/starttime و نه یک stop-flag از پیش. اگر یکی �
 دقیقاً یک rollback با precedence صریح اجرا می‌شود:
 
 - **unit قبلی وجود ندارد (نصب تازه):** unit جدید stop/disable و حذف می‌شود.
-- **unit قبلی وجود دارد و process قبلی هنوز همان است** (`MainPID`/starttime
-  برابر snapshot، یعنی هرگز stop نشد): process را stop نمی‌کند و unit را حذف
-  نمی‌کند؛ فایل قبلی را byte-for-byte restore، enabled را به snapshot برمی‌گرداند
-  (disable فقط وضعیت boot را عوض می‌کند، نه process) و `daemon-reload` می‌زند.
-- **unit قبلی وجود دارد ولی process قبلی دیگر همان نیست** (inactive بود یا در
-  جریان start/restart متوقف/جایگزین شد): unit جدید را stop/disable می‌کند، فایل
-  قبلی را restore و enabled قبلی را برمی‌گرداند؛ سپس اگر unit قبلی قبل از install
-  فعال بود آن را start می‌کند و اگر قبلاً inactive بود start نمی‌کند.
+- **unit قبلی وجود دارد، قبل از install فعال بود، و اکنون هم active است با
+  `MainPID` غیرصفر و starttime برابر snapshot:** process را stop نمی‌کند و unit
+  را حذف نمی‌کند؛ فایل قبلی را byte-for-byte restore، enabled را به snapshot
+  برمی‌گرداند (disable فقط وضعیت boot را عوض می‌کند، نه process) و
+  `daemon-reload` می‌زند.
+- **unit قبلی وجود دارد ولی شرط بالا برقرار نیست** (قبلاً inactive بود، یا
+  `MainPID=0`، یا starttime/PID عوض شده، یا در جریان start/restart متوقف/جایگزین
+  شد): unit جدید را stop/disable می‌کند، فایل قبلی را restore و enabled قبلی را
+  برمی‌گرداند؛ سپس اگر unit قبلی قبل از install فعال بود آن را start می‌کند و
+  اگر قبلاً inactive بود start نمی‌کند.
 - **adoption markerless:** فایل قبلی backup می‌شود و در شکست byte-for-byte
-  restore؛ چون unit قبلی inactive است، شاخهٔ سوم بدون start اعمال می‌شود.
+  restore؛ چون unit قبلی inactive است، صریحاً شاخهٔ «شرط بالا برقرار نیست»
+  (بدون start) اعمال می‌شود، حتی اگر `MainPID=0` با snapshot برابر باشد.
 
 rollback یک‌بار اجرا می‌شود؛ شکست خود آن terminal است: هر دو خطا گزارش و unit برای
 بررسی دستی باقی می‌ماند (exit `1`). خروجی برای bind/port مستند `6` و برای شکست
@@ -1460,20 +1487,31 @@ restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بده
 را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
 
 **Migration از unit فعلی.** قبل از upgrade، unit قدیمی
-`systemctl --user disable --now routelatch.service` می‌شود. برای نصب tarball، فایل
-markerless `$XDG_CONFIG_HOME/systemd/user/routelatch.service` و symlinkهای
-`default.target.wants` باید حذف شوند؛ برای نصب بسته، unit در
-`/usr/lib/systemd/user/routelatch.service` با upgrade حذف می‌شود، ولی باید بررسی و
-در صورت باقی‌ماندن symlink/user unit پاک شود. سپس `systemctl --user daemon-reload`،
-نصب بستهٔ جدید و انتخاب `autostart enable` یا `service install` انجام می‌شود. اگر
-unit قدیمی فراموش شود، دو حالت دارد و هر دو باید امن بمانند: engine قدیمی که
-همین حالا در حال اجراست، lock legacy خود را (زیر `XDG_RUNTIME_DIR`، `<StateDir>`
-یا `<data-dir>`) نگه می‌دارد؛ engine جدید همان lock legacy را در پنجرهٔ migration
-می‌گیرد و نمی‌تواند، پس قبل از هر bind با exit `4` رد می‌شود — حتی اگر آن engine
-در mode `stopped` و بدون listener باشد. unit فراموش‌شده‌ای که هنوز engine جدید
-را start می‌کند، چون lockهای legacy در اختیار app جدید هستند نمی‌تواند engine
-دوم بسازد و خودش fail می‌شود. در هر دو حالت ابتدا stop/disable و سپس upgrade
-لازم است.
+`systemctl --user disable --now routelatch.service` می‌شود. برای نصب tarball،
+فایل markerless در **manager config base**
+(`<manager-config-base>/systemd/user/routelatch.service`) و در صورت تفاوت، همان
+مسیر legacy محیط shell (`$XDG_CONFIG_HOME/systemd/user/...` یا
+`~/.config/systemd/user/...`) و symlinkهای `default.target.wants` باید بررسی و
+حذف شوند؛ برای نصب بسته، unit در `/usr/lib/systemd/user/routelatch.service` با
+upgrade حذف می‌شود، ولی باید بررسی و در صورت باقی‌ماندن symlink/user unit پاک
+شود. سپس `systemctl --user daemon-reload`، نصب بستهٔ جدید و انتخاب
+`autostart enable` یا `service install` انجام می‌شود.
+
+اگر unit قدیمی فراموش شود، رفتار به data directory وابسته است:
+
+- **همان data-dir:** engine قدیمی lock legacy همان instance را نگه می‌دارد؛
+  engine جدید همان lock را در پنجرهٔ migration می‌گیرد و نمی‌تواند، پس قبل از هر
+  bind با exit `4` رد می‌شود — حتی اگر آن engine در mode `stopped` و بدون
+  listener باشد. unit فراموش‌شده‌ای که engine جدید را start می‌کند هم چون
+  lockهای legacy در اختیار app جدید هستند نمی‌تواند engine دوم بسازد.
+- **data-dir متفاوت** (مثلاً unit/engine قدیمی default و app جدید با
+  `--data-dir`): دو instance مستقل‌اند (R-19) و ممکن است بر سر port تصادم کنند؛
+  migration باید instance قدیمی را صریحاً stop/disable کند. lockهای جدید عمداً
+  سراسری نیستند، پس این coexistence را نمی‌بندند.
+- **runtime سفارشی:** اگر engine قدیمی default با `XDG_RUNTIME_DIR` سفارشی و
+  غیرقابل‌حدس اجرا شده باشد، دیده نمی‌شود (R-20)؛ stop صریح unit قدیمی همچنان
+  لازم است.
+
 `service install --force` می‌تواند unit قدیمی markerless را فقط در صورت regular
 file/مالکیت کاربر adopt کند؛ بدون `--force` unit متفاوت exit `6` می‌دهد. اسکریپت‌ها
 و تست‌های داخلی که foreground می‌خواهند باید `run --headless` را صدا بزنند.
@@ -1481,9 +1519,9 @@ R13-E باید upgrade با unit کهنه را با نتیجهٔ قابل مشا
 stop/disabled می‌ماند، بستهٔ جدید هیچ unit در `/usr/lib` ندارد، هیچ restart loop،
 orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌شده (`autostart` یا `service`)
 سالم بالا می‌آید. این آزمون باید engine قدیمی فعال و `stopped` را، با و بدون
-`XDG_RUNTIME_DIR` و با `--data-dir`، پوشش دهد و ثابت کند lock/socket قدیمی به
-engine دوم اجازه نمی‌دهد. `run` بدون `--headless` در unit جدید عمداً پشتیبانی
-نمی‌شود.
+`XDG_RUNTIME_DIR`، برای همان data-dir و همچنین حالت default-old + data-dir-new
+پوشش دهد و ثابت کند حالت اول engine دوم نمی‌سازد و حالت دوم صراحتاً stop
+می‌شود. `run` بدون `--headless` در unit جدید عمداً پشتیبانی نمی‌شود.
 ## ۸. پوشش پذیرش
 
 | معیار | task | check |
