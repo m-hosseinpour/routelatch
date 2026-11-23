@@ -222,7 +222,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
 `a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`؛ دور هفتم
-`53ebf68`. بازبینی‌های دور اول تا هفتم **Not ready** بودند (current-state unit،
+`53ebf68`؛ دور هشتم `eddcc4e`. بازبینی‌های دور اول تا هفتم **Not ready** بودند (current-state unit،
 singleton/app marker، tray lifetime، coexistence، migration، ownership،
 startup-in-progress، readiness/rollback، managed-path symlink، adoption، دادهٔ run،
 lock legacy migration، attribution marker، readiness listener، rollback branch،
@@ -231,8 +231,8 @@ XDG base pinning، rollback stop-flag، exit-1 restart race، repair re-flock،
 newline framing، inactive rollback branch، grandchild teardown، legacy symlink
 dedupe، unit path shell/manager، PID/PGID reuse در teardown و ready زودهنگام در
 startup-phase repair). اصلاحات دور هشتم هویت `(pid,starttime)`/pidfd برای
-teardown و repair وابسته به فاز readiness را اضافه می‌کند. بازبینی متمرکز هشتم
-در حال اجراست؛ verdict نهایی پس از آن ثبت می‌شود.
+teardown و repair وابسته به فاز readiness را اضافه می‌کند (commit `eddcc4e`).
+بازبینی متمرکز هشتم در حال اجراست؛ verdict نهایی پس از آن ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -594,9 +594,10 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
    `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6`،
-   دور چهارم `b623567`، دور پنجم `f9bcd45`، دور ششم `5a28874` و دور هفتم
-   `53ebf68` (و verdict دور هفتم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
-   کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
+   دور چهارم `b623567`، دور پنجم `f9bcd45`، دور ششم `5a28874`، دور هفتم
+   `53ebf68` و دور هشتم `eddcc4e` (و verdict دور هشتم پس از آن در `git log`)؛
+   D26 ثبت شده و هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است.
+   آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
