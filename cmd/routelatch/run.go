@@ -125,7 +125,10 @@ func (c *cli) runHeadless(ctx context.Context) int {
 	}
 	defer func() { _ = legacy.Close() }()
 
-	svc, err := control.NewService(ctx, control.Options{Store: st, Paths: c.paths, LogOutput: c.serviceLogOutput()})
+	svc, err := control.NewService(ctx, control.Options{
+		Store: st, Paths: c.paths, LogOutput: c.serviceLogOutput(),
+		TrayProbe: appTrayProbe, PIDFDProbe: appPIDFDProbe,
+	})
 	if err != nil {
 		return c.runFailure(err, false)
 	}

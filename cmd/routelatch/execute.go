@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"routelatch/internal/autostart"
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
 	"routelatch/internal/platform"
@@ -119,6 +120,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) int {
 		return c.config(ctx, rest)
 	case "doctor":
 		return c.doctor(ctx)
+	case "autostart":
+		return c.autostart(ctx, rest)
 	case "env":
 		return c.call(ctx, control.Request{Op: control.OpEnv})
 	case "exec":
@@ -245,7 +248,10 @@ func (c *cli) doctor(ctx context.Context) int {
 		return c.localFailure("doctor", lockErr)
 	}
 	defer lock.Release()
-	svc, svcErr := control.NewService(ctx, control.Options{Store: st, Paths: c.paths, LogOutput: io.Discard})
+	svc, svcErr := control.NewService(ctx, control.Options{
+		Store: st, Paths: c.paths, LogOutput: io.Discard,
+		TrayProbe: appTrayProbe, PIDFDProbe: appPIDFDProbe,
+	})
 	if svcErr != nil {
 		return c.localFailure("doctor", svcErr)
 	}
@@ -535,6 +541,24 @@ func (c *cli) human(env contract.Envelope) {
 			fmt.Fprintf(c.stdout, "desktop proxy restored; modified by user: %v\n", d["user_modified"])
 			return
 		}
+	case "autostart status", "autostart enable", "autostart disable":
+		if d, ok := env.Data.(map[string]any); ok {
+			switch env.Command {
+			case "autostart enable":
+				fmt.Fprintf(c.stdout, "autostart entry enabled: %v\n", d["path"])
+			case "autostart disable":
+				fmt.Fprintf(c.stdout, "autostart entry disabled: %v\n", d["path"])
+			default:
+				fmt.Fprintf(c.stdout, "autostart entry: %v\n", d["path"])
+			}
+			fmt.Fprintf(c.stdout, "enabled: %v\nmanaged: %v\n", yesNo(d["enabled"]), yesNo(d["managed"]))
+			fmt.Fprintf(c.stdout, "tray available: %v\npidfd available: %v\n",
+				yesNo(d["tray_available"]), yesNo(d["pidfd_available"]))
+			if d["conflict"] == autostart.ConflictService {
+				fmt.Fprintln(c.stderr, "warning: a managed RouteLatch service unit exists; disable one of autostart and the service")
+			}
+			return
+		}
 	}
 	// Fallback: print the data as indented JSON on stdout.
 	raw, _ := json.MarshalIndent(env.Data, "", "  ")
@@ -620,6 +644,13 @@ func firstNonEmpty(v any) any {
 	return v
 }
 
+func yesNo(v any) string {
+	if v == true {
+		return "yes"
+	}
+	return "no"
+}
+
 func (c *cli) localFailure(command string, err error) int {
 	env := control.EnvelopeFor(command, nil, err)
 	if c.jsonOut {
@@ -652,6 +683,8 @@ Usage: routelatch [--json] [--data-dir DIR] <command> [args]
   proposals list|accept|reject|recheck|clear
   config get|set|path
   doctor                    permissions, listeners, pool and state checks
+  autostart enable|disable|status
+                            start the app at desktop login (XDG autostart)
   env | exec -- <cmd>       launcher environment
   desktop proxy status|set|restore
   backup | restore <ref>

@@ -34,7 +34,10 @@ var WatcherNames = []string{
 // registered. The app owns this probe: the tray library does not provide a
 // readiness signal, and D26 needs it for status.ready and tray-loss handling.
 func ProbeTray() error {
-	conn, err := dbus.ConnectSessionBus()
+	// No autolaunch: a probe must not start a session bus just to discover
+	// that it has no host. A desktop session already has DBUS_SESSION_BUS_ADDRESS
+	// or /run/user/<uid>/bus; anywhere else there is no tray to find.
+	conn, err := dbus.SessionBusPrivateNoAutoStartup()
 	if err != nil {
 		return fmt.Errorf("session bus is unavailable: %w", err)
 	}

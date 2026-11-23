@@ -177,6 +177,25 @@ type DoctorData struct {
 	Checks []Check `json:"checks"`
 }
 
+// capabilityProbeTimeout bounds the advisory tray/pidfd probes. A wedged
+// session bus must not hold the management operation that serves doctor.
+var capabilityProbeTimeout = time.Second
+
+// probeCapability runs an advisory probe with a deadline. timedOut means the
+// capability was not verified, so the caller must report it as unavailable.
+func probeCapability(probe func() error) (err error, timedOut bool) {
+	result := make(chan error, 1)
+	go func() { result <- probe() }()
+	timer := time.NewTimer(capabilityProbeTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-result:
+		return err, false
+	case <-timer.C:
+		return nil, true
+	}
+}
+
 func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
@@ -304,6 +323,33 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		add("log_file", "warn", "log file "+logPath+" is not writable: "+err.Error(), "check the log directory permissions; the service keeps serving without a file log")
 	} else {
 		add("log_file", "ok", "log file "+logPath+" is writable", "")
+	}
+
+	// App-mode capability. Both are required by the default `run` and by
+	// autostart, which has no headless fallback (§7.5, R-21). A failure is a
+	// warning, not a doctor error: `run --headless` and the service do not
+	// need either.
+	if s.trayProbe == nil {
+		add("tray_available", "warn", "tray availability was not probed in this process", "start the app from a desktop session to check the tray")
+	} else if err, timedOut := probeCapability(s.trayProbe); timedOut {
+		add("tray_available", "warn", "the tray probe did not answer within its deadline; the tray is not verified",
+			"use 'routelatch run --headless' (autostart needs a desktop session with a tray)")
+	} else if err != nil {
+		add("tray_available", "warn", "no StatusNotifier tray host is available for the app: "+err.Error(),
+			"use 'routelatch run --headless' (autostart needs a desktop session with a tray)")
+	} else {
+		add("tray_available", "ok", "a StatusNotifier tray host is registered", "")
+	}
+	if s.pidfdProbe == nil {
+		add("pidfd_available", "warn", "pidfd availability was not probed in this process", "start the app to check pidfd support")
+	} else if err, timedOut := probeCapability(s.pidfdProbe); timedOut {
+		add("pidfd_available", "warn", "the pidfd probe did not answer within its deadline; pidfd is not verified",
+			"use 'routelatch run --headless' or the opt-in service (the app needs Linux >= 5.3 with pidfd_open allowed)")
+	} else if err != nil {
+		add("pidfd_available", "warn", "pidfd_open is not available for the app: "+err.Error(),
+			"use 'routelatch run --headless' or the opt-in service (the app needs Linux >= 5.3 with pidfd_open allowed)")
+	} else {
+		add("pidfd_available", "ok", "pidfd_open is allowed", "")
 	}
 
 	var conflicts []string

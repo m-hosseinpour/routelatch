@@ -56,6 +56,11 @@ type Options struct {
 	// LogOutput is the foreground log stream. Production passes stdout; tests
 	// pass io.Discard. The file log is always at Paths.LogDir/routelatch.log.
 	LogOutput io.Writer
+	// TrayProbe and PIDFDProbe report app-mode capability for the doctor
+	// checks. The CLI injects internal/app's probes; a nil probe is reported
+	// as "not probed" rather than treated as available.
+	TrayProbe  func() error
+	PIDFDProbe func() error
 }
 
 // Service implements Handler and owns the in-process runtime.
@@ -106,6 +111,9 @@ type Service struct {
 	logger  *serviceLogger
 	logPath string
 	logErr  error
+
+	trayProbe  func() error
+	pidfdProbe func() error
 
 	httpListen    string
 	socksListen   string
@@ -158,7 +166,8 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		refresher:  refresher,
 		direct:     opts.Direct,
 		httpListen: snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,
-		stopped: snap.State.Mode == contract.ModeStopped,
+		stopped:   snap.State.Mode == contract.ModeStopped,
+		trayProbe: opts.TrayProbe, pidfdProbe: opts.PIDFDProbe,
 	}
 	s.snap.Store(&snap)
 	s.policy.Store(policy)
