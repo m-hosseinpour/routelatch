@@ -24,7 +24,7 @@ func TestDoctorReportsAppCapabilities(t *testing.T) {
 	st, paths := newServiceStore(t)
 	cases := []struct {
 		name       string
-		tray       func() error
+		tray       func(context.Context) error
 		pidfd      func() error
 		trayState  string
 		pidfdState string
@@ -32,24 +32,24 @@ func TestDoctorReportsAppCapabilities(t *testing.T) {
 		pidfdText  string
 	}{
 		{
-			name: "available", tray: func() error { return nil }, pidfd: func() error { return nil },
+			name: "available", tray: func(context.Context) error { return nil }, pidfd: func() error { return nil },
 			trayState: "ok", pidfdState: "ok",
 			trayText: "StatusNotifier", pidfdText: "pidfd_open is allowed",
 		},
 		{
-			name: "tray unavailable", tray: func() error { return errors.New("no StatusNotifierWatcher on the session bus") },
+			name: "tray unavailable", tray: func(context.Context) error { return errors.New("no StatusNotifierWatcher on the session bus") },
 			pidfd:     func() error { return nil },
 			trayState: "warn", pidfdState: "ok",
 			trayText: "no StatusNotifier tray host", pidfdText: "pidfd_open is allowed",
 		},
 		{
-			name: "pidfd ENOSYS", tray: func() error { return nil },
+			name: "pidfd ENOSYS", tray: func(context.Context) error { return nil },
 			pidfd:     func() error { return errors.New("function not implemented") },
 			trayState: "ok", pidfdState: "warn",
 			trayText: "StatusNotifier", pidfdText: "pidfd_open is not available",
 		},
 		{
-			name: "pidfd EPERM", tray: func() error { return nil },
+			name: "pidfd EPERM", tray: func(context.Context) error { return nil },
 			pidfd:     func() error { return errors.New("operation not permitted") },
 			trayState: "ok", pidfdState: "warn",
 			trayText: "StatusNotifier", pidfdText: "pidfd_open is not available",
@@ -91,7 +91,7 @@ func TestDoctorCapabilityChecksKeepShape(t *testing.T) {
 	st, paths := newServiceStore(t)
 	svc, err := NewService(context.Background(), Options{
 		Store: st, Paths: paths, LogOutput: io.Discard,
-		TrayProbe: func() error { return errors.New("unavailable") }, PIDFDProbe: func() error { return nil },
+		TrayProbe: func(context.Context) error { return errors.New("unavailable") }, PIDFDProbe: func() error { return nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -116,11 +116,9 @@ func TestDoctorCapabilityProbeTimeout(t *testing.T) {
 	capabilityProbeTimeout = 20 * time.Millisecond
 	defer func() { capabilityProbeTimeout = oldTimeout }()
 	st, paths := newServiceStore(t)
-	release := make(chan struct{})
-	defer close(release)
 	svc, err := NewService(context.Background(), Options{
 		Store: st, Paths: paths, LogOutput: io.Discard,
-		TrayProbe: func() error { <-release; return nil }, PIDFDProbe: func() error { return nil },
+		TrayProbe: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }, PIDFDProbe: func() error { return nil },
 	})
 	if err != nil {
 		t.Fatal(err)

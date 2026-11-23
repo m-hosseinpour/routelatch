@@ -20,22 +20,38 @@ import (
 // this, an offline doctor call would dial the real bus and could block for the
 // length of the test timeout; the gated real-KDE probe test opts back in.
 func TestMain(m *testing.M) {
-	appTrayProbe = func() error { return errors.New("tray probe is disabled in package tests") }
+	appTrayProbe = func(context.Context) error { return errors.New("tray probe is disabled in package tests") }
 	appPIDFDProbe = func() error { return nil }
 	os.Exit(m.Run())
+}
+
+// runAutostartCLI runs an autostart command without --data-dir: autostart is
+// default-instance-only and rejects an explicit --data-dir.
+func runAutostartCLI(t *testing.T, args ...string) cliResult {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	full := append([]string{"--json"}, args...)
+	code := Execute(context.Background(), full, &out, &errOut)
+	result := cliResult{code: code, stdout: out.String(), stderr: errOut.String()}
+	if strings.HasPrefix(strings.TrimSpace(result.stdout), "{") {
+		if err := json.Unmarshal(out.Bytes(), &result.env); err != nil {
+			t.Fatalf("invalid JSON envelope %q: %v", result.stdout, err)
+		}
+	}
+	return result
 }
 
 // isolateAutostart points HOME/XDG at a temporary tree and replaces the
 // session-bus, pidfd and systemd seams. Nothing here can touch the user's real
 // autostart file or user manager.
-func isolateAutostart(t *testing.T, tray, pidfd func() error, exe string, unit func(context.Context) (systemd.Unit, error)) (home, dataDir string) {
+func isolateAutostart(t *testing.T, tray func(context.Context) error, pidfd func() error, exe string, unit func(context.Context) (systemd.Unit, error)) (home, dataDir string) {
 	t.Helper()
 	home = t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	dataDir = t.TempDir()
 	if tray == nil {
-		tray = func() error { return nil }
+		tray = func(context.Context) error { return nil }
 	}
 	if pidfd == nil {
 		pidfd = func() error { return nil }
@@ -65,10 +81,10 @@ func autostartData(t *testing.T, result cliResult) map[string]any {
 }
 
 func TestCLIAutostartEnableStatusDisable(t *testing.T) {
-	home, dataDir := isolateAutostart(t, nil, nil, "/opt/Route Latch/routelatch", nil)
+	home, _ := isolateAutostart(t, nil, nil, "/opt/Route Latch/routelatch", nil)
 	path := filepath.Join(home, "config", "autostart", autostart.Filename)
 
-	status := runCLI(t, dataDir, "autostart", "status")
+	status := runAutostartCLI(t, "autostart", "status")
 	if status.code != 0 || status.env.Command != "autostart status" {
 		t.Fatalf("status = %+v (code %d, %s)", status.env, status.code, status.stderr)
 	}
@@ -81,7 +97,7 @@ func TestCLIAutostartEnableStatusDisable(t *testing.T) {
 		t.Fatal("status created the autostart entry")
 	}
 
-	enable := runCLI(t, dataDir, "autostart", "enable")
+	enable := runAutostartCLI(t, "autostart", "enable")
 	if enable.code != 0 || !enable.env.OK {
 		t.Fatalf("enable = %+v (code %d, %s)", enable.env, enable.code, enable.stderr)
 	}
@@ -102,7 +118,7 @@ func TestCLIAutostartEnableStatusDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	again := runCLI(t, dataDir, "autostart", "enable")
+	again := runAutostartCLI(t, "autostart", "enable")
 	if again.code != 0 {
 		t.Fatalf("second enable = %+v", again.env)
 	}
@@ -111,28 +127,28 @@ func TestCLIAutostartEnableStatusDisable(t *testing.T) {
 		t.Fatal("second enable rewrote the managed entry")
 	}
 
-	status = runCLI(t, dataDir, "autostart", "status")
+	status = runAutostartCLI(t, "autostart", "status")
 	data = autostartData(t, status)
 	if status.code != 0 || data["enabled"] != true || data["managed"] != true {
 		t.Fatalf("status after enable = %+v", data)
 	}
 
-	disable := runCLI(t, dataDir, "autostart", "disable")
+	disable := runAutostartCLI(t, "autostart", "disable")
 	if disable.code != 0 || !disable.env.OK {
 		t.Fatalf("disable = %+v (code %d)", disable.env, disable.code)
 	}
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("disable left the managed entry")
 	}
-	if again := runCLI(t, dataDir, "autostart", "disable"); again.code != 0 {
+	if again := runAutostartCLI(t, "autostart", "disable"); again.code != 0 {
 		t.Fatalf("second disable = %+v", again.env)
 	}
 }
 
 func TestCLIAutostartHumanOutput(t *testing.T) {
-	home, dataDir := isolateAutostart(t, nil, nil, "", nil)
+	home, _ := isolateAutostart(t, nil, nil, "", nil)
 	var out, errOut bytes.Buffer
-	code := Execute(context.Background(), []string{"--data-dir", dataDir, "autostart", "enable"}, &out, &errOut)
+	code := Execute(context.Background(), []string{"autostart", "enable"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("enable exit = %d, stderr %s", code, errOut.String())
 	}
@@ -142,7 +158,7 @@ func TestCLIAutostartHumanOutput(t *testing.T) {
 		t.Fatalf("human enable output =\n%s", out.String())
 	}
 	out.Reset()
-	code = Execute(context.Background(), []string{"--data-dir", dataDir, "autostart", "status"}, &out, &errOut)
+	code = Execute(context.Background(), []string{"autostart", "status"}, &out, &errOut)
 	if code != 0 || !strings.Contains(out.String(), "autostart entry:") ||
 		!strings.Contains(out.String(), "pidfd available: yes") {
 		t.Fatalf("human status exit = %d, output =\n%s", code, out.String())
@@ -153,7 +169,7 @@ func TestCLIAutostartHumanOutput(t *testing.T) {
 }
 
 func TestCLIAutostartForeignAndUnsafeExitSix(t *testing.T) {
-	home, dataDir := isolateAutostart(t, nil, nil, "", nil)
+	home, _ := isolateAutostart(t, nil, nil, "", nil)
 	path := filepath.Join(home, "config", "autostart", autostart.Filename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
@@ -162,11 +178,11 @@ func TestCLIAutostartForeignAndUnsafeExitSix(t *testing.T) {
 	if err := os.WriteFile(path, []byte(foreign), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	enable := runCLI(t, dataDir, "autostart", "enable")
+	enable := runAutostartCLI(t, "autostart", "enable")
 	if enable.code != 6 || enable.env.Error == nil || enable.env.Error.Kind != contract.StateLocked {
 		t.Fatalf("foreign enable = %+v (code %d)", enable.env, enable.code)
 	}
-	disable := runCLI(t, dataDir, "autostart", "disable")
+	disable := runAutostartCLI(t, "autostart", "disable")
 	if disable.code != 6 {
 		t.Fatalf("foreign disable exit = %d", disable.code)
 	}
@@ -184,7 +200,7 @@ func TestCLIAutostartForeignAndUnsafeExitSix(t *testing.T) {
 	if err := os.Symlink(target, path); err != nil {
 		t.Fatal(err)
 	}
-	symlink := runCLI(t, dataDir, "autostart", "enable")
+	symlink := runAutostartCLI(t, "autostart", "enable")
 	if symlink.code != 6 {
 		t.Fatalf("symlink enable exit = %d", symlink.code)
 	}
@@ -194,9 +210,9 @@ func TestCLIAutostartForeignAndUnsafeExitSix(t *testing.T) {
 }
 
 func TestCLIAutostartCapabilityReasons(t *testing.T) {
-	trayDown := func() error { return errors.New("no StatusNotifierWatcher") }
-	_, dataDir := isolateAutostart(t, trayDown, nil, "", nil)
-	enable := runCLI(t, dataDir, "autostart", "enable")
+	trayDown := func(context.Context) error { return errors.New("no StatusNotifierWatcher") }
+	isolateAutostart(t, trayDown, nil, "", nil)
+	enable := runAutostartCLI(t, "autostart", "enable")
 	if enable.code != 7 || enable.env.Error == nil || enable.env.Error.Kind != contract.Unsupported {
 		t.Fatalf("tray enable = %+v (code %d)", enable.env, enable.code)
 	}
@@ -208,8 +224,8 @@ func TestCLIAutostartCapabilityReasons(t *testing.T) {
 	}
 
 	pidfdDown := func() error { return errors.New("operation not permitted") }
-	_, dataDir = isolateAutostart(t, nil, pidfdDown, "", nil)
-	enable = runCLI(t, dataDir, "autostart", "enable")
+	isolateAutostart(t, nil, pidfdDown, "", nil)
+	enable = runAutostartCLI(t, "autostart", "enable")
 	if enable.code != 7 || enable.env.Error.Detail["reason"] != "pidfd_unavailable" {
 		t.Fatalf("pidfd enable = %+v (code %d)", enable.env, enable.code)
 	}
@@ -219,10 +235,10 @@ func TestCLIAutostartServiceCoexistence(t *testing.T) {
 	unit := func(context.Context) (systemd.Unit, error) {
 		return systemd.Unit{Exists: true, Managed: true, Safe: true}, nil
 	}
-	home, dataDir := isolateAutostart(t, nil, nil, "", unit)
+	home, _ := isolateAutostart(t, nil, nil, "", unit)
 	path := filepath.Join(home, "config", "autostart", autostart.Filename)
 
-	status := runCLI(t, dataDir, "autostart", "status")
+	status := runAutostartCLI(t, "autostart", "status")
 	if status.code != 0 || !status.env.OK {
 		t.Fatalf("status = %+v (code %d)", status.env, status.code)
 	}
@@ -230,7 +246,7 @@ func TestCLIAutostartServiceCoexistence(t *testing.T) {
 		t.Fatalf("status data = %+v", autostartData(t, status))
 	}
 	for _, verb := range []string{"enable", "disable"} {
-		result := runCLI(t, dataDir, "autostart", verb)
+		result := runAutostartCLI(t, "autostart", verb)
 		if result.code != 6 || result.env.Error == nil || result.env.Error.Kind != contract.StateLocked {
 			t.Fatalf("%s with managed service = %+v (code %d)", verb, result.env, result.code)
 		}
@@ -241,14 +257,14 @@ func TestCLIAutostartServiceCoexistence(t *testing.T) {
 
 	// Human status carries the warning on stderr and still exits 0.
 	var out, errOut bytes.Buffer
-	code := Execute(context.Background(), []string{"--data-dir", dataDir, "autostart", "status"}, &out, &errOut)
+	code := Execute(context.Background(), []string{"autostart", "status"}, &out, &errOut)
 	if code != 0 || !strings.Contains(errOut.String(), "warning:") {
 		t.Fatalf("human conflict status exit = %d, stderr = %s", code, errOut.String())
 	}
 }
 
 func TestCLIDoctorReportsAutostartCapabilities(t *testing.T) {
-	_, dataDir := isolateAutostart(t, func() error { return nil }, func() error { return errors.New("operation not supported") }, "", nil)
+	_, dataDir := isolateAutostart(t, func(context.Context) error { return nil }, func() error { return errors.New("operation not supported") }, "", nil)
 	doctor := runCLI(t, dataDir, "doctor")
 	if doctor.code != 0 || !doctor.env.OK {
 		t.Fatalf("doctor = %+v (code %d, %s)", doctor.env, doctor.code, doctor.stderr)
@@ -274,9 +290,27 @@ func TestCLIDoctorReportsAutostartCapabilities(t *testing.T) {
 	}
 }
 
+// autostart is default-instance-only: an explicit --data-dir must be rejected
+// with usage/2 instead of silently managing the default login entry.
+func TestCLIAutostartRejectsDataDir(t *testing.T) {
+	home, dataDir := isolateAutostart(t, nil, nil, "", nil)
+	for _, verb := range []string{"enable", "disable", "status"} {
+		result := runCLI(t, dataDir, "autostart", verb)
+		if result.code != 2 || result.env.Error == nil || result.env.Error.Kind != contract.InvalidDestination {
+			t.Fatalf("%s --data-dir = %+v (code %d)", verb, result.env, result.code)
+		}
+		if result.env.Error.Message != autostartDataDirMessage {
+			t.Fatalf("%s message = %q, want %q", verb, result.env.Error.Message, autostartDataDirMessage)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(home, "config", "autostart", autostart.Filename)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("a rejected --data-dir command created the default autostart entry")
+	}
+}
+
 func TestCLIAutostartUnknownVerb(t *testing.T) {
-	_, dataDir := isolateAutostart(t, nil, nil, "", nil)
-	result := runCLI(t, dataDir, "autostart", "maybe")
+	isolateAutostart(t, nil, nil, "", nil)
+	result := runAutostartCLI(t, "autostart", "maybe")
 	if result.code != 2 || result.env.Error == nil || result.env.Error.Kind != contract.InvalidDestination {
 		t.Fatalf("unknown verb = %+v (code %d)", result.env, result.code)
 	}
@@ -295,7 +329,7 @@ func (f fakeSystemRunner) Output(context.Context, string, ...string) (string, er
 // puts the shell base and the manager base in different trees and only a
 // managed unit under the manager base.
 func TestCLIAutostartDetectsManagedUnitFromManagerBase(t *testing.T) {
-	home, dataDir := isolateAutostart(t, nil, nil, "", nil)
+	home, _ := isolateAutostart(t, nil, nil, "", nil)
 	autostartServiceUnit = detectManagedServiceUnit
 	managerBase := filepath.Join(home, "manager-config")
 	unitDir := filepath.Join(managerBase, "systemd", "user")
@@ -310,7 +344,7 @@ func TestCLIAutostartDetectsManagedUnitFromManagerBase(t *testing.T) {
 	autostartSystem = fakeSystemRunner{out: "XDG_CONFIG_HOME=" + managerBase + "\nHOME=" + home + "\n"}
 	t.Cleanup(func() { autostartSystem = oldRunner })
 
-	status := runCLI(t, dataDir, "autostart", "status")
+	status := runAutostartCLI(t, "autostart", "status")
 	if status.code != 0 || autostartData(t, status)["conflict"] != autostart.ConflictService {
 		t.Fatalf("status = %+v (code %d)", status.env, status.code)
 	}
@@ -329,7 +363,7 @@ func TestRealKDEAutostartProbe(t *testing.T) {
 	// TestMain replaced the probes with fakes; this test is the explicit
 	// opt-in that uses the real session bus and pidfd.
 	oldTray, oldPIDFD := appTrayProbe, appPIDFDProbe
-	appTrayProbe, appPIDFDProbe = app.ProbeTray, app.ProbePIDFD
+	appTrayProbe, appPIDFDProbe = app.ProbeTrayContext, app.ProbePIDFD
 	t.Cleanup(func() { appTrayProbe, appPIDFDProbe = oldTray, oldPIDFD })
 	if err := app.ProbeTray(); err != nil {
 		t.Skipf("no real StatusNotifier tray host: %v", err)
@@ -344,9 +378,8 @@ func TestRealKDEAutostartProbe(t *testing.T) {
 	autostartServiceUnit = func(context.Context) (systemd.Unit, error) { return systemd.Unit{}, nil }
 	t.Cleanup(func() { autostartServiceUnit = oldUnit })
 
-	dataDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	if code := Execute(context.Background(), []string{"--json", "--data-dir", dataDir, "autostart", "enable"}, &out, &errOut); code != 0 {
+	if code := Execute(context.Background(), []string{"--json", "autostart", "enable"}, &out, &errOut); code != 0 {
 		t.Fatalf("real enable exit = %d: %s %s", code, out.String(), errOut.String())
 	}
 	path := filepath.Join(home, "config", "autostart", autostart.Filename)
@@ -361,7 +394,7 @@ func TestRealKDEAutostartProbe(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	if code := Execute(context.Background(), []string{"--json", "--data-dir", dataDir, "autostart", "disable"}, &out, &errOut); code != 0 {
+	if code := Execute(context.Background(), []string{"--json", "autostart", "disable"}, &out, &errOut); code != 0 {
 		t.Fatalf("real disable exit = %d: %s %s", code, out.String(), errOut.String())
 	}
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {

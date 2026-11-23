@@ -58,8 +58,10 @@ type Options struct {
 	LogOutput io.Writer
 	// TrayProbe and PIDFDProbe report app-mode capability for the doctor
 	// checks. The CLI injects internal/app's probes; a nil probe is reported
-	// as "not probed" rather than treated as available.
-	TrayProbe  func() error
+	// as "not probed" rather than treated as available. TrayProbe is
+	// context-aware because a busy session bus must not hold the doctor
+	// operation.
+	TrayProbe  func(context.Context) error
 	PIDFDProbe func() error
 }
 
@@ -112,7 +114,7 @@ type Service struct {
 	logPath string
 	logErr  error
 
-	trayProbe  func() error
+	trayProbe  func(context.Context) error
 	pidfdProbe func() error
 
 	httpListen    string

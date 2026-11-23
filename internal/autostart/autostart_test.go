@@ -18,8 +18,8 @@ import (
 
 const testExecutable = "/opt/Route Latch/bin/routelatch"
 
-func okProbes() (func() error, func() error) {
-	return func() error { return nil }, func() error { return nil }
+func okProbes() (func(context.Context) error, func() error) {
+	return func(context.Context) error { return nil }, func() error { return nil }
 }
 
 func testManager(t *testing.T) (*Manager, string) {
@@ -269,7 +269,7 @@ func TestEnableRejectsForeignOwner(t *testing.T) {
 
 func TestEnableRequiresTrayBeforeWriting(t *testing.T) {
 	m, path := testManager(t)
-	m.ProbeTray = func() error { return errors.New("no StatusNotifierWatcher") }
+	m.ProbeTray = func(context.Context) error { return errors.New("no StatusNotifierWatcher") }
 	_, err := m.Enable(context.Background())
 	opErr := expectCode(t, err, contract.ExitUnsupported)
 	if reason(opErr) != "tray_unavailable" {
@@ -289,7 +289,7 @@ func TestEnableRequiresTrayBeforeDeclaringIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := os.Lstat(path)
-	m.ProbeTray = func() error { return errors.New("tray host disappeared") }
+	m.ProbeTray = func(context.Context) error { return errors.New("tray host disappeared") }
 	_, err := m.Enable(context.Background())
 	opErr := expectCode(t, err, contract.ExitUnsupported)
 	if reason(opErr) != "tray_unavailable" {
@@ -314,7 +314,7 @@ func TestEnableRequiresPIDFDBeforeWritingAndIdempotent(t *testing.T) {
 			t.Fatalf("%v: entry written without pidfd", wantErr)
 		}
 
-		m.ProbeTray = func() error { return nil }
+		m.ProbeTray = func(context.Context) error { return nil }
 		m.ProbePIDFD = func() error { return nil }
 		if _, err := m.Enable(context.Background()); err != nil {
 			t.Fatal(err)
@@ -335,7 +335,7 @@ func TestEnableRequiresPIDFDBeforeWritingAndIdempotent(t *testing.T) {
 
 func TestTrayFailureTakesPrecedence(t *testing.T) {
 	m, _ := testManager(t)
-	m.ProbeTray = func() error { return errors.New("no host") }
+	m.ProbeTray = func(context.Context) error { return errors.New("no host") }
 	m.ProbePIDFD = func() error { return errors.New("ENOSYS") }
 	_, err := m.Enable(context.Background())
 	opErr := expectCode(t, err, contract.ExitUnsupported)
@@ -466,17 +466,132 @@ func TestStatusIsReadOnly(t *testing.T) {
 	}
 }
 
-func TestStatusReportsUnsafePathAsUnmanaged(t *testing.T) {
+// The managed-path rule applies to status too: a symlink, non-regular entry or
+// foreign owner is rejected with exit 6 instead of reported as unmanaged/0.
+func TestStatusRejectsUnsafePaths(t *testing.T) {
+	cases := []struct {
+		name  string
+		want  string
+		setup func(t *testing.T, m *Manager, path string)
+	}{
+		{
+			name: "symlink", want: "is a symlink",
+			setup: func(t *testing.T, _ *Manager, path string) {
+				target := filepath.Join(t.TempDir(), "target")
+				if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(target, path); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "not_regular", want: "not a regular file",
+			setup: func(t *testing.T, _ *Manager, path string) {
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			// This reaches the directory ownership branch: a mismatched euid
+			// fails before the entry is inspected. The file branch is covered
+			// by TestStatusRejectsForeignOwnedEntry when running as root.
+			name: "directory_foreign_owner", want: "directory is not owned by the current uid",
+			setup: func(t *testing.T, m *Manager, path string) {
+				if err := os.WriteFile(path, []byte(MarkerKey+"\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				m.Euid = func() int { return os.Geteuid() + 1 }
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, path := testManager(t)
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			tc.setup(t, m, path)
+			_, err := m.Status(context.Background())
+			opErr := expectCode(t, err, contract.ExitConflict)
+			if !strings.Contains(opErr.Message, tc.want) {
+				t.Fatalf("message = %q, want %q", opErr.Message, tc.want)
+			}
+		})
+	}
+}
+
+// The entry-level foreign-owner branch needs a directory owned by us that holds
+// a file owned by another uid, which only root can arrange.
+func TestStatusRejectsForeignOwnedEntry(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("needs root to chown an entry inside a user-owned directory")
+	}
 	m, path := testManager(t)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("/tmp/target", path); err != nil {
+	if err := os.WriteFile(path, []byte(MarkerKey+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chown(path, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	_, err := m.Status(context.Background())
+	opErr := expectCode(t, err, contract.ExitConflict)
+	if !strings.Contains(opErr.Message, "entry is not owned by the current uid") {
+		t.Fatalf("message = %q", opErr.Message)
+	}
+}
+
+// Foreign regular content without the marker is not unsafe: status reports it
+// as enabled but unmanaged with exit 0 and never overwrites it.
+func TestStatusReportsForeignRegularAsUnmanaged(t *testing.T) {
+	m, path := testManager(t)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := "[Desktop Entry]\nExec=/usr/bin/other\n"
+	if err := os.WriteFile(path, []byte(foreign), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	st, err := m.Status(context.Background())
 	if err != nil || !st.Enabled || st.Managed {
 		t.Fatalf("status = %+v, %v", st, err)
+	}
+	if readFile(t, path) != foreign {
+		t.Fatal("status changed the foreign entry")
+	}
+}
+
+// An existing autostart directory belongs to the user's XDG config; enable
+// must not silently tighten its mode.
+func TestEnableLeavesExistingDirectoryModeAlone(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "autostart")
+	if err := os.Mkdir(dir, 0o775); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o775); err != nil {
+		t.Fatal(err)
+	}
+	tray, pidfd := okProbes()
+	m := &Manager{
+		ConfigBase: base, Executable: testExecutable,
+		ProbeTray: tray, ProbePIDFD: pidfd,
+		ServiceUnit: func(context.Context) (systemd.Unit, error) { return systemd.Unit{}, nil },
+	}
+	if _, err := m.Enable(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o775 {
+		t.Fatalf("existing directory mode = %04o, want 0775", info.Mode().Perm())
 	}
 }
 

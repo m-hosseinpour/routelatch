@@ -18,7 +18,7 @@ import (
 // the user-manager lookup; tests replace these seams instead of touching the
 // session bus, pidfd or systemctl.
 var (
-	appTrayProbe                                = app.ProbeTray
+	appTrayProbe                                = app.ProbeTrayContext
 	appPIDFDProbe                               = app.ProbePIDFD
 	autostartExecutable                         = os.Executable
 	autostartHomeDir                            = os.UserHomeDir
@@ -43,12 +43,22 @@ func detectManagedServiceUnit(ctx context.Context) (systemd.Unit, error) {
 	return systemd.ReadUnit(systemd.UnitPath(base))
 }
 
+// autostartDataDirMessage stays under the output sanitizer's rune limit so the
+// advice is not truncated.
+const autostartDataDirMessage = "autostart is default-instance-only; use 'routelatch service install --data-dir <dir>'"
+
 func (c *cli) autostart(ctx context.Context, args []string) int {
 	if len(args) != 1 {
 		return c.localFailure("autostart", usageErr("autostart needs enable, disable or status"))
 	}
 	verb := args[0]
 	command := "autostart " + verb
+	// Autostart manages the default desktop instance only. A custom data
+	// directory is a separate instance and has no XDG login entry; rejecting
+	// is better than silently starting the default one.
+	if c.dataDirSet {
+		return c.localFailure(command, usageErr(autostartDataDirMessage))
+	}
 	home, _ := autostartHomeDir()
 	base, err := autostart.ConfigBase(autostartGetenv, home)
 	if err != nil {

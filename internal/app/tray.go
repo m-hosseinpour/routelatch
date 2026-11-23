@@ -30,26 +30,39 @@ var WatcherNames = []string{
 	"org.freedesktop.StatusNotifierWatcher",
 }
 
+// trayProbeTimeout bounds ProbeTray and the supervisor/registration checks so
+// a wedged session bus cannot hold app preflight, autostart or doctor.
+const trayProbeTimeout = 2 * time.Second
+
 // ProbeTray verifies that a StatusNotifier watcher exists and that a host is
-// registered. The app owns this probe: the tray library does not provide a
-// readiness signal, and D26 needs it for status.ready and tray-loss handling.
+// registered, with a bounded deadline. The app owns this probe: the tray
+// library does not provide a readiness signal, and D26 needs it for
+// status.ready and tray-loss handling.
 func ProbeTray() error {
-	// No autolaunch: a probe must not start a session bus just to discover
-	// that it has no host. A desktop session already has DBUS_SESSION_BUS_ADDRESS
-	// or /run/user/<uid>/bus; anywhere else there is no tray to find.
-	conn, err := dbus.SessionBusPrivateNoAutoStartup()
+	ctx, cancel := context.WithTimeout(context.Background(), trayProbeTimeout)
+	defer cancel()
+	return ProbeTrayContext(ctx)
+}
+
+// ProbeTrayContext is the context-aware tray probe. Cancellation aborts the
+// in-flight bus calls; no deadline is imposed here, so callers choose the bound.
+func ProbeTrayContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	conn, err := connectSessionBus(ctx)
 	if err != nil {
-		return fmt.Errorf("session bus is unavailable: %w", err)
+		return err
 	}
 	defer conn.Close()
-	watcher, err := findWatcher(conn)
+	watcher, err := findWatcher(ctx, conn)
 	if err != nil {
 		return err
 	}
 	if watcher == "" {
 		return errors.New("no StatusNotifierWatcher on the session bus")
 	}
-	host, err := hostRegistered(conn, watcher)
+	host, err := hostRegistered(ctx, conn, watcher)
 	if err != nil {
 		return err
 	}
@@ -59,11 +72,49 @@ func ProbeTray() error {
 	return nil
 }
 
-func findWatcher(conn *dbus.Conn) (string, error) {
+// connectSessionBus returns an authenticated private session-bus connection
+// without autolaunch. godbus's Auth and Hello take no context and do blocking
+// socket I/O, so the connection is closed when ctx is done; otherwise a peer
+// that accepts but stalls mid-handshake would hang the probe past its deadline.
+func connectSessionBus(ctx context.Context) (*dbus.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// No autolaunch: a probe must not start a session bus just to discover
+	// that it has no host. A desktop session already has DBUS_SESSION_BUS_ADDRESS
+	// or /run/user/<uid>/bus; anywhere else there is no tray to find.
+	conn, err := dbus.SessionBusPrivateNoAutoStartup()
+	if err != nil {
+		return nil, fmt.Errorf("session bus is unavailable: %w", err)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	// Private connections are unauthenticated by construction: calls on them
+	// without Auth/Hello never complete, which made the old probe hang on a
+	// live session bus.
+	err = conn.Auth(nil)
+	if err == nil {
+		err = conn.Hello()
+	}
+	stop()
+	if err != nil {
+		_ = conn.Close()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, fmt.Errorf("session bus handshake failed: %w", err)
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		_ = conn.Close()
+		return nil, ctxErr
+	}
+	return conn, nil
+}
+
+func findWatcher(ctx context.Context, conn *dbus.Conn) (string, error) {
 	obj := conn.Object("org.freedesktop.DBus", "/org/freedesktop/DBus")
 	for _, name := range WatcherNames {
 		var owned bool
-		if err := obj.Call("org.freedesktop.DBus.NameHasOwner", 0, name).Store(&owned); err != nil {
+		if err := obj.CallWithContext(ctx, "org.freedesktop.DBus.NameHasOwner", 0, name).Store(&owned); err != nil {
 			return "", fmt.Errorf("NameHasOwner(%s): %w", name, err)
 		}
 		if owned {
@@ -73,7 +124,7 @@ func findWatcher(conn *dbus.Conn) (string, error) {
 	return "", nil
 }
 
-func watcherProperty(conn *dbus.Conn, watcher, property string, out any) error {
+func watcherProperty(ctx context.Context, conn *dbus.Conn, watcher, property string, out any) error {
 	ifaces := []string{watcher}
 	for _, fallback := range []string{"org.kde.StatusNotifierWatcher", "org.freedesktop.StatusNotifierWatcher"} {
 		if fallback != watcher {
@@ -82,8 +133,8 @@ func watcherProperty(conn *dbus.Conn, watcher, property string, out any) error {
 	}
 	var lastErr error
 	for _, iface := range ifaces {
-		err := conn.Object(watcher, "/StatusNotifierWatcher").Call(
-			"org.freedesktop.DBus.Properties.Get", 0, iface, property,
+		err := conn.Object(watcher, "/StatusNotifierWatcher").CallWithContext(
+			ctx, "org.freedesktop.DBus.Properties.Get", 0, iface, property,
 		).Store(out)
 		if err == nil {
 			return nil
@@ -93,17 +144,17 @@ func watcherProperty(conn *dbus.Conn, watcher, property string, out any) error {
 	return lastErr
 }
 
-func hostRegistered(conn *dbus.Conn, watcher string) (bool, error) {
+func hostRegistered(ctx context.Context, conn *dbus.Conn, watcher string) (bool, error) {
 	var host bool
-	if err := watcherProperty(conn, watcher, "IsStatusNotifierHostRegistered", &host); err != nil {
+	if err := watcherProperty(ctx, conn, watcher, "IsStatusNotifierHostRegistered", &host); err != nil {
 		return false, fmt.Errorf("get IsStatusNotifierHostRegistered: %w", err)
 	}
 	return host, nil
 }
 
-func registeredItems(conn *dbus.Conn, watcher string) ([]string, error) {
+func registeredItems(ctx context.Context, conn *dbus.Conn, watcher string) ([]string, error) {
 	var items []string
-	if err := watcherProperty(conn, watcher, "RegisteredStatusNotifierItems", &items); err != nil {
+	if err := watcherProperty(ctx, conn, watcher, "RegisteredStatusNotifierItems", &items); err != nil {
 		return nil, fmt.Errorf("get RegisteredStatusNotifierItems: %w", err)
 	}
 	return items, nil
@@ -119,17 +170,21 @@ func itemRegistered(items []string, pid int) bool {
 	return false
 }
 
-func waitRegistered(conn *dbus.Conn, watcher string, pid int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+func waitRegistered(ctx context.Context, conn *dbus.Conn, watcher string, pid int, timeout time.Duration) error {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for {
-		items, err := registeredItems(conn, watcher)
+		items, err := registeredItems(waitCtx, conn, watcher)
 		if err == nil && itemRegistered(items, pid) {
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("the tray item for pid %d did not register within %s", pid, timeout)
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("the tray item for pid %d did not register within %s: %w", pid, timeout, waitCtx.Err())
+		case <-ticker.C:
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -159,22 +214,30 @@ func Notify(conn *dbus.Conn, summary, body string) error {
 }
 
 // TrayRegistered verifies that this app's tray item is still registered with
-// the current watcher. It closes over a fresh connection so it does not depend
-// on the tray child's own bus handle.
+// the current watcher using a bounded deadline.
 func TrayRegistered(pid int) error {
-	conn, err := dbus.ConnectSessionBus()
+	ctx, cancel := context.WithTimeout(context.Background(), trayProbeTimeout)
+	defer cancel()
+	return TrayRegisteredContext(ctx, pid)
+}
+
+// TrayRegisteredContext is the context-aware registration check. It closes
+// over a fresh connection so it does not depend on the tray child's own bus
+// handle.
+func TrayRegisteredContext(ctx context.Context, pid int) error {
+	conn, err := connectSessionBus(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	watcher, err := findWatcher(conn)
+	watcher, err := findWatcher(ctx, conn)
 	if err != nil {
 		return err
 	}
 	if watcher == "" {
 		return errors.New("no StatusNotifierWatcher")
 	}
-	items, err := registeredItems(conn, watcher)
+	items, err := registeredItems(ctx, conn, watcher)
 	if err != nil {
 		return err
 	}
@@ -228,12 +291,12 @@ func RunTray(opts TrayOptions) error {
 		return unsupportedTray(err)
 	}
 	defer conn.Close()
-	watcher, err := findWatcher(conn)
+	watcher, err := findWatcher(context.Background(), conn)
 	if err != nil || watcher == "" {
 		send("error tray_unavailable")
 		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierWatcher")))
 	}
-	host, err := hostRegistered(conn, watcher)
+	host, err := hostRegistered(context.Background(), conn, watcher)
 	if err != nil || !host {
 		send("error tray_unavailable")
 		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierHost")))
@@ -281,7 +344,7 @@ func RunTray(opts TrayOptions) error {
 		return internalFailure("app.tray", "cannot add the tray log entry", err)
 	}
 
-	if err := waitRegistered(conn, watcher, os.Getpid(), opts.ReadyWait); err != nil {
+	if err := waitRegistered(context.Background(), conn, watcher, os.Getpid(), opts.ReadyWait); err != nil {
 		send("error tray_registration_failed")
 		return internalFailure("app.tray", "the tray item did not register", err)
 	}
@@ -307,17 +370,17 @@ func RunTray(opts TrayOptions) error {
 			closeItem()
 			return nil
 		case <-monitor.C:
-			watcher, err := findWatcher(conn)
+			watcher, err := findWatcher(context.Background(), conn)
 			if err != nil || watcher == "" {
 				send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierWatcher disappeared"}
 			}
-			host, err := hostRegistered(conn, watcher)
+			host, err := hostRegistered(context.Background(), conn, watcher)
 			if err != nil || !host {
 				send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierHost disappeared"}
 			}
-			items, err := registeredItems(conn, watcher)
+			items, err := registeredItems(context.Background(), conn, watcher)
 			if err != nil || !itemRegistered(items, os.Getpid()) {
 				send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the tray item is no longer registered"}

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
@@ -32,13 +33,17 @@ const (
 	entryMode    = 0o644
 	dirMode      = 0o700
 	maxEntrySize = 64 << 10
+	// probeTimeout bounds each capability probe so a wedged session bus cannot
+	// hold an autostart command.
+	probeTimeout = 2 * time.Second
 )
 
 // Status is the documented `autostart ...` payload. The CLI renders the same
 // fields as JSON and as human output.
 type Status struct {
 	Path string `json:"path"`
-	// Enabled means a path exists at Path, including a foreign or unsafe one.
+	// Enabled means a regular path exists at Path, including a foreign one.
+	// An unsafe path (symlink, non-regular, foreign owner) is an error.
 	Enabled bool `json:"enabled"`
 	// Managed means that entry carries the ownership marker and passed the
 	// managed-path checks, so RouteLatch may rewrite or remove it.
@@ -53,7 +58,7 @@ type Status struct {
 type Manager struct {
 	ConfigBase  string
 	Executable  string
-	ProbeTray   func() error
+	ProbeTray   func(context.Context) error
 	ProbePIDFD  func() error
 	ServiceUnit func(context.Context) (systemd.Unit, error)
 	Euid        func() int
@@ -150,21 +155,27 @@ func (m *Manager) validate() error {
 }
 
 // Status reports the current entry and capability state without writing. A
-// path RouteLatch cannot safely manage is reported as enabled but unmanaged,
-// never as ours.
+// path RouteLatch cannot safely manage (symlink, non-regular, foreign owner)
+// is rejected with the managed-path rule (§7.5), never reported as ours. A
+// foreign regular file without the marker stays enabled/unmanaged.
 func (m *Manager) Status(ctx context.Context) (Status, error) {
 	if err := m.validate(); err != nil {
 		return Status{}, err
 	}
 	st := Status{Path: m.Path()}
-	if state, err := m.inspect(); err == nil {
-		st.Enabled = state.exists
-		st.Managed = state.managed
+	state, err := m.inspect()
+	if err != nil {
+		return Status{}, conflictFailure("cannot inspect the existing autostart entry", err)
 	}
+	if state.unsafe != "" {
+		return Status{}, conflictFailure(unsafeMessage(state.unsafe), nil)
+	}
+	st.Enabled = state.exists
+	st.Managed = state.managed
 	if managed, err := m.managedService(ctx); err == nil && managed {
 		st.Conflict = ConflictService
 	}
-	st.TrayAvailable, st.PIDFDAvailable = m.capabilities()
+	st.TrayAvailable, st.PIDFDAvailable = m.capabilities(ctx)
 	return st, nil
 }
 
@@ -196,7 +207,7 @@ func (m *Manager) Enable(ctx context.Context) (Status, error) {
 	if managed {
 		return Status{}, conflictFailure("a managed RouteLatch service unit exists; choose autostart or the service, not both (remove the service unit first)", nil)
 	}
-	tray, pidfd := m.capabilities()
+	tray, pidfd := m.capabilities(ctx)
 	if !tray {
 		return Status{}, unsupportedTray()
 	}
@@ -243,7 +254,7 @@ func (m *Manager) Disable(ctx context.Context) (Status, error) {
 	if state.exists && !state.managed {
 		return Status{}, conflictFailure("an autostart entry that RouteLatch does not manage exists; it was not removed", nil)
 	}
-	tray, pidfd := m.capabilities()
+	tray, pidfd := m.capabilities(ctx)
 	st := Status{Path: m.Path(), TrayAvailable: tray, PIDFDAvailable: pidfd}
 	if !state.exists {
 		return st, nil
@@ -335,12 +346,35 @@ func hasMarker(content string) bool {
 
 // ensureDir creates the autostart directory and re-applies the managed-path
 // rule after creation so a path swapped for a symlink is not written through.
+// Only a directory RouteLatch creates is set to 0700: an existing directory
+// belongs to the user's XDG configuration, so its mode is left alone.
 func (m *Manager) ensureDir() error {
 	dir := m.dir()
-	if err := os.MkdirAll(dir, dirMode); err != nil {
-		return internalFailure("cannot create the autostart directory", err)
-	}
 	info, err := os.Lstat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			return internalFailure("cannot create the autostart directory", err)
+		}
+		// MkdirAll is subject to the umask; set the exact mode for the new
+		// directory. Open with O_NOFOLLOW so a path swapped for a symlink
+		// between MkdirAll and the chmod is never followed.
+		f, openErr := os.OpenFile(dir, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_DIRECTORY|syscall.O_CLOEXEC, 0)
+		if openErr != nil {
+			if errors.Is(openErr, syscall.ELOOP) || errors.Is(openErr, syscall.ENOTDIR) {
+				return conflictFailure("the autostart directory is a symlink or not a directory; refusing to write through it", nil)
+			}
+			return internalFailure("cannot open the new autostart directory", openErr)
+		}
+		chmodErr := f.Chmod(dirMode)
+		closeErr := f.Close()
+		if chmodErr != nil {
+			return internalFailure("cannot set the autostart directory permissions", chmodErr)
+		}
+		if closeErr != nil {
+			return internalFailure("cannot close the autostart directory", closeErr)
+		}
+		info, err = os.Lstat(dir)
+	}
 	if err != nil {
 		return internalFailure("cannot inspect the autostart directory", err)
 	}
@@ -349,11 +383,6 @@ func (m *Manager) ensureDir() error {
 	}
 	if st, ok := info.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != m.euid() {
 		return conflictFailure("the autostart directory is not owned by the current uid; refusing to write into it", nil)
-	}
-	if info.Mode().Perm() != dirMode {
-		if err := os.Chmod(dir, dirMode); err != nil {
-			return internalFailure("cannot set the autostart directory permissions", err)
-		}
 	}
 	return nil
 }
@@ -369,6 +398,10 @@ func (m *Manager) write(content []byte) error {
 	if state.unsafe != "" || (state.exists && !state.managed) {
 		return conflictFailure("the autostart entry changed while enabling; it was not overwritten", nil)
 	}
+	// The re-inspect above is a safety check, not a lock: the directory entry
+	// can change between it and Rename. That TOCTOU window is accepted; the
+	// rename replaces the path atomically and never follows a final symlink,
+	// and every managed decision is based on no-follow observations.
 	tmp, err := os.CreateTemp(m.dir(), "."+Filename+".tmp-*")
 	if err != nil {
 		return internalFailure("cannot create a temporary autostart file", err)
@@ -432,9 +465,11 @@ func syncDir(dir string) error {
 	return d.Sync()
 }
 
-func (m *Manager) capabilities() (tray, pidfd bool) {
+func (m *Manager) capabilities(ctx context.Context) (tray, pidfd bool) {
 	if m.ProbeTray != nil {
-		tray = m.ProbeTray() == nil
+		probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+		tray = m.ProbeTray(probeCtx) == nil
+		cancel()
 	}
 	if m.ProbePIDFD != nil {
 		pidfd = m.ProbePIDFD() == nil

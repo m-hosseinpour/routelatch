@@ -505,7 +505,7 @@ func (s *supervisor) engineDied(code int) error {
 	if err := s.checkTray(); err != nil {
 		return s.shutdown(7, unsupportedTray(err))
 	}
-	if s.tray == nil || TrayRegistered(s.tray.handle.PID) != nil {
+	if s.tray == nil || s.trayRegistered() != nil {
 		return s.trayDied(3)
 	}
 	if err := s.writeState(MarkerReady); err != nil {
@@ -921,7 +921,15 @@ func (s *supervisor) checkTray() error {
 	if s.opts.TrayCheck != nil {
 		return s.opts.TrayCheck()
 	}
-	return ProbeTray()
+	ctx, cancel := context.WithTimeout(context.Background(), trayProbeTimeout)
+	defer cancel()
+	return ProbeTrayContext(ctx)
+}
+
+func (s *supervisor) trayRegistered() error {
+	ctx, cancel := context.WithTimeout(context.Background(), trayProbeTimeout)
+	defer cancel()
+	return TrayRegisteredContext(ctx, s.tray.handle.PID)
 }
 
 func (s *supervisor) engineArgs() []string {

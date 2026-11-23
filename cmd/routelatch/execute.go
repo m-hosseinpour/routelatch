@@ -19,11 +19,12 @@ import (
 )
 
 type cli struct {
-	jsonOut bool
-	dataDir string
-	stdout  io.Writer
-	stderr  io.Writer
-	paths   store.Paths
+	jsonOut    bool
+	dataDir    string
+	dataDirSet bool
+	stdout     io.Writer
+	stderr     io.Writer
+	paths      store.Paths
 }
 
 func main() {
@@ -77,9 +78,11 @@ func (c *cli) parseGlobal(args []string) ([]string, error) {
 				return nil, usageErr("--data-dir needs a value")
 			}
 			c.dataDir = args[i+1]
+			c.dataDirSet = true
 			i++
 		case strings.HasPrefix(arg, "--data-dir="):
 			c.dataDir = strings.TrimPrefix(arg, "--data-dir=")
+			c.dataDirSet = true
 		default:
 			rest = append(rest, arg)
 		}
