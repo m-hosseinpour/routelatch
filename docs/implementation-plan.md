@@ -220,14 +220,14 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 **وضعیت:** تصمیم D26 ثبت شد و مستندات طراحی (`requirements.md`، `architecture.md`،
 `contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
 میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
-`5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ commit اصلاحات دور دوم:
-`76dd6d6`؛ commit اصلاحات دور سوم: `a7fa3b6`. بازبینی دور اول **Not ready** بود
-(current-state unit، singleton per-data-dir/app marker، tray lifetime،
-autostart/service coexistence، migration، unit ownership و چند nit)؛ دور دوم نیز
-**Not ready** بود (startup-in-progress، service readiness/rollback، managed-path
-symlink، adoption active و دادهٔ run). اصلاحات دور سوم شامل lock/check order،
-readiness واقعی، rollback دقیق، no-follow و adoption-after-stop است. بازبینی
-متمرکز سوم در حال اجراست؛ verdict نهایی پس از آن ثبت می‌شود.
+`5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
+`a7fa3b6`؛ دور چهارم `b623567`. بازبینی‌های دور اول تا سوم **Not ready** بودند
+(current-state unit، singleton/app marker، tray lifetime، coexistence، migration،
+ownership، startup-in-progress، readiness/rollback، managed-path symlink، adoption
+و دادهٔ run). اصلاحات دور چهارم `InstanceDir` canonical مستقل از XDG_RUNTIME،
+مالکیت lock توسط supervisor، marker starting/ready با repair، readiness mode-aware
+و timeout، rollback یک‌مرحله‌ای و adoption فقط inactive را اضافه می‌کند. بازبینی
+متمرکز چهارم در حال اجراست؛ verdict نهایی پس از آن ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -284,10 +284,10 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 - **R13 — تصمیم مدل اجرا ثبت شد (۲۰۲۶-۱۱-۲۳، ارکستریتور؛ فقط مستندات):** D26 برای
   app/tray، `run --headless`، `autostart` و systemd user service opt-in ثبت شد؛
   A13/A15 و قراردادهای §۷.۵ به‌روز شدند. HEAD پیش از commit مستندات `de70f20`،
-  commit D26 `5dbc070`، commit اصلاحات دور اول `973d5a8`، اصلاحات دور دوم
-  `76dd6d6` و اصلاحات دور سوم `a7fa3b6` است؛ بازبینی دور اول/دوم `Not ready` و
-  بازبینی متمرکز سوم در حال اجراست. هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر
-  نکرد. کار باز: R13-A تا R13-F. قدم بعدی: ثبت verdict دور سوم، سپس spike
+  commit D26 `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم
+  `a7fa3b6` و دور چهارم `b623567` است؛ بازبینی‌های اول تا سوم `Not ready` و
+  بازبینی متمرکز چهارم در حال اجراست. هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ
+  تغییر نکرد. کار باز: R13-A تا R13-F. قدم بعدی: ثبت verdict دور چهارم، سپس spike
   tray pure-Go روی KDE.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
@@ -580,9 +580,9 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 1. `AGENTS.md` و همین بخش (مخصوصاً R13) را بخوان؛ `git status` و
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
-   `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6` و دور سوم `a7fa3b6`
-   (و verdict دور سوم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
-   کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
+   `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6` و
+   دور چهارم `b623567` (و verdict دور چهارم پس از آن در `git log`)؛ D26 ثبت شده
+   و هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
