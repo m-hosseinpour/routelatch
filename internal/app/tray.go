@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -403,25 +404,32 @@ func TrayOptionsFromEnv() (TrayOptions, error) {
 }
 
 // ParentWatchFromEnv arms the headless engine's parent-death watchdog. It
-// returns a cancel function that stops the watcher.
-func ParentWatchFromEnv() (context.Context, context.CancelFunc, error) {
+// returns a cancel function that stops the watcher and whether this process is
+// the app supervisor's own engine child. That exception is not granted from an
+// environment marker alone: the inherited pidfd must name this process's real
+// parent, and that parent must equal ROUTELATCH_PARENT_PID. A stale or forged
+// marker therefore stays an ordinary headless engine.
+func ParentWatchFromEnv() (context.Context, context.CancelFunc, bool, error) {
 	fdRaw := os.Getenv("ROUTELATCH_PARENT_PIDFD")
 	if fdRaw == "" {
-		return nil, nil, nil
+		return nil, nil, false, nil
 	}
 	fd, err := strconv.Atoi(fdRaw)
 	if err != nil || fd < 3 {
-		return nil, nil, fmt.Errorf("invalid ROUTELATCH_PARENT_PIDFD")
+		return nil, nil, false, fmt.Errorf("invalid ROUTELATCH_PARENT_PIDFD")
 	}
+	expected := 0
 	if expectedRaw := os.Getenv("ROUTELATCH_PARENT_PID"); expectedRaw != "" {
-		expected, err := strconv.Atoi(expectedRaw)
+		expected, err = strconv.Atoi(expectedRaw)
 		if err != nil || expected <= 1 {
-			return nil, nil, fmt.Errorf("invalid ROUTELATCH_PARENT_PID")
+			return nil, nil, false, fmt.Errorf("invalid ROUTELATCH_PARENT_PID")
 		}
-		if os.Getppid() != expected {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			return ctx, func() {}, nil
+		// A readable fdinfo target that differs from the advertised parent is
+		// a forged/stale inherited descriptor: ignore it entirely. If the
+		// supervisor already died, the pidfd still names it, so arming the
+		// watch below makes this child exit instead of orphaning it.
+		if target := pidfdTargetPID(fd); target != 0 && target != expected {
+			return nil, nil, false, nil
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -438,5 +446,27 @@ func ParentWatchFromEnv() (context.Context, context.CancelFunc, error) {
 			}
 		}
 	}()
-	return ctx, cancel, nil
+	supervised := os.Getenv("ROUTELATCH_APP_ENGINE") == "1" && expected > 1 && os.Getppid() == expected
+	return ctx, cancel, supervised, nil
+}
+
+// pidfdTargetPID reads the pid a pidfd was opened on from /proc fdinfo. It
+// returns 0 when the descriptor is not a pidfd or cannot be inspected, which
+// keeps the caller on the conservative (non-supervised) path.
+func pidfdTargetPID(fd int) int {
+	raw, err := os.ReadFile(fmt.Sprintf("%s/self/fdinfo/%d", procRoot, fd))
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, "Pid:") {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "Pid:")))
+		if err != nil || pid <= 1 {
+			return 0
+		}
+		return pid
+	}
+	return 0
 }

@@ -50,6 +50,17 @@ type childProc struct {
 	handle  *ProcHandle
 	wait    chan int
 	control *os.File
+	// msgs and readErr belong to exactly one tray generation. A restarted
+	// tray gets fresh channels, so a message queued by the previous child can
+	// never satisfy or abort the new generation's readiness.
+	msgs    chan string
+	readErr chan error
+	// done stops that generation's control reader when the child is replaced,
+	// so a full buffer can never strand a goroutine.
+	done chan struct{}
+	// readerDone closes after the reader has delivered every line the dead
+	// child wrote, so a quit that races the exit status is not stranded.
+	readerDone chan struct{}
 }
 
 type supervisor struct {
@@ -76,8 +87,6 @@ type supervisor struct {
 	engine *childProc
 	tray   *childProc
 
-	trayMsgs      chan string
-	trayReadErr   chan error
 	quitRequested bool
 
 	restarts map[string][]time.Time
@@ -139,13 +148,11 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	logPath := filepath.Join(opts.Paths.LogDir, "routelatch.log")
 	s := &supervisor{
 		opts: opts, log: logFile,
-		paths:       MarkerPathsFor(opts.Paths.InstanceDir, absData, logPath, opts.Paths.Socket),
-		logPath:     logPath,
-		phase:       MarkerStarting,
-		listeners:   configuredListeners(opts.Paths.Config),
-		restarts:    map[string][]time.Time{},
-		trayMsgs:    make(chan string, 8),
-		trayReadErr: make(chan error, 1),
+		paths:     MarkerPathsFor(opts.Paths.InstanceDir, absData, logPath, opts.Paths.Socket),
+		logPath:   logPath,
+		phase:     MarkerStarting,
+		listeners: configuredListeners(opts.Paths.Config),
+		restarts:  map[string][]time.Time{},
 	}
 	s.generation = uint64(opts.Now().UTC().UnixNano())
 	s.startedAt = opts.Now().UTC().Format(time.RFC3339Nano)
@@ -190,12 +197,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		return s.abortStartup(markerWriteFailed(err))
 	}
 
-	// 3. Preflight tray and engine lock before spawning anything. Tray absence
-	// is unsupported/7; a headless engine is already_running/4 regardless of
-	// marker content.
-	if err := s.checkTray(); err != nil {
-		return s.abortStartup(unsupportedTray(err))
-	}
+	// 3. Preflight the engine lock before the tray probe: a headless engine is
+	// already_running/4 regardless of marker content and must win over a
+	// missing tray's unsupported/7.
 	free, err := ProbeEngineLock(s.opts.Paths.Lock)
 	if err != nil {
 		return s.abortStartup(conflictExit(contract.ExitConflict, "app.preflight", "the engine lock path is invalid; refusing to start", "engine_lock_invalid", err))
@@ -203,6 +207,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	if !free {
 		return s.abortStartup(conflictExit(contract.ExitAlreadyRunning, "app.preflight",
 			"a headless RouteLatch engine is running for this data dir; stop it first or use 'routelatch run --headless'", "headless_running", nil))
+	}
+	if err := s.checkTray(); err != nil {
+		return s.abortStartup(unsupportedTray(err))
 	}
 
 	// 4. Hand the tray and engine a pidfd on this supervisor so both observe
@@ -269,15 +276,38 @@ func (s *supervisor) loop(ctx context.Context) error {
 			if s.quitRequested {
 				continue
 			}
-			return s.engineDied(code)
-		case code := <-s.tray.wait:
+			if code == 0 {
+				// An engine that exits cleanly is a stop request, not a
+				// restart; shutdown owns the stopping transition.
+				return s.shutdown(0, nil)
+			}
+			if err := s.engineDied(code); err != nil {
+				return err
+			}
+			if s.quitRequested {
+				return nil
+			}
+		case code := <-s.trayWait():
 			if s.quitRequested {
 				continue
 			}
-			return s.trayDied(code)
-		case msg := <-s.trayMsgs:
+			if err := s.trayDied(code); err != nil {
+				return err
+			}
+			if s.quitRequested {
+				return nil
+			}
+		case msg := <-s.trayMessages():
+			if msg == "quit" {
+				s.quitRequested = true
+				s.logf("supervisor.quit requested=tray")
+				return s.shutdown(0, nil)
+			}
 			if err := s.handleTrayMessage(msg); err != nil {
 				return s.shutdown(0, err)
+			}
+			if s.quitRequested {
+				return nil
 			}
 		case <-repair.C:
 			if err := s.repair(); err != nil {
@@ -507,6 +537,9 @@ func (s *supervisor) trayDied(code int) error {
 	if err := s.stopTrayOnly(); err != nil {
 		return s.failClosed(teardownIncomplete(err))
 	}
+	if s.quitRequested {
+		return s.shutdown(0, nil)
+	}
 	if err := s.spawnTray(); err != nil {
 		return s.failClosed(err)
 	}
@@ -530,10 +563,6 @@ func (s *supervisor) trayDied(code int) error {
 
 func (s *supervisor) handleTrayMessage(msg string) error {
 	switch {
-	case msg == "quit":
-		s.quitRequested = true
-		s.logf("supervisor.quit requested=tray")
-		return s.shutdown(0, nil)
 	case msg == "lost":
 		s.logf("supervisor.tray_lost")
 		return s.trayDied(3)
@@ -581,8 +610,7 @@ func (s *supervisor) spawnEngine() error {
 	}
 	handle, err := OpenProc(cmd.Process.Pid)
 	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		stopUnpinnedDirectChild(cmd)
 		return internalFailure("app.engine", "cannot pin the engine child with a pidfd", err)
 	}
 	wait := make(chan int, 1)
@@ -632,8 +660,7 @@ func (s *supervisor) spawnTray() error {
 	handle, err := OpenProc(cmd.Process.Pid)
 	if err != nil {
 		_ = controlR.Close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		stopUnpinnedDirectChild(cmd)
 		return internalFailure("app.tray", "cannot pin the tray child with a pidfd", err)
 	}
 	wait := make(chan int, 1)
@@ -650,20 +677,76 @@ func (s *supervisor) spawnTray() error {
 		}
 		wait <- code
 	}()
-	s.tray = &childProc{cmd: cmd, handle: handle, wait: wait, control: controlR}
+	// A fresh pair per tray child is what keeps a queued lost/quit from a
+	// previous generation out of this generation's readiness window.
+	msgs := make(chan string, 8)
+	readErr := make(chan error, 1)
+	done := make(chan struct{})
+	readerDone := make(chan struct{})
+	s.tray = &childProc{cmd: cmd, handle: handle, wait: wait, control: controlR, msgs: msgs, readErr: readErr, done: done, readerDone: readerDone}
 	s.reportIdentity("tray", handle)
-	go readTrayControl(controlR, s.trayMsgs, s.trayReadErr)
+	go readTrayControl(controlR, msgs, readErr, done, readerDone)
 	s.logf("supervisor.tray_started pid=%d", handle.PID)
 	return nil
+}
+
+// trayWait and trayMessages return nil when no tray is running; a nil channel
+// blocks forever in select, which is exactly right while a tray is absent.
+func (s *supervisor) trayWait() <-chan int {
+	if s.tray == nil {
+		return nil
+	}
+	return s.tray.wait
+}
+
+func (s *supervisor) trayMessages() <-chan string {
+	if s.tray == nil {
+		return nil
+	}
+	return s.tray.msgs
 }
 
 func (s *supervisor) stopTrayOnly() error {
 	if s.tray == nil {
 		return nil
 	}
-	err := s.tray.handle.Terminate(s.opts.TermWait, s.opts.KillWait)
-	if s.tray.control != nil {
-		_ = s.tray.control.Close()
+	tray := s.tray
+	err := tray.handle.Terminate(s.opts.TermWait, s.opts.KillWait)
+	// The child is dead and its write end is closed, so the reader will reach
+	// EOF. Drain what it already queued before discarding the generation: a
+	// tray Quit writes "quit" and exits 0, and the exit status may win the
+	// select race. Such a quit must still stop the app, not restart the tray.
+	if tray.msgs != nil && tray.readerDone != nil {
+		deadline := time.NewTimer(500 * time.Millisecond)
+		defer deadline.Stop()
+	drain:
+		for {
+			select {
+			case msg := <-tray.msgs:
+				if msg == "quit" {
+					s.quitRequested = true
+				}
+			case <-tray.readerDone:
+				for {
+					select {
+					case msg := <-tray.msgs:
+						if msg == "quit" {
+							s.quitRequested = true
+						}
+					default:
+						break drain
+					}
+				}
+			case <-deadline.C:
+				break drain
+			}
+		}
+	}
+	if tray.done != nil {
+		close(tray.done)
+	}
+	if tray.control != nil {
+		_ = tray.control.Close()
 	}
 	s.tray = nil
 	return err
@@ -698,22 +781,33 @@ func (s *supervisor) waitEngineReady(ctx context.Context) error {
 }
 
 func (s *supervisor) waitTrayReady(ctx context.Context) error {
+	tray := s.tray
+	if tray == nil {
+		return internalFailure("app.tray", "no tray child is running", nil)
+	}
+	// Bind every channel to this generation before waiting. A message or EOF
+	// left over from an earlier tray child lives on its own channels and can
+	// never satisfy, abort or busy-loop this readiness window.
+	wait := tray.wait
+	msgs := tray.msgs
+	readErr := tray.readErr
 	deadline := time.NewTimer(s.opts.ReadyTimeout)
 	defer deadline.Stop()
 	repair := time.NewTicker(s.opts.RepairInterval)
 	defer repair.Stop()
 	for {
 		select {
-		case code := <-s.tray.wait:
+		case code := <-wait:
 			return &childExit{name: "tray", code: code}
 		case <-deadline.C:
 			return &childExit{name: "tray", code: -2, timeout: true}
 		case <-ctx.Done():
 			return ctx.Err()
-		case err := <-s.trayReadErr:
+		case err := <-readErr:
 			if err == nil || errors.Is(err, io.EOF) {
-				// The wait channel will report the exit code; avoid a busy loop.
-				s.trayReadErr = make(chan error, 1)
+				// The wait channel reports the exit code; stop selecting this
+				// closed generation's error channel.
+				readErr = nil
 				continue
 			}
 			return internalFailure("app.tray", "the tray control pipe failed", err)
@@ -721,7 +815,7 @@ func (s *supervisor) waitTrayReady(ctx context.Context) error {
 			if err := s.repair(); err != nil {
 				return &repairError{err: err}
 			}
-		case msg := <-s.trayMsgs:
+		case msg := <-msgs:
 			switch {
 			case msg == "ready":
 				return nil
@@ -761,12 +855,17 @@ func (s *supervisor) statusReady(ctx context.Context) (Listeners, bool) {
 	return out, true
 }
 
+// ownerWrite is the single marker write used by the supervisor. Tests replace
+// it to exercise the documented stopping-write failure path through
+// RunSupervisor, not through a direct failClosed call.
+var ownerWrite = func(o *Owner, r Record) error { return o.Write(r) }
+
 func (s *supervisor) writeState(state string) error {
 	if s.owner == nil {
 		return fmt.Errorf("app.owner is not open")
 	}
 	s.phase = state
-	return s.owner.Write(Record{
+	return ownerWrite(s.owner, Record{
 		State: state, Generation: s.generation, PID: os.Getpid(), StartedAt: s.startedAt,
 		DataDir: s.paths.DataDir, Listeners: s.listeners, LogPath: s.logPath,
 	})
@@ -940,20 +1039,29 @@ func configuredListeners(configPath string) Listeners {
 	return Listeners{HTTP: cfg.HTTP, SOCKS: cfg.SOCKS}
 }
 
-func readTrayControl(r io.Reader, out chan<- string, errOut chan<- error) {
+func readTrayControl(r io.Reader, out chan<- string, errOut chan<- error, done <-chan struct{}, readerDone chan<- struct{}) {
+	defer close(readerDone)
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 1024), 16*1024)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			out <- line
+		if line == "" {
+			continue
+		}
+		select {
+		case out <- line:
+		case <-done:
+			return
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		errOut <- err
-		return
+	err := scanner.Err()
+	if err == nil {
+		err = io.EOF
 	}
-	errOut <- io.EOF
+	select {
+	case errOut <- err:
+	case <-done:
+	}
 }
 
 // Reporter writes one JSON line per readiness event and closes the inherited

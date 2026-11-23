@@ -3,14 +3,19 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
+	"routelatch/internal/contract"
 	"routelatch/internal/control"
 	"routelatch/internal/store"
 )
@@ -46,7 +51,21 @@ func helperCommand(mode string) Command {
 	return Command{
 		Path: os.Args[0],
 		Args: []string{"-test.run=TestAppHelper", "--"},
-		Env:  []string{"RL_TEST_MODE=" + mode, "RL_TEST_DATA=" + os.Getenv("RL_TEST_DATA"), "RL_TEST_FAKE=" + os.Getenv("RL_TEST_FAKE")},
+		Env: []string{
+			"RL_TEST_MODE=" + mode,
+			"RL_TEST_DATA=" + os.Getenv("RL_TEST_DATA"),
+			"RL_TEST_FAKE=" + os.Getenv("RL_TEST_FAKE"),
+			"RL_TEST_LOSSES=" + os.Getenv("RL_TEST_LOSSES"),
+		},
+	}
+}
+
+// fakeCommand builds one re-exec helper for an in-process supervisor test.
+func fakeCommand(data, mode, fake string) Command {
+	return Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestAppHelper", "--", data},
+		Env:  []string{"RL_TEST_MODE=" + mode, "RL_TEST_DATA=" + data, "RL_TEST_FAKE=" + fake},
 	}
 }
 
@@ -83,6 +102,9 @@ func helperEngine() int {
 	if fake == "exit4" {
 		return 4
 	}
+	if fake == "exit10" {
+		return 10
+	}
 	lock, err := os.OpenFile(paths.Lock, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return 1
@@ -91,7 +113,7 @@ func helperEngine() int {
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return 4
 	}
-	parent, cancel, err := ParentWatchFromEnv()
+	parent, cancel, _, err := ParentWatchFromEnv()
 	if err != nil {
 		return 1
 	}
@@ -112,6 +134,33 @@ func helperEngine() int {
 		}
 		return 0
 	}
+	if fake == "slowready" {
+		select {
+		case <-time.After(800 * time.Millisecond):
+		case <-sig:
+			return 0
+		case <-parent.Done():
+			return 0
+		}
+	}
+	firstGeneration := false
+	if fake == "enginedie" {
+		f, err := os.OpenFile(filepath.Join(paths.DataDir, "engine-died-once"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			firstGeneration = true
+			_ = f.Close()
+		} else {
+			// The replacement engine stays in starting long enough for a
+			// second run to observe the transition instead of a stale ready.
+			select {
+			case <-time.After(time.Second):
+			case <-sig:
+				return 0
+			case <-parent.Done():
+				return 0
+			}
+		}
+	}
 	srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: helperStatus{}, AllowStale: true})
 	if err != nil {
 		return 1
@@ -120,8 +169,22 @@ func helperEngine() int {
 		return 1
 	}
 	defer srv.Close()
+	_ = os.WriteFile(filepath.Join(paths.DataDir, "engine.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+	if firstGeneration {
+		select {
+		case <-time.After(300 * time.Millisecond):
+			return 3
+		case <-sig:
+			return 0
+		case <-parent.Done():
+			return 0
+		}
+	}
 	select {
 	case <-sig:
+		if fake == "slowstop" {
+			time.Sleep(800 * time.Millisecond)
+		}
 	case <-parent.Done():
 	}
 	return 0
@@ -156,6 +219,58 @@ func helperTray() int {
 	if err != nil {
 		return 1
 	}
+	_ = os.WriteFile(filepath.Join(helperPaths().DataDir, "tray.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+	if fake == "traylostmany" {
+		losses := 8
+		if n, convErr := strconv.Atoi(os.Getenv("RL_TEST_LOSSES")); convErr == nil && n > 0 {
+			losses = n
+		}
+		dir := helperPaths().DataDir
+		counter := filepath.Join(dir, "tray-lost-count")
+		count := readCounter(counter)
+		if count < losses {
+			writeCounter(counter, count+1)
+			if count > 0 {
+				// Stay in starting long enough that a lost/quit left on a
+				// previous generation's channel would be selected first.
+				time.Sleep(200 * time.Millisecond)
+			}
+			send("ready")
+			time.Sleep(150 * time.Millisecond)
+			send("lost")
+			return 3
+		}
+		time.Sleep(200 * time.Millisecond)
+		send("ready")
+		_ = os.WriteFile(filepath.Join(dir, "tray-final-ready"), []byte("1"), 0o600)
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+		defer signal.Stop(sig)
+		for {
+			select {
+			case <-gone:
+				return 0
+			case <-sig:
+				return 0
+			}
+		}
+	}
+	if fake == "trayquitrace" {
+		once := filepath.Join(helperPaths().DataDir, "tray-quit-once")
+		if f, err := os.OpenFile(once, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600); err == nil {
+			_ = f.Close()
+			// The explicit Quit races the exit status; the supervisor must
+			// honor the message whichever select case wins.
+			send("ready")
+			send("quit")
+			return 0
+		}
+	}
+	if fake == "traylost" && fileExists(filepath.Join(helperPaths().DataDir, "tray-lost-once")) {
+		// Keep the replacement in starting so a second run observes the
+		// transition before ready returns.
+		time.Sleep(300 * time.Millisecond)
+	}
 	send("ready")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
@@ -165,7 +280,12 @@ func helperTray() int {
 	case "trayquit":
 		after = time.After(300 * time.Millisecond)
 	case "traylost":
-		after = time.After(300 * time.Millisecond)
+		// Lose the host once; the replacement tray must be able to register.
+		once := filepath.Join(helperPaths().DataDir, "tray-lost-once")
+		if f, err := os.OpenFile(once, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600); err == nil {
+			_ = f.Close()
+			after = time.After(300 * time.Millisecond)
+		}
 	case "trayexit":
 		after = time.After(300 * time.Millisecond)
 	}
@@ -190,6 +310,24 @@ func helperTray() int {
 	}
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func readCounter(path string) int {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(string(raw))
+	return n
+}
+
+func writeCounter(path string, n int) {
+	_ = os.WriteFile(path, []byte(strconv.Itoa(n)), 0o600)
+}
+
 func integrationData(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp/opencode", "rl-app-")
@@ -207,7 +345,7 @@ func launchFake(t *testing.T, data, fake string, timeout time.Duration) (*Result
 	t.Helper()
 	cmd := Command{
 		Path: os.Args[0],
-		Args: []string{"-test.run=TestAppHelper", "--"},
+		Args: []string{"-test.run=TestAppHelper", "--", data},
 		Env:  []string{"RL_TEST_MODE=supervisor", "RL_TEST_DATA=" + data, "RL_TEST_FAKE=" + fake},
 	}
 	return Launch(context.Background(), LaunchOptions{
@@ -240,6 +378,16 @@ func TestLaunchReadyAlreadyRunningAndQuit(t *testing.T) {
 		t.Fatalf("first result = %+v", result)
 	}
 	paths := pathsFor(t, data)
+	logPath := filepath.Join(paths.LogDir, "routelatch.log")
+	if result.LogPath != logPath {
+		t.Fatalf("reported log = %q, want %q", result.LogPath, logPath)
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("reported log does not exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(paths.LogDir, "app.log")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a separate app.log was created: %v", err)
+	}
 	raw, err := os.ReadFile(paths.AppOwner)
 	if err != nil {
 		t.Fatal(err)
@@ -448,24 +596,625 @@ func TestSupervisorSIGKILLLeavesNoChildren(t *testing.T) {
 	waitGroupEmpty(t, result.PID, 5*time.Second)
 }
 
-func TestTrayLossClearsReadyAndStops(t *testing.T) {
+func TestTrayLossRestartsWithNewTray(t *testing.T) {
 	data := integrationData(t)
 	result, err := launchFake(t, data, "traylost", 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitGroupEmpty(t, result.PID, 10*time.Second)
+	t.Cleanup(func() { stopLaunched(t, result.PID) })
 	paths := pathsFor(t, data)
-	raw, err := os.ReadFile(paths.AppOwner)
-	if err != nil {
-		t.Fatalf("marker unreadable: %v", err)
+	firstTray := readPIDFile(t, filepath.Join(data, "tray.pid"))
+	waitMarkerState(t, paths.AppOwner, MarkerStarting, 5*time.Second)
+	// The restart window must never be reported as ready to a second run.
+	if _, err := launchFake(t, data, "normal", 2*time.Second); asFailure(err).Exit != contract.ExitConflict {
+		t.Fatalf("second run during tray restart = %v, want exit 6", err)
 	}
-	rec, err := ParseRecord(raw)
-	if err != nil {
-		t.Fatalf("marker = %q: %v", raw, err)
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		pid, err := readPIDFileErr(filepath.Join(data, "tray.pid"))
+		if err == nil && pid != firstTray {
+			if rec, readErr := readRecordFile(paths.AppOwner); readErr == nil && rec.State == MarkerReady {
+				return
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
 	}
-	if rec.State == MarkerReady {
-		t.Fatal("tray loss left a stale ready marker")
+	t.Fatal("tray loss did not restart the tray to a ready state")
+}
+
+func TestTrayQuitRacingExitStopsApp(t *testing.T) {
+	for i := 0; i < 6; i++ {
+		data := integrationData(t)
+		result, err := launchFake(t, data, "trayquitrace", 5*time.Second)
+		if err != nil {
+			t.Fatalf("iteration %d launch: %v", i, err)
+		}
+		sup, err := OpenProc(result.PID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !sup.WaitExit(5 * time.Second) {
+			sup.Close()
+			t.Fatalf("iteration %d: tray quit was stranded after a restart", i)
+		}
+		sup.Close()
+		waitGroupEmpty(t, result.PID, 5*time.Second)
+	}
+}
+
+// --- R13-B remaining checks -------------------------------------------------
+
+type launched struct {
+	result *Result
+	err    error
+}
+
+type supervisorHandle struct {
+	cancel context.CancelFunc
+	errCh  chan error
+	exited chan struct{}
+	paths  store.Paths
+}
+
+func startSupervisor(t *testing.T, data, engineFake, trayFake string, configure ...func(*SupervisorOptions)) *supervisorHandle {
+	t.Helper()
+	paths := pathsFor(t, data)
+	ctx, cancel := context.WithCancel(context.Background())
+	opts := SupervisorOptions{
+		Paths: paths, LogDir: paths.LogDir,
+		Engine:         fakeCommand(data, "fakeengine", engineFake),
+		Tray:           fakeCommand(data, "faketray", trayFake),
+		TrayCheck:      func() error { return nil },
+		ReadyTimeout:   10 * time.Second,
+		RepairInterval: 100 * time.Millisecond,
+		TermWait:       2 * time.Second,
+		KillWait:       2 * time.Second,
+	}
+	for _, fn := range configure {
+		fn(&opts)
+	}
+	h := &supervisorHandle{cancel: cancel, errCh: make(chan error, 1), exited: make(chan struct{}), paths: paths}
+	go func() {
+		h.errCh <- RunSupervisor(ctx, opts)
+		close(h.exited)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-h.exited:
+		case <-time.After(5 * time.Second):
+			t.Errorf("in-process supervisor did not exit")
+		}
+	})
+	return h
+}
+
+func (h *supervisorHandle) waitReady(t *testing.T, timeout time.Duration) Record {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if rec, err := readRecordFile(h.paths.AppOwner); err == nil && rec.State == MarkerReady {
+			return rec
+		}
+		select {
+		case <-h.exited:
+			t.Fatalf("supervisor exited before readiness: %v", <-h.errCh)
+		default:
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("supervisor did not become ready")
+	return Record{}
+}
+
+func (h *supervisorHandle) result(t *testing.T, timeout time.Duration) error {
+	t.Helper()
+	select {
+	case <-h.exited:
+		return <-h.errCh
+	case <-time.After(timeout):
+		t.Fatal("supervisor did not exit")
+		return nil
+	}
+}
+
+func readRecordFile(path string) (Record, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return Record{}, err
+	}
+	return ParseRecord(raw)
+}
+
+func waitMarkerState(t *testing.T, path, state string, timeout time.Duration) Record {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if rec, err := readRecordFile(path); err == nil && rec.State == state {
+			return rec
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	rec, err := readRecordFile(path)
+	t.Fatalf("marker did not reach %q: %+v (%v)", state, rec, err)
+	return Record{}
+}
+
+func processAlive(pid int) bool {
+	if pid <= 1 {
+		return false
+	}
+	_, state, _, err := readProcStat(pid)
+	return err == nil && state != 'Z'
+}
+
+func waitProcessGone(t *testing.T, pid int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !processAlive(pid) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("pid %d is still alive", pid)
+}
+
+func readPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err != nil || pid <= 1 {
+		t.Fatalf("bad pid file %s: %q", path, raw)
+	}
+	return pid
+}
+
+func noProcessWithArg(t *testing.T, needle string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		found := false
+		for _, name := range procPIDs(t) {
+			raw, err := os.ReadFile(filepath.Join(procRoot, name, "cmdline"))
+			if err == nil && strings.Contains(string(raw), needle) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("a helper process for %s survived", needle)
+}
+
+func stopLaunched(t *testing.T, pid int) {
+	t.Helper()
+	h, err := OpenProc(pid)
+	if err != nil {
+		return
+	}
+	defer h.Close()
+	_ = h.Signal(syscall.SIGTERM)
+	if !h.WaitExit(5 * time.Second) {
+		t.Fatalf("supervisor %d did not stop", pid)
+	}
+	waitGroupEmpty(t, pid, 5*time.Second)
+}
+
+func assertLocked(t *testing.T, path string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		t.Fatalf("%s is not locked", path)
+	}
+}
+
+// TestTrayRestartContainsStaleControlMessages is the regression for the shared
+// tray channel: eight generations queue lost just before exiting while the
+// next generation stays in starting. A stale message must never abort the new
+// generation with 7 (or a needless quit).
+func TestTrayRestartContainsStaleControlMessages(t *testing.T) {
+	data := integrationData(t)
+	result, err := Launch(context.Background(), LaunchOptions{
+		Command: Command{
+			Path: os.Args[0],
+			Args: []string{"-test.run=TestAppHelper", "--", data},
+			Env: []string{
+				"RL_TEST_MODE=supervisor", "RL_TEST_DATA=" + data,
+				"RL_TEST_FAKE=traylostmany", "RL_TEST_LOSSES=4",
+			},
+		},
+		LogDir: filepath.Join(data, "log"), ReadyTimeout: 15 * time.Second,
+		TermWait: 3 * time.Second, KillWait: 2 * time.Second,
+	})
+	if err != nil {
+		f := asFailure(err)
+		t.Fatalf("stale tray message aborted the new generation: exit=%d reason=%s (%v)", f.Exit, f.Reason, err)
+	}
+	t.Cleanup(func() { stopLaunched(t, result.PID) })
+	paths := pathsFor(t, data)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(data, "tray-final-ready")); err == nil {
+			if rec, readErr := readRecordFile(paths.AppOwner); readErr == nil && rec.State == MarkerReady {
+				return
+			}
+		}
+		select {
+		case <-time.After(30 * time.Millisecond):
+		default:
+		}
+		if !processAlive(result.PID) {
+			t.Fatal("supervisor exited during repeated tray loss")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("tray never reached its final ready generation")
+}
+
+func TestWaitTrayReadyUsesOnlyTheCurrentGeneration(t *testing.T) {
+	stale := &childProc{
+		wait: make(chan int, 1), msgs: make(chan string, 2), readErr: make(chan error, 1),
+	}
+	stale.msgs <- "lost"
+	stale.msgs <- "quit"
+	stale.readErr <- io.EOF
+	current := &childProc{
+		wait: make(chan int, 1), msgs: make(chan string, 1), readErr: make(chan error, 1),
+	}
+	s := &supervisor{tray: current, opts: SupervisorOptions{ReadyTimeout: time.Second, RepairInterval: time.Hour}}
+	if got := s.trayMessages(); got != current.msgs {
+		t.Fatal("tray messages are not bound to the current child")
+	}
+	s.tray = nil
+	if s.trayMessages() != nil || s.trayWait() != nil {
+		t.Fatal("absent tray must expose nil channels")
+	}
+	s.tray = current
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		current.msgs <- "ready"
+	}()
+	if err := s.waitTrayReady(context.Background()); err != nil {
+		t.Fatalf("readiness consumed a previous generation's message: %v", err)
+	}
+}
+
+func TestEngineDeathRestartsAndHidesStaleReady(t *testing.T) {
+	data := integrationData(t)
+	h := startSupervisor(t, data, "enginedie", "normal")
+	first := h.waitReady(t, 5*time.Second)
+	seenStarting := false
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		second, err := launchFake(t, data, "normal", 2*time.Second)
+		if err == nil && second.AlreadyRunning {
+			if seenStarting {
+				if second.PID != first.PID {
+					t.Fatalf("restart changed the supervisor pid: %d -> %d", first.PID, second.PID)
+				}
+				return
+			}
+		} else if err != nil {
+			f := asFailure(err)
+			if f.Exit == 6 {
+				seenStarting = true
+			} else {
+				select {
+				case <-h.exited:
+					logRaw, _ := os.ReadFile(filepath.Join(data, "log", "routelatch.log"))
+					t.Fatalf("supervisor exited: %v\n%s", <-h.errCh, logRaw)
+				default:
+				}
+				t.Fatalf("second run during engine restart = %+v", f)
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	t.Fatal("engine never restarted, or the starting window was never observed")
+}
+
+func TestSecondRunWhileStoppingIsConflict(t *testing.T) {
+	data := integrationData(t)
+	result, err := launchFake(t, data, "slowstop", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stopLaunched(t, result.PID) })
+	paths := pathsFor(t, data)
+	sup, err := OpenProc(result.PID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sup.Close()
+	if err := sup.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	waitMarkerState(t, paths.AppOwner, MarkerStopping, 3*time.Second)
+	_, err = launchFake(t, data, "normal", 2*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitConflict {
+		t.Fatalf("second run during stopping = %+v, want 6", f)
+	}
+	if !sup.WaitExit(5 * time.Second) {
+		t.Fatal("supervisor did not exit")
+	}
+	waitGroupEmpty(t, result.PID, 5*time.Second)
+}
+
+func TestSecondRunSocketVetoNeverZero(t *testing.T) {
+	data := integrationData(t)
+	paths := pathsFor(t, data)
+	if err := os.MkdirAll(paths.InstanceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := AcquireAppLock(paths.AppLock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	owner, err := OpenOwner(paths.AppOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	rec := Record{
+		State: MarkerReady, Generation: 1, PID: os.Getpid(), StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		DataDir: paths.DataDir, LogPath: filepath.Join(paths.LogDir, "routelatch.log"),
+	}
+	if err := owner.Write(rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Lock(1, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, err = launchFake(t, data, "normal", 2*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitConflict || f.Reason != "app_socket_veto" {
+		t.Fatalf("socket veto = %+v, want 6/app_socket_veto", f)
+	}
+}
+
+func TestStartupPhaseRepairStaysAtSixThenReady(t *testing.T) {
+	data := integrationData(t)
+	paths := pathsFor(t, data)
+	firstCh := make(chan launched, 1)
+	go func() {
+		res, err := launchFake(t, data, "slowready", 10*time.Second)
+		firstCh <- launched{result: res, err: err}
+	}()
+	waitMarkerState(t, paths.AppOwner, MarkerStarting, 5*time.Second)
+	if err := os.Remove(paths.AppOwner); err != nil {
+		t.Fatal(err)
+	}
+	_, err := launchFake(t, data, "normal", 2*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitConflict {
+		t.Fatalf("second run during startup repair = %+v, want 6", f)
+	}
+	first := <-firstCh
+	if first.err != nil {
+		t.Fatalf("first launch: %v", first.err)
+	}
+	t.Cleanup(func() { stopLaunched(t, first.result.PID) })
+	waitMarkerState(t, paths.AppOwner, MarkerReady, 5*time.Second)
+	third, err := launchFake(t, data, "normal", 2*time.Second)
+	if err != nil || !third.AlreadyRunning || third.PID != first.result.PID {
+		t.Fatalf("post-repair launch = %+v, %v", third, err)
+	}
+}
+
+func TestDeletedMarkerIsRecreatedLockedWhileReady(t *testing.T) {
+	data := integrationData(t)
+	result, err := launchFake(t, data, "normal", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stopLaunched(t, result.PID) })
+	paths := pathsFor(t, data)
+	if err := os.Remove(paths.AppOwner); err != nil {
+		t.Fatal(err)
+	}
+	waitMarkerState(t, paths.AppOwner, MarkerReady, 5*time.Second)
+	assertLocked(t, paths.AppOwner)
+	second, err := launchFake(t, data, "normal", 2*time.Second)
+	if err != nil || !second.AlreadyRunning || second.PID != result.PID {
+		t.Fatalf("second run after live repair = %+v, %v", second, err)
+	}
+}
+
+func TestLiveRepairFailureFailClosed(t *testing.T) {
+	data := integrationData(t)
+	h := startSupervisor(t, data, "normal", "normal")
+	h.waitReady(t, 5*time.Second)
+	trayPID := readPIDFile(t, filepath.Join(data, "tray.pid"))
+	path := h.paths.AppOwner
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("foreign\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := h.result(t, 5*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitConflict || f.Reason != "app_marker_invalid" {
+		t.Fatalf("repair failure = %+v, want 6/app_marker_invalid", f)
+	}
+	assertUnlocked(t, h.paths.AppLock)
+	assertUnlocked(t, h.paths.Lock)
+	waitProcessGone(t, trayPID, 5*time.Second)
+}
+
+func TestStoppingWriteFailureThroughRunSupervisor(t *testing.T) {
+	oldWrite := ownerWrite
+	ownerWrite = func(o *Owner, r Record) error {
+		if r.State == MarkerStopping {
+			return errors.New("injected stopping write failure")
+		}
+		return oldWrite(o, r)
+	}
+	defer func() { ownerWrite = oldWrite }()
+
+	data := integrationData(t)
+	h := startSupervisor(t, data, "normal", "normal")
+	h.waitReady(t, 5*time.Second)
+	trayPID := readPIDFile(t, filepath.Join(data, "tray.pid"))
+	h.cancel()
+	err := h.result(t, 5*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitError || f.Reason != "app_marker_write_failed" {
+		t.Fatalf("stopping write failure = %+v, want 1/app_marker_write_failed", f)
+	}
+	assertUnlocked(t, h.paths.AppLock)
+	assertUnlocked(t, h.paths.Lock)
+	waitProcessGone(t, trayPID, 5*time.Second)
+	// The owner path stays, but no supervisor flock may outlive the failure.
+	assertUnlocked(t, h.paths.AppOwner)
+}
+
+func TestEngineLockConflictWinsOverTrayProbe(t *testing.T) {
+	data := integrationData(t)
+	paths := pathsFor(t, data)
+	if err := os.MkdirAll(paths.InstanceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := os.OpenFile(paths.Lock, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	_, err = launchFake(t, data, "trayfail", 2*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitAlreadyRunning {
+		t.Fatalf("headless lock + no tray = %+v, want 4", f)
+	}
+}
+
+func TestLaunchCancellationStopsSupervisorAndChildren(t *testing.T) {
+	data := integrationData(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan launched, 1)
+	go func() {
+		res, err := Launch(ctx, LaunchOptions{
+			Command: Command{
+				Path: os.Args[0],
+				Args: []string{"-test.run=TestAppHelper", "--", data},
+				Env:  []string{"RL_TEST_MODE=supervisor", "RL_TEST_DATA=" + data, "RL_TEST_FAKE=noready"},
+			},
+			LogDir: filepath.Join(data, "log"), ReadyTimeout: 10 * time.Second,
+			TermWait: 2 * time.Second, KillWait: 2 * time.Second,
+		})
+		done <- launched{result: res, err: err}
+	}()
+	paths := pathsFor(t, data)
+	waitMarkerState(t, paths.AppOwner, MarkerStarting, 5*time.Second)
+	cancel()
+	got := <-done
+	f := asFailure(got.err)
+	if f.Exit != contract.ExitCanceled {
+		t.Fatalf("canceled launch = %+v, want exit 12", f)
 	}
 	assertUnlocked(t, paths.AppLock)
+	assertUnlocked(t, paths.Lock)
+	assertUnlocked(t, paths.AppOwner)
+	noProcessWithArg(t, data)
+}
+
+func TestChildPIDFDFailureCleansUp(t *testing.T) {
+	old := pidfdOpen
+	defer func() { pidfdOpen = old }()
+	self := os.Getpid()
+	pidfdOpen = func(pid, flags int) (int, error) {
+		if pid == self {
+			return old(pid, flags)
+		}
+		return -1, unix.ENOSYS
+	}
+	data := integrationData(t)
+	h := startSupervisor(t, data, "normal", "normal")
+	err := h.result(t, 5*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitError || !strings.Contains(f.Message, "cannot pin the engine child") {
+		t.Fatalf("child pidfd failure = %+v", f)
+	}
+	assertUnlocked(t, h.paths.AppLock)
+	assertUnlocked(t, h.paths.Lock)
+	noProcessWithArg(t, data)
+}
+
+func TestChildSIGKILLRestartsWithNewEngine(t *testing.T) {
+	data := integrationData(t)
+	h := startSupervisor(t, data, "normal", "normal")
+	h.waitReady(t, 5*time.Second)
+	enginePath := filepath.Join(data, "engine.pid")
+	first := readPIDFile(t, enginePath)
+	if err := syscall.Kill(first, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		pid, err := readPIDFileErr(enginePath)
+		if err == nil && pid != first {
+			if rec, readErr := readRecordFile(h.paths.AppOwner); readErr == nil && rec.State == MarkerReady {
+				return
+			}
+		}
+		select {
+		case <-h.exited:
+			t.Fatalf("supervisor exited after child SIGKILL: %v", <-h.errCh)
+		default:
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	t.Fatal("engine was not replaced after SIGKILL")
+}
+
+func readPIDFileErr(path string) (int, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(raw)))
+}
+
+func TestStaleReadyMarkerWithoutOwnerIsNotAlreadyRunning(t *testing.T) {
+	data := integrationData(t)
+	paths := pathsFor(t, data)
+	if err := os.MkdirAll(paths.InstanceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rec := Record{
+		State: MarkerReady, Generation: 1, PID: 999999, StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		DataDir: paths.DataDir, LogPath: filepath.Join(paths.LogDir, "routelatch.log"),
+	}
+	raw, err := EncodeRecord(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.AppOwner, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := launchFake(t, data, "normal", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stopLaunched(t, result.PID) })
+	if result.AlreadyRunning || result.PID == rec.PID {
+		t.Fatalf("stale marker was reported as already running: %+v", result)
+	}
 }

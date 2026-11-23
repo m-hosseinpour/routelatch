@@ -50,7 +50,12 @@ func (c *cli) runApp(ctx context.Context) int {
 		supervisorArgs = append(supervisorArgs, "--data-dir", c.paths.DataDir)
 	}
 	supervisorArgs = append(supervisorArgs, "__app-supervisor")
-	result, err := app.Launch(ctx, app.LaunchOptions{
+	// Ctrl-C/SIGTERM while the detached supervisor is still starting must
+	// cancel this launcher and let Launch tear the supervisor and its children
+	// down instead of exiting and leaving them behind.
+	launchCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	result, err := app.Launch(launchCtx, app.LaunchOptions{
 		Command: app.Command{Path: exe, Args: supervisorArgs},
 		LogDir:  c.paths.LogDir,
 	})
@@ -83,17 +88,21 @@ func (c *cli) runHeadless(ctx context.Context) int {
 	// An app supervisor owns this data dir even while its engine child is
 	// starting. The engine lock alone is not enough to report that conflict.
 	// The supervisor's own engine child is the one exception; it is still
-	// serialized by state.lock, and it must be allowed to take that lock.
-	if os.Getenv("ROUTELATCH_APP_ENGINE") != "1" {
+	// serialized by state.lock, and it must be allowed to take that lock. The
+	// exception is not trusted from ROUTELATCH_APP_ENGINE alone: the inherited
+	// pidfd must name this process's real supervisor parent.
+	parentCtx, cancel, supervised, err := app.ParentWatchFromEnv()
+	if err != nil {
+		return c.localFailure("run", err)
+	}
+	if parentCtx != nil {
+		ctx = parentCtx
+		defer cancel()
+	}
+	if !supervised {
 		if err := app.RejectHeadlessConflict(c.paths.AppLock); err != nil {
 			return c.printAppFailure(err)
 		}
-	}
-	if parentCtx, cancel, err := app.ParentWatchFromEnv(); err != nil {
-		return c.localFailure("run", err)
-	} else if parentCtx != nil {
-		ctx = parentCtx
-		defer cancel()
 	}
 
 	st, err := store.Open(store.Options{Paths: c.paths})

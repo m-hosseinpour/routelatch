@@ -503,3 +503,45 @@ func TestProbePIDFDPreflightKinds(t *testing.T) {
 		}
 	}
 }
+
+func TestRepairInStoppingPhaseNeverWritesReady(t *testing.T) {
+	root := t.TempDir()
+	instance := filepath.Join(root, "run")
+	owner, err := OpenOwner(filepath.Join(instance, "app.owner"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	if err := owner.Lock(1, 0); err != nil {
+		t.Fatal(err)
+	}
+	s := &supervisor{
+		opts: SupervisorOptions{Now: time.Now}, owner: owner, phase: MarkerStopping,
+		generation: 3, startedAt: "now",
+		paths:   MarkerPathsFor(instance, root, filepath.Join(root, "log"), filepath.Join(instance, "control.sock")),
+		logPath: filepath.Join(root, "log", "routelatch.log"),
+	}
+	rec := s.record(MarkerStopping)
+	// A valid ready record on the same inode must be rewritten to stopping.
+	rec.State = MarkerReady
+	if err := owner.Write(rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.repair(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := owner.Read(); err != nil || got.State != MarkerStopping {
+		t.Fatalf("in-place stopping repair = %+v, %v", got, err)
+	}
+	// A deleted path is recreated with stopping, never ready, even when the
+	// engine still answers status.ready.
+	if err := os.Remove(filepath.Join(instance, "app.owner")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.repair(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := owner.Read(); err != nil || got.State != MarkerStopping {
+		t.Fatalf("recreated stopping marker = %+v, %v", got, err)
+	}
+}

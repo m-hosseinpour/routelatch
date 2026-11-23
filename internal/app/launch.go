@@ -118,9 +118,8 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Result, error) {
 	supervisor, err := OpenProc(cmd.Process.Pid)
 	if err != nil {
 		// The child is a direct, unreaped child, so its PID cannot be reused
-		// before waitpid. This raw SIGKILL is the single documented exception.
-		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGKILL)
-		_ = cmd.Wait()
+		// before waitpid. This is the single documented raw-SIGKILL exception.
+		stopUnpinnedDirectChild(cmd)
 		return nil, internalFailure("app.launch", "cannot pin the app supervisor with a pidfd; it was stopped before startup", err)
 	}
 
@@ -290,6 +289,17 @@ func teardownIncomplete(cause error) *Failure {
 	return f
 }
 
+// stopUnpinnedDirectChild stops a direct child whose pidfd could not be
+// opened. §7.5 documents this exception for the launcher's supervisor; the
+// supervisor applies the same predicate to its own engine/tray child when
+// pinning fails. In every case the caller is the parent and has not reaped the
+// child yet, so waitpid pins that PID and no reused PID/PGID can be signalled.
+// Every other signal goes through a pidfd.
+func stopUnpinnedDirectChild(cmd *exec.Cmd) {
+	_ = syscall.Kill(cmd.Process.Pid, syscall.SIGKILL)
+	_ = cmd.Wait()
+}
+
 func openAppLog(logDir string) (*os.File, error) {
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return nil, err
@@ -297,7 +307,13 @@ func openAppLog(logDir string) (*os.File, error) {
 	if err := os.Chmod(logDir, 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(logDir, "app.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND|syscall.O_CLOEXEC, 0o600)
+	// The supervisor, tray and engine all write the one reported log file.
+	// The control service rotates routelatch.log by rename; these inherited
+	// append descriptors follow the renamed file (.1/.2/.3) rather than the
+	// fresh path. That keeps app lines inside the rotated set until retention,
+	// but they are not counted by the control logger's size accounting; a
+	// separate app.log would escape the reported path entirely.
+	f, err := os.OpenFile(filepath.Join(logDir, "routelatch.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
 		return nil, err
 	}
