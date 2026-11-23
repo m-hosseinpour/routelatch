@@ -158,20 +158,23 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
   management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
   listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
-  launcher فرایند supervisor/child را خاتمه می‌دهد و فقط پس از آزادشدن lock با
-  exit `8` برمی‌گردد، پس exit `8` یعنی هیچ appی باقی نمانده. خطای startup با exit
-  code به فراخواننده می‌رسد. engine child state lock و management socket قبل را
-  دارد؛ invariant دقیق «یک engine در هر data directory» است، نه هر کاربر. همهٔ
-  lock/socket/app files از یک `InstanceDir` مشتق از state/data directory
-  (`<StateDir>/run` یا `<data-dir>/run`) می‌آیند، نه از `XDG_RUNTIME_DIR`؛ بنابراین
-  desktop و SSH با runtime env متفاوت همان lock و socket را می‌بینند. در پنجرهٔ
-  migration، engine lockهای legacy مسیرهای R12 را هم probe/نگه می‌دارد تا engine
-  قدیمی (حتی در mode `stopped`) دیده شود. app-mode یک `flock` روی
-  `InstanceDir/app.lock` و یک `flock` دوم روی `InstanceDir/app.owner` دارد که
-  supervisor تا خروج نگه می‌دارد؛ محتوای marker (`starting`/`ready`، `generation`،
-  `pid`) فقط تشخیصی/دادهٔ `already_running` است و liveness را lock تعیین می‌کند،
-  نه PID. supervisor مالک lockها است و engine child آن‌ها را با `CLOEXEC` به ارث
-  نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
+  launcher فرایند supervisor/child خودش را خاتمه می‌دهد و با `waitpid` مرگ آن را
+  تأیید می‌کند؛ exit `8` یعنی «appی که این invocation ساخت دیگر زنده نیست»، نه
+  آزادبودن global lock (یک `run` هم‌زمان می‌تواند پس از آن app جدید بسازد). خطای
+  startup با exit code به فراخواننده می‌رسد. engine child state lock و management
+  socket قبل را دارد؛ invariant دقیق «یک engine در هر data directory» است، نه هر
+  کاربر. همهٔ lock/socket/app files از یک `InstanceDir` مشتق از state/data
+  directory (`<StateDir>/run` یا `<data-dir>/run`) می‌آیند، نه از
+  `XDG_RUNTIME_DIR`؛ بنابراین desktop و SSH با runtime env متفاوت همان lock و
+  socket را می‌بینند. در پنجرهٔ migration، engine lockهای legacy **همان data
+  directory** را probe/نگه می‌دارد (برای `--data-dir` فقط lock همان ریشه، نه
+  runtime سراسری) تا engine قدیمی حتی در mode `stopped` دیده شود و instanceهای
+  مستقل قربانی نشوند. app-mode یک `flock` روی `InstanceDir/app.lock` و یک
+  `flock` دوم روی `InstanceDir/app.owner` دارد که supervisor تا خروج نگه می‌دارد؛
+  marker (`starting`/`ready`، `generation`، `pid`، `data_dir`) دادهٔ
+  `already_running` است و فقط وقتی `ready` معتبر است که flock آن در اختیار
+  supervisor زنده باشد؛ liveness را lock تعیین می‌کند، نه PID. supervisor مالک
+  lockها است و engine child آن‌ها را با `CLOEXEC` به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
   می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
   ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
@@ -185,9 +188,10 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   با `Exec=<absolute> run` می‌سازد. نصب بسته autostart نمی‌سازد؛ linger/start-before-login
   بخشی از مدل دسکتاپ نیست.
 - برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
-  **user unit** در `$XDG_CONFIG_HOME/systemd/user` (fallback `~/.config/systemd/user`)
-  با `ExecStart=<absolute> [--data-dir <abs>] run --headless` می‌سازد،
-  config/state مطلق را در unit pin می‌کند، enable/start می‌کند و فقط وقتی
+  **user unit** در base config همان user manager (از `systemctl --user
+  show-environment`، fallback `~/.config/systemd/user`) با
+  `ExecStart=<absolute> [--data-dir <abs>] run --headless` می‌سازد، baseهای
+  مطلق config/state را در unit pin می‌کند، enable/start می‌کند و فقط وقتی
   `status.ready` واقعی شد (نه فقط `ActiveState`) موفقیت اعلام می‌کند؛ در شکست
   محتوای unit و enabled/active قبلی را در یک rollback برمی‌گرداند. اگر linger
   خاموش باشد فقط `sudo loginctl enable-linger <user>` را چاپ می‌کند؛ خودش sudo
