@@ -3,8 +3,10 @@
 > **Planned runtime model (D26, 2026-11-23):** the next release removes this
 > packaged unit. `routelatch run` becomes the app/tray mode and `run --headless`
 > the foreground/server mode; `autostart` and `service install` are explicit
-> opt-ins. The unit flow below still describes the current package until R13
-> lands. See `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
+> opt-ins. App mode will require permitted `pidfd_open` (Linux ≥5.3, not
+> seccomp-blocked; otherwise exit `7` `pidfd_unavailable`, with `--headless`
+> or this service as the alternative). The unit flow below still describes the
+> current package until R13 lands. See `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
 
 This directory contains the **systemd user** unit for `routelatch run`, the
 foreground service command defined in `docs/contracts.md` §7.1. The process is

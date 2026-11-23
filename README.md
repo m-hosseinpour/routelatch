@@ -108,7 +108,10 @@ Packages do not start or enable the service; opt in with
 **Planned runtime model (D26):** the next release makes plain `routelatch run`
 the app/tray mode and `routelatch run --headless` the foreground/server mode;
 packages will no longer ship a systemd unit, and `autostart`/`service install`
-become explicit opt-ins. The current packages and instructions on this page
+become explicit opt-ins. App mode will require permitted `pidfd_open`
+(Linux ≥5.3, not blocked by seccomp); otherwise it exits `7`
+(`pidfd_unavailable`) and `--headless`/the opt-in service remain available.
+The current packages and instructions on this page
 still use the user unit until R13 is implemented; see
 [docs/requirements.md](docs/requirements.md) and
 [docs/implementation-plan.md](docs/implementation-plan.md).

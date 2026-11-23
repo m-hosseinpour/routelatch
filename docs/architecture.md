@@ -154,7 +154,10 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   `routelatch run --headless` اجرا و supervise می‌کند. `--headless` تنها حالت
   جایگزین است: engine foreground بدون tray/GUI برای ترمینال، SSH، container، تست و
   systemd. فرمان جدا برای `tray`/`gui` وجود ندارد؛ اگر GUI بعداً اضافه شود، همان
-  `run` پیش‌فرض GUI+tray می‌شود و `--headless` دست‌نخورده می‌ماند (D26).
+  `run` پیش‌فرض GUI+tray می‌شود و `--headless` دست‌نخورده می‌ماند (D26). حالت
+  اپ برای teardown به `pidfd_open` مجاز نیاز دارد (Linux ≥5.3 و مسدودنشده با
+  seccomp)؛ در غیر این صورت `unsupported`/`7` با دلیل `pidfd_unavailable` و
+  پیشنهاد `--headless`/سرویس.
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
   management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
   listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
@@ -193,8 +196,10 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   واقعی ادعا نمی‌شوند.
 - شروع در login با XDG autostart است، نه unit: `routelatch autostart enable` یک فایل
   `$XDG_CONFIG_HOME/autostart/routelatch.desktop` (fallback `~/.config/autostart`)
-  با `Exec=<absolute> run` می‌سازد. نصب بسته autostart نمی‌سازد؛ linger/start-before-login
-  بخشی از مدل دسکتاپ نیست.
+  با `Exec=<absolute> run` می‌سازد؛ پیش از نوشتن/اعلام idempotent، tray host و
+  pidfd مجاز را probe می‌کند و در نبود هرکدام `unsupported`/`7` با دلیل
+  `tray_unavailable`/`pidfd_unavailable` می‌دهد. نصب بسته autostart نمی‌سازد؛
+  linger/start-before-login بخشی از مدل دسکتاپ نیست.
 - برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
   **user unit** در base config همان user manager (از `systemctl --user
   show-environment`، fallback `~/.config/systemd/user`) با

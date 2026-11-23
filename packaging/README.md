@@ -12,8 +12,11 @@ published or downloaded.
 **Planned runtime model (D26, 2026-11-23):** the next release removes the
 packaged systemd user unit. `routelatch run` becomes the app/tray mode,
 `run --headless` the foreground/server mode, and `routelatch autostart ...` /
-`routelatch service install` become explicit opt-ins. The current package layout
-and install steps below still describe the shipped artifacts until R13 lands;
+`routelatch service install` become explicit opt-ins. App mode needs permitted
+`pidfd_open` (Linux ≥5.3, not seccomp-blocked; otherwise exit `7`
+`pidfd_unavailable`, with `--headless`/service as the alternative). The current
+package layout and install steps below still describe the shipped artifacts
+until R13 lands;
 see `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
 
 The default answer for "how do I get a package" is `scripts/build.sh` followed

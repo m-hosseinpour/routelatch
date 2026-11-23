@@ -14,6 +14,9 @@ R1/R2/R4 اثبات شده‌اند. A01 در ۲۰۲۶-۱۱-۲۱ با شهادت
 install` opt-in خواهند بود. این تصمیم در [نیازمندی‌ها](requirements.md) و
 [قراردادها](contracts.md) ثبت شده و پیاده‌سازی آن R13 در [پلن](implementation-plan.md)
 است؛ بسته‌ها و سندهای نصب فعلی تا پایان R13 همان رفتار foreground/unit را دارند.
+حالت اپ به `pidfd_open` مجاز نیاز دارد (Linux ≥5.3 و مسدودنشده با seccomp)؛ در
+غیر این صورت `run` با `unsupported`/`7` و دلیل `pidfd_unavailable` متوقف می‌شود و
+`--headless`/سرویس opt-in جایگزین است.
 
 | سند | مرجع اصلی برای |
 | --- | --- |

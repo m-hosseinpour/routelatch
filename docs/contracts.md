@@ -1120,7 +1120,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
 | `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?` یا `state/reason`؛ `--headless`: `listeners` در shutdown | 0، 1، 2، 4، 6، 7، 8، 9، 10 | «شروع اپ (tray)» / «شروع headless» |
-| `autostart enable\|disable\|status` | `path, enabled, managed, conflict?` | 0، 1، 2، 6، 7 | — |
+| `autostart enable\|disable\|status` | `path, enabled, managed, tray_available, pidfd_available, conflict?` | 0، 1، 2، 6، 7 | — |
 | `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10 | — |
 | `version` | `version, commit, build_date` | 0 | — |
 | `status` | `mode, ready, listeners_open, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
@@ -1281,10 +1281,11 @@ tray، یا شروع Quit/shutdown، supervisor ابتدا `starting` (در حا
 `stopping` (در حال خروج) را می‌نویسد و سپس child/tray را تغییر می‌دهد؛ `ready`
 دوباره فقط پس از `status.ready=true` کودک جدید **و** ثبت tray نوشته می‌شود. اگر
 مرگ غیرمنتظرهٔ child دیده شد، handler پیش از restart همان `starting` را
-می‌نویسد. اگر نوشتن این transition شکست بخورد، supervisor عملیات را ادامه
-نمی‌دهد و fail-closed می‌شود (child را می‌بندد و lockها را آزاد می‌کند) تا
-`ready` کهنه با child مرده باقی نماند؛ در Quit حتی اگر نوشتن `stopping` شکست
-بخورد، child/tray بسته می‌شوند و stale marker با lock آزادشده `0` نمی‌سازد.
+می‌نویسد. اگر نوشتن این transition شکست بخورد، supervisor پیش از هر کار دیگری
+fd/flock `app.owner` را می‌بندد (فایل را حذف نمی‌کند) تا هیچ `run` هم‌زمانی با
+lock-success به `0` نرسد؛ سپس child/tray را می‌بندد، `app.lock` را آزاد می‌کند
+و fail-closed می‌شود. بنابراین حتی اگر نوشتن `stopping` شکست بخورد، stale
+`ready` بدون owner lock باقی می‌ماند و `run` بعدی `6` می‌گیرد.
 
 **liveness و `already_running`.** liveness را flock تعیین می‌کند، نه `pid`.
 supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `app.owner` را با `lstat` و
@@ -1296,9 +1297,11 @@ supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `
   **state فعلی** بازنویسی می‌کند (fd و flock دست‌نخورده): `starting`/`stopping`
   تا برقراری دوبارهٔ readiness، و فقط پس از آن `ready`.
 - اگر مسیر حذف شده است، یک inode تازه با `O_CREAT|O_EXCL|O_NOFOLLOW` می‌سازد،
-  **state فعلی** (`starting` یا `ready` فقط اگر readiness همین حالا برقرار است)
-  را می‌نویسد، `flock(LOCK_EX)` را با retry کوتاه می‌گیرد، دوباره state فعلی را
-  می‌نویسد و **تنها پس از قفل‌شدن inode تازه** fd قدیمی را می‌بندد. ترتیب
+  **دقیقاً state فعلی** (`starting`، `stopping`، یا `ready` فقط اگر readiness
+  همین حالا برقرار است و فاز `stopping` نیست) را می‌نویسد، `flock(LOCK_EX)` را
+  با retry کوتاه می‌گیرد، دوباره state فعلی را می‌نویسد و **تنها پس از قفل‌شدن
+  inode تازه** fd قدیمی را می‌بندد. در فاز `stopping` حتی اگر engine هنوز
+  `status.ready=true` بدهد، هرگز `ready` نوشته نمی‌شود. ترتیب
   create→write→flock→write→close-old باید حفظ شود تا هرگز مسیر بدون flock یا
   `ready` زودهنگام نماند؛ در فاصلهٔ کوتاه بین حذف و قفل تازه، `run` جدید `6`
   می‌گیرد.
@@ -1347,24 +1350,34 @@ ready + socket.ready» پنجرهٔ child مرده/Quit/restart را می‌بن
 
 **timeout و دو `run` هم‌زمان.** launcher readiness deadline دارد (پیشنهاد ۱۰s).
 supervisor فرزند مستقیم launcher است (بدون double-fork) تا `waitpid` معنا داشته
-باشد. launcher pidfd supervisor را **بلافاصله پس از spawn** باز می‌کند و تا پایان
-گروه‌scan نهایی نگه می‌دارد؛ این pidfd تا بسته‌نشدن، PID/PGID supervisor را از
-reuse محافظت می‌کند. `ENOSYS` یعنی pidfd در دسترس نیست و `run` پیش‌فرض با
-`unsupported`/exit `7` و دلیل `pidfd_unavailable` refuse می‌کند (حالت
-`--headless` وابسته به آن نیست)؛ `ESRCH` یعنی supervisor پیش از بازکردن pidfd
-مرده است و همان failure startup/exit `1` گزارش می‌شود، نه `7`. supervisor هویت خود و هر فرزند (engine/sidecar) را به‌صورت
-`(pid, starttime)` در pipe readiness گزارش می‌کند؛ هیچ فرزندی نباید بدون گزارش از
-process group خارج شود. launcher برای هر گزارش، pidfd را **فوراً** باز می‌کند:
+باشد. **پیش از spawn**، launcher با `pidfd_open` روی PID خودش توانایی pidfd را
+probe می‌کند؛ `ENOSYS`/`EPERM` یعنی pidfd مجاز نیست و `run` پیش‌فرض با
+`unsupported`/exit `7` و دلیل `pidfd_unavailable` refuse می‌کند و هیچ processی
+نمی‌سازد (حالت `--headless` وابسته به pidfd نیست). سپس supervisor را spawn
+می‌کند و pidfd آن را **بلافاصله** باز می‌کند و تا پایان گروه‌scan نهایی نگه
+می‌دارد؛ این pidfd تا بسته‌نشدن، PID/PGID supervisor را از reuse محافظت می‌کند.
+اگر بازکردن pidfd supervisor پس از spawn شکست بخورد، چون فرزند مستقیم و
+reap‌نشده است PID آن قابل reuse نیست: launcher با SIGKILL روی همان PID فرزند
+مستقیم آن را می‌بندد، `waitpid` می‌کند و با exit `1` برمی‌گردد؛ `ESRCH` یعنی
+supervisor از قبل مرده و همان failure startup/exit `1` گزارش می‌شود، نه `7`.
+
+supervisor هویت خود و هر فرزند (engine/sidecar) را به‌صورت `(pid, starttime)` در
+pipe readiness گزارش می‌کند؛ هیچ فرزندی نباید بدون گزارش از process group خارج
+شود. launcher برای هر گزارش، pidfd را **فوراً** باز می‌کند:
 
 - `ESRCH` یعنی فرزند از قبل مرده است؛ ثبت می‌شود و ادامه می‌دهد.
-- `ENOSYS` یا خطای دیگر یعنی سیگنال ایمن ممکن نیست؛ به PID/PGID bare سیگنال
-  فرستاده نمی‌شود و خروجی `teardown_incomplete`/exit `1` است.
+- `ENOSYS`/`EPERM`/خطای دیگر یعنی سیگنال ایمن ممکن نیست؛ به PID/PGID bare سیگنال
+  فرستاده نمی‌شود. launcher با pidfd supervisor خودش teardown را آغاز می‌کند
+  (SIGTERM/SIGKILL و `waitpid`) و سپس فرزندان/گروه را بررسی می‌کند؛ خروجی
+  `teardown_incomplete`/exit `1` است، اما app تا حد امکان باقی نمی‌ماند.
 - پس از باز شدن pidfd، starttime همان processِ pin‌شده از `/proc/<pid>/stat`
   خوانده و با مقدار گزارش‌شده مقایسه می‌شود؛ mismatch/خطا یعنی هویت قابل تأیید
-  نیست و بدون سیگنال exit `1` برمی‌گردد.
+  نیست و همان مسیر abort/exit `1` بالا اجرا می‌شود.
 
 همهٔ سیگنال‌ها فقط با `pidfd_send_signal` روی pidfdهای بازشده فرستاده می‌شوند؛
-PID/PGID عددی هرگز هدف سیگنال نیست.
+PID/PGID عددی هرگز هدف سیگنال نیست. `pidfd_send_signal` با `ESRCH` یعنی process
+از قبل مرده و ادامه می‌دهد؛ `EPERM`/خطای دیگر یعنی بدون سیگنال و
+`teardown_incomplete`/exit `1`.
 
 در timeout، pipe readiness بسته می‌شود، به supervisor با pidfd خودش `SIGTERM`
 فرستاده می‌شود، تا ۵s برای خروج supervisor صبر می‌شود و در صورت نیاز `SIGKILL`
@@ -1377,10 +1390,11 @@ SIGTERM با pidfd، انتظار محدود برای exit/zombie، و در صو
 
 فقط پس از مرگ/zombie شدن همهٔ فرزندان گزارش‌شده، launcher با supervisor pidfd
 هنوز‌باز، `/proc` را برای اعضای process group قدیمی اسکن می‌کند و هر عضو
-زنده/غیرzombie که در مجموعهٔ گزارش‌شده نیست را تخلف می‌داند: به آن سیگنال
-نمی‌فرستد و `teardown_incomplete`/exit `1` می‌دهد. اگر گروه خالی (فقط zombie)
-بود، pidfd supervisor بسته و exit `8` داده می‌شود. processهای zombie با وضعیت
-`Z` باقی‌مانده حساب نمی‌شوند.
+زنده/غیرzombie را با مجموعهٔ `(pid,starttime)` گزارش‌شده مقایسه می‌کند؛ تطابق
+یعنی همان فرزند هنوز زنده است و عدم‌تطابق یعنی عضو ناشناخته/reused. در هر دو
+حالت زنده‌بودن تخلف است: به آن سیگنال نمی‌فرستد و `teardown_incomplete`/exit `1`
+می‌دهد. اگر گروه خالی (فقط zombie) بود، pidfd supervisor بسته و exit `8` داده
+می‌شود. processهای zombie با وضعیت `Z` باقی‌مانده حساب نمی‌شوند.
 
 exit `8` فقط یعنی «همهٔ processهای گزارش‌شده و اعضای تأییدشدهٔ process group همین
 invocation دیگر زنده نیستند»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run`
@@ -1410,11 +1424,14 @@ quoting صحیح Desktop Entry برای مسیر دارای فاصله)، `Termi
 اجرا را stop نمی‌کند؛ فقط entry ورود بعدی را تغییر می‌دهند. `disable` فقط فایل مالک
 را حذف می‌کند و برای فایل غیرمالک exit `6` می‌دهد؛ `status` فقط خواندنی است،
 `managed` را نشان می‌دهد و اگر managed service هم وجود داشته باشد با
-`conflict=service` و exit `0` هشدار می‌دهد (setup commands در این حالت exit `6`). `enable` اگر StatusNotifier host نباشد با
-`unsupported`/exit `7` و دلیل `tray_unavailable` refuse می‌کند؛ autostart اصلاً
-حالت headless ندارد. اگر managed service unit وجود داشته باشد، `enable` برای
-جلوگیری از دو supervisor هم‌زمان exit `6` می‌دهد. نصب بسته هیچ فایل autostart
-نمی‌سازد.
+`conflict=service` و exit `0` هشدار می‌دهد (setup commands در این حالت exit `6`).
+`status` فیلدهای `tray_available` و `pidfd_available` را هم نشان می‌دهد و `doctor`
+همین دو check را دارد. `enable` پیش از نوشتن **یا** اعلام idempotent، هر دو را
+probe می‌کند: نبود StatusNotifier host → `unsupported`/exit `7` با دلیل
+`tray_unavailable`؛ نبود pidfd مجاز (ENOSYS/EPERM) → `unsupported`/exit `7` با
+دلیل `pidfd_unavailable` (R-21). autostart اصلاً حالت headless ندارد. اگر managed
+service unit وجود داشته باشد، `enable` برای جلوگیری از دو supervisor هم‌زمان
+exit `6` می‌دهد. نصب بسته هیچ فایل autostart نمی‌سازد.
 
 **`service install|uninstall|status`.** فقط Linux با systemd user manager. `install`
 unit را در base config **همان user manager** می‌نویسد:
@@ -1591,7 +1608,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | A12 | T3 | status/redirect/body/stream بایت‌به‌بایت؛ HEAD/POST/body؛ UDP صریحاً `0x07` بدون سوکت UDP |
 | A13 | R13 | `run --headless` foreground، crash/port collision، config خراب، shutdown تمیز با دادهٔ سالم؛ restart فقط در سطح process |
 | A14 | T7 — **D20 بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
-| A15 | R13 | `run` پیش‌فرض detached/tray فقط بعد از readiness واقعی (`status.ready` و listenerهای لازم بر اساس mode) برمی‌گردد؛ `--headless` foreground؛ `autostart`/`service install` idempotent؛ بسته بدون unit/postinst؛ نبود tray fail صریح؛ migration از lock/unit قدیمی engine دوم نمی‌سازد |
+| A15 | R13 | `run` پیش‌فرض detached/tray فقط بعد از readiness واقعی (`status.ready` و listenerهای لازم بر اساس mode) برمی‌گردد؛ `--headless` foreground؛ `autostart`/`service install` idempotent؛ بسته بدون unit/postinst؛ نبود tray/pidfd fail صریح (`7`)؛ teardown فقط با هویت تأییدشده (survivor → `1`، clean → `8`)؛ migration از lock/unit قدیمی engine دوم نمی‌سازد |
 
 ## ۹. محدودیت‌های ثبت‌شده و کار باز
 
@@ -1617,7 +1634,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | R-18 | `service install` فقط systemd user unit می‌سازد؛ system unit، OpenRC و سرویس‌های OSهای دیگر پشتیبانی نمی‌شوند و linger نیاز به اقدام root/polkit دارد | تصمیم/پیاده‌سازی milestone بعد؛ مستند به‌عنوان مرز v1 |
 | R-19 | lock فقط per data directory است؛ app/service با `--data-dir` متفاوت می‌توانند هم‌زمان اجرا شوند و بر سر port تصادم کنند. `autostart`/`service` فقط setupهای managed را از هم منع می‌کنند، نه فایل‌های دستی را | app و service پیش‌فرض همان data-dir را دارند؛ data-dir سفارشی یک instance جدا و پیشرفته است؛ تعارض port با exit 6 گزارش می‌شود |
 | R-20 | پنجرهٔ migration فقط مسیرهای legacy شناخته‌شدهٔ R12 را probe/نگه می‌دارد؛ engine قدیمی default با `XDG_RUNTIME_DIR` سفارشی/غیرقابل‌حدس ممکن است دیده نشود (instanceهای `--data-dir` فقط lock همان data-dir را می‌بینند) | migration صریحاً old unit را stop/disable می‌کند؛ پس از یک نسخه سازگاری حذف می‌شود؛ `doctor` مسیر lockهای resolve‌شده را نشان می‌دهد |
-| R-21 | حالت اپ برای teardown ایمن به pidfd (Linux ≥5.3) نیاز دارد؛ روی kernel قدیمی‌تر `run` پیش‌فرض با `unsupported`/`7` و دلیل `pidfd_unavailable` refuse می‌کند | `run --headless` مستقل از pidfd است؛ ارتقای kernel یا استفاده از سرویس opt-in |
+| R-21 | حالت اپ برای teardown ایمن به `pidfd_open` **مجاز** نیاز دارد (Linux ≥5.3 و مسدودنشده با seccomp/EPERM)؛ در غیر این صورت `run` پیش‌فرض و `autostart enable` با `unsupported`/`7` و دلیل `pidfd_unavailable` refuse می‌کنند | `run --headless` مستقل از pidfd است؛ ارتقای kernel/رفع seccomp یا استفاده از سرویس opt-in |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است
