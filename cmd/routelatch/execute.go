@@ -15,6 +15,7 @@ import (
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
 	"routelatch/internal/platform"
+	"routelatch/internal/service"
 	"routelatch/internal/store"
 )
 
@@ -125,6 +126,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) int {
 		return c.doctor(ctx)
 	case "autostart":
 		return c.autostart(ctx, rest)
+	case "service":
+		return c.serviceCmd(ctx, rest)
 	case "env":
 		return c.call(ctx, control.Request{Op: control.OpEnv})
 	case "exec":
@@ -562,6 +565,24 @@ func (c *cli) human(env contract.Envelope) {
 			}
 			return
 		}
+	case "service install", "service uninstall", "service status":
+		if d, ok := env.Data.(map[string]any); ok {
+			switch env.Command {
+			case "service install":
+				fmt.Fprintf(c.stdout, "service installed: %v\n", d["unit"])
+			case "service uninstall":
+				fmt.Fprintf(c.stdout, "service uninstalled: %v\n", d["unit"])
+			default:
+				fmt.Fprintf(c.stdout, "service unit: %v\n", d["unit"])
+			}
+			fmt.Fprintf(c.stdout, "enabled: %v\nactive: %v\nmanaged: %v\n",
+				yesNo(d["enabled"]), yesNo(d["active"]), yesNo(d["managed"]))
+			fmt.Fprintf(c.stdout, "linger: %v\n", d["linger"])
+			if d["conflict"] == service.ConflictAutostart {
+				fmt.Fprintln(c.stderr, "warning: a managed autostart entry exists; disable one of autostart and the service")
+			}
+			return
+		}
 	}
 	// Fallback: print the data as indented JSON on stdout.
 	raw, _ := json.MarshalIndent(env.Data, "", "  ")
@@ -688,6 +709,8 @@ Usage: routelatch [--json] [--data-dir DIR] <command> [args]
   doctor                    permissions, listeners, pool and state checks
   autostart enable|disable|status
                             start the app at desktop login (XDG autostart)
+  service install|uninstall|status
+                            opt-in systemd user service (run --headless)
   env | exec -- <cmd>       launcher environment
   desktop proxy status|set|restore
   backup | restore <ref>

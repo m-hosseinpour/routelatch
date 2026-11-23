@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -129,6 +130,19 @@ func TestReadUnitStates(t *testing.T) {
 	nonRegular, err := ReadUnit(path)
 	if err != nil || !nonRegular.Exists || nonRegular.Managed || nonRegular.Safe {
 		t.Fatalf("directory = %+v, %v", nonRegular, err)
+	}
+}
+
+func TestReadUnitRejectsOversizeFileInsteadOfTruncating(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, UnitName)
+	body := OwnershipMarker + "\n" + strings.Repeat("# padding\n", maxUnitBytes/10+1)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unit, err := ReadUnit(path)
+	if err != nil || !unit.Exists || unit.Safe || unit.Managed {
+		t.Fatalf("oversize = %+v, %v", unit, err)
 	}
 }
 

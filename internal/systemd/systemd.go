@@ -139,12 +139,14 @@ func UnitPath(base string) string {
 
 // Unit describes the unit file at a resolved path. Safe is false for a
 // symlink, a non-regular file or a foreign owner; such a path is never adopted
-// or unlinked by RouteLatch.
+// or unlinked by RouteLatch. Content is the exact bytes read through the
+// no-follow descriptor, used for the install snapshot and comparison.
 type Unit struct {
 	Path    string
 	Exists  bool
 	Managed bool
 	Safe    bool
+	Content []byte
 }
 
 // ReadUnit inspects a unit without following a final symlink or writing
@@ -172,10 +174,16 @@ func ReadUnit(path string) (Unit, error) {
 		return Unit{Path: path, Exists: true, Safe: false}, nil
 	}
 	defer f.Close()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUnitBytes))
+	raw, err := io.ReadAll(io.LimitReader(f, maxUnitBytes+1))
 	if err != nil {
 		return Unit{Path: path, Exists: true, Safe: false}, nil
 	}
+	if len(raw) > maxUnitBytes {
+		// Never truncate a unit: the install snapshot must restore every byte,
+		// so an oversize file is not safe to replace or adopt.
+		return Unit{Path: path, Exists: true, Safe: false}, nil
+	}
+	unit.Content = raw
 	unit.Managed = hasOwnershipMarker(string(raw))
 	return unit, nil
 }

@@ -335,6 +335,43 @@ func (m *Manager) inspect() (entryState, error) {
 	return state, nil
 }
 
+// ManagedFile reports whether a RouteLatch-owned autostart entry exists at
+// configBase. It is read-only and treats an unsafe path (symlink, non-regular,
+// foreign owner) as not managed: it must never block or be adopted by a service
+// command. Used by `service install|status` for the service/autostart conflict.
+func ManagedFile(configBase string) (bool, error) {
+	if configBase == "" {
+		return false, nil
+	}
+	path := filepath.Join(configBase, "autostart", Filename)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return false, nil
+	}
+	if st, ok := info.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Geteuid() {
+		return false, nil
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxEntrySize+1))
+	if err != nil {
+		return false, err
+	}
+	if len(raw) > maxEntrySize {
+		return false, nil
+	}
+	return hasMarker(string(raw)), nil
+}
+
 func hasMarker(content string) bool {
 	for _, line := range strings.Split(content, "\n") {
 		if strings.TrimSuffix(line, "\r") == MarkerKey {
