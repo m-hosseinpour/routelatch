@@ -1442,7 +1442,9 @@ quoting صحیح Desktop Entry برای مسیر دارای فاصله)، `Termi
 همین دو check را دارد. `enable` پیش از نوشتن **یا** اعلام idempotent، هر دو را
 probe می‌کند: نبود StatusNotifier host → `unsupported`/exit `7` با دلیل
 `tray_unavailable`؛ نبود pidfd مجاز (ENOSYS/EPERM) → `unsupported`/exit `7` با
-دلیل `pidfd_unavailable` (R-21). autostart اصلاً حالت headless ندارد. اگر managed
+دلیل `pidfd_unavailable` (R-21). autostart اصلاً حالت headless ندارد و فقط
+instance پیش‌فرض را مدیریت می‌کند: هر سه فرمان با `--data-dir` با exit `2` رد
+می‌شوند و برای data-dir سفارشی `service install --data-dir` مسیر درست است. اگر managed
 service unit وجود داشته باشد، `enable` برای جلوگیری از دو supervisor هم‌زمان
 exit `6` می‌دهد. نصب بسته هیچ فایل autostart نمی‌سازد.
 

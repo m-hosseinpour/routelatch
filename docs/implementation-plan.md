@@ -274,6 +274,18 @@ InstanceDir canonical، lockهای legacy پنجرهٔ migration، و `status.re
 `ENOSYS`/`EPERM` pidfd روی kernel واقعی، runtime غیر-amd64، و failure-injection
 مستقیم مسیر repair سه‌شکست.
 
+**R13-C انجام شد (۲۰۲۶-۱۱-۲۳):** `autostart enable|disable|status` و helper
+`internal/systemd` در `c113dde` پیاده شد و در `bd16367` پس از بازبینی اصلاح شد
+(احراز/Hello اتصال private no-autolaunch، probe دارای deadline در
+supervisor/autostart/doctor، حذف نشت goroutine، رد `--data-dir` با exit 2
+به‌عنوان default-instance-only، exit 6 برای مسیر ناامن در status، و عدم chmod
+دایرکتوری موجود). بازبینی مستقل اول **Not ready** (hang واقعی `ProbeTray`) و پس
+از اصلاح **Ready** بود. checks: `gofmt`/`go vet`/`go build`، full tests،
+`scripts/check-artifact.sh`، و تست گیت‌شدهٔ واقعی KDE با XDG موقت **PASS** (real
+`~/.config/autostart` و سرویس میزبان دست‌نخورده). **آزمون‌نشده:** تست مالکیت
+root (skip چون non-root)، رفتار `disable`/`status` علیه user manager واقعی، و
+`umask` غیرعادی.
+
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
 `autostart` و `service install` idempotent باشند؛ بسته هیچ unit/postinst نداشته باشد؛
@@ -287,7 +299,7 @@ tray/autostart/service روی میزبان و نصب/فعال‌سازی سرو�
 | --- | --- | --- | --- | --- |
 | R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد؛ parent-death/child lifetime قابل پیاده‌سازی باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher؛ parent-death prototype |
 | R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ `InstanceDir` canonical زیر state/data (state.lock/app.lock/app.owner/socket، مستقل از XDG_RUNTIME_DIR)، flock `app.lock` + flock دوم `app.owner` (no-follow، inode پایدار، هرگز unlink، supervisor owner در عملیات عادی؛ در fail-closed ابتدا `app.owner` آزاد و سپس `app.lock` پس از توقف child/tray، CLOEXEC برای child)، marker `starting/ready/stopping` با invalidate قبل از flock، رکورد کامل/`data_dir`، transitionهای readiness و negative socket veto، repair/fail-closed (بدون socket-only already_running)، singleton per data-dir، lockهای legacy **همان data-dir** در پنجرهٔ migration، startup-in-progress → exit `6`، Quit/مرگ supervisor → توقف child، readiness deadline با teardown محدود به supervisor/فرزندان خودی (exit `8` فقط پس از مرگ تأییدشده؛ survivor/identity → `1`؛ pidfd unavailable → `7`)، `status.ready`/`listeners_open` mode-aware، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run ready/starting/stopping/stale-marker/lock-liveness/never-0-on-stale؛ app-vs-headless **صرف‌نظر از marker**؛ data-dir متفاوت؛ PID reuse/concurrent/corrupt/symlink/foreign marker؛ marker truncate/rewrite/newline/partial-read/repair-reflock-after-unlink/startup-phase-repair/repair-failure/engine-death/Quit/tray-loss stale-ready/deleted-marker-stopping/stopping-write-failure؛ lock delete/recreate؛ XDG_RUNTIME_DIR متفاوت (desktop/SSH)؛ legacy lock فعال/stopped با و بدون runtime و فقط برای همان data-dir؛ دو data-dir هم‌زمان؛ default+data-dir؛ runtime سفارشی مستند؛ stopped mode بدون listener؛ readiness timeout + concurrent-run + pidfd preflight (ENOSYS/EPERM) + supervisor-pidfd-open-failure (SIGKILL direct child, no reused PID) + child-pidfd-failure cleanup + signal-ESRCH/EPERM + child-death-wait/group-identity + fail-closed window (app.lock held + app.owner free → 6؛ پس از آزادشدن app.lock شروع مجاز) + no-orphan؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
-| R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، no-follow/regular/uid برای مسیر، بررسی tray host و pidfd مجاز (R-21)، `tray_available`/`pidfd_available` در status و doctor، منع هم‌زمان با service و `conflict` در status | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ stale/foreign/symlink conflict؛ tray-unavailable؛ pidfd-unavailable (ENOSYS/EPERM)؛ service-coexistence/status conflict؛ اجرای واقعی KDE (گیت‌شده) |
+| R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، no-follow/regular/uid برای مسیر، بررسی tray host و pidfd مجاز (R-21)، `tray_available`/`pidfd_available` در status و doctor، منع هم‌زمان با service و `conflict` در status؛ فقط instance پیش‌فرض (رد `--data-dir` با exit 2) | R13-B | temp XDG؛ رد `--data-dir`؛ محتوای فایل؛ re-run no-op؛ stale/foreign/symlink conflict؛ tray-unavailable؛ pidfd-unavailable (ENOSYS/EPERM)؛ service-coexistence/status conflict؛ اجرای واقعی KDE (گیت‌شده) |
 | R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy (`RestartPreventExitStatus=1 4 6 7 9 10`)، readiness واقعی با `status.ready`/`listeners_open` (listener فقط در mode غیر-stopped، نه فقط active؛ timeout exit `8`)، resolve/pin کردن **baseهای** XDG config/state در unit (Environment یا `--data-dir`) و نوشتن unit در base config همان user manager، linger hint، بدون sudo، `--force` با start/restart/adopt فقط پس از inactive، marker مالکیت، preflight unit خودش با attribution lockهای legacy خودش، snapshot/rollback با precedence (previous-active + MainPID/starttime یکسان، نصب تازه، inactive/adoption، restart/start failure)، exit mapping `1→1` و `4→6`/`6→6`/`7→7`/`9→9`/`10→10` (همه terminal)، quoting ExecStart/Environment، no-follow unit، `uninstall` اول ownership | R13-B | fake systemctl/loginctl/show-environment؛ temp XDG؛ unit content/marker/quoting/pinned base env/unit path (manager vs shell base)؛ second-run no-op؛ differing/foreign/symlink unit؛ force active/inactive/disabled/adoption (enabled-inactive و disabled-inactive)؛ own-service active با legacy locks؛ app/other headless refuse؛ stopped/timeout/readiness-before-bind/port/corrupt/unsupported/child-exit 1/4/6/7/9/10؛ rollback failed-restart-after-stop/active-disabled/fresh/adoption؛ autostart conflict/status؛ foreign uninstall بدون تغییر؛ gated real user manager |
 | R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README، `packaging/README.md` (INSTALL)، `deploy/README.md` (SERVICE)، `CONTRIBUTING.md` و `internal/acceptance/README.md`؛ ثبت مرز pidfd مجاز (R-21) و جایگزین `--headless`/service در READMEها؛ migration از unit قدیمی (tarball و `/usr/lib`) و از lock/socket legacy R12 (default: `<StateDir>` + runtimeهای شناخته‌شده؛ `--data-dir`: فقط همان ریشه) به `InstanceDir` با نگه‌داشتن lockهای legacy برای یک نسخه؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ stale-unit upgrade با نتیجهٔ «unit قدیمی stop/disabled، بدون loop/orphan/direct، مسیر جدید سالم»؛ engine قدیمی active و stopped با/بدون `XDG_RUNTIME_DIR` → exit `4`؛ دو data-dir هم‌زمان و default+data-dir بدون lock سراسری نادرست؛ duplicate path/inode dedupe با Lstat/fstat بدون follow؛ symlink lock رد شود؛ default-old + data-dir-new صریحاً stop؛ `XDG_RUNTIME_DIR` سفارشی مستند و در migration stop صریح؛ desktop/SSH با runtime متفاوت یک lock؛ اسکریپت‌ها/تست‌ها به `run --headless`؛ README/INSTALL/SERVICE شامل pidfd/Linux ≥5.3/seccomp و جایگزین headless؛ CI |
 | R13-F | **acceptance/review/release** | A13/A15 و harness؛ بازنشستگی تست‌های systemd-first یا تبدیل آن‌ها به service opt-in؛ بازبینی مستقل؛ تصمیم انتشار جدا | R13-E | `gofmt`/`go vet`/`go build`؛ `go test -count=1 ./...`؛ تست‌های گیت‌شده؛ package checks؛ verdict بازبین |
@@ -330,26 +342,28 @@ exitهای `1/4/6/7/9/10` child را terminal map می‌کند، و در هر �
 (شامل start/restart) با snapshot و precedence `MainPID`/starttime محتوا و
 enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-follow را می‌سنجد.
 
-**تصمیم‌های باز تا R13-C/D:** جزئیات تشخیص دقیق user manager/linger روی
-توزیع‌های مختلف؛ مرز GUI آینده. انتخاب/pin library tray در R13-A و اجرای R13-B
+**تصمیم‌های باز تا R13-D:** جزئیات تشخیص دقیق user manager/linger روی
+توزیع‌های مختلف؛ مرز GUI آینده. انتخاب/pin library tray، اجرای R13-B و R13-C
 بسته شدند.
 
-**قدم بعدی:** R13-C (autostart) و R13-D (service) روی runtime نهایی R13-B؛ سپس
-R13-E (بسته‌بندی/مستندات/migration) و R13-F (acceptance/review).
+**قدم بعدی:** R13-D (service) روی helper `internal/systemd` و runtime R13-B؛
+سپس R13-E (بسته‌بندی/مستندات/migration) و R13-F (acceptance/review).
 
 ### وضعیت فعلی
 
-- **R13 — مدل اجرا، R13-A و R13-B بسته شدند (۲۰۲۶-۱۱-۲۳، ارکستریتور):** D26
-  ثبت و A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
+- **R13 — R13-A/B/C بسته شدند (۲۰۲۶-۱۱-۲۳، ارکستریتور):** D26 ثبت و
+  A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
   `deedles.dev/tray v0.2.0` (MIT) را pin کرد (`77a5d22`؛ Plasma 6.6.7، build
   استاتیک چهار معماری، pidfd parent-death؛ تأیید بصری/GNOME/SSH/runtime دو
   معماری آزمون‌نشده). R13-B در `332fa97`، `ab78768` و `3a141a2` پیاده شد:
   `run --headless` foreground، launcher/supervisor و tray پیش‌فرض، InstanceDir/
-  lock/marker/pidfd/readiness و تست‌های جدول؛ بازبینی اول **Not ready** و پس از
-  اصلاح **Ready**، full tests/-race/check-artifact سبز. tray واقعی KDE، بستن
-  ترمینال واقعی، pidfd ENOSYS/EPERM و runtime غیر-amd64 آزمون‌نشده‌اند. هیچ
-  سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار باز: R13-C تا R13-F؛
-  قدم بعدی R13-C/D.
+  lock/marker/pidfd/readiness و تست‌های جدول. R13-C در `c113dde` و `bd16367`
+  پیاده شد: autostart، helper `internal/systemd`، probe احرازشده با deadline،
+  رد `--data-dir`، و gated KDE واقعی **PASS**. بازبینی‌های B و C ابتدا
+  **Not ready** و پس از اصلاح **Ready** بودند؛ full tests/-race/check-artifact
+  سبز. tray واقعی KDE، بستن ترمینال واقعی، pidfd ENOSYS/EPERM و runtime
+  غیر-amd64 هنوز آزمون‌نشده‌اند. هیچ سرویس، unit، autostart یا تنظیم دسکتاپ
+  تغییر نکرد. کار باز: R13-D تا R13-F؛ قدم بعدی R13-D.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود

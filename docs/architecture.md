@@ -206,7 +206,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   `$XDG_CONFIG_HOME/autostart/routelatch.desktop` (fallback `~/.config/autostart`)
   با `Exec=<absolute> run` می‌سازد؛ پیش از نوشتن/اعلام idempotent، tray host و
   pidfd مجاز را probe می‌کند و در نبود هرکدام `unsupported`/`7` با دلیل
-  `tray_unavailable`/`pidfd_unavailable` می‌دهد. نصب بسته autostart نمی‌سازد؛
+  `tray_unavailable`/`pidfd_unavailable` می‌دهد. autostart فقط instance پیش‌فرض
+  است و هر سه فرمان با `--data-dir` رد می‌شوند؛ برای data-dir سفارشی
+  `service install --data-dir` مسیر درست است. نصب بسته autostart نمی‌سازد؛
   linger/start-before-login بخشی از مدل دسکتاپ نیست.
 - برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
   **user unit** در base config همان user manager (از `systemctl --user
