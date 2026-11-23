@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -77,6 +79,7 @@ func helperSupervisor() int {
 		Paths: paths, LogDir: paths.LogDir, ReadyFD: ready,
 		Engine: helperCommand("fakeengine"), Tray: helperCommand("faketray"),
 		TrayCheck:      func() error { return nil },
+		TrayRegistered: func() error { return nil },
 		ReadyTimeout:   5 * time.Second,
 		RepairInterval: 250 * time.Millisecond,
 		TermWait:       2 * time.Second,
@@ -220,6 +223,20 @@ func helperTray() int {
 		return 1
 	}
 	_ = os.WriteFile(filepath.Join(helperPaths().DataDir, "tray.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+	if f, err := os.OpenFile(filepath.Join(helperPaths().DataDir, "tray-launches"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+		_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
+		_ = f.Close()
+	}
+	switch fake {
+	case "trayerror":
+		send("error tray_menu_failed")
+		time.Sleep(50 * time.Millisecond)
+		return 1
+	case "trayunavailable":
+		send("error tray_unavailable")
+		time.Sleep(50 * time.Millisecond)
+		return 7
+	}
 	if fake == "traylostmany" {
 		losses := 8
 		if n, convErr := strconv.Atoi(os.Getenv("RL_TEST_LOSSES")); convErr == nil && n > 0 {
@@ -288,6 +305,8 @@ func helperTray() int {
 		}
 	case "trayexit":
 		after = time.After(300 * time.Millisecond)
+	case "trayexit1":
+		after = time.After(300 * time.Millisecond)
 	}
 	for {
 		select {
@@ -303,6 +322,8 @@ func helperTray() int {
 			case "traylost":
 				send("lost")
 				return 3
+			case "trayexit1":
+				return 1
 			default:
 				return 0
 			}
@@ -524,6 +545,33 @@ func TestLaunchTrayUnavailable(t *testing.T) {
 	}
 }
 
+// A tray menu failure is an internal terminal failure, not "unsupported": it
+// must exit 1 and must never start a replacement tray.
+func TestTrayMenuFailureIsTerminalExitOne(t *testing.T) {
+	data := integrationData(t)
+	_, err := launchFake(t, data, "trayerror", 5*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitError {
+		t.Fatalf("tray menu failure = %+v, want exit 1", f)
+	}
+	raw, readErr := os.ReadFile(filepath.Join(data, "tray-launches"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if launches := strings.Count(string(raw), "\n"); launches != 1 {
+		t.Fatalf("tray menu failure restarted the tray: %d launches", launches)
+	}
+}
+
+func TestTrayUnavailableMessageMapsToSeven(t *testing.T) {
+	data := integrationData(t)
+	_, err := launchFake(t, data, "trayunavailable", 5*time.Second)
+	f := asFailure(err)
+	if f.Exit != contract.ExitUnsupported || f.Reason != "tray_unavailable" {
+		t.Fatalf("tray unavailable message = %+v, want 7/tray_unavailable", f)
+	}
+}
+
 func TestLaunchHeadlessConflict(t *testing.T) {
 	data := integrationData(t)
 	paths := pathsFor(t, data)
@@ -666,6 +714,7 @@ func startSupervisor(t *testing.T, data, engineFake, trayFake string, configure 
 		Engine:         fakeCommand(data, "fakeengine", engineFake),
 		Tray:           fakeCommand(data, "faketray", trayFake),
 		TrayCheck:      func() error { return nil },
+		TrayRegistered: func() error { return nil },
 		ReadyTimeout:   10 * time.Second,
 		RepairInterval: 100 * time.Millisecond,
 		TermWait:       2 * time.Second,
@@ -1035,6 +1084,42 @@ func TestDeletedMarkerIsRecreatedLockedWhileReady(t *testing.T) {
 	}
 }
 
+func TestDeletedMarkerWhileUnreadyIsNotReady(t *testing.T) {
+	data := integrationData(t)
+	var registered atomic.Bool
+	registered.Store(true)
+	h := startSupervisor(t, data, "normal", "normal", func(o *SupervisorOptions) {
+		o.RepairInterval = 50 * time.Millisecond
+		o.TrayRegistered = func() error {
+			if registered.Load() {
+				return nil
+			}
+			return errors.New("tray item is not registered")
+		}
+	})
+	h.waitReady(t, 5*time.Second)
+	// Readiness is gone, but the supervisor has not restarted anything, so the
+	// next repair must not republish the old ready phase.
+	registered.Store(false)
+	if err := os.Remove(h.paths.AppOwner); err != nil {
+		t.Fatal(err)
+	}
+	rec := waitMarkerState(t, h.paths.AppOwner, MarkerStarting, 5*time.Second)
+	if rec.State != MarkerStarting {
+		t.Fatalf("recreated marker = %+v, want starting", rec)
+	}
+	second, err := launchFake(t, data, "normal", 2*time.Second)
+	if err == nil && second.AlreadyRunning {
+		t.Fatalf("concurrent run treated the unready marker as ready: %+v", second)
+	}
+	if f := asFailure(err); f.Exit != contract.ExitConflict {
+		t.Fatalf("concurrent run during unready repair = %+v, want exit 6", f)
+	}
+	// Readiness returning restores ready on the next repair, not a restart.
+	registered.Store(true)
+	waitMarkerState(t, h.paths.AppOwner, MarkerReady, 5*time.Second)
+}
+
 func TestLiveRepairFailureFailClosed(t *testing.T) {
 	data := integrationData(t)
 	h := startSupervisor(t, data, "normal", "normal")
@@ -1190,6 +1275,23 @@ func readPIDFileErr(path string) (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(raw)))
+}
+
+func TestTrayExitOneIsTerminalWithoutRestart(t *testing.T) {
+	data := integrationData(t)
+	h := startSupervisor(t, data, "normal", "trayexit1")
+	h.waitReady(t, 5*time.Second)
+	f := asFailure(h.result(t, 5*time.Second))
+	if f.Exit != contract.ExitError {
+		t.Fatalf("tray exit 1 = %+v, want exit 1", f)
+	}
+	raw, err := os.ReadFile(filepath.Join(data, "tray-launches"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if launches := strings.Count(string(raw), "\n"); launches != 1 {
+		t.Fatalf("tray exit 1 restarted the tray: %d launches", launches)
+	}
 }
 
 func TestStaleReadyMarkerWithoutOwnerIsNotAlreadyRunning(t *testing.T) {

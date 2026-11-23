@@ -37,6 +37,9 @@ type SupervisorOptions struct {
 	// TrayCheck replaces the real StatusNotifier probe in tests. nil means the
 	// app performs the real watcher/host probe.
 	TrayCheck func() error
+	// TrayRegistered replaces the bounded registration re-check in tests. nil
+	// means the app queries the session bus for this tray child's item.
+	TrayRegistered func() error
 
 	ReadyTimeout   time.Duration
 	RepairInterval time.Duration
@@ -291,7 +294,7 @@ func (s *supervisor) loop(ctx context.Context) error {
 			if s.quitRequested {
 				continue
 			}
-			if err := s.trayDied(code); err != nil {
+			if err := s.trayDied(code, ""); err != nil {
 				return err
 			}
 			if s.quitRequested {
@@ -506,7 +509,7 @@ func (s *supervisor) engineDied(code int) error {
 		return s.shutdown(7, unsupportedTray(err))
 	}
 	if s.tray == nil || s.trayRegistered() != nil {
-		return s.trayDied(3)
+		return s.trayDied(3, "")
 	}
 	if err := s.writeState(MarkerReady); err != nil {
 		return s.failClosed(markerWriteFailed(err))
@@ -516,13 +519,29 @@ func (s *supervisor) engineDied(code int) error {
 	return nil
 }
 
-func (s *supervisor) trayDied(code int) error {
-	s.logf("supervisor.tray_exit code=%d", code)
+func (s *supervisor) trayDied(code int, reason string) error {
+	s.logf("supervisor.tray_exit code=%d reason=%s", code, reason)
 	if s.quitRequested {
 		return s.shutdown(0, nil)
 	}
-	if code == 7 {
-		return s.shutdown(7, unsupportedTray(errors.New("the tray child reported that no tray host is available")))
+	if code == 7 || reason == "tray_unavailable" {
+		return s.shutdown(7, unsupportedTray(errors.New(firstReason(reason, "the tray child reported that no tray host is available"))))
+	}
+	// A tray menu/registration/internal failure is terminal: restarting would
+	// repeat the same failure, so exit 1 (or the documented child status)
+	// without a restart.
+	if reason != "" || terminalExit(code) {
+		exit := contract.ExitError
+		kind := contract.Internal
+		if reason == "" && code != 1 {
+			exit = contract.ExitCode(code)
+			kind = exitKind(code)
+		}
+		message := "the tray child failed"
+		if reason != "" {
+			message += ": " + reason
+		}
+		return s.shutdown(int(exit), &Failure{Exit: exit, Kind: kind, Op: "app.tray", Message: message + "; it was not restarted"})
 	}
 	if err := s.checkTray(); err != nil {
 		return s.shutdown(7, unsupportedTray(err))
@@ -565,13 +584,13 @@ func (s *supervisor) handleTrayMessage(msg string) error {
 	switch {
 	case msg == "lost":
 		s.logf("supervisor.tray_lost")
-		return s.trayDied(3)
+		return s.trayDied(3, "")
 	case strings.HasPrefix(msg, "error "):
 		reason := strings.TrimSpace(strings.TrimPrefix(msg, "error "))
 		if reason == "tray_unavailable" {
-			return s.shutdown(7, unsupportedTray(errors.New(reason)))
+			return s.trayDied(7, reason)
 		}
-		return s.shutdown(1, internalFailure("app.tray", "the tray child failed: "+reason, nil))
+		return s.trayDied(1, reason)
 	}
 	return nil
 }
@@ -825,7 +844,12 @@ func (s *supervisor) waitTrayReady(ctx context.Context) error {
 			case msg == "lost":
 				return &childExit{name: "tray", code: 3, lost: true}
 			case strings.HasPrefix(msg, "error "):
-				return &childExit{name: "tray", code: 7, reason: strings.TrimSpace(strings.TrimPrefix(msg, "error "))}
+				reason := strings.TrimSpace(strings.TrimPrefix(msg, "error "))
+				code := 1
+				if reason == "tray_unavailable" {
+					code = 7
+				}
+				return &childExit{name: "tray", code: code, reason: reason}
 			}
 		}
 	}
@@ -861,32 +885,51 @@ func (s *supervisor) statusReady(ctx context.Context) (Listeners, bool) {
 var ownerWrite = func(o *Owner, r Record) error { return o.Write(r) }
 
 func (s *supervisor) writeState(state string) error {
+	s.phase = state
+	return s.writeRecordState(state)
+}
+
+// writeRecordState publishes a state without changing the supervisor's logical
+// phase. Repair uses it so a readiness dip writes starting without trapping the
+// phase there: when readiness returns, the next repair may publish ready again.
+func (s *supervisor) writeRecordState(state string) error {
 	if s.owner == nil {
 		return fmt.Errorf("app.owner is not open")
 	}
-	s.phase = state
-	return ownerWrite(s.owner, Record{
-		State: state, Generation: s.generation, PID: os.Getpid(), StartedAt: s.startedAt,
-		DataDir: s.paths.DataDir, Listeners: s.listeners, LogPath: s.logPath,
-	})
+	return ownerWrite(s.owner, s.record(state))
+}
+
+// repairState is the state repair may publish right now. A ready phase is not
+// enough: §7.5 allows ready only while the engine reports status.ready and the
+// current tray item is still registered. Everything else is starting; stopping
+// always stays stopping.
+func (s *supervisor) repairState() string {
+	if s.phase != MarkerReady {
+		return s.phase
+	}
+	if _, ready := s.statusReady(context.Background()); ready && s.trayRegistered() == nil {
+		return MarkerReady
+	}
+	return MarkerStarting
 }
 
 func (s *supervisor) repair() error {
 	if s.owner == nil {
 		return markerInvalid(errors.New("app.owner is not open during repair"))
 	}
+	state := s.repairState()
 	err := s.owner.Verify()
 	if err == nil {
 		rec, readErr := s.owner.Read()
-		if readErr != nil || rec.State != s.phase || (s.phase == MarkerStopping && rec.State == MarkerReady) {
-			if writeErr := s.writeState(s.phase); writeErr != nil {
+		if readErr != nil || rec.State != state {
+			if writeErr := s.writeRecordState(state); writeErr != nil {
 				return markerWriteFailed(writeErr)
 			}
 		}
 		return nil
 	}
 	if errors.Is(err, ErrDeleted) {
-		if recErr := s.owner.RecreateAfterDelete(s.record(s.phase), 3, 50*time.Millisecond); recErr != nil {
+		if recErr := s.owner.RecreateAfterDelete(s.record(state), 3, 50*time.Millisecond); recErr != nil {
 			return markerWriteFailed(recErr)
 		}
 		return nil
@@ -927,6 +970,12 @@ func (s *supervisor) checkTray() error {
 }
 
 func (s *supervisor) trayRegistered() error {
+	if s.opts.TrayRegistered != nil {
+		return s.opts.TrayRegistered()
+	}
+	if s.tray == nil || s.tray.handle == nil {
+		return errors.New("no tray child is running")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), trayProbeTimeout)
 	defer cancel()
 	return TrayRegisteredContext(ctx, s.tray.handle.PID)
@@ -989,8 +1038,13 @@ func (s *supervisor) mapChildExit(name string, err error) error {
 		if ce.lost || (name == "tray" && ce.code == 3) {
 			return unsupportedTray(errors.New("tray host was lost"))
 		}
-		if name == "tray" && (ce.reason == "tray_unavailable" || ce.code == 7) {
-			return unsupportedTray(errors.New(firstReason(ce.reason, "tray child reported an unsupported tray")))
+		if name == "tray" {
+			if ce.reason == "tray_unavailable" || ce.code == 7 {
+				return unsupportedTray(errors.New(firstReason(ce.reason, "tray child reported an unsupported tray")))
+			}
+			if ce.reason != "" {
+				return &Failure{Exit: contract.ExitError, Kind: contract.Internal, Op: "app.tray", Message: "the tray child failed: " + ce.reason + "; it was not restarted"}
+			}
 		}
 		if name == "engine" && terminalExit(ce.code) {
 			return &Failure{Exit: contract.ExitCode(ce.code), Kind: exitKind(ce.code), Op: "app.engine", Message: fmt.Sprintf("the engine child exited with documented status %d", ce.code)}

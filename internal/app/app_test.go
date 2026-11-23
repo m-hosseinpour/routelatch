@@ -409,7 +409,7 @@ func TestRepairRewritesCorruptRecordAndRecreatesDeletedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &supervisor{
-		opts: SupervisorOptions{Now: time.Now}, owner: owner, phase: MarkerReady,
+		opts: SupervisorOptions{Now: time.Now}, owner: owner, phase: MarkerStarting,
 		generation: 3, startedAt: "now",
 		paths:   MarkerPathsFor(instance, root, filepath.Join(root, "log"), filepath.Join(instance, "control.sock")),
 		logPath: filepath.Join(root, "log", "routelatch.log"),
@@ -422,7 +422,7 @@ func TestRepairRewritesCorruptRecordAndRecreatesDeletedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec, err := owner.Read()
-	if err != nil || rec.State != MarkerReady {
+	if err != nil || rec.State != MarkerStarting {
 		t.Fatalf("repaired record = %+v, %v", rec, err)
 	}
 	// A deleted path is recreated, written and re-locked with the current
@@ -434,7 +434,7 @@ func TestRepairRewritesCorruptRecordAndRecreatesDeletedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec, err = owner.Read()
-	if err != nil || rec.State != MarkerReady {
+	if err != nil || rec.State != MarkerStarting {
 		t.Fatalf("recreated record = %+v, %v", rec, err)
 	}
 	if err := s.repair(); err != nil {
@@ -543,5 +543,91 @@ func TestRepairInStoppingPhaseNeverWritesReady(t *testing.T) {
 	}
 	if got, err := owner.Read(); err != nil || got.State != MarkerStopping {
 		t.Fatalf("recreated stopping marker = %+v, %v", got, err)
+	}
+}
+
+// Repair may publish ready only while both readiness legs hold: status.ready
+// and a registered current tray. A readiness dip writes starting but must not
+// move the logical phase, so a later repair can restore ready without a restart.
+func TestRepairPublishesReadyOnlyWhileReadinessHolds(t *testing.T) {
+	root := t.TempDir()
+	instance := filepath.Join(root, "run")
+	paths := MarkerPathsFor(instance, root, filepath.Join(root, "log"), filepath.Join(instance, "control.sock"))
+	if err := os.MkdirAll(instance, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := AcquireAppLock(paths.AppLock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	owner, err := OpenOwner(paths.AppOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	if err := owner.Lock(1, 0); err != nil {
+		t.Fatal(err)
+	}
+	s := &supervisor{
+		opts: SupervisorOptions{
+			Now:            time.Now,
+			Paths:          store.Paths{Socket: paths.Socket},
+			TrayRegistered: func() error { return nil },
+		},
+		owner: owner, phase: MarkerReady, generation: 3, startedAt: "now",
+		paths: paths, logPath: filepath.Join(root, "log", "routelatch.log"),
+	}
+	if err := owner.Write(s.record(MarkerStarting)); err != nil {
+		t.Fatal(err)
+	}
+	startStatus := func() *control.Server {
+		t.Helper()
+		srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: helperStatus{}, AllowStale: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := srv.Start(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return srv
+	}
+	// With readiness present, repair fills the marker back in as ready.
+	srv := startStatus()
+	if err := s.repair(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := owner.Read(); err != nil || got.State != MarkerReady {
+		t.Fatalf("repair with readiness = %+v, %v", got, err)
+	}
+	// Readiness disappears: a deleted marker must come back as starting, not a
+	// stale ready, and a concurrent run must get 6 instead of 0.
+	if err := srv.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(paths.AppOwner); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.repair(); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := owner.Read()
+	if err != nil || rec.State != MarkerStarting {
+		t.Fatalf("recreated unready marker = %+v, %v; want starting", rec, err)
+	}
+	if s.phase != MarkerReady {
+		t.Fatalf("repair changed the logical phase to %q", s.phase)
+	}
+	if _, _, err := ExistingState(paths); asFailure(err).Exit != contract.ExitConflict {
+		t.Fatalf("concurrent second run = %v, want exit 6", err)
+	}
+	// Readiness returning lets the next repair restore ready without a restart.
+	srv = startStatus()
+	defer srv.Close()
+	if err := s.repair(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := owner.Read(); err != nil || got.State != MarkerReady {
+		t.Fatalf("restored ready marker = %+v, %v", got, err)
 	}
 }

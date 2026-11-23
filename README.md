@@ -137,9 +137,12 @@ anything.
 
 App mode needs a StatusNotifier tray host and permitted `pidfd_open`: **Linux
 ≥5.3**, not blocked by seccomp/EPERM (R-21). GNOME without an extension and
-SSH/no-display sessions have no tray host. In both cases plain `run` exits `7`
-with reason `tray_unavailable` or `pidfd_unavailable` and starts no process;
-`run --headless` and the opt-in service do not need either capability.
+SSH/no-display sessions have no tray host. A refused `pidfd_open` exits `7` with
+reason `pidfd_unavailable` before anything is spawned. A missing tray host exits
+`7` with reason `tray_unavailable`: the preflight rejects it before any engine or
+tray child starts, and if a spawned tray child reports it anyway, startup aborts
+and stops whatever it already started. Either way no engine or listener is left
+behind. `run --headless` and the opt-in service do not need either capability.
 
 ### Upgrading from the old packaged unit
 

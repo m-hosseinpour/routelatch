@@ -6,10 +6,22 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// The tray only suggests the documented command; it must not promise or perform
+// an automatic restore of desktop proxy settings.
+func TestDesktopProxyRestoreHintNamesTheCommand(t *testing.T) {
+	if !strings.Contains(desktopProxyRestoreHint, "routelatch desktop proxy restore") {
+		t.Fatalf("hint = %q, want the documented restore command", desktopProxyRestoreHint)
+	}
+	if !strings.Contains(desktopProxyRestoreHint, "if the desktop proxy was enabled") {
+		t.Fatalf("hint = %q, want the user-visible condition", desktopProxyRestoreHint)
+	}
+}
 
 // A cancelled context must abort the probe before it dials the session bus.
 func TestProbeTrayContextHonoursCancellation(t *testing.T) {

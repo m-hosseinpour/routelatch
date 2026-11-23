@@ -1119,9 +1119,9 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
-| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?` یا `state/reason`؛ `--headless`: `listeners` در shutdown | 0، 1، 2، 4، 6، 7، 8، 9، 10 | «شروع اپ (tray)» / «شروع headless» |
+| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?` یا `state/reason`؛ `--headless`: `listeners` در shutdown | 0، 1، 2، 4، 6، 7، 8، 9، 10، 12 | «شروع اپ (tray)» / «شروع headless» |
 | `autostart enable\|disable\|status` | `path, enabled, managed, tray_available, pidfd_available, conflict?` | 0، 1، 2، 6، 7 | — |
-| `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10 | — |
+| `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10، 12 | — |
 | `version` | `version, commit, build_date` | 0 | — |
 | `status` | `mode, ready, listeners_open, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
@@ -1569,7 +1569,9 @@ restart همیشه در سطح process است (tray child یا systemd)؛ restar
 rollback نصب و سیاست restart با هم ناسازگار نشوند؛ systemd هم آن را در
 `RestartPreventExitStatus` دارد. پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن را خودکار
 restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان `run` پیش‌فرض
-را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
+را GUI+tray می‌کند و فرمان `gui` جدا ندارد. ورودی hint منوی tray فقط
+`routelatch desktop proxy restore` را پیشنهاد می‌دهد (notification) و هیچ تنظیم
+دسکتاپ یا state را تغییر نمی‌دهد؛ restore خودکار یا مخفی وجود ندارد.
 
 **Migration از unit فعلی.** قبل از upgrade، unit قدیمی
 `systemctl --user disable --now routelatch.service` می‌شود. برای نصب tarball،

@@ -200,6 +200,10 @@ func contains(haystack, needle string) bool {
 	return false
 }
 
+// desktopProxyRestoreHint is shown on demand from the tray menu. The tray never
+// changes desktop proxy settings itself; the user runs the documented command.
+const desktopProxyRestoreHint = "Run `routelatch desktop proxy restore` if the desktop proxy was enabled."
+
 // Notify sends one destination-free desktop notification.
 func Notify(conn *dbus.Conn, summary, body string) error {
 	if conn == nil {
@@ -342,6 +346,16 @@ func RunTray(opts TrayOptions) error {
 	); err != nil {
 		send("error tray_menu_failed")
 		return internalFailure("app.tray", "cannot add the tray log entry", err)
+	}
+	if _, err := item.Menu().AddChild(
+		tray.MenuItemLabel("Desktop proxy restore hint"),
+		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
+			_ = Notify(conn, "Desktop proxy restore", desktopProxyRestoreHint)
+			return nil
+		})),
+	); err != nil {
+		send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot add the tray desktop-proxy entry", err)
 	}
 
 	if err := waitRegistered(context.Background(), conn, watcher, os.Getpid(), opts.ReadyWait); err != nil {
