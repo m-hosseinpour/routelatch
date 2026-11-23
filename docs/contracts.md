@@ -1107,7 +1107,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
-| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?`؛ `--headless`: `listeners` در shutdown | 0، 2، 4، 6، 7، 10 | «شروع اپ (tray)» / «شروع headless» |
+| `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?` یا `state/reason`؛ `--headless`: `listeners` در shutdown | 0، 1، 2، 4، 6، 7، 10 | «شروع اپ (tray)» / «شروع headless» |
 | `autostart enable\|disable\|status` | `path, enabled, managed, conflict?` | 0، 1، 2، 6، 7 | — |
 | `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 9، 10 | — |
 | `version` | `version, commit, build_date` | 0 | — |
@@ -1203,20 +1203,24 @@ engine یا tray شکست بخورد، child متوقف و exit code خطا به
 (پیشنهادی: `RuntimeDir/app.lock`، flock، و `RuntimeDir/app.owner` با حالت `0600`
 برای `pid`/`data_dir`/`started_at` فقط جهت تشخیص). liveness را kernel/flock تعیین
 می‌کند، نه PID؛ `pid` در خروجی startup همان PID supervisor/tray است. ترتیب بررسی
-launcher: (۱) تلاش non-blocking برای گرفتن `app.lock`؛ اگر قفل در اختیار دیگری است،
-`ok=true`، `already_running=true` و exit `0` (حتی اگر marker هنوز نوشته نشده یا
-خراب باشد؛ lock مرجع است)؛ (۲) اگر قفل آزاد است ولی engine lock در اختیار یک
-`--headless` است و app marker زنده ندارد، exit `4` با پیام «ابتدا نمونهٔ headless را
-متوقف کنید یا `--headless` اجرا کنید»؛ (۳) نبود tray/StatusNotifier →
-`unsupported`/exit `7` با دلیل پایدار `tray_unavailable` و پیشنهاد `--headless`؛
-(۴) شروع، نگه‌داشتن lock تا خروج supervisor و نوشتن اتمیک marker پس از readiness.
-marker کهنه فقط اگر regular file، مالک uid جاری و داخل همان RuntimeDir باشد
-پاک/بازنویسی می‌شود؛ symlink/non-regular/مالک دیگر/`data_dir` متفاوت دنبال یا حذف
-نمی‌شود و فقط هشدار `app_marker_invalid` می‌دهد. دو `run` هم‌زمان با flock سریال
-می‌شوند؛ بازنده instance دوم نمی‌سازد. fallback بی‌صدا وجود ندارد. `--json` در
+launcher: (۱) تلاش non-blocking برای گرفتن `app.lock`؛ اگر قفل در اختیار دیگری است
+و `app.owner` معتبر/ready است، `ok=true`، `already_running=true` و exit `0` با
+دادهٔ همان app؛ اگر قفل در اختیار دیگری است ولی marker آماده نیست، exit `6`
+«startup in progress؛ retry» (نه موفقیت کاذب)؛ (۲) اگر قفل را گرفتیم ولی engine
+lock در اختیار یک `--headless` است، قفل app آزاد و **صرف‌نظر از marker** exit `4`
+با پیام «ابتدا نمونهٔ headless را متوقف کنید یا `--headless` اجرا کنید»؛ (۳) نبود
+tray/StatusNotifier → قفل آزاد و `unsupported`/exit `7` با دلیل پایدار
+`tray_unavailable` و پیشنهاد `--headless`؛ (۴) شروع، نگه‌داشتن lock تا خروج
+supervisor و نوشتن اتمیک marker پس از readiness. marker کهنه فقط اگر regular file،
+مالک uid جاری و داخل همان RuntimeDir باشد پاک/بازنویسی می‌شود؛
+symlink/non-regular/مالک دیگر/`data_dir` متفاوت دنبال یا حذف نمی‌شود و فقط هشدار
+`app_marker_invalid` می‌دهد. دو `run` هم‌زمان با flock سریال می‌شوند؛ بازنده در
+حین startup exit `6` می‌گیرد و پس از release می‌تواند retry کند. `--json` در
 حالت پیش‌فرض یک envelope زمان startup با `pid`، listenerها، log path و
-`already_running?` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را
-دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL منبع داشته باشد (D21).
+`already_running?` می‌دهد؛ اگر این فیلدها از marker معتبر در دسترس نباشند، حذف
+می‌شوند و `state`/`reason` جای آن‌ها می‌آید. `--headless --json` رفتار
+blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL
+منبع داشته باشد (D21).
 
 `--headless` هیچ‌گاه tray را باز نمی‌کند و داخل systemd/ترمینال بلاک می‌ماند؛ unitها
 باید `--headless` داشته باشند. plain `run` عمداً detach می‌شود و برای unit مناسب
@@ -1252,14 +1256,21 @@ unit را در `$XDG_CONFIG_HOME/systemd/user/routelatch.service` (fallback
 `KillSignal=SIGTERM`، `KillMode=mixed`، `TimeoutStopSec=20s`،
 `WantedBy=default.target`. unit هیچ `User=`/`Group=` ندارد و root لازم نیست.
 `install` idempotent است: اگر unit نیست، اتمیک می‌نویسد،
-`systemctl --user daemon-reload` و `enable --now` می‌زند و فعال‌شدن را verify
-می‌کند؛ اگر همان unit هست، بدون بازنویسی/restart فقط enabled/active را همگرا
-می‌کند؛ اگر محتوا متفاوت است، بدون `--force` بازنویسی نمی‌کند و exit `6` می‌دهد.
+`systemctl --user daemon-reload` و `enable --now` می‌زند؛ اگر همان unit هست، بدون
+بازنویسی/restart فقط enabled/active را همگرا می‌کند؛ اگر محتوا متفاوت است، بدون
+`--force` بازنویسی نمی‌کند و exit `6` می‌دهد. `Type=simple` «active» را زودتر از
+آمادگی listenerها اعلام می‌کند، پس install فقط به `ActiveState` تکیه نمی‌کند: تا
+یک deadline محدود (پیشنهاد ۱۰s) منتظر می‌ماند تا management socket همان data-dir
+به `status` پاسخ دهد و listenerها آماده باشند؛ اگر child با exit documented
+`4/6/7/10` مرد، همان exit/kind به install منتقل می‌شود (4→6، 6→6، 7→7، 10→10) و
+rollback اجرا می‌شود.
 `--force` unit را به‌روزرسانی می‌کند، daemon-reload و enable می‌زند و اگر unit از
 قبل active بود restart/try-restart می‌کند؛ اگر inactive بود `enable --now` آن را
 start می‌کند. `--force` می‌تواند unit قدیمی/بدون marker را در مسیر هدف، فقط اگر
-regular file و مالک کاربر باشد، adopt و با marker فعلی جایگزین کند؛ symlink یا
-non-regular را overwrite نمی‌کند و exit `6` می‌دهد.
+regular file و مالک کاربر باشد و unit قبلی stop/disabled شده باشد، adopt و با
+marker فعلی جایگزین کند؛ اگر markerless unit هنوز active باشد، engine آن
+«headless دیگر» شمرده می‌شود و install exit `6` می‌دهد. symlink یا non-regular
+overwrite نمی‌شود و exit `6` می‌دهد.
 
 پیش از preflight، `install` ابتدا target managed unit را مشخص می‌کند: اگر همان unit
 managed خودش active است، engine آن **مجاز** است و install/`--force` همان unit را
@@ -1270,10 +1281,15 @@ refuse می‌کند. اگر managed autostart وجود داشته باشد، `i
 systemd نوشته می‌شوند (از جمله `%` → `%%` و `$` → `$$`) تا مسیرهای دارای
 فاصله/کاراکتر ویژه معتبر بمانند.
 
-اگر `enable --now` یا verification شکست بخورد، `install` موفقیت اعلام نمی‌کند:
-unit تازه stop/disable و حذف می‌شود، daemon-reload می‌زند و برای `--force` unit
-قبلی (اگر وجود داشت) restore/restart می‌شود؛ خروجی برای bind/port documented
-`6` و برای شکست ابزار `1` (`external_tool_failed`) است. اگر `Linger=no` باشد،
+قبل از هر نوشتن، `install` یک snapshot از محتوای unit قبلی (در صورت وجود) و
+وضعیت enabled/active آن می‌گیرد. اگر هر مرحله پس از نوشتن شکست بخورد — از جمله
+`daemon-reload`، `enable`، readiness یا rollback — موفقیت اعلام نمی‌کند: unit تازه
+stop/disable و حذف می‌شود؛ محتوای قبلی byte-for-byte restore و enabled/active
+دقیقاً به حالت قبل برمی‌گردد (restart فقط اگر قبلاً active بود)؛ سپس daemon-reload
+می‌زند. برای adoption markerless هم فایل قبلی backup و در شکست restore می‌شود.
+اگر خود rollback شکست بخورد، هر دو خطا گزارش و unit برای بررسی دستی باقی می‌ماند
+(exit `1`). خروجی برای bind/port documented `6` و برای شکست ابزار `1`
+(`external_tool_failed`) است. اگر `Linger=no` باشد،
 فقط دستور `sudo loginctl enable-linger <user>` را چاپ می‌کند و خودش sudo اجرا
 نمی‌کند. اجرای فرمان با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود
 (exit `9`)؛ فقط کاربر هدف باید آن را اجرا کند. اگر systemd user manager در دسترس
@@ -1286,6 +1302,19 @@ daemon-reload می‌کند (idempotent) و state/config/linger را حذف نم
 باشد با `conflict=autostart` و exit `0` هشدار می‌دهد (setup commands در این حالت
 exit `6`). بسته هیچ unit/postinst ندارد (از R13 به بعد) و این فرمان تنها مسیر ساخت
 سرویس است.
+
+**مسیرهای managed.** برای `app.lock`، `app.owner`، فایل autostart و unit سرویس یک
+قاعدهٔ واحد است: با `Lstat`/`O_NOFOLLOW` بررسی می‌شوند، باید regular file، مالک uid
+جاری و داخل دایرکتوری مورد انتظار باشند؛ symlink/non-regular/مالک دیگر بدون
+side-effect رد می‌شود (exit `6`؛ برای `app.owner` فقط هشدار `app_marker_invalid` و
+عدم دنبال‌کردن). `app.lock` یک‌بار با `O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته
+می‌شود، fd آن تا خروج supervisor نگه داشته می‌شود و RouteLatch هرگز آن را
+unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن توسط همان uid خارج از تضمین
+single-instance است (root/همان uid مرز امنیتی نیست). `app.owner` با temp+rename
+اتمیک نوشته می‌شود. `service install` بدون `--force` فقط unit regular/مالک را
+همان می‌داند؛ `--force` symlink را overwrite نمی‌کند. `disable`/`uninstall` برای
+مسیر symlink/non-regular/غیرمالک هیچ stop/disable/حذفی انجام نمی‌دهند و exit `6`
+می‌دهند.
 
 **مرزها و migration.** invariant سخت «یک engine در هر data directory» است، نه هر
 کاربر؛ app و service به‌صورت پیش‌فرض همان data-dir XDG را دارند. `--data-dir`

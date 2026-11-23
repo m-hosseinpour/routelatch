@@ -239,9 +239,9 @@ tray/autostart/service روی میزبان و نصب/فعال‌سازی سرو�
 | ID | task | نتیجه | وابستگی | check اصلی |
 | --- | --- | --- | --- | --- |
 | R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد؛ parent-death/child lifetime قابل پیاده‌سازی باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher؛ parent-death prototype |
-| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ flock `app.lock` + marker تشخیصی، singleton per data-dir، Quit/مرگ supervisor → توقف child، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run no-op؛ app-vs-headless؛ data-dir متفاوت؛ PID reuse/concurrent/corrupt/symlink marker؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
-| R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، بررسی tray host، منع هم‌زمان با service و `conflict` در status | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ stale/foreign conflict؛ tray-unavailable؛ service-coexistence/status conflict؛ اجرای واقعی KDE (گیت‌شده) |
-| R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy، ensure enabled/active، linger hint، بدون sudo، `--force` با start/restart/adopt صحیح، marker مالکیت، preflight که unit خودش را مجاز می‌داند، rollback شکست، quoting ExecStart، `uninstall` اول ownership | R13-B | fake systemctl/loginctl؛ temp XDG؛ unit content/marker/quoting؛ second-run no-op؛ differing/foreign unit؛ force inactive/active؛ own-service active؛ app/other headless refuse؛ rollback/port collision؛ autostart conflict/status؛ foreign uninstall بدون تغییر؛ gated real user manager |
+| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ flock `app.lock` (no-follow، هرگز unlink) + marker تشخیصی، singleton per data-dir، startup-in-progress → exit `6`، Quit/مرگ supervisor → توقف child، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run ready/starting؛ app-vs-headless **صرف‌نظر از marker**؛ data-dir متفاوت؛ PID reuse/concurrent/corrupt/symlink/foreign marker؛ lock delete/recreate؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
+| R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، no-follow/regular/uid برای مسیر، بررسی tray host، منع هم‌زمان با service و `conflict` در status | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ stale/foreign/symlink conflict؛ tray-unavailable؛ service-coexistence/status conflict؛ اجرای واقعی KDE (گیت‌شده) |
+| R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy، readiness واقعی (management socket/listener، نه فقط active)، linger hint، بدون sudo، `--force` با start/restart/adopt فقط پس از stop، marker مالکیت، preflight unit خودش، snapshot/rollback محتوا و enabled/active دقیق، quoting ExecStart، no-follow unit، `uninstall` اول ownership | R13-B | fake systemctl/loginctl؛ temp XDG؛ unit content/marker/quoting؛ second-run no-op؛ differing/foreign/symlink unit؛ force active/inactive/disabled/adoption؛ own-service active؛ app/other headless refuse؛ readiness failure/port/corrupt/unsupported/child-exit؛ rollback همهٔ حالت‌ها؛ autostart conflict/status؛ foreign uninstall بدون تغییر؛ gated real user manager |
 | R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README، `packaging/README.md` (INSTALL)، `deploy/README.md` (SERVICE)، `CONTRIBUTING.md` و `internal/acceptance/README.md`؛ migration از unit قدیمی (tarball و `/usr/lib`)؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ stale-unit upgrade با نتیجهٔ «unit قدیمی stop/disabled، بدون loop/orphan/direct، مسیر جدید سالم»؛ اسکریپت‌ها/تست‌ها به `run --headless`؛ CI |
 | R13-F | **acceptance/review/release** | A13/A15 و harness؛ بازنشستگی تست‌های systemd-first یا تبدیل آن‌ها به service opt-in؛ بازبینی مستقل؛ تصمیم انتشار جدا | R13-E | `gofmt`/`go vet`/`go build`؛ `go test -count=1 ./...`؛ تست‌های گیت‌شده؛ package checks؛ verdict بازبین |
 
@@ -255,15 +255,18 @@ C/D و F بعد از E. B1 (افزودن `run --headless` و مهاجرت تست
 دلیل `tray_unavailable` است؛ `service install --force` unit را update و enable
 می‌کند و اگر قبلاً active بود restart و اگر inactive بود start می‌کند؛ اجرای service
 با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود. invariant سخت
-«یک engine در هر data directory» است، نه هر کاربر؛ app-mode یک marker مالکیت/`pid`
-در runtime همان data-dir می‌نویسد؛ Quit/مرگ supervisor child را متوقف می‌کند؛
+«یک engine در هر data directory» است، نه هر کاربر؛ app-mode flock `app.lock` را
+نگه می‌دارد و marker تشخیصی/`pid` در runtime همان data-dir می‌نویسد؛ startup
+در حال اجرا exit `6` می‌دهد، نه موفقیت کاذب؛ Quit/مرگ supervisor child را متوقف
+می‌کند؛
 مسیرهای XDG (`$XDG_CONFIG_HOME` با fallback `~/.config`) مبنا هستند؛ `autostart` و
 `service` برای یک کاربر هم‌زمان فعال نمی‌شوند؛ unit/autostart مالک با marker از
 غیرمالک جدا می‌شوند. liveness app با flock روی `RuntimeDir/app.lock` است، نه PID؛
 marker (`app.owner`) فقط تشخیصی است و قواعد stale/corrupt/symlink در §۷.۵ آمده‌اند.
 `service install` unit خودش را در preflight مجاز می‌شمارد، unit/فایل غیرمالک را فقط
-با `--force` (در صورت regular file/مالکیت) adopt می‌کند، و در شکست enable/start
-rollback می‌کند؛ `uninstall` اول ownership را می‌سنجد.
+با `--force` (در صورت regular file/مالکیت و stop قبلی) adopt می‌کند، readiness را
+از management socket/listener می‌سنجد، و در هر شکست پس از نوشتن snapshot محتوا و
+enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-follow را می‌سنجد.
 
 **تصمیم‌های باز تا R13-A/B:** انتخاب library tray و مجوز/پایداری آن؛ جزئیات تشخیص
 دقیق user manager/linger روی توزیع‌های مختلف؛ مرز GUI آینده.
