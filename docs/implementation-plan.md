@@ -223,8 +223,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
 `a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`؛ دور هفتم
 `53ebf68`؛ دور هشتم `eddcc4e`؛ دور نهم `58c4430`؛ دور دهم `2d5db69`. بازبینی‌های
-دور اول تا نهم
-**Not ready** بودند
+دور اول تا دهم **Not ready** بودند
 (current-state unit، singleton/app marker، tray lifetime، coexistence، migration،
 ownership، startup-in-progress، readiness/rollback، managed-path symlink،
 adoption، دادهٔ run، lock legacy migration، attribution marker، readiness
@@ -234,12 +233,12 @@ race، repair re-flock، newline framing، inactive rollback branch، grandchild
 teardown، legacy symlink dedupe، unit path shell/manager، PID/PGID reuse، ready
 زودهنگام در startup-phase repair، pidfd open/identity order، child-death wait،
 ready کهنه پس از engine death/Quit/tray-loss، deleted-marker stopping،
-stopping-write failure، startup pidfd failure/ESRCH و انتشار R-21 به autostart/
-docs). اصلاحات دور دهم state stopping در repair، آزادکردن owner lock در شکست
-stopping، pidfd preflight قبل از spawn، cleanup در خطای pidfd فرزند، طبقه‌بندی
-ESRCH/EPERM و اسکن گروه با هویت، و pidfd probe/مستندات در autostart/README/
-doctor را اضافه می‌کند (commit `2d5db69`). بازبینی متمرکز دهم در حال اجراست؛
-verdict نهایی پس از آن ثبت می‌شود.
+stopping-write failure، startup pidfd failure/ESRCH، انتشار R-21 به autostart/
+docs، استثنای SIGKILL خام در خطای pidfd supervisor، ترتیب آزادکردن lock در
+پنجرهٔ fail-closed و پوشش second-run stopping). اصلاحات دور یازدهم استثنای
+صراحتاً محدود SIGKILL، تفکیک singleton `app.lock` از readiness `app.owner` در
+پنجرهٔ fail-closed و افزودن stopping به تست مستقیم second-run را اضافه می‌کند.
+verdict دور یازدهم پس از commit ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -253,7 +252,7 @@ tray/autostart/service روی میزبان و نصب/فعال‌سازی سرو�
 | ID | task | نتیجه | وابستگی | check اصلی |
 | --- | --- | --- | --- | --- |
 | R13-A | **spike tray pure-Go** | یک library/implementation برای StatusNotifierItem انتخاب شود که static `CGO_ENABLED=0` بماند و روی KDE آیکن/منو/نوتیفیکیشن کار کند؛ نبود tray روی GNOME بدون extension/SSH قابل تشخیص باشد؛ parent-death/child lifetime قابل پیاده‌سازی باشد | — | build static چهار معماری؛ اجرای واقعی KDE؛ بررسی license/deps/version؛ تشخیص نبود watcher؛ parent-death prototype |
-| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ `InstanceDir` canonical زیر state/data (state.lock/app.lock/app.owner/socket، مستقل از XDG_RUNTIME_DIR)، flock `app.lock` + flock دوم `app.owner` (no-follow، inode پایدار، هرگز unlink، supervisor owner، CLOEXEC برای child)، marker `starting/ready/stopping` با invalidate قبل از flock، رکورد کامل/`data_dir`، transitionهای readiness و negative socket veto، repair/fail-closed (بدون socket-only already_running)، singleton per data-dir، lockهای legacy **همان data-dir** در پنجرهٔ migration، startup-in-progress → exit `6`، Quit/مرگ supervisor → توقف child، readiness deadline با teardown محدود به supervisor/فرزندان خودی (exit `8` فقط پس از مرگ تأییدشده؛ survivor/identity → `1`؛ pidfd unavailable → `7`)، `status.ready`/`listeners_open` mode-aware، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run ready/starting/stale-marker/lock-liveness/never-0-on-stale؛ app-vs-headless **صرف‌نظر از marker**؛ data-dir متفاوت؛ PID reuse/concurrent/corrupt/symlink/foreign marker؛ marker truncate/rewrite/newline/partial-read/repair-reflock-after-unlink/startup-phase-repair/repair-failure/engine-death/Quit/tray-loss stale-ready/deleted-marker-stopping/stopping-write-failure؛ lock delete/recreate؛ XDG_RUNTIME_DIR متفاوت (desktop/SSH)؛ legacy lock فعال/stopped با و بدون runtime و فقط برای همان data-dir؛ دو data-dir هم‌زمان؛ default+data-dir؛ runtime سفارشی مستند؛ stopped mode بدون listener؛ readiness timeout + concurrent-run + pidfd preflight (ENOSYS/EPERM) + child-pidfd-failure cleanup + signal-ESRCH/EPERM + child-death-wait/group-identity + no-orphan؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
+| R13-B | **runtime `run`/`--headless`** | `run --headless` رفتار foreground فعلی را حفظ کند؛ `run` پیش‌فرض launcher detached، readiness، tray supervisor و child engine باشد؛ `InstanceDir` canonical زیر state/data (state.lock/app.lock/app.owner/socket، مستقل از XDG_RUNTIME_DIR)، flock `app.lock` + flock دوم `app.owner` (no-follow، inode پایدار، هرگز unlink، supervisor owner، CLOEXEC برای child)، marker `starting/ready/stopping` با invalidate قبل از flock، رکورد کامل/`data_dir`، transitionهای readiness و negative socket veto، repair/fail-closed (بدون socket-only already_running)، singleton per data-dir، lockهای legacy **همان data-dir** در پنجرهٔ migration، startup-in-progress → exit `6`، Quit/مرگ supervisor → توقف child، readiness deadline با teardown محدود به supervisor/فرزندان خودی (exit `8` فقط پس از مرگ تأییدشده؛ survivor/identity → `1`؛ pidfd unavailable → `7`)، `status.ready`/`listeners_open` mode-aware، لاگ/نوتیفیکیشن/`--json`، menu دو حالت؛ restart فقط با child جدید | R13-A | CLI tests؛ fake tray/child؛ بستن ترمینال؛ second-run ready/starting/stopping/stale-marker/lock-liveness/never-0-on-stale؛ app-vs-headless **صرف‌نظر از marker**؛ data-dir متفاوت؛ PID reuse/concurrent/corrupt/symlink/foreign marker؛ marker truncate/rewrite/newline/partial-read/repair-reflock-after-unlink/startup-phase-repair/repair-failure/engine-death/Quit/tray-loss stale-ready/deleted-marker-stopping/stopping-write-failure؛ lock delete/recreate؛ XDG_RUNTIME_DIR متفاوت (desktop/SSH)؛ legacy lock فعال/stopped با و بدون runtime و فقط برای همان data-dir؛ دو data-dir هم‌زمان؛ default+data-dir؛ runtime سفارشی مستند؛ stopped mode بدون listener؛ readiness timeout + concurrent-run + pidfd preflight (ENOSYS/EPERM) + supervisor-pidfd-open-failure (SIGKILL direct child, no reused PID) + child-pidfd-failure cleanup + signal-ESRCH/EPERM + child-death-wait/group-identity + fail-closed window (app.lock held + app.owner free → 6) + no-orphan؛ port/corrupt/state؛ SIGKILL supervisor/child؛ `check-artifact.sh` |
 | R13-C | **autostart** | `autostart enable\|disable\|status` با `$XDG_CONFIG_HOME/autostart`، keyهای کامل `.desktop` و quoting، idempotent، managed/stale/foreign، no-follow/regular/uid برای مسیر، بررسی tray host و pidfd مجاز (R-21)، `tray_available`/`pidfd_available` در status و doctor، منع هم‌زمان با service و `conflict` در status | R13-B | temp XDG؛ محتوای فایل؛ re-run no-op؛ stale/foreign/symlink conflict؛ tray-unavailable؛ pidfd-unavailable (ENOSYS/EPERM)؛ service-coexistence/status conflict؛ اجرای واقعی KDE (گیت‌شده) |
 | R13-D | **service** | `service install\|uninstall\|status` با systemd user unit، `run --headless`، restart policy (`RestartPreventExitStatus=1 4 6 7 9 10`)، readiness واقعی با `status.ready`/`listeners_open` (listener فقط در mode غیر-stopped، نه فقط active؛ timeout exit `8`)، resolve/pin کردن **baseهای** XDG config/state در unit (Environment یا `--data-dir`) و نوشتن unit در base config همان user manager، linger hint، بدون sudo، `--force` با start/restart/adopt فقط پس از inactive، marker مالکیت، preflight unit خودش با attribution lockهای legacy خودش، snapshot/rollback با precedence (previous-active + MainPID/starttime یکسان، نصب تازه، inactive/adoption، restart/start failure)، exit mapping `1→1` و `4→6`/`6→6`/`7→7`/`9→9`/`10→10` (همه terminal)، quoting ExecStart/Environment، no-follow unit، `uninstall` اول ownership | R13-B | fake systemctl/loginctl/show-environment؛ temp XDG؛ unit content/marker/quoting/pinned base env/unit path (manager vs shell base)؛ second-run no-op؛ differing/foreign/symlink unit؛ force active/inactive/disabled/adoption (enabled-inactive و disabled-inactive)؛ own-service active با legacy locks؛ app/other headless refuse؛ stopped/timeout/readiness-before-bind/port/corrupt/unsupported/child-exit 1/4/6/7/9/10؛ rollback failed-restart-after-stop/active-disabled/fresh/adoption؛ autostart conflict/status؛ foreign uninstall بدون تغییر؛ gated real user manager |
 | R13-E | **packaging/docs/migration** | حذف unit از tarball/`.deb`/RPM/CI/checker؛ به‌روزرسانی README، `packaging/README.md` (INSTALL)، `deploy/README.md` (SERVICE)، `CONTRIBUTING.md` و `internal/acceptance/README.md`؛ ثبت مرز pidfd مجاز (R-21) و جایگزین `--headless`/service در READMEها؛ migration از unit قدیمی (tarball و `/usr/lib`) و از lock/socket legacy R12 (default: `<StateDir>` + runtimeهای شناخته‌شده؛ `--data-dir`: فقط همان ریشه) به `InstanceDir` با نگه‌داشتن lockهای legacy برای یک نسخه؛ icon/desktop assets در صورت نیاز؛ rlch حفظ شود | R13-C/R13-D | `scripts/package.sh`/`check-package.sh`؛ بازرسی tarball/deb/spec؛ stale-unit upgrade با نتیجهٔ «unit قدیمی stop/disabled، بدون loop/orphan/direct، مسیر جدید سالم»؛ engine قدیمی active و stopped با/بدون `XDG_RUNTIME_DIR` → exit `4`؛ دو data-dir هم‌زمان و default+data-dir بدون lock سراسری نادرست؛ duplicate path/inode dedupe با Lstat/fstat بدون follow؛ symlink lock رد شود؛ default-old + data-dir-new صریحاً stop؛ `XDG_RUNTIME_DIR` سفارشی مستند و در migration stop صریح؛ desktop/SSH با runtime متفاوت یک lock؛ اسکریپت‌ها/تست‌ها به `run --headless`؛ README/INSTALL/SERVICE شامل pidfd/Linux ≥5.3/seccomp و جایگزین headless؛ CI |
@@ -274,16 +273,18 @@ C/D و F بعد از E. B1 (افزودن `run --headless` و مهاجرت تست
 `starting/ready/stopping` دادهٔ already_running است و فقط وقتی `ready` معتبر است
 که flock آن در اختیار supervisor زندهٔ همان app.lock باشد و یک negative socket
 check آن را رد نکند؛ transitionهای restart/Quit/tray-loss ابتدا `starting`/
-`stopping` می‌نویسند؛ liveness از lock می‌آید، نه PID؛
-startup در حال اجرا exit `6` می‌دهد، نه موفقیت کاذب؛ Quit/مرگ supervisor child را
-متوقف می‌کند؛
+`stopping` می‌نویسند؛ singleton از `app.lock` و readiness از `app.owner` می‌آید،
+نه PID؛ startup در حال اجرا exit `6` می‌دهد، نه موفقیت کاذب؛ Quit/مرگ supervisor
+child را متوقف می‌کند؛
 مسیرهای XDG (`$XDG_CONFIG_HOME` با fallback `~/.config`) مبنا هستند؛ `autostart` و
 `service` برای یک کاربر هم‌زمان فعال نمی‌شوند؛ unit/autostart مالک با marker از
 غیرمالک جدا می‌شوند. `InstanceDir` canonical از state/data (`<StateDir>/run` یا
 `<data-dir>/run`) می‌آید، نه `XDG_RUNTIME_DIR`؛ liveness app با flock روی
 `InstanceDir/app.lock` است و supervisor مالک آن است (child با CLOEXEC آن را به
 ارث نمی‌برد)، نه PID؛ `app.owner` هم با flock دوم و نوشتن در همان inode است و
-قواعد stale/corrupt/symlink در §۷.۵ آمده‌اند. پنجرهٔ migration R13 فقط lockهای
+در عملیات عادی تا خروج نگه داشته می‌شود؛ در پنجرهٔ fail-closed `app.owner` اول
+آزاد و `app.lock` تا توقف child/tray نگه داشته می‌شود، و `app.owner` آزاد
+به‌تنهایی هرگز مجوز شروع/`0` نیست. قواعد stale/corrupt/symlink در §۷.۵ آمده‌اند. پنجرهٔ migration R13 فقط lockهای
 legacy همان data-dir را probe/نگه می‌دارد (برای `--data-dir` هیچ lock سراسری
 runtime نه) تا engine قدیمی دوم (حتی stopped) ممکن نباشد و instanceها مستقل
 بمانند. `service install` unit خودش را در preflight مجاز می‌شمارد و lockهای legacy

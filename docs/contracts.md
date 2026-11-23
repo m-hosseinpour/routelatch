@@ -1251,8 +1251,10 @@ refuse می‌شود. نگه‌داشتن این lockها مانع شروع engi
 (R-20). این سازگاری فقط برای پنجرهٔ migration است و پس از یک نسخه حذف می‌شود.
 
 **`run` پیش‌فرض (حالت اپ).** launcher فقط supervisor را detached می‌کند و از طریق
-pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و نه engine child) مالک
-`InstanceDir/app.lock` و یک `flock(LOCK_EX)` دوم روی `InstanceDir/app.owner` است.
+pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و نه engine child) در
+عملیات عادی مالک `InstanceDir/app.lock` و یک `flock(LOCK_EX)` دوم روی
+`InstanceDir/app.owner` است و هر دو را تا خروج نگه می‌دارد؛ استثنای fail-closed
+در ادامه توضیح داده شده است.
 `app.owner` یک regular file پایدار است: اگر وجود ندارد یک‌بار با
 `O_CREAT|O_EXCL|O_NOFOLLOW` و `0600` ساخته می‌شود و در اجراهای بعدی همان inode با
 `O_NOFOLLOW` باز می‌شود. رکورد آن شامل `state=starting|ready|stopping`، `generation`،
@@ -1283,12 +1285,18 @@ tray، یا شروع Quit/shutdown، supervisor ابتدا `starting` (در حا
 مرگ غیرمنتظرهٔ child دیده شد، handler پیش از restart همان `starting` را
 می‌نویسد. اگر نوشتن این transition شکست بخورد، supervisor پیش از هر کار دیگری
 fd/flock `app.owner` را می‌بندد (فایل را حذف نمی‌کند) تا هیچ `run` هم‌زمانی با
-lock-success به `0` نرسد؛ سپس child/tray را می‌بندد، `app.lock` را آزاد می‌کند
-و fail-closed می‌شود. بنابراین حتی اگر نوشتن `stopping` شکست بخورد، stale
-`ready` بدون owner lock باقی می‌ماند و `run` بعدی `6` می‌گیرد.
+lock-success به `0` نرسد؛ **`app.lock` را تا پایان توقف child/tray نگه می‌دارد**
+و تنها پس از آن آزاد می‌کند و خارج می‌شود. این تنها استثنای «نگه‌داشتن تا خروج»
+است: در این پنجره supervisor زنده است ولی `app.owner` را ندارد؛ `app.lock` هنوز
+singleton است و `run` جدید ابتدا همان را می‌بیند، پس شروع نمی‌کند و با
+`app.owner` آزاد هم فقط `6` می‌گیرد. بنابراین حتی اگر نوشتن `stopping` شکست
+بخورد، stale `ready` بدون owner lock باقی می‌ماند و `run` بعدی `6` می‌گیرد.
 
-**liveness و `already_running`.** liveness را flock تعیین می‌کند، نه `pid`.
-supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `app.owner` را با `lstat` و
+**liveness و `already_running`.** singleton را `app.lock` تعیین می‌کند و
+readiness/owner را `app.owner`؛ هیچ‌کدام به `pid` تکیه نمی‌کنند. گرفتن موفق
+flock `app.owner` به‌تنهایی هرگز مجوز شروع یا `0` نیست، چون ممکن است در پنجرهٔ
+fail-closed باشد؛ `app.lock` اول بررسی می‌شود. supervisor هر چند ثانیه (پیشنهاد
+۱۰s) وجود/اعتبار `app.owner` را با `lstat` و
 مقایسهٔ inode با fd خودش بررسی می‌کند:
 
 - اگر فایل همان inode قفل‌شده است، state/listeners رکورد را با فاز فعلی مقایسه
@@ -1374,8 +1382,11 @@ pipe readiness گزارش می‌کند؛ هیچ فرزندی نباید بدو�
   خوانده و با مقدار گزارش‌شده مقایسه می‌شود؛ mismatch/خطا یعنی هویت قابل تأیید
   نیست و همان مسیر abort/exit `1` بالا اجرا می‌شود.
 
-همهٔ سیگنال‌ها فقط با `pidfd_send_signal` روی pidfdهای بازشده فرستاده می‌شوند؛
-PID/PGID عددی هرگز هدف سیگنال نیست. `pidfd_send_signal` با `ESRCH` یعنی process
+همهٔ سیگنال‌ها فقط با `pidfd_send_signal` روی pidfdهای بازشده فرستاده می‌شوند.
+**تنها استثنا:** اگر pidfd supervisor پس از spawn باز نشود، `SIGKILL` به همان
+PID فرزند مستقیم و reap‌نشدهٔ launcher مجاز است، چون تا `waitpid` تخصیص PID آن
+آزاد نمی‌شود و reuse ممکن نیست؛ این مسیر بلافاصله `waitpid` می‌کند. به هیچ
+PID/PGID دیگری سیگنال خام فرستاده نمی‌شود. `pidfd_send_signal` با `ESRCH` یعنی process
 از قبل مرده و ادامه می‌دهد؛ `EPERM`/خطای دیگر یعنی بدون سیگنال و
 `teardown_incomplete`/exit `1`.
 
@@ -1529,10 +1540,12 @@ exit `6`). بسته هیچ unit/postinst ندارد (از R13 به بعد) و ا
 side-effect رد می‌شود (exit `6`؛ برای `app.owner` عدم دنبال‌کردن + abort startup
 با دلیل `app_marker_invalid`، نه overwrite). `app.lock` یک‌بار با
 `O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته می‌شود، fd آن تا خروج supervisor نگه
-داشته می‌شود و RouteLatch هرگز آن را unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن
-توسط همان uid خارج از تضمین single-instance است (root/همان uid مرز امنیتی نیست).
-`app.owner` هم یک inode پایدار است: یک‌بار ساخته می‌شود، lock آن تا خروج supervisor
-نگه داشته می‌شود و محتوا در همان fd نوشته می‌شود (نه temp+rename) تا lock و
+داشته می‌شود (در مسیر fail-closed فقط پس از توقف child/tray آزاد می‌شود) و
+RouteLatch هرگز آن را unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن توسط همان uid
+خارج از تضمین single-instance است (root/همان uid مرز امنیتی نیست).
+`app.owner` هم یک inode پایدار است: یک‌بار ساخته می‌شود، lock آن در عملیات عادی
+تا خروج supervisor نگه داشته می‌شود (در مسیر fail-closed پیش از `app.lock` آزاد
+می‌شود) و محتوا در همان fd نوشته می‌شود (نه temp+rename) تا lock و
 محتوا از هم جدا نشوند؛ بازسازی پس از حذف/خرابی فقط با همان قاعدهٔ no-follow و
 بدون overwrite مسیر غیرمجاز است. `service install` بدون `--force` فقط unit regular/مالک را
 همان می‌داند؛ `--force` symlink را overwrite نمی‌کند. `disable`/`uninstall` برای

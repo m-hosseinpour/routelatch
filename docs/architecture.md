@@ -161,9 +161,11 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
   management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
   listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
-  launcher با pidfdهای `(pid,starttime)` تأییدشده سیگنال می‌فرستد، مرگ
-  supervisor را با `waitpid` و مرگ هر فرزند گزارش‌شده را با pidfd/`/proc` تا
-  deadline تأیید می‌کند، سپس با pidfd supervisor باز گروه قدیمی را اسکن می‌کند؛
+  launcher با pidfdهای `(pid,starttime)` تأییدشده سیگنال می‌فرستد (تنها استثنا:
+  `SIGKILL` به supervisor مستقیم/reap‌نشده اگر pidfd آن باز نشود؛ تا `waitpid`
+  PID قابل reuse نیست)، مرگ supervisor را با `waitpid` و مرگ هر فرزند
+  گزارش‌شده را با pidfd/`/proc` تا deadline تأیید می‌کند، سپس با pidfd
+  supervisor باز گروه قدیمی را اسکن می‌کند؛
   عضو زنده/تأییدنشده یعنی `teardown_incomplete`/exit `1`، نه `8`. exit `8` یعنی
   «همهٔ processهای گزارش‌شده و اعضای تأییدشدهٔ همان invocation دیگر زنده
   نیستند»، نه آزادبودن global lock (یک `run` هم‌زمان می‌تواند پس از آن app جدید
@@ -176,11 +178,14 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   socket را می‌بینند. در پنجرهٔ migration، engine lockهای legacy **همان data
   directory** را probe/نگه می‌دارد (برای `--data-dir` فقط lock همان ریشه، نه
   runtime سراسری) تا engine قدیمی حتی در mode `stopped` دیده شود و instanceهای
-  مستقل قربانی نشوند. app-mode یک `flock` روی `InstanceDir/app.lock` و یک
-  `flock` دوم روی `InstanceDir/app.owner` دارد که supervisor تا خروج نگه می‌دارد؛
-  marker (`starting`/`ready`/`stopping`، `generation`، `pid`، `data_dir`) دادهٔ
-  `already_running` است و فقط وقتی `ready` معتبر است که flock آن در اختیار
-  supervisor زنده باشد؛ liveness را lock تعیین می‌کند، نه PID. readiness
+  مستقل قربانی نشوند. app-mode یک `flock` روی `InstanceDir/app.lock` (singleton)
+  و یک `flock` دوم روی `InstanceDir/app.owner` (readiness/owner) دارد که
+  supervisor در عملیات عادی تا خروج نگه می‌دارد؛ در پنجرهٔ fail-closed،
+  `app.owner` اول آزاد می‌شود و `app.lock` تا پایان توقف child/tray می‌ماند.
+  گرفتن موفق `app.owner` به‌تنهایی هرگز یعنی supervisorی نیست؛ `app.lock` اول
+  بررسی می‌شود. marker (`starting`/`ready`/`stopping`، `generation`، `pid`،
+  `data_dir`) دادهٔ `already_running` است و فقط وقتی `ready` معتبر است که flock
+  آن در اختیار supervisor زنده باشد؛ liveness را lock تعیین می‌کند، نه PID. readiness
   event-driven است: پیش از restart/Quit/tray-loss، `starting`/`stopping` نوشته
   می‌شود و `ready` فقط پس از `status.ready` کودک جدید و tray؛ `run` جدید علاوه
   بر marker، با یک negative check از socket مطمئن می‌شود `ready` کهنه نیست
