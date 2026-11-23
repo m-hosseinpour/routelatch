@@ -1266,9 +1266,10 @@ pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و ن�
 باز/می‌سازد و **پیش از گرفتن flock آن** رکورد `starting` را می‌نویسد تا هیچ
 `ready` قبلی معتبر نماند؛ بعد `flock(LOCK_EX)` را با retry کوتاه می‌گیرد و تا
 خروج نگه می‌دارد. سپس engine lock/tray را preflight می‌کند، engine child را با
-`CLOEXEC` (بدون ارث‌بردن lockها) اجرا می‌کند، PID آن و هر sidecar شناخته‌شده را
-برای teardown نگه می‌دارد و از طریق pipe readiness گزارش می‌کند (هیچ فرزندی
-نباید بدون گزارش PID از process group خارج شود)، و فقط پس از
+`CLOEXEC` (بدون ارث‌بردن lockها) اجرا می‌کند، هویت `(pid, starttime)` خودش و
+engine و هر sidecar شناخته‌شده را برای teardown نگه می‌دارد و از طریق pipe
+readiness گزارش می‌کند (هیچ فرزندی نباید بدون گزارش هویت از process group خارج
+شود)، و فقط پس از
 اینکه management socket `status.ready=true` داد **و** tray ثبت شد، رکورد را به
 `ready` تغییر می‌دهد؛
 listenerها فقط اگر mode ذخیره‌شده `stopped` نباشد لازم‌اند. اگر نوشتن یا گرفتن
@@ -1279,12 +1280,15 @@ supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `
 مقایسهٔ inode با fd خودش بررسی می‌کند:
 
 - اگر فایل همان inode قفل‌شده است، فقط محتوای ناقص/خراب را با نوشتن کامل
-  `ready` بازنویسی می‌کند (fd و flock دست‌نخورده).
+  **state فعلی** بازنویسی می‌کند (fd و flock دست‌نخورده): تا وقتی شرط readiness
+  اپ برقرار نشده `starting`، و فقط پس از آن `ready`.
 - اگر مسیر حذف شده است، یک inode تازه با `O_CREAT|O_EXCL|O_NOFOLLOW` می‌سازد،
-  `starting` را می‌نویسد، `flock(LOCK_EX)` را با retry کوتاه می‌گیرد، `ready` را
+  **state فعلی** (`starting` یا `ready` فقط اگر readiness همین حالا برقرار است)
+  را می‌نویسد، `flock(LOCK_EX)` را با retry کوتاه می‌گیرد، دوباره state فعلی را
   می‌نویسد و **تنها پس از قفل‌شدن inode تازه** fd قدیمی را می‌بندد. ترتیب
-  create→write→flock→ready→close-old باید حفظ شود تا هرگز مسیر بدون flock
-  نماند؛ در فاصلهٔ کوتاه بین حذف و قفل تازه، `run` جدید `6` می‌گیرد.
+  create→write→flock→write→close-old باید حفظ شود تا هرگز مسیر بدون flock یا
+  `ready` زودهنگام نماند؛ در فاصلهٔ کوتاه بین حذف و قفل تازه، `run` جدید `6`
+  می‌گیرد.
 - اگر مسیر به symlink/non-regular/مالک دیگر تبدیل شده یا inode آن با fd فرق
   دارد (جایگزینی/بازسازی توسط دیگری)، adopt/overwrite نمی‌کند و fail-closed
   می‌شود.
@@ -1293,7 +1297,10 @@ supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `
   می‌بندد و lockها را آزاد می‌کند (دلیل `app_marker_invalid` یا
   `app_marker_write_failed`).
 
-پس از یک چرخهٔ repair موفق، `run` بعدی باید `0` بگیرد (نه `6`).
+در طول startup، repair هرگز `ready` نمی‌نویسد؛ اگر marker حذف/خراب شود، `run`
+جدید تا برقراری readiness اپ `6` می‌گیرد و پس از transition عادی به `ready` (یا
+repair بعدی) `0` می‌شود. پس از یک چرخهٔ repair موفق در حالت ready، `run` بعدی
+باید `0` بگیرد (نه `6`).
 
 `run` جدید: اگر `app.lock` آزاد است آن را می‌گیرد و ادامه می‌دهد. اگر در اختیار
 دیگری است، `app.owner` را با `O_NOFOLLOW` باز می‌کند (نبودن فایل → exit `6`
@@ -1324,19 +1331,30 @@ fail-closed می‌شود.
 
 **timeout و دو `run` هم‌زمان.** launcher readiness deadline دارد (پیشنهاد ۱۰s).
 supervisor فرزند مستقیم launcher است (بدون double-fork) تا `waitpid` معنا داشته
-باشد. در timeout، pipe readiness بسته می‌شود، به process group supervisor
-`SIGTERM` فرستاده می‌شود، تا ۵s برای خروج supervisor/child صبر می‌شود و در صورت
-نیاز `SIGKILL` می‌شود. launcher با `waitpid` خروج supervisor خودش را تأیید
-می‌کند، سپس با `kill(-pgid, 0)` و بررسی `/proc` مطمئن می‌شود process group
-supervisor خالی است و PIDs فرزندان (engine و sidecar) که supervisor برای teardown
-گزارش کرده هم دیگر وجود ندارند؛ هر باقی‌مانده با SIGTERM/SIGKILL پاک و دوباره
-بررسی می‌شود (processهای zombie با وضعیت `Z` باقی‌مانده حساب نمی‌شوند). exit `8`
-فقط یعنی «supervisor/childی که همین invocation ساخته بود
-دیگر زنده نیست»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run` هم‌زمان
-می‌تواند پس از آزادشدن آن app جدید بسازد. اگر خروج supervisor/گروه/فرزندان قابل
-تأیید نباشد، exit `1` با `teardown_incomplete` گزارش می‌شود، نه `8`. دو `run` هم‌زمان: دومی با `app.lock`
-سریال می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت پیش‌فرض یک
-envelope زمان startup با `pid`، listenerها، log path و `already_running?` یا
+باشد. supervisor هویت خود و هر فرزند (engine/sidecar) را به‌صورت
+`(pid, starttime)` در pipe readiness گزارش می‌کند؛ هیچ فرزندی نباید بدون گزارش از
+process group خارج شود. launcher این هویت‌ها را تا teardown نگه می‌دارد و برای
+supervisor و هر فرزند گزارش‌شده یک `pidfd_open` باز می‌کند؛ هر سیگنال با
+`pidfd_send_signal` روی همان pidfd فرستاده می‌شود تا PID reuse بین بررسی و signal
+ممکن نباشد. تطبیق `(pid,starttime)` برای تشخیص عضویت/مرگ استفاده می‌شود، نه مبنای
+سیگنال. اگر pidfd در دسترس نباشد یا هویت عضوی قابل تأیید نباشد، به PID/PGID bare
+سیگنال فرستاده نمی‌شود و `teardown_incomplete`/exit `1` گزارش می‌شود.
+
+در timeout، pipe readiness بسته می‌شود، به supervisor تأییدشده `SIGTERM`
+فرستاده می‌شود، تا ۵s برای خروج supervisor/child صبر می‌شود و در صورت نیاز
+`SIGKILL` می‌شود. launcher با `waitpid` خروج supervisor خودش را تأیید می‌کند،
+سپس برای هر فرزند گزارش‌شده هویت `(pid,starttime)` را دوباره می‌سنجد و فقط
+processهای همان invocation را با pidfd خاتمه می‌دهد. اگر در process
+group قدیمی supervisor عضوی هست که در مجموعهٔ گزارش‌شده نیست، یا هویت supervisor/
+فرزندی قابل تأیید نیست، launcher به آن سیگنال نمی‌فرستد و با exit `1` و
+`teardown_incomplete` برمی‌گردد (نه `8`). processهای zombie با وضعیت `Z`
+باقی‌مانده حساب نمی‌شوند.
+
+exit `8` فقط یعنی «همهٔ processهای گزارش‌شده/تأییدشدهٔ همین invocation دیگر
+زنده نیستند»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run` هم‌زمان می‌تواند
+پس از آزادشدن آن app جدید بسازد. دو `run` هم‌زمان: دومی با `app.lock` سریال
+می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت پیش‌فرض یک envelope
+زمان startup با `pid`، listenerها، log path و `already_running?` یا
 `state/reason` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را دارد.
 log/نوتیفیکیشن tray نباید مقصد، credential یا URL منبع داشته باشد (D21).
 

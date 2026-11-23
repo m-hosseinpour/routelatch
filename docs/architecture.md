@@ -158,9 +158,11 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
   management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
   listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
-  launcher فرایند supervisor/child خودش را خاتمه می‌دهد و با `waitpid` مرگ آن را
-  تأیید می‌کند؛ exit `8` یعنی «appی که این invocation ساخت دیگر زنده نیست»، نه
-  آزادبودن global lock (یک `run` هم‌زمان می‌تواند پس از آن app جدید بسازد). خطای
+  launcher فرایند supervisor/child خودش را با هویت `(pid,starttime)`/pidfd خاتمه
+  می‌دهد و با `waitpid` مرگ supervisor را تأیید می‌کند؛ اگر هویت عضوی از process
+  group قابل تأیید نباشد، سیگنال نمی‌فرستد و `teardown_incomplete` می‌دهد. exit
+  `8` یعنی «appی که این invocation ساخت دیگر زنده نیست»، نه آزادبودن global lock
+  (یک `run` هم‌زمان می‌تواند پس از آن app جدید بسازد). خطای
   startup با exit code به فراخواننده می‌رسد. engine child state lock و management
   socket قبل را دارد؛ invariant دقیق «یک engine در هر data directory» است، نه هر
   کاربر. همهٔ lock/socket/app files از یک `InstanceDir` مشتق از state/data
