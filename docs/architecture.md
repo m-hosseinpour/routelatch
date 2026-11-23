@@ -158,11 +158,13 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 - launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
   management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
   listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
-  launcher فرایند supervisor/child خودش را با هویت `(pid,starttime)`/pidfd خاتمه
-  می‌دهد و با `waitpid` مرگ supervisor را تأیید می‌کند؛ اگر هویت عضوی از process
-  group قابل تأیید نباشد، سیگنال نمی‌فرستد و `teardown_incomplete` می‌دهد. exit
-  `8` یعنی «appی که این invocation ساخت دیگر زنده نیست»، نه آزادبودن global lock
-  (یک `run` هم‌زمان می‌تواند پس از آن app جدید بسازد). خطای
+  launcher با pidfdهای `(pid,starttime)` تأییدشده سیگنال می‌فرستد، مرگ
+  supervisor را با `waitpid` و مرگ هر فرزند گزارش‌شده را با pidfd/`/proc` تا
+  deadline تأیید می‌کند، سپس با pidfd supervisor باز گروه قدیمی را اسکن می‌کند؛
+  عضو زنده/تأییدنشده یعنی `teardown_incomplete`/exit `1`، نه `8`. exit `8` یعنی
+  «همهٔ processهای گزارش‌شده و اعضای تأییدشدهٔ همان invocation دیگر زنده
+  نیستند»، نه آزادبودن global lock (یک `run` هم‌زمان می‌تواند پس از آن app جدید
+  بسازد). خطای
   startup با exit code به فراخواننده می‌رسد. engine child state lock و management
   socket قبل را دارد؛ invariant دقیق «یک engine در هر data directory» است، نه هر
   کاربر. همهٔ lock/socket/app files از یک `InstanceDir` مشتق از state/data
@@ -173,9 +175,13 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   runtime سراسری) تا engine قدیمی حتی در mode `stopped` دیده شود و instanceهای
   مستقل قربانی نشوند. app-mode یک `flock` روی `InstanceDir/app.lock` و یک
   `flock` دوم روی `InstanceDir/app.owner` دارد که supervisor تا خروج نگه می‌دارد؛
-  marker (`starting`/`ready`، `generation`، `pid`، `data_dir`) دادهٔ
+  marker (`starting`/`ready`/`stopping`، `generation`، `pid`، `data_dir`) دادهٔ
   `already_running` است و فقط وقتی `ready` معتبر است که flock آن در اختیار
-  supervisor زنده باشد؛ liveness را lock تعیین می‌کند، نه PID. supervisor مالک
+  supervisor زنده باشد؛ liveness را lock تعیین می‌کند، نه PID. readiness
+  event-driven است: پیش از restart/Quit/tray-loss، `starting`/`stopping` نوشته
+  می‌شود و `ready` فقط پس از `status.ready` کودک جدید و tray؛ `run` جدید علاوه
+  بر marker، با یک negative check از socket مطمئن می‌شود `ready` کهنه نیست
+  (socket هرگز به‌تنهایی `0` نمی‌سازد). supervisor مالک
   lockها است و engine child آن‌ها را با `CLOEXEC` به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
   می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن

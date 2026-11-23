@@ -1255,7 +1255,7 @@ pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و ن�
 `InstanceDir/app.lock` و یک `flock(LOCK_EX)` دوم روی `InstanceDir/app.owner` است.
 `app.owner` یک regular file پایدار است: اگر وجود ندارد یک‌بار با
 `O_CREAT|O_EXCL|O_NOFOLLOW` و `0600` ساخته می‌شود و در اجراهای بعدی همان inode با
-`O_NOFOLLOW` باز می‌شود. رکورد آن شامل `state=starting|ready`، `generation`،
+`O_NOFOLLOW` باز می‌شود. رکورد آن شامل `state=starting|ready|stopping`، `generation`،
 `pid`، `started_at`، `data_dir` مطلق، `listeners` و `log_path` است. هر نوشتن با
 `ftruncate(0)`، `pwrite` کل رکورد در offset صفر و `fsync` انجام می‌شود؛ رکورد
 دقیقاً یک `\n` پایانی دارد (compact JSON + یک newline). خواننده فقط رکوردی را
@@ -1275,13 +1275,26 @@ readiness گزارش می‌کند (هیچ فرزندی نباید بدون گز
 listenerها فقط اگر mode ذخیره‌شده `stopped` نباشد لازم‌اند. اگر نوشتن یا گرفتن
 flock شکست بخورد، startup abort و lockها آزاد می‌شوند.
 
+**transitionهای readiness.** readiness اپ event-driven و با repair loop سریال
+است، نه فقط لحظهٔ startup. پیش از هر stop/restart engine child، از دست رفتن
+tray، یا شروع Quit/shutdown، supervisor ابتدا `starting` (در حال restart) یا
+`stopping` (در حال خروج) را می‌نویسد و سپس child/tray را تغییر می‌دهد؛ `ready`
+دوباره فقط پس از `status.ready=true` کودک جدید **و** ثبت tray نوشته می‌شود. اگر
+مرگ غیرمنتظرهٔ child دیده شد، handler پیش از restart همان `starting` را
+می‌نویسد. اگر نوشتن این transition شکست بخورد، supervisor عملیات را ادامه
+نمی‌دهد و fail-closed می‌شود (child را می‌بندد و lockها را آزاد می‌کند) تا
+`ready` کهنه با child مرده باقی نماند؛ در Quit حتی اگر نوشتن `stopping` شکست
+بخورد، child/tray بسته می‌شوند و stale marker با lock آزادشده `0` نمی‌سازد.
+
 **liveness و `already_running`.** liveness را flock تعیین می‌کند، نه `pid`.
 supervisor هر چند ثانیه (پیشنهاد ۱۰s) وجود/اعتبار `app.owner` را با `lstat` و
 مقایسهٔ inode با fd خودش بررسی می‌کند:
 
-- اگر فایل همان inode قفل‌شده است، فقط محتوای ناقص/خراب را با نوشتن کامل
-  **state فعلی** بازنویسی می‌کند (fd و flock دست‌نخورده): تا وقتی شرط readiness
-  اپ برقرار نشده `starting`، و فقط پس از آن `ready`.
+- اگر فایل همان inode قفل‌شده است، state/listeners رکورد را با فاز فعلی مقایسه
+  می‌کند و محتوای ناقص/خراب **یا رکورد معتبری که با فاز نمی‌خواند** (مثلاً
+  `ready` در حالی که child/tray آماده نیست یا Quit شروع شده) را با نوشتن کامل
+  **state فعلی** بازنویسی می‌کند (fd و flock دست‌نخورده): `starting`/`stopping`
+  تا برقراری دوبارهٔ readiness، و فقط پس از آن `ready`.
 - اگر مسیر حذف شده است، یک inode تازه با `O_CREAT|O_EXCL|O_NOFOLLOW` می‌سازد،
   **state فعلی** (`starting` یا `ready` فقط اگر readiness همین حالا برقرار است)
   را می‌نویسد، `flock(LOCK_EX)` را با retry کوتاه می‌گیرد، دوباره state فعلی را
@@ -1309,17 +1322,20 @@ repair بعدی) `0` می‌شود. پس از یک چرخهٔ repair موفق د
 
 - گرفتن موفق یعنی هیچ supervisor زنده‌ای مالک marker نیست و محتوای آن stale
   است؛ فوراً آزاد می‌شود و خروجی **همیشه `6`** است، هرگز `0`.
-- شکست یعنی supervisor زنده است؛ فقط اگر رکورد کامل، `state=ready` و
-  `data_dir` برابر data-dir فعلی باشد، `ok=true`/`already_running=true`/exit `0`
-  با `pid`/`listeners`/`log_path` همان رکورد برمی‌گردد؛ `starting`، رکورد
-  ناقص/نامعتبر یا `data_dir` متفاوت → exit `6`.
+- شکست یعنی supervisor زنده است. رکورد باید کامل، `state=ready` و `data_dir`
+  برابر data-dir فعلی باشد؛ سپس یک **negative readiness check** کوتاه روی
+  management socket انجام می‌شود: اگر `status` در دسترس نباشد یا `ready=false`
+  باشد، exit `6` است. فقط اگر marker `ready` باشد و socket هم آن را رد نکند،
+  `ok=true`/`already_running=true`/exit `0` با `pid`/`listeners`/`log_path`
+  همان رکورد برمی‌گردد. `starting`/`stopping`، رکورد ناقص/نامعتبر یا `data_dir`
+  متفاوت → exit `6`.
 
-هیچ fallback مبتنی بر management socket برای `already_running` وجود ندارد:
-`status.ready` فقط readiness موتور است و ثبت tray را ثابت نمی‌کند؛ پس فقط
-رکورد `ready` که یک supervisor زندهٔ همان `app.lock` نوشته معتبر است. حذف مؤقت
-marker حداکثر یک چرخهٔ repair (۱۰s) خروجی `6` می‌دهد، نه `0` کاذب؛ marker
-به‌طور دائمی غایب نمی‌ماند، چون supervisor آن را repair می‌کند و در شکست پایدار
-fail-closed می‌شود.
+management socket هرگز به‌تنهایی `0` نمی‌سازد (ثبت tray را ثابت نمی‌کند)؛ فقط
+می‌تواند یک `ready` ظاهراً معتبر را **veto** کند. ترکیب «flock زنده + marker
+ready + socket.ready» پنجرهٔ child مرده/Quit/restart را می‌بندد. حذف مؤقت marker
+حداکثر یک چرخهٔ repair (۱۰s) خروجی `6` می‌دهد، نه `0` کاذب؛ marker به‌طور دائمی
+غایب نمی‌ماند، چون supervisor آن را repair می‌کند و در شکست پایدار fail-closed
+می‌شود.
 
 اگر lock را گرفتیم ولی engine lock در اختیار یک `--headless` است، lockها آزاد و
 **صرف‌نظر از marker** exit `4` با پیام «ابتدا نمونهٔ headless را متوقف کنید یا
@@ -1331,32 +1347,49 @@ fail-closed می‌شود.
 
 **timeout و دو `run` هم‌زمان.** launcher readiness deadline دارد (پیشنهاد ۱۰s).
 supervisor فرزند مستقیم launcher است (بدون double-fork) تا `waitpid` معنا داشته
-باشد. supervisor هویت خود و هر فرزند (engine/sidecar) را به‌صورت
+باشد. launcher pidfd supervisor را **بلافاصله پس از spawn** باز می‌کند و تا پایان
+گروه‌scan نهایی نگه می‌دارد؛ این pidfd تا بسته‌نشدن، PID/PGID supervisor را از
+reuse محافظت می‌کند. `ENOSYS` یعنی pidfd در دسترس نیست و `run` پیش‌فرض با
+`unsupported`/exit `7` و دلیل `pidfd_unavailable` refuse می‌کند (حالت
+`--headless` وابسته به آن نیست)؛ `ESRCH` یعنی supervisor پیش از بازکردن pidfd
+مرده است و همان failure startup/exit `1` گزارش می‌شود، نه `7`. supervisor هویت خود و هر فرزند (engine/sidecar) را به‌صورت
 `(pid, starttime)` در pipe readiness گزارش می‌کند؛ هیچ فرزندی نباید بدون گزارش از
-process group خارج شود. launcher این هویت‌ها را تا teardown نگه می‌دارد و برای
-supervisor و هر فرزند گزارش‌شده یک `pidfd_open` باز می‌کند؛ هر سیگنال با
-`pidfd_send_signal` روی همان pidfd فرستاده می‌شود تا PID reuse بین بررسی و signal
-ممکن نباشد. تطبیق `(pid,starttime)` برای تشخیص عضویت/مرگ استفاده می‌شود، نه مبنای
-سیگنال. اگر pidfd در دسترس نباشد یا هویت عضوی قابل تأیید نباشد، به PID/PGID bare
-سیگنال فرستاده نمی‌شود و `teardown_incomplete`/exit `1` گزارش می‌شود.
+process group خارج شود. launcher برای هر گزارش، pidfd را **فوراً** باز می‌کند:
 
-در timeout، pipe readiness بسته می‌شود، به supervisor تأییدشده `SIGTERM`
-فرستاده می‌شود، تا ۵s برای خروج supervisor/child صبر می‌شود و در صورت نیاز
-`SIGKILL` می‌شود. launcher با `waitpid` خروج supervisor خودش را تأیید می‌کند،
-سپس برای هر فرزند گزارش‌شده هویت `(pid,starttime)` را دوباره می‌سنجد و فقط
-processهای همان invocation را با pidfd خاتمه می‌دهد. اگر در process
-group قدیمی supervisor عضوی هست که در مجموعهٔ گزارش‌شده نیست، یا هویت supervisor/
-فرزندی قابل تأیید نیست، launcher به آن سیگنال نمی‌فرستد و با exit `1` و
-`teardown_incomplete` برمی‌گردد (نه `8`). processهای zombie با وضعیت `Z`
-باقی‌مانده حساب نمی‌شوند.
+- `ESRCH` یعنی فرزند از قبل مرده است؛ ثبت می‌شود و ادامه می‌دهد.
+- `ENOSYS` یا خطای دیگر یعنی سیگنال ایمن ممکن نیست؛ به PID/PGID bare سیگنال
+  فرستاده نمی‌شود و خروجی `teardown_incomplete`/exit `1` است.
+- پس از باز شدن pidfd، starttime همان processِ pin‌شده از `/proc/<pid>/stat`
+  خوانده و با مقدار گزارش‌شده مقایسه می‌شود؛ mismatch/خطا یعنی هویت قابل تأیید
+  نیست و بدون سیگنال exit `1` برمی‌گردد.
 
-exit `8` فقط یعنی «همهٔ processهای گزارش‌شده/تأییدشدهٔ همین invocation دیگر
-زنده نیستند»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run` هم‌زمان می‌تواند
-پس از آزادشدن آن app جدید بسازد. دو `run` هم‌زمان: دومی با `app.lock` سریال
-می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت پیش‌فرض یک envelope
-زمان startup با `pid`، listenerها، log path و `already_running?` یا
-`state/reason` می‌دهد؛ `--headless --json` رفتار blocking/shutdown فعلی را دارد.
-log/نوتیفیکیشن tray نباید مقصد، credential یا URL منبع داشته باشد (D21).
+همهٔ سیگنال‌ها فقط با `pidfd_send_signal` روی pidfdهای بازشده فرستاده می‌شوند؛
+PID/PGID عددی هرگز هدف سیگنال نیست.
+
+در timeout، pipe readiness بسته می‌شود، به supervisor با pidfd خودش `SIGTERM`
+فرستاده می‌شود، تا ۵s برای خروج supervisor صبر می‌شود و در صورت نیاز `SIGKILL`
+می‌شود. launcher با `waitpid` خروج supervisor را تأیید می‌کند (pidfd supervisor
+باز می‌ماند). سپس برای هر فرزند گزارش‌شده: اگر هنوز زنده/غیرzombie است،
+SIGTERM با pidfd، انتظار محدود برای exit/zombie، و در صورت نیاز SIGKILL با pidfd؛
+تا زمانی که pidfd آن قابل خواندن (exit) نشود یا `/proc` وضعیت `Z`/غیرموجود
+نشان ندهد، ادامه می‌دهد. اگر هر فرزند گزارش‌شده پس از deadline هنوز زنده/غیرzombie
+باشد، exit `1`/`teardown_incomplete` است و هرگز `8` برنمی‌گردد.
+
+فقط پس از مرگ/zombie شدن همهٔ فرزندان گزارش‌شده، launcher با supervisor pidfd
+هنوز‌باز، `/proc` را برای اعضای process group قدیمی اسکن می‌کند و هر عضو
+زنده/غیرzombie که در مجموعهٔ گزارش‌شده نیست را تخلف می‌داند: به آن سیگنال
+نمی‌فرستد و `teardown_incomplete`/exit `1` می‌دهد. اگر گروه خالی (فقط zombie)
+بود، pidfd supervisor بسته و exit `8` داده می‌شود. processهای zombie با وضعیت
+`Z` باقی‌مانده حساب نمی‌شوند.
+
+exit `8` فقط یعنی «همهٔ processهای گزارش‌شده و اعضای تأییدشدهٔ process group همین
+invocation دیگر زنده نیستند»؛ آزادبودن global `app.lock` شرط نیست، چون یک `run`
+هم‌زمان می‌تواند پس از آزادشدن آن app جدید بسازد. دو `run` هم‌زمان: دومی با
+`app.lock` سریال می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت
+پیش‌فرض یک envelope زمان startup با `pid`، listenerها، log path و
+`already_running?` یا `state/reason` می‌دهد؛ `--headless --json` رفتار
+blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL
+منبع داشته باشد (D21).
 
 `--headless` هیچ‌گاه tray را باز نمی‌کند و داخل systemd/ترمینال بلاک می‌ماند؛ unitها
 باید `--headless` داشته باشند. plain `run` عمداً detach می‌شود و برای unit مناسب
@@ -1584,6 +1617,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | R-18 | `service install` فقط systemd user unit می‌سازد؛ system unit، OpenRC و سرویس‌های OSهای دیگر پشتیبانی نمی‌شوند و linger نیاز به اقدام root/polkit دارد | تصمیم/پیاده‌سازی milestone بعد؛ مستند به‌عنوان مرز v1 |
 | R-19 | lock فقط per data directory است؛ app/service با `--data-dir` متفاوت می‌توانند هم‌زمان اجرا شوند و بر سر port تصادم کنند. `autostart`/`service` فقط setupهای managed را از هم منع می‌کنند، نه فایل‌های دستی را | app و service پیش‌فرض همان data-dir را دارند؛ data-dir سفارشی یک instance جدا و پیشرفته است؛ تعارض port با exit 6 گزارش می‌شود |
 | R-20 | پنجرهٔ migration فقط مسیرهای legacy شناخته‌شدهٔ R12 را probe/نگه می‌دارد؛ engine قدیمی default با `XDG_RUNTIME_DIR` سفارشی/غیرقابل‌حدس ممکن است دیده نشود (instanceهای `--data-dir` فقط lock همان data-dir را می‌بینند) | migration صریحاً old unit را stop/disable می‌کند؛ پس از یک نسخه سازگاری حذف می‌شود؛ `doctor` مسیر lockهای resolve‌شده را نشان می‌دهد |
+| R-21 | حالت اپ برای teardown ایمن به pidfd (Linux ≥5.3) نیاز دارد؛ روی kernel قدیمی‌تر `run` پیش‌فرض با `unsupported`/`7` و دلیل `pidfd_unavailable` refuse می‌کند | `run --headless` مستقل از pidfd است؛ ارتقای kernel یا استفاده از سرویس opt-in |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است
