@@ -26,9 +26,10 @@ import (
 // authorization for the run (see this package's README.md).
 //
 // The unit under test is deploy/systemd/routelatch.service with ExecStart
-// rewritten to the built binary plus --data-dir <temp>, so the shipped
-// Restart/KillSignal/TimeoutStopSec/RestartPreventExitStatus settings are the
-// ones exercised while the caller's normal data dir and ports stay untouched.
+// rewritten to the built binary plus --data-dir <temp> and the explicit
+// foreground `run --headless`, so the shipped Restart/KillSignal/TimeoutStopSec/
+// RestartPreventExitStatus settings are the ones exercised while the caller's
+// normal data dir and ports stay untouched.
 func TestA13SystemdUserLifecycle(t *testing.T) {
 	if os.Getenv("ROUTELATCH_SYSTEMD_TEST") != "1" {
 		t.Skip("set ROUTELATCH_SYSTEMD_TEST=1 to exercise the real systemd --user lifecycle (installs a temporary unit)")
@@ -323,7 +324,7 @@ func renderUnit(t *testing.T, dataDir string) []byte {
 		t.Skipf("temp paths contain a newline; cannot render a unit file")
 	}
 	rendered := strings.Replace(string(raw), old,
-		"ExecStart="+systemdArg(productBin)+" --data-dir "+systemdArg(dataDir)+" run", 1)
+		"ExecStart="+systemdArg(productBin)+" --data-dir "+systemdArg(dataDir)+" run --headless", 1)
 	return []byte(rendered)
 }
 

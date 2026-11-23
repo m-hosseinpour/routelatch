@@ -41,10 +41,11 @@ func checkPermissions(t *testing.T, r report, dir string) {
 	}
 
 	wantFiles := map[string]os.FileMode{
-		filepath.Join(dir, "state.json"):     0o600,
-		filepath.Join(dir, "config.json"):    0o600,
-		filepath.Join(dir, "state.lock"):     0o600,
-		filepath.Join(dir, "state.json.bak"): 0o600,
+		filepath.Join(dir, "state.json"):        0o600,
+		filepath.Join(dir, "config.json"):       0o600,
+		filepath.Join(dir, "run", "state.lock"): 0o600,
+		filepath.Join(dir, "state.lock"):        0o600,
+		filepath.Join(dir, "state.json.bak"):    0o600,
 	}
 	okFiles := true
 	for path, want := range wantFiles {

@@ -14,10 +14,24 @@ import (
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
+	"routelatch/internal/instance"
 	"routelatch/internal/store"
 )
 
-func (c *cli) run(ctx context.Context) int {
+// run is the foreground engine in this phase. --headless is the explicit name
+// for that behavior (contracts §7.5, A13); the detached app/tray launcher that
+// becomes the plain-run default is a later unit, so both spellings currently
+// take the same path.
+func (c *cli) run(ctx context.Context, args []string) int {
+	fs := c.newFlags("run")
+	_ = fs.Bool("headless", false, "run the engine in the foreground without the tray")
+	if err := fs.Parse(args); err != nil {
+		return c.localFailure("run", usageErr("invalid run flags"))
+	}
+	if fs.NArg() != 0 {
+		return c.localFailure("run", usageErr("run takes no positional arguments"))
+	}
+
 	st, err := store.Open(store.Options{Paths: c.paths})
 	if err != nil {
 		return c.runFailure(err, false)
@@ -27,6 +41,16 @@ func (c *cli) run(ctx context.Context) int {
 		return c.runFailure(err, false)
 	}
 	defer lock.Release()
+
+	// The R13 migration window: hold the R12 locks for this data dir so a
+	// forgotten old unit is stopped instead of serving a second engine. The
+	// canonical lock above is already held, so this cannot race another new
+	// process.
+	legacy, err := instance.AcquireLegacy(ctx, c.paths.LegacyLocks)
+	if err != nil {
+		return c.runFailure(err, false)
+	}
+	defer func() { _ = legacy.Close() }()
 
 	svc, err := control.NewService(ctx, control.Options{Store: st, Paths: c.paths, LogOutput: c.serviceLogOutput()})
 	if err != nil {
@@ -93,8 +117,12 @@ func (c *cli) serviceLogOutput() io.Writer {
 
 func (c *cli) runFailure(err error, afterNetworkStart bool) int {
 	code := contract.ExitError
+	var legacy *instance.ExitError
 	var failure *contract.Failure
-	if errors.As(err, &failure) {
+	switch {
+	case errors.As(err, &legacy):
+		code = legacy.Exit
+	case errors.As(err, &failure):
 		switch failure.Kind {
 		case contract.StateCorrupt:
 			code = contract.ExitStateCorrupt

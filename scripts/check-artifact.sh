@@ -86,16 +86,19 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-mkdir -p "$tmp/config/routelatch" "$tmp/state" "$tmp/home"
-chmod 700 "$tmp/config" "$tmp/config/routelatch" "$tmp/state" "$tmp/home"
-cat >"$tmp/config/routelatch/config.json" <<EOF
+# Use one explicit data dir, not the caller's default state dir: this keeps the
+# check independent of any live installation and of the R12 runtime lock that
+# a running default instance still holds during the migration window.
+mkdir -p "$tmp/data" "$tmp/home"
+chmod 700 "$tmp/data" "$tmp/home"
+cat >"$tmp/data/config.json" <<EOF
 {"schema_version":1,"http_listen":"127.0.0.1:$http_port","socks_listen":"127.0.0.1:$socks_port","log_level":"info"}
 EOF
-chmod 600 "$tmp/config/routelatch/config.json"
+chmod 600 "$tmp/data/config.json"
 
-socket="$tmp/state/routelatch/run/control.sock"
+socket="$tmp/data/run/control.sock"
 env -i XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" HOME="$tmp/home" \
-	"$artifact" run >"$tmp/run.log" 2>&1 &
+	"$artifact" --data-dir "$tmp/data" run --headless >"$tmp/run.log" 2>&1 &
 pid=$!
 
 tries=0
@@ -116,7 +119,7 @@ fi
 
 code=0
 env -i XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" HOME="$tmp/home" \
-	"$artifact" status || code=$?
+	"$artifact" --data-dir "$tmp/data" status || code=$?
 if [ "$code" -ne 0 ]; then
 	echo "status exited $code" >&2
 	cat "$tmp/run.log" >&2

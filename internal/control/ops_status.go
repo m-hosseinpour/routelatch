@@ -46,6 +46,11 @@ type diagnosticsData struct {
 
 // StatusData is the documented `status` payload.
 type StatusData struct {
+	// Ready is true only while management serves this request and, unless the
+	// stored mode is stopped, both traffic listeners are bound and accepting.
+	// Stopped is a valid ready state with listeners_open=false (§7.1).
+	Ready         bool                   `json:"ready"`
+	ListenersOpen bool                   `json:"listeners_open"`
 	Mode          contract.Mode          `json:"mode"`
 	PolicyVersion contract.PolicyVersion `json:"policy_version"`
 	// SelectedExit is the manual pin, not the automatic choice: empty means
@@ -67,7 +72,9 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	p := pool.Build(snap.State, now)
 	counts := p.Counts()
 	out := StatusData{
-		Mode: snap.State.Mode, PolicyVersion: snap.State.PolicyVersion,
+		Ready:         s.stopped || s.listenersOpen,
+		ListenersOpen: s.listenersOpen,
+		Mode:          snap.State.Mode, PolicyVersion: snap.State.PolicyVersion,
 		SelectedExit: snap.State.SelectedExit,
 		Listeners:    listenersData{HTTP: s.httpAddr, SOCKS: s.socksAddr},
 		Pool:         poolStatusData{Total: counts.Total, Usable: counts.Usable, Healthy: counts.Healthy, Cooling: counts.Cooling},
@@ -228,7 +235,7 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		} else if mode&0o077 != 0 {
 			add("management_socket", "warn", detail+"; group/other can open it", "chmod 600 "+filepath.Base(paths.Socket))
 		} else if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
-			add("management_socket", "warn", detail+"; owned by another uid", "inspect the runtime directory")
+			add("management_socket", "warn", detail+"; owned by another uid", "inspect the instance directory")
 		} else {
 			add("management_socket", "ok", detail+"; same-uid peer check is enforced (root and same-uid processes are inside the boundary)", "")
 		}

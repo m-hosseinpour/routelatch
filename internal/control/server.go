@@ -65,7 +65,7 @@ func (s *Server) Start(ctx context.Context) error {
 	if len(s.opts.Path) > 100 {
 		return &contract.Failure{
 			Kind: contract.Unsupported, Path: contract.PathLocal, Op: "control.server",
-			Message: "management socket path is too long for a Unix socket; set a shorter XDG_RUNTIME_DIR or --data-dir",
+			Message: "management socket path is too long for a Unix socket; set a shorter XDG_STATE_HOME or --data-dir",
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(s.opts.Path), 0o700); err != nil {

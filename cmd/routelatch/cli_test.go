@@ -14,6 +14,7 @@ import (
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
+	"routelatch/internal/instance"
 	"routelatch/internal/store"
 )
 
@@ -226,6 +227,35 @@ func TestRunFailureExitCodes(t *testing.T) {
 		if got := c.runFailure(tc.failure, tc.after); got != tc.want {
 			t.Errorf("runFailure(%s, after=%v) = %d, want %d", tc.failure.Kind, tc.after, got, tc.want)
 		}
+	}
+}
+
+func TestRunFailureLegacyExitOverride(t *testing.T) {
+	var out, errOut bytes.Buffer
+	c := &cli{stdout: &out, stderr: &errOut}
+	for _, want := range []int{4, 6} {
+		err := &instance.ExitError{
+			Exit: contract.ExitCode(want),
+			Failure: &contract.Failure{
+				Kind: contract.StateLocked, Path: contract.PathLocal, Op: "instance.legacy", Message: "legacy",
+			},
+		}
+		if got := c.runFailure(err, false); got != want {
+			t.Errorf("runFailure(legacy exit %d) = %d", want, got)
+		}
+	}
+}
+
+func TestPrintStatusMarksClosedListeners(t *testing.T) {
+	var out bytes.Buffer
+	c := &cli{stdout: &out}
+	c.printStatus(map[string]any{
+		"mode": "stopped", "policy_version": 3, "ready": true, "listeners_open": false,
+		"listeners": map[string]any{"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"},
+	})
+	text := out.String()
+	if !strings.Contains(text, "ready: yes") || !strings.Contains(text, "(closed)") {
+		t.Fatalf("stopped status = %q, want ready and a closed listener marker", text)
 	}
 }
 

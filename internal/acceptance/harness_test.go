@@ -122,9 +122,19 @@ func writeConfig(t *testing.T, dir string, cfg serviceConfig) string {
 	return path
 }
 
-// startService starts `routelatch run` in its own process and waits until the
-// management socket answers `status`. It never talks to the service in-process.
+// startService starts `routelatch run --headless` in its own process and waits
+// until the management socket answers `status`. It never talks to the service
+// in-process. --headless is the explicit foreground mode; the detached app
+// launcher is a later R13 unit.
 func startService(t *testing.T, env *testEnv, dir string, cfg serviceConfig) *service {
+	t.Helper()
+	return startServiceWithArgs(t, env, dir, cfg, "--headless")
+}
+
+// startServiceWithArgs is startService with extra run-mode arguments. It lets a
+// test compare plain `run` (still foreground in this phase) with `--headless`
+// without guessing the mode.
+func startServiceWithArgs(t *testing.T, env *testEnv, dir string, cfg serviceConfig, extra ...string) *service {
 	t.Helper()
 	if cfg.HTTPListen == "" {
 		cfg.HTTPListen = fmt.Sprintf("127.0.0.1:%d", freePort(t))
@@ -137,7 +147,8 @@ func startService(t *testing.T, env *testEnv, dir string, cfg serviceConfig) *se
 	s := &service{t: t, dir: dir, env: env, cfg: cfg, done: make(chan error, 1),
 		httpAddr: cfg.HTTPListen, socksAddr: cfg.SOCKSListen}
 
-	cmd := exec.Command(productBin, "--data-dir", dir, "run")
+	runArgs := append([]string{"--data-dir", dir, "run"}, extra...)
+	cmd := exec.Command(productBin, runArgs...)
 	cmd.Env = env.vars
 	cmd.Dir = env.tmp
 	stderr, err := cmd.StderrPipe()
@@ -185,14 +196,14 @@ func startService(t *testing.T, env *testEnv, dir string, cfg serviceConfig) *se
 	}
 }
 
-// startExpectingFailure starts `routelatch run` and returns its exit code and
-// captured stderr once it terminates. Used for corrupt state, a second
+// startExpectingFailure starts `routelatch run --headless` and returns its exit
+// code and captured stderr once it terminates. Used for corrupt state, a second
 // instance and port collisions, where run must never become ready.
 func startExpectingFailure(t *testing.T, env *testEnv, dir string) (code int, stderr string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, productBin, "--json", "--data-dir", dir, "run")
+	cmd := exec.CommandContext(ctx, productBin, "--json", "--data-dir", dir, "run", "--headless")
 	cmd.Env = env.vars
 	cmd.Dir = env.tmp
 	var out, errb strings.Builder

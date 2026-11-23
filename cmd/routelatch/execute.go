@@ -94,7 +94,7 @@ func (c *cli) dispatch(ctx context.Context, args []string) int {
 		c.usage()
 		return 0
 	case "run":
-		return c.run(ctx)
+		return c.run(ctx, rest)
 	case "menu":
 		return c.menu(ctx)
 	case "status":
@@ -552,8 +552,18 @@ func (c *cli) printStatus(d map[string]any) {
 		selected = control.SanitizeTerminal(selected)
 	}
 	fmt.Fprintf(c.stdout, "exit: %s\n", selected)
+	switch {
+	case d["ready"] == true:
+		fmt.Fprintln(c.stdout, "ready: yes")
+	case d["ready"] == false:
+		fmt.Fprintln(c.stdout, "ready: no")
+	}
 	if l, ok := d["listeners"].(map[string]any); ok {
-		fmt.Fprintf(c.stdout, "listeners: http %v, socks %v\n", l["http"], l["socks"])
+		suffix := ""
+		if open, present := d["listeners_open"].(bool); present && !open {
+			suffix = " (closed)"
+		}
+		fmt.Fprintf(c.stdout, "listeners: http %v, socks %v%s\n", l["http"], l["socks"], suffix)
 	}
 	if p, ok := d["pool"].(map[string]any); ok {
 		fmt.Fprintf(c.stdout, "pool: %v total, %v usable, %v healthy, %v cooling\n", p["total"], p["usable"], p["healthy"], p["cooling"])
@@ -626,7 +636,7 @@ func (c *cli) usage() {
 
 Usage: routelatch [--json] [--data-dir DIR] <command> [args]
 
-  run                       start the service
+  run [--headless]          start the engine in the foreground (--headless is explicit)
   version                   show build version, commit and date
   status                    show mode, listeners, pool and connections
   mode <mode>               targeted | all-proxy | all-direct | stopped
