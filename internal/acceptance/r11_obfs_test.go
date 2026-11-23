@@ -23,14 +23,10 @@ const r11ObfsPassword = "r11-hy2-obfs-secret"
 
 func TestR11Hysteria2ObfsRealTraffic(t *testing.T) {
 	if os.Getenv("RL_ACCEPT_HYSTERIA2_OBFS_TEST") != "1" {
-		t.Skip("set RL_ACCEPT_HYSTERIA2_OBFS_TEST=1 for the real hysteria2 obfs cell (downloads a digest-verified sing-box into /tmp/opencode)")
+		t.Skip("set RL_ACCEPT_HYSTERIA2_OBFS_TEST=1 for the real hysteria2 obfs cell (downloads a digest-verified sing-box into a disposable temp dir)")
 	}
 	r := report{t: t}
-	work, err := os.MkdirTemp("/tmp/opencode", "rl-r11-obfs-")
-	if err != nil {
-		r11NotRun(t, r, "cannot create a disposable dir under /tmp/opencode: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(work) })
+	work := t.TempDir()
 	binary := r11ArchiveBinary(t, r, work)
 	certs := r11MakeCerts(t, work)
 

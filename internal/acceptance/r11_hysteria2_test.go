@@ -28,7 +28,7 @@ import (
 // R11 acceptance evidence. The ordinary suite proves the import projection and
 // the fail-closed exclusion with a local fake sidecar (no binary, no network).
 // The real hysteria2 traffic cell is gated: it downloads the OFFICIAL sing-box
-// v1.14.4 archive into a disposable /tmp/opencode directory, verifies the
+// v1.14.4 archive into a disposable temporary directory, verifies the
 // SHA-256 pinned in scripts/package.sh and packaging/README.md, extracts the
 // binary there, and uses it ONLY as a loopback hysteria2 server and as the
 // RouteLatch sidecar. It never installs or touches system state.
@@ -333,14 +333,10 @@ func r11ServerGone() { time.Sleep(700 * time.Millisecond) }
 
 func TestR11Hysteria2RealTraffic(t *testing.T) {
 	if os.Getenv("RL_ACCEPT_HYSTERIA2_TEST") != "1" {
-		t.Skip("set RL_ACCEPT_HYSTERIA2_TEST=1 for the real hysteria2 traffic cell (downloads a digest-verified sing-box into /tmp/opencode)")
+		t.Skip("set RL_ACCEPT_HYSTERIA2_TEST=1 for the real hysteria2 traffic cell (downloads a digest-verified sing-box into a disposable temp dir)")
 	}
 	r := report{t: t}
-	work, err := os.MkdirTemp("/tmp/opencode", "rl-r11-hy2-")
-	if err != nil {
-		r11NotRun(t, r, "cannot create a disposable dir under /tmp/opencode: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(work) })
+	work := t.TempDir()
 	binary := r11ArchiveBinary(t, r, work)
 	certs := r11MakeCerts(t, work)
 

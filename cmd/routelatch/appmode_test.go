@@ -67,11 +67,7 @@ func fmtSscanf(s string, out *int) (int, error) {
 }
 
 func TestAppModeRealEngineIsolatedDataDir(t *testing.T) {
-	data, err := os.MkdirTemp("/tmp/opencode", "rl-realapp-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(data)
+	data := t.TempDir()
 	if err := os.Chmod(data, 0o700); err != nil {
 		t.Fatal(err)
 	}

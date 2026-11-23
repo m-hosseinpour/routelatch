@@ -19,11 +19,7 @@ import (
 
 func isolatedData(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp/opencode", "rl-cmd-app-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
