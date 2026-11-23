@@ -221,15 +221,15 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 `contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
 میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
-`a7fa3b6`؛ دور چهارم `b623567`. بازبینی‌های دور اول تا چهارم **Not ready** بودند
+`a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`. بازبینی‌های دور اول تا چهارم **Not ready** بودند
 (current-state unit، singleton/app marker، tray lifetime، coexistence، migration،
 ownership، startup-in-progress، readiness/rollback، managed-path symlink، adoption،
 دادهٔ run، lock legacy migration، attribution marker، readiness listener، rollback
 branch، exit `1/9` و teardown timeout). اصلاحات دور پنجم lockهای legacy پنجرهٔ
 migration، flock دوم `app.owner`، `status.ready`/`listeners_open`، pin کردن
 config/state در unit، rollback شاخه‌ای، exit mapping کامل و teardown launcher در
-timeout را اضافه می‌کند. بازبینی متمرکز پنجم در حال اجراست؛ verdict نهایی پس از
-آن ثبت می‌شود.
+timeout را اضافه می‌کند (commit `f9bcd45`). بازبینی متمرکز پنجم در حال اجراست؛
+verdict نهایی پس از آن ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -586,9 +586,10 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
 1. `AGENTS.md` و همین بخش (مخصوصاً R13) را بخوان؛ `git status` و
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
-   `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6` و
-   دور چهارم `b623567` (و verdict دور چهارم پس از آن در `git log`)؛ D26 ثبت شده
-   و هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
+   `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6`،
+   دور چهارم `b623567` و دور پنجم `f9bcd45` (و verdict دور پنجم پس از آن در
+   `git log`)؛ D26 ثبت شده و هیچ کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر
+   نکرده است. آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
