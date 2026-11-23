@@ -636,8 +636,11 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
   با بازنویسی در یک کپی پاک می‌شود (تاریخچه‌ای را که product نگه می‌دارد بازنویسی نمی‌کنیم)؛
   بررسی رسمی نام/علامت فعلاً لازم نیست و نام حفظ می‌شود؛ ایمیل committer قابل‌انتشار است؛
   و push مجاز است. شاهد کامل در `docs/release-readiness.md`.
-- **remoteها:** `origin` = forgejo `routelatch.git`، و دومین remote = GitHub
-  `m-hosseinpour/routelatch.git`؛ **فقط GitHub عمومی است**.
+- **remoteها (۲۰۲۶-۱۱-۲۳):** `origin` یک remote با fetch از forgejo `routelatch.git`
+  و دو push URL است: forgejo و GitHub `m-hosseinpour/routelatch.git`؛
+  `git push origin main` هر دو مقصد را به‌روزرسانی می‌کند و remote جداگانهٔ `github`
+  وجود ندارد. **فقط GitHub عمومی است**؛ تغییرهای قبلی که `github` را remote دوم
+  ثبت کرده‌اند snapshot تاریخی‌اند.
 - **مجوز/ممیزی:** D20 با Apache-2.0 بسته شد (R3)؛ source offer و بستهٔ انتشار در R8 فراهم
   شدند. D22 (نقطهٔ تعهد CONNECT) با موافقت کاربر ثبت شد.
 - **مجاز بدون درخواست تازه:** build/test محلی، دریافت وابستگی عمومی، commit محلی،
