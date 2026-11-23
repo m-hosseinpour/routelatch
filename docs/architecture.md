@@ -146,9 +146,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 ## ۷. سرویس، پلتفرم و استفاده
 
 > **وضعیت:** این بخش مدل اجرای تصمیم‌شده در D26 (۲۰۲۶-۱۱-۲۳) را توصیف می‌کند.
-> R13-B/C/D/E در درخت پیاده شده‌اند؛ R13-F باز است و بسته‌های منتشرشده تا انتشار
-> R13 همان unit و `run` foreground را دارند. README/INSTALL/SERVICE در R13-E
-> به‌روز شدند.
+> R13 در درخت کامل شده است (R13-F verdict **Ready**)؛ بسته‌های منتشرشده تا
+> انتشار R13 همان unit و `run` foreground را دارند. README/INSTALL/SERVICE در
+> R13-E به‌روز شدند.
 
 - Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child

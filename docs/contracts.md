@@ -1212,9 +1212,9 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 
 ### ۷.۵ مدل اجرا، tray، autostart و service (D26)
 
-این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. R13-B/C/D/E در درخت پیاده
-شده‌اند؛ R13-F باز است و تا انتشار R13، بستهٔ منتشرشدهٔ فعلی (v0.1.3) همان `run`
-foreground و unit را دارد.
+این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. R13 در درخت کامل شده است
+(R13-F verdict **Ready**)؛ تا انتشار R13، بستهٔ منتشرشدهٔ فعلی (v0.1.3) همان
+`run` foreground و unit را دارد.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق

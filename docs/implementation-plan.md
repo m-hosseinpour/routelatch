@@ -192,7 +192,7 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 
 | معیار | task و check یکپارچه |
 | --- | --- |
-| A01/A13/A15 | T6/R13، نصب روی artifact رسمی و lifecycle در T7؛ A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته شد، بدون آزمون محیط پاک توسط ما؛ A13/A15 مدل D26 در R13 باز است |
+| A01/A13/A15 | T6/R13، نصب روی artifact رسمی و lifecycle در T7؛ A01 در ۲۰۲۶-۱۱-۲۱ با شهادت کاربر بسته شد، بدون آزمون محیط پاک توسط ما؛ A13/A15 مدل D26 در R13 پیاده شد (F: Ready؛ محدودیت‌های واقعی در جدول «آنچه پذیرفته/اثبات نشده») |
 | A02/A03/A04 | T1/T3، counters عدم bypass و mode races در T7 |
 | A05 | T1 پیش‌نیاز feedback؛ T5/T7 پذیرش proposal/approval/disable/no replay |
 | A06/A07 | T4، refresh failures و pool churn در T7 |
@@ -316,6 +316,19 @@ systemd بازنشسته شد، corrupt-state به `run --headless` آفلاین
 default+data-dir به‌خاطر engine زندهٔ R12 در host NOTE می‌شود؛
 `docs/release-readiness.md` snapshot تاریخی می‌ماند.
 
+**R13-F انجام شد (۲۰۲۶-۱۱-۲۴):** بازبینی مستقل کل `9f678bb..1ae5f6a`
+**Ready with findings** داد؛ دو یافتهٔ کد (نگاشت خطای tray، بازسازی marker
+بدون probe) و ناسازگاری مستندات رفع شد و بازبینی متمرکز **Ready** شد. checks:
+full tests **۲۷۴ PASS / ۰ FAIL / ۱۵ NOTE** (~۱۲۰s)، `gofmt`/`go vet`/
+`go build` و build استاتیک، `-race` روی app/service/cmd، package چهارمعماری و
+`check-package.sh`/`check-artifact.sh`، smoke واقعی KDE app/tray (readiness،
+tray registration، SIGHUP/بستن pty، SIGTERM/SIGKILL بدون orphan)، و
+گیت‌شدهٔ autostart واقعی PASS؛ tarball/deb/spec بدون unit/autostart/postinst.
+**آزمون‌نشده (نیازمند مجوز/محیط):** نصب/rollback/linger واقعی user manager و
+upgrade unit قدیمی `/usr/lib`، کلیک Quit در tray، GNOME/SSH واقعی، pidfd
+`ENOSYS`/`EPERM`، runtime غیر-amd64، و سلول default+data-dir (NOTE به‌خاطر
+engine زندهٔ R12). **انتشار:** tag/release انجام نشد و تصمیم جدا می‌خواهد.
+
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
 `autostart` و `service install` idempotent باشند؛ بسته هیچ unit/postinst نداشته باشد؛
@@ -376,12 +389,13 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
 مختلف؛ مرز GUI آینده؛ و تصمیم release/tag جدا. انتخاب/pin library tray و
 اجرای R13-B/C/D/E بسته شدند.
 
-**قدم بعدی:** R13-F — اجرای full/gated checks و package checks، بازبینی مستقل
-کل change R13، و تصمیم release/tag جدا (بدون انتشار در این واحد).
+**قدم بعدی:** تصمیم انتشار/tag جدا؛ آزمون‌های واقعی user manager/linger،
+کلیک Quit و پلتفرم‌های غیر-amd64 فقط با مجوز/محیط جدا. هیچ کار پیاده‌سازی باز
+v1 نمانده است.
 
 ### وضعیت فعلی
 
-- **R13 — R13-A/B/C/D/E بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
+- **R13 — R13-A..F بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
   `deedles.dev/tray v0.2.0` (MIT) را pin کرد (`77a5d22`؛ Plasma 6.6.7، build
   استاتیک چهار معماری، pidfd parent-death؛ تأیید بصری/GNOME/SSH/runtime دو
@@ -393,12 +407,14 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
   `service install/uninstall/status`، unit دقیق، base pinning، readiness،
   rollback، force/adoption و تعارض‌ها. R13-E در `e6d0100` unit را از
   بسته‌ها/CI/checker حذف و README/INSTALL/SERVICE/migration را به‌روز کرد
-  (۲۷۴ PASS/۰ FAIL/۱۵ NOTE). بازبینی‌های B/C/D ابتدا **Not ready** (یا یافتهٔ
-  مادی) و پس از اصلاح **Ready** بودند؛ full tests/-race/check-artifact سبز.
-  tray واقعی KDE، بستن ترمینال واقعی، pidfd ENOSYS/EPERM، نصب/rollback واقعی
-  systemd، autostart واقعی در login و runtime غیر-amd64 هنوز آزمون‌نشده‌اند.
-  هیچ سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار باز: R13-F؛ قدم
-  بعدی R13-F.
+  (۲۷۴ PASS/۰ FAIL/۱۵ NOTE). R13-F بازبینی مستقل کل change را با
+  **Ready with findings** گذراند؛ `2f1e60d` (tray error mapping و marker
+  repair) و مستندات پس از آن **Ready** شدند. smoke واقعی KDE app/tray
+  (readiness، tray registration، SIGHUP، SIGTERM/SIGKILL بدون orphan) و
+  package checks چهارمعماری pass. **آزمون‌نشده:** نصب/rollback/linger واقعی
+  user manager، upgrade unit قدیمی `/usr/lib`، کلیک Quit، GNOME/SSH، pidfd
+  ENOSYS/EPERM، runtime غیر-amd64 و default+data-dir (NOTE). هیچ سرویس، unit،
+  autostart یا تنظیم دسکتاپ تغییر نکرد. تصمیم tag/release جدا است.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
@@ -598,13 +614,13 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
 | R11 | **انجام شد (`654cbb6`، `84efe5e`، `8d4118b`):** پشتیبانی واقعی hysteria2/sing-box با رانتایم جدیگانه sing-box `v1.14.4` کنار Xray — import، فیلدهای قرارداد، handoff محلی SOCKS5، انطباق GPL/بستهبندی، و اثبات ترافیک واقعی (۱ تماس مقصد، fail-closed با ۰ تماس، D21). obfs salamander/gecko با ترافیک واقعی اثبات شد (`internal/acceptance/r11_obfs_test.go`). sidecar بستهٔ منتشرشدهٔ v0.1.2 (amd64) آزموده شد (بخش ب/۴). **باقی (کار باز v1):** session طولانی؛ QUIC roaming در repo قابل بازتولید نیست (نیازمند تغییر مسیر/اینترفیس واقعی) | D07/A06/A08 (گسترش دامنه) | انجام شد با تصمیم معماری + مجوز کاربر |
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
-| R13 | **R13-A..E انجام شد (۲۰۲۶-۱۱-۲۳/۲۴)؛ R13-F در حال بسته‌شدن:** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) رفع و تأیید متمرکز در جریان است | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service و reboot آزمون‌نشده |
+| R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 
-**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13-A..E بسته شدند و تنها گام باز v1، تأیید متمرکز نهایی R13-F است.**
+**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12، R13 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 کامل شد و تصمیم انتشار/tag جداست.**
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -696,8 +712,8 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
    یازدهم `7407a6d` و دور دوازدهم `ee28f23` (verdict دور دوازدهم **Ready**، فقط
    مستندات)؛ D26 ثبت شده و هیچ
    کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
-   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
-   بسته‌اند؛ R13 تنها کار باز v1 است.
+   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12، گروه ج
+   و R13-A..F بسته‌اند؛ تنها تصمیم باز، انتشار/tag جداست.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
    `--headless` تنها حالت جایگزین؛ فرمان `tray`/`gui` جدا نیست؛ `autostart` XDG؛
    `service install` فقط systemd user unit + linger؛ بسته هیچ unit/postinst ندارد.
