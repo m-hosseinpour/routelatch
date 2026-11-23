@@ -1,0 +1,70 @@
+toolchain: go version go1.27.4 linux/amd64
+command: GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=<arch> go build -trimpath -o <out> ./cmd/<cmd>
+scope: all 20 artifacts checked with file; the two amd64 tray binaries also checked with ldd and go version -m
+
+== all built artifacts: 5 commands x 4 architectures
+20
+fake-watcher-amd64           ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=pQ-twtRm1h0cQTbao8YI/on8P4TCi21jnhFIkxJle/Bvq8UmTesKJXdVUv6ogZ/UAo1UMu0Sy51jXk6DBW3
+fake-watcher-arm64           ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=YEAVWBcmm1WYrotbxkVy/FK2mFbGDG655-RyK87_1/jIvQBIE_B013QglPgT6C/JRUwEsR3hltZ4G8PnJGD
+fake-watcher-ppc64le         ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked
+fake-watcher-riscv64         ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked
+lifecycle-child-amd64        ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=sR1Or4nYDbeZjpOh5Kzj/DkZ2NAall8lEmASsAhC2/YmhbNxpo0GH6KEHH-K6q/BJBjEIoCUNMEhnGD03DR
+lifecycle-child-arm64        ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=s6yxf3Nhv6t84i1fcm5C/syl3W54SDbP_3UmQ0G6E/pLVwttxBaa18FkwiWENY/TKclLalRqpGIuqNKRS9N
+lifecycle-child-ppc64le      ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked
+lifecycle-child-riscv64      ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked
+supervisor-amd64             ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=sQ8rk4LbUy90ezKTszAt/Qn0ecKzP5EXgOlXT2RQw/aQxYVy3-xf5WpWosMeAc/4yM1nSBLJAhJAi2I6nIp
+supervisor-arm64             ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=943a9QXI6hKFP-fbyeAG/i9AZit7OWgRI7AxqIObX/gFSEz3gGgBwAYbYPgp5k/_tqlh5rwp-1DzadBPKTW
+supervisor-ppc64le           ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked
+supervisor-riscv64           ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked
+systray-spike-amd64          ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=nHg7L2YaWYoEQ_TGXS4F/vgfE_yAz_5fCDB0AOuJl/ab5-73-Dp3ZVcb52nIzM/4rUnBBXJThjZo4lnv1t5
+systray-spike-arm64          ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=C9krp-jnh2urn05bXdH-/mMHG0CW5ueM7edkrtveG/RUqJSDBa65ktaz1usRQF/975vdpwO9J4cti1qHG42
+systray-spike-ppc64le        ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked
+systray-spike-riscv64        ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked
+tray-spike-amd64             ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=LchcjwtIwu66_atxQQPK/8J5DIQ6NL0MUuo8fupyG/p3VuxhioKbdn9wT3rAj7/LnMwZevKkameaHFdRgas
+tray-spike-arm64             ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=N29jKgaekS3LsW7BEXDi/PDQ237t3Jt4Hx_8C4ccY/CLzD-Hju9jE-U67KNmd4/1kYO-L0iINHvd_WKruE2
+tray-spike-ppc64le           ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked
+tray-spike-riscv64           ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked
+
+statically_linked_count=20
+
+== ldd (amd64 tray binaries only)
+systray-spike-amd64: 	not a dynamic executable 
+tray-spike-amd64: 	not a dynamic executable 
+
+== go version -m (amd64 tray binaries only)
+systray-spike-amd64: go1.27.4
+	path	routelatch/spike/tray/cmd/systray-spike
+	mod	routelatch/spike/tray	(devel)	
+	dep	github.com/godbus/dbus/v5	v5.2.4	h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
+	dep	github.com/gogpu/systray	v0.3.0	h1:1kbYI/XujAvbwaVs/4o/UAjSNW8DMgsGoBeACKTH+S0=
+	dep	golang.org/x/sys	v0.49.0	h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=9f678bb840611853bd49a4e78cb03e009e2e6a1c
+	build	vcs.time=2026-11-23T05:48:58Z
+	build	vcs.modified=true
+
+tray-spike-amd64: go1.27.4
+	path	routelatch/spike/tray/cmd/tray-spike
+	mod	routelatch/spike/tray	(devel)	
+	dep	deedles.dev/tray	v0.2.0	h1:idycIgJvxeKgCUGqNh6UbokUYEjBDTa55KK3pNSOYes=
+	dep	github.com/godbus/dbus/v5	v5.2.4	h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
+	dep	golang.org/x/sys	v0.49.0	h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=9f678bb840611853bd49a4e78cb03e009e2e6a1c
+	build	vcs.time=2026-11-23T05:48:58Z
+	build	vcs.modified=true
+

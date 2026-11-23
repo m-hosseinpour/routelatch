@@ -1,0 +1,23 @@
+case1 supervisor=37807 child=37815
+case1 result=gone child_after_supervisor_sigkill_ms=14 zombie_seen=no
+case1 child log:
+  2026-11-23T08:14:15.384Z event=supervisor_pidfd_ready pidfd=3
+  2026-11-23T08:14:15.385Z event=supervisor_ready pid=37807 child_pid=37815
+  2026-11-23T08:14:15.387Z event=child_ready pid=37815 ppid=37807
+  2026-11-23T08:14:15.387Z event=parent_watch_armed pidfd=3 ppid=37807
+  2026-11-23T08:14:15.406Z event=parent_died exit=watchdog
+case2 supervisor_exit_code=0 child_exited_lines=1
+case2 child log:
+  2026-11-23T08:14:15.423Z event=supervisor_pidfd_ready pidfd=3
+  2026-11-23T08:14:15.423Z event=supervisor_ready pid=37837 child_pid=37843
+  2026-11-23T08:14:15.424Z event=child_ready pid=37843 ppid=37837
+  2026-11-23T08:14:17.425Z event=child_self_exit reason=timer
+  2026-11-23T08:14:17.426Z event=child_exited detected_by=waitpid code=0 elapsed_ms=2002
+case3 (arm-late race) child_after_supervisor_exit_ms=453 result=gone zombie_seen=no
+case3 child log:
+  2026-11-23T08:14:17.431Z event=supervisor_pidfd_ready pidfd=3
+  2026-11-23T08:14:17.431Z event=supervisor_ready pid=38088 child_pid=38094
+  2026-11-23T08:14:17.432Z event=child_ready pid=38094 ppid=38088
+  2026-11-23T08:14:17.481Z event=supervisor_abandon exit=without_waiting
+  2026-11-23T08:14:17.933Z event=parent_watch_armed pidfd=3 ppid=1897
+  2026-11-23T08:14:17.933Z event=parent_died exit=watchdog

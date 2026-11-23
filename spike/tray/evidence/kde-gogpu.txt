@@ -1,0 +1,20 @@
+2026-11-23T08:16:04.305Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:16:04.305Z event=host_registered host=true
+2026-11-23T08:16:04.309Z event=tray_registered impl=gogpu/systray id=routelatch-tray-spike item=org.kde.StatusNotifierItem-40646-2/StatusNotifierItem
+item=org.kde.StatusNotifierItem-40646-2/StatusNotifierItem bus=org.kde.StatusNotifierItem-40646-2
+property Id: (<'org.kde.StatusNotifierItem-40646-2'>,)
+property Title: (<'RouteLatch tray spike'>,)
+property Status: (<'Active'>,)
+IconPixmap bytes_in_reply=11638 dimensions_22x22=1
+menu_path=/MenuBar
+menu_layout=(uint32 1, (0, {'children-display': <'submenu'>}, [<(1, {'label': <'Send test notification'>}, @av [])>, <(2, {'type': <'separator'>}, @av [])>, <(3, {'label': <'Quit prototype'>}, @av [])>]))
+2026-11-23T08:16:04.392Z event=menu_click item=notify
+click notify id=1: 
+2026-11-23T08:16:04.614Z event=notification_sent via=gogpu/systray (errors are not observable through this API)
+2026-11-23T08:16:05.431Z event=menu_click item=quit
+2026-11-23T08:16:05.432Z event=tray_loop_exit err=<nil>
+spike: tray removed
+click quit id=3: Call failed: Message recipient disconnected from message bus without replying
+after_quit_event process_alive=no
+notify_calls_seen=2
+watcher_still_lists_item=0 notification_observed=yes exited_after_menu=yes

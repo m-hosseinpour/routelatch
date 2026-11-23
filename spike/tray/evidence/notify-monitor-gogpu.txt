@@ -1,0 +1,26 @@
+signal time=1795421764.302515 sender=org.freedesktop.DBus -> destination=:1.234 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.234"
+signal time=1795421764.302538 sender=org.freedesktop.DBus -> destination=:1.234 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.234"
+method call time=1795421764.393177 sender=:1.236 -> destination=org.freedesktop.Notifications serial=27 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "routelatch-tray-spike"
+   uint32 0
+   string ""
+   string "RouteLatch spike"
+   string "gogpu/systray notification path"
+   array [
+   ]
+   array [
+   ]
+   int32 -1
+method call time=1795421764.611370 sender=:1.236 -> destination=org.freedesktop.Notifications serial=29 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "routelatch-tray-spike"
+   uint32 0
+   string ""
+   string "RouteLatch spike"
+   string "gogpu/systray notification path"
+   array [
+   ]
+   array [
+   ]
+   int32 -1

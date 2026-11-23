@@ -1,0 +1,21 @@
+== no watcher (only the fresh session bus)
+2026-11-23T08:15:45.160Z event=no_watcher stage=probe names=[org.kde.StatusNotifierWatcher org.freedesktop.StatusNotifierWatcher]
+case host=absent systray-spike-amd64 exit=3
+2026-11-23T08:15:45.172Z event=no_watcher stage=probe names=[org.kde.StatusNotifierWatcher org.freedesktop.StatusNotifierWatcher]
+case host=absent tray-spike-amd64 exit=3
+== watcher present, host absent
+2026-11-23T08:15:45.596Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:15:45.597Z event=host_registered host=false
+2026-11-23T08:15:45.597Z event=no_tray_host watcher=org.kde.StatusNotifierWatcher
+case host=false systray-spike-amd64 check-watcher exit=5
+2026-11-23T08:15:45.609Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:15:45.609Z event=host_registered host=false
+2026-11-23T08:15:45.609Z event=no_tray_host watcher=org.kde.StatusNotifierWatcher
+case host=false tray-spike-amd64 check-watcher exit=5
+== watcher present, host present
+2026-11-23T08:15:46.029Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:15:46.030Z event=host_registered host=true
+case host=true systray-spike-amd64 check-watcher exit=0
+2026-11-23T08:15:46.043Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:15:46.044Z event=host_registered host=true
+case host=true tray-spike-amd64 check-watcher exit=0

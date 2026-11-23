@@ -1,0 +1,11 @@
+item_pid=41200
+282:method call time=1795421816.511370 sender=:1.24 -> destination=org.kde.StatusNotifierItem-41200-2 serial=8340 path=/StatusNotifierItem; interface=org.freedesktop.DBus.Properties; member=GetAll
+452:method call time=1795421816.513942 sender=:1.24 -> destination=org.kde.StatusNotifierItem-41200-2 serial=8344 path=/MenuBar; interface=com.canonical.dbusmenu; member=GetLayout
+-- method calls from plasmashell to the item (Properties/SNI/menu):
+282:method call time=1795421816.511370 sender=:1.24 -> destination=org.kde.StatusNotifierItem-41200-2 serial=8340 path=/StatusNotifierItem; interface=org.freedesktop.DBus.Properties; member=GetAll
+283-   string "org.kde.StatusNotifierItem"
+284-method return time=1795421816.512581 sender=:1.267 -> destination=:1.24 serial=13 reply_serial=8340
+--
+452:method call time=1795421816.513942 sender=:1.24 -> destination=org.kde.StatusNotifierItem-41200-2 serial=8344 path=/MenuBar; interface=com.canonical.dbusmenu; member=GetLayout
+453-   int32 0
+454-   int32 1

@@ -1,0 +1,19 @@
+2026-11-23T08:16:06.482Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+2026-11-23T08:16:06.483Z event=host_registered host=true
+2026-11-23T08:16:06.493Z event=tray_registered impl=deedles.dev/tray id=routelatch-tray-spike item=org.freedesktop.StatusNotifierItem-40730-1/StatusNotifierItem
+item=org.freedesktop.StatusNotifierItem-40730-1/StatusNotifierItem bus=org.freedesktop.StatusNotifierItem-40730-1
+property Id: (<'routelatch-tray-spike'>,)
+property Title: (<'RouteLatch tray spike'>,)
+property Status: (<'Active'>,)
+IconPixmap bytes_in_reply=11638 dimensions_22x22=1
+menu_path=/StatusNotifierMenu
+menu_layout=(uint32 3, (0, {'children-display': <'submenu'>}, [<(1, {'label': <'Send test notification'>}, @av [])>, <(2, {'type': <'separator'>}, @av [])>, <(3, {'label': <'Quit prototype'>}, @av [])>]))
+2026-11-23T08:16:06.566Z event=menu_click item=notify
+2026-11-23T08:16:06.600Z event=notification_result id=24 err=<nil>
+click notify id=1: 
+2026-11-23T08:16:06.807Z event=notification_result id=0 err=Notify: Created too many similar notifications in quick succession
+2026-11-23T08:16:07.613Z event=menu_click item=quit
+click quit id=3: Call failed: Message recipient disconnected from message bus without replying
+after_quit_event process_alive=no
+notify_calls_seen=2
+watcher_still_lists_item=0 notification_observed=yes exited_after_menu=yes

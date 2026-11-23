@@ -1,0 +1,9 @@
+supervisor_exit_code=0 wall_ms=2038
+watcher_after=(<[':1.49/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4022-1/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4019-1/StatusNotifierItem']>,)
+  2026-11-23T08:16:34.945Z event=supervisor_pidfd_ready pidfd=3
+  2026-11-23T08:16:34.946Z event=supervisor_ready pid=40996 child_pid=41002
+  2026-11-23T08:16:34.952Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+  2026-11-23T08:16:34.954Z event=host_registered host=true
+  2026-11-23T08:16:34.962Z event=tray_registered impl=deedles.dev/tray id=routelatch-tray-spike item=org.freedesktop.StatusNotifierItem-41002-1/StatusNotifierItem
+  2026-11-23T08:16:36.964Z event=exit reason=timer
+  2026-11-23T08:16:36.966Z event=child_exited detected_by=waitpid code=0 elapsed_ms=2020

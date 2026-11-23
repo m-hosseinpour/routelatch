@@ -116,6 +116,9 @@ proxy، firewall redirect و virtual interface را توضیح می‌دهد. پ
 هدف این بررسی، امکان‌سنجی یک tray بدون شکستن باینری static (`CGO_ENABLED=0`) بود.
 هیچ کتابخانه‌ای در این تاریخ انتخاب، pin یا روی میزبان اجرا نشد؛ R13-A باید prototype
 و آزمون واقعی KDE را انجام دهد.
+**[به‌روزرسانی ۲۰۲۶-۱۱-۲۳]** این پاراگراف snapshot پیش از R13-A است. در R13-A هر دو
+نامزد روی KDE اجرا شدند و `deedles.dev/tray v0.2.0` pin شد؛ بخش «نتیجهٔ spike tray»
+پایین‌تر.
 
 | نامزد | شاهد/نسخه | نتیجه | محدودیت |
 | --- | --- | --- | --- |
@@ -130,6 +133,39 @@ SSH/بدون display هم tray ندارد. XEmbed قدیمی انتخاب نمی
 fallback صریح است و fallback بی‌صدا مجاز نیست (D26/R-16). قبل از انتخاب نهایی باید
 license/deps، cross-build چهار معماری، ثبت SNI، منو و رفتار parent-death بررسی و
 نسخه pin شود.
+
+## نتیجهٔ spike tray pure-Go (۲۰۲۶-۱۱-۲۳، R13-A)
+
+این بخش snapshot شواهد اجرایی R13-A است و ادعاهای امکان‌سنجی جدول بالا را به نتیجه
+می‌رساند؛ لاگ‌های خام و دستورها در `spike/tray/FINDINGS.md` و `spike/tray/evidence/`
+هستند. هیچ سرویس/autostart/تنظیم دسکتاپ تغییر نکرد و هیچ آیتم tray موجودی دست نخورد.
+
+| نامزد | نسخه و commit | build static چهار معماری | KDE واقعی (پلاسما ۶.۶.۷) | watcher/host غایب | license/deps |
+| --- | --- | --- | --- | --- | --- |
+| `deedles.dev/tray` | `v0.2.0` = `acf85aba49de` | هر چهار معماری، بدون cgo؛ `file` برای هر ۲۰ آرتیفکت و `ldd`/`go version -m` برای باینری‌های amd64 | ثبت SNI، آیکن ۲۲×۲۲، منوی dbusmenu (مسیر `/StatusNotifierMenu`)، کلیک منو، نوتیفیکیشن با godbus، حذف هنگام خروج؛ plasmashell خودش `GetAll` و `GetLayout` را صدا زد | `New()` برای نبود watcher خطا می‌دهد؛ نبود host با probe برنامه exit ۵ | MIT؛ فقط godbus (BSD-2) و x/sys (BSD-3) لینک می‌شوند |
+| `gogpu/systray` | `v0.3.0` = `a71468fe` | همان | همان رفتار SNI/منو/آیکن؛ `Id` را نادیده می‌گیرد (نام bus)؛ نوتیفیکیشن داخلی اما خطای آن مشاهده‌ناپذیر | `New/Create` نبود watcher را فقط warn می‌کند و خطا نمی‌دهد؛ probe برنامه لازم است | MIT؛ همان دو وابستگی؛ goffi فقط در module graph (داروین) |
+
+**تصمیم:** `deedles.dev/tray v0.2.0` برای R13-B pin شد. دلیل: خطاهای صریح در ساخت و
+عملیات (به‌جای موفقیت بی‌صدا) و حفظ `Id` درخواستی؛ هر دو نامزد دقیقاً godbus و x/sys
+را لینک می‌کنند، پس حجم وابستگی معیار تفکیک نیست. هزینه‌ها: نوتیفیکیشن ندارد (یک
+فراخوانی godbus)، پس از restart شدن watcher خودش دوباره ثبت نمی‌شود (supervisor باید
+tray child را جایگزین کند؛ مطابق D26)، پروژه کوچک است، و در خطای `New()` اتصال bus را
+نمی‌بندد؛ بنابراین retry باید با جایگزینی process باشد نه حلقهٔ `New()`.
+`gogpu/systray v0.3.0` گزینهٔ جایگزین مستند است اگر re-registration خودکار مهم‌تر
+باشد؛ در آن صورت probe بیرونی و `Remove()` idempotent (باگ panic مشاهده‌شده) لازم است.
+
+**اندازه‌گیری‌های lifecycle:** supervisor یک pidfd روی خودش را پیش از fork به child
+می‌دهد؛ child ۱۴–۱۹ میلی‌ثانیه پس از `SIGKILL` شدن supervisor خارج شد (هم در محیط بدون
+D-Bus و هم با tray واقعی) و آیتم از watcher حذف شد. حتی وقتی supervisor ۵۰ میلی‌ثانیه
+پس از spawn مرد و child با ۵۰۰ میلی‌ثانیه تأخیر arm شد، pidfd ارث‌رسیده مرگ را نشان داد
+و child ۴۵۳ میلی‌ثانیه بعد (در لحظهٔ arm) خارج شد، نه روی parent جدید. خروج خودکار
+child در ۲.۰ ثانیه توسط supervisor با `waitpid` تشخیص داده شد. مسیر pidfd ناموجود
+(`ENOSYS`/`EPERM`) پیاده اما اجرا نشده است.
+
+**آزمون‌نشده:** تأیید بصری آیکن/منو/نوتیفیکیشن توسط کاربر؛ GNOME بدون extension یا
+SSH واقعی (فقط bus ایزوله با fake watcher)؛ DEهای دیگر؛ اجرای runtime روی
+`riscv64`/`ppc64le`؛ زنده‌ماندن پس از restart واقعی `kded`/plasmashell؛ و ادغام در
+بسته/`run` که کار R13-B است.
 
 ## فرض‌های اصلاح‌شده و پوشش باقی‌مانده
 

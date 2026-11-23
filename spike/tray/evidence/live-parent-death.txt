@@ -1,0 +1,11 @@
+supervisor=40947 child=40955
+watcher_before=(<[':1.49/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4022-1/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4019-1/StatusNotifierItem', 'org.kde.StatusNotifierItem-40955-2/StatusNotifierItem']>,)
+child_after_supervisor_sigkill_ms=19
+watcher_after=(<[':1.49/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4022-1/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4019-1/StatusNotifierItem']>,)
+  2026-11-23T08:16:33.342Z event=supervisor_pidfd_ready pidfd=3
+  2026-11-23T08:16:33.343Z event=supervisor_ready pid=40947 child_pid=40955
+  2026-11-23T08:16:33.349Z event=watcher_found watcher=org.kde.StatusNotifierWatcher
+  2026-11-23T08:16:33.349Z event=host_registered host=true
+  2026-11-23T08:16:33.357Z event=tray_registered impl=gogpu/systray id=routelatch-tray-spike item=org.kde.StatusNotifierItem-40955-2/StatusNotifierItem
+  2026-11-23T08:16:33.357Z event=parent_watch_armed pidfd=3
+  2026-11-23T08:16:34.888Z event=parent_died exit=watchdog

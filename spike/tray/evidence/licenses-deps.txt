@@ -1,0 +1,54 @@
+== license classification (from module cache)
+-- github.com/godbus/dbus/v5@v5.2.4
+modification, are permitted provided that the following conditions
+-- golang.org/x/sys@v0.49.0
+modification, are permitted provided that the following conditions are
+-- github.com/gogpu/systray@v0.3.0
+MIT License
+-- deedles.dev/tray@v0.2.0
+MIT License
+-- github.com/go-webgpu/goffi@v0.6.3
+MIT License
+
+godbus 'Neither the name' clauses: 0 => BSD-2-Clause
+x/sys  'Neither the name' clauses: 1 => BSD-3-Clause
+
+== linked modules per binary (go list -deps)
+-- systray-spike
+github.com/godbus/dbus/v5 v5.2.4
+github.com/gogpu/systray v0.3.0
+golang.org/x/sys v0.49.0
+routelatch/spike/tray 
+-- tray-spike
+deedles.dev/tray v0.2.0
+github.com/godbus/dbus/v5 v5.2.4
+golang.org/x/sys v0.49.0
+routelatch/spike/tray 
+
+counts: go.sum_lines=10 module_graph_nodes=216 graph_edges=227 cgo_files=0
+
+== go.mod
+module routelatch/spike/tray
+
+go 1.27.4
+
+require (
+	deedles.dev/tray v0.2.0
+	github.com/godbus/dbus/v5 v5.2.4
+	github.com/gogpu/systray v0.3.0
+	golang.org/x/sys v0.49.0
+)
+
+require github.com/go-webgpu/goffi v0.6.3 // indirect
+
+== go.sum
+deedles.dev/tray v0.2.0 h1:idycIgJvxeKgCUGqNh6UbokUYEjBDTa55KK3pNSOYes=
+deedles.dev/tray v0.2.0/go.mod h1:sWWCLEqHWHcrUO/2HNKUriTixk2+ZQBoAibFGGO50bI=
+github.com/go-webgpu/goffi v0.6.3 h1:p4gKGikHBAQ/8iUiew9MV4C5M1ZGIsk8QGFGuJjMj+A=
+github.com/go-webgpu/goffi v0.6.3/go.mod h1:wfoxNsJkU+5RFbV1kNN1kunhc1lFHuJKK3zpgx08/uM=
+github.com/godbus/dbus/v5 v5.2.4 h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
+github.com/godbus/dbus/v5 v5.2.4/go.mod h1:3AAv2+hPq5rdnr5txxxRwiGjPXamgoIHgz9FPBfOp3c=
+github.com/gogpu/systray v0.3.0 h1:1kbYI/XujAvbwaVs/4o/UAjSNW8DMgsGoBeACKTH+S0=
+github.com/gogpu/systray v0.3.0/go.mod h1:aoA1tAjYSKH/iVc761t7IVDOaTRYmOwglbcbpcLF1v0=
+golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+golang.org/x/sys v0.49.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=

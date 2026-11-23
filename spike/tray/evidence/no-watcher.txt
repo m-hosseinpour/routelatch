@@ -1,0 +1,16 @@
+== no watcher: check-watcher / raw-create
+-- gogpu
+2026-11-23T08:15:44.105Z event=no_watcher stage=probe names=[org.kde.StatusNotifierWatcher org.freedesktop.StatusNotifierWatcher]
+exit=3
+-- deedles
+2026-11-23T08:15:44.113Z event=no_watcher stage=probe names=[org.kde.StatusNotifierWatcher org.freedesktop.StatusNotifierWatcher]
+exit=3
+-- gogpu raw-create
+2026-11-23T08:15:44.121Z event=no_watcher stage=probe action=continuing_for_raw_create
+2026/11/23 11:45:44 WARN systray: initial watcher registration failed (watcher may not be running) err="register status notifier item: The name org.kde.StatusNotifierWatcher was not provided by any .service files"
+2026-11-23T08:15:44.127Z event=library_create_reported_no_error impl=gogpu/systray watcher_present=false
+exit=3
+-- deedles raw-create
+2026-11-23T08:15:45.137Z event=no_watcher stage=probe action=continuing_for_raw_create
+2026-11-23T08:15:45.142Z event=error stage=new err="export StatusNotifierItem: register StatusNotifierItem with org.freedesktop.StatusNotifierWatcher: The name org.freedesktop.StatusNotifierWatcher was not provided by any .service files\nregister StatusNotifierItem with org.kde.StatusNotifierWatcher: The name org.kde.StatusNotifierWatcher was not provided by any .service files"
+exit=1

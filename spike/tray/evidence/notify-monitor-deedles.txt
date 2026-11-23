@@ -1,0 +1,34 @@
+signal time=1795421766.480194 sender=org.freedesktop.DBus -> destination=:1.246 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.246"
+signal time=1795421766.480244 sender=org.freedesktop.DBus -> destination=:1.246 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.246"
+method call time=1795421766.567215 sender=:1.247 -> destination=org.freedesktop.Notifications serial=5 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "routelatch-tray-spike"
+   uint32 0
+   string ""
+   string "RouteLatch spike"
+   string "deedles.dev/tray + godbus notification path"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "routelatch-tray-spike"
+      )
+   ]
+   int32 -1
+method call time=1795421766.795042 sender=:1.247 -> destination=org.freedesktop.Notifications serial=6 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "routelatch-tray-spike"
+   uint32 0
+   string ""
+   string "RouteLatch spike"
+   string "deedles.dev/tray + godbus notification path"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "routelatch-tray-spike"
+      )
+   ]
+   int32 -1
