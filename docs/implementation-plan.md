@@ -218,8 +218,9 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 ### R13 — مدل اجرای app/tray و سرویس اختیاری (شروع ۲۰۲۶-۱۱-۲۳)
 
 **وضعیت:** تصمیم D26 ثبت شد و مستندات طراحی (`requirements.md`، `architecture.md`،
-`contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
-میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
+`contracts.md`، `research.md`) به‌روز شدند. در آن مرحله هیچ کد، بسته، unit،
+autostart یا تنظیم میزبان تغییر نکرده بود؛ R13-A/B بعداً کد افزودند. HEAD پیش از
+commit مستندات: `de70f20`؛ commit D26:
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
 `a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`؛ دور هفتم
 `53ebf68`؛ دور هشتم `eddcc4e`؛ دور نهم `58c4430`؛ دور دهم `2d5db69`؛ دور یازدهم
@@ -257,6 +258,21 @@ watcher/host و notification را خودش داشته باشد (deedles notifica
 `New()` را در حلقهٔ retry نکند (نشت fd). **آزمون‌نشده:** تأیید بصری آیکن/منو، GNOME
 بدون extension/SSH واقعی، runtime `riscv64`/`ppc64le`، `ENOSYS`/`EPERM` pidfd، و
 زنده‌ماندن پس از restart واقعی watcher.
+
+**R13-B انجام شد (۲۰۲۶-۱۱-۲۳):** در سه commit: `332fa97` (فاز ۱: `run --headless`،
+InstanceDir canonical، lockهای legacy پنجرهٔ migration، و `status.ready`/
+`listeners_open`)، `ab78768` (فاز ۲: launcher detached/supervisor،
+`app.lock`/`app.owner`/marker، tray با `deedles.dev/tray`، pidfd، readiness/exit،
+منوی دو حالت) و `3a141a2` (رفع بازبینی: کانال کنترل per-generation tray، context
+لغوپذیر، log واحد، ترتیب engine-lock/tray، سخت‌سازی استثنای engine، و تست‌های
+منفی R13-B). بازبینی مستقل اول **Not ready** داد (نقص tray generation + تست‌های
+غایب + متن‌های کهنه)؛ پس از اصلاح، بازبینی متمرکز **Ready** بود. checks:
+`gofmt`/`go vet`/`go build` سبز، `go test -count=1 ./...` همهٔ پکیج‌ها سبز
+(acceptance ~۱۱۸s)، `go test -race -count=1 ./internal/app` سبز،
+`go mod verify` سبز و `scripts/check-artifact.sh` PASS. **آزمون‌نشده:** tray
+واقعی KDE/DBus (تست‌ها fake؛ شاهد library در R13-A)، بستن ترمینال واقعی،
+`ENOSYS`/`EPERM` pidfd روی kernel واقعی، runtime غیر-amd64، و failure-injection
+مستقیم مسیر repair سه‌شکست.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -314,24 +330,26 @@ exitهای `1/4/6/7/9/10` child را terminal map می‌کند، و در هر �
 (شامل start/restart) با snapshot و precedence `MainPID`/starttime محتوا و
 enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-follow را می‌سنجد.
 
-**تصمیم‌های باز تا R13-B:** جزئیات تشخیص دقیق user manager/linger روی توزیع‌های
-مختلف؛ مرز GUI آینده. انتخاب/pin library tray در R13-A بسته شد.
+**تصمیم‌های باز تا R13-C/D:** جزئیات تشخیص دقیق user manager/linger روی
+توزیع‌های مختلف؛ مرز GUI آینده. انتخاب/pin library tray در R13-A و اجرای R13-B
+بسته شدند.
 
-**قدم بعدی:** R13-B — پیاده‌سازی `run --headless` و مدل launcher/supervisor
-(marker، lockهای InstanceDir، pidfd، readiness، tray) با تست‌های جدول R13-B.
+**قدم بعدی:** R13-C (autostart) و R13-D (service) روی runtime نهایی R13-B؛ سپس
+R13-E (بسته‌بندی/مستندات/migration) و R13-F (acceptance/review).
 
 ### وضعیت فعلی
 
-- **R13 — مدل اجرا ثبت و R13-A بسته شد (۲۰۲۶-۱۱-۲۳، ارکستریتور):** D26 برای
-  app/tray، `run --headless`، `autostart` و systemd user service opt-in ثبت شد؛
-  A13/A15 و قراردادهای §۷.۵ به‌روز شدند و بازبینی متمرکز دوازدهم **Ready** بود.
-  سپس R13-A با pin کردن `deedles.dev/tray v0.2.0` (MIT) بسته شد: build استاتیک
-  چهار معماری، Plasma 6.6.7 واقعی، watcher/host detection و prototype pidfd
-  parent-death در `spike/tray/` و `research.md` شاهد دارند (commit `77a5d22`؛
-  بازبینی مستقل pass-with-findings). تأیید بصری، GNOME/SSH واقعی، runtime دو
-  معماری و `ENOSYS`/`EPERM` pidfd آزمون‌نشده‌اند. هیچ کد محصول، بسته، unit،
-  autostart، سرویس یا تنظیم دسکتاپ تغییر نکرد. کار باز: R13-B تا R13-F؛ قدم بعدی
-  R13-B.
+- **R13 — مدل اجرا، R13-A و R13-B بسته شدند (۲۰۲۶-۱۱-۲۳، ارکستریتور):** D26
+  ثبت و A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
+  `deedles.dev/tray v0.2.0` (MIT) را pin کرد (`77a5d22`؛ Plasma 6.6.7، build
+  استاتیک چهار معماری، pidfd parent-death؛ تأیید بصری/GNOME/SSH/runtime دو
+  معماری آزمون‌نشده). R13-B در `332fa97`، `ab78768` و `3a141a2` پیاده شد:
+  `run --headless` foreground، launcher/supervisor و tray پیش‌فرض، InstanceDir/
+  lock/marker/pidfd/readiness و تست‌های جدول؛ بازبینی اول **Not ready** و پس از
+  اصلاح **Ready**، full tests/-race/check-artifact سبز. tray واقعی KDE، بستن
+  ترمینال واقعی، pidfd ENOSYS/EPERM و runtime غیر-amd64 آزمون‌نشده‌اند. هیچ
+  سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار باز: R13-C تا R13-F؛
+  قدم بعدی R13-C/D.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
