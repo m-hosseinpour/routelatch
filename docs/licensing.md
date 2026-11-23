@@ -9,6 +9,22 @@
 [`LICENSE`](../LICENSE) و attribution پروژه در [`NOTICE`](../NOTICE) است. تصمیم
 کاربر در [نیازمندی‌ها، D20](requirements.md) ثبت شده است.
 
+## به‌روزرسانی R13-B (۲۰۲۶-۱۱-۲۳)
+
+این بخش snapshot ممیزی ۲۰۲۶-۱۱-۱۸ را بازنویسی نمی‌کند؛ تغییر وابستگی R13-B را
+روی همان روش ثبت می‌کند. `deedles.dev/tray v0.2.0` (MIT) و
+`github.com/godbus/dbus/v5 v5.2.4` (BSD-2-Clause) برای tray/notification اضافه
+شدند. گراف آن‌ها چهار ماژول کوچک را به build آورد: `clipperhouse/displaywidth`
+v0.11.0 (MIT)، `clipperhouse/uax29/v2` v2.7.0 (MIT)، و نسخه‌های جدیدتر
+`charmbracelet/colorprofile`، `x/ansi`، `x/cellbuf`، `x/term`،
+`lucasb-eyer/go-colorful`، `mattn/go-isatty`، `mattn/go-runewidth` و
+`xo/terminfo` (همه MIT). نتیجهٔ شمارش فعلی: **۷۲ ماژول ثالث لینک‌شده** و **۷۷
+requirement در `go.mod`**؛ `THIRD-PARTY-NOTICES.md` با همین اعداد/نسخه‌ها
+به‌روز شده و `internal/licensing` سبز است. `replace` و `vendor/` همچنان وجود
+ندارند و `CGO_ENABLED=0` است. `go list -deps` روی amd64 (همراه ماژول اصلی) ۷۳
+entry نشان می‌دهد؛ بقیهٔ معماری‌ها فقط cross-build شده‌اند و ممیزی runtime جدیدی
+ادعا نمی‌شود.
+
 ## تصمیم
 
 | مورد | مقدار |

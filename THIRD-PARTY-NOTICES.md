@@ -4,7 +4,8 @@ RouteLatch is licensed under the Apache License, Version 2.0 (the full text is i
 [`LICENSE`](LICENSE)). The shipped binary also contains the third-party Go modules
 listed in this file, each used unmodified under its own license.
 
-This inventory was generated on 2026-11-18 from the modules and packages that the
+This inventory was generated on 2026-11-18 and updated on 2026-11-23 for the
+R13-B tray dependency from the modules and packages that the
 pinned toolchain actually links into `./cmd/routelatch` for the Linux builds
 (`GOOS=linux`, `GOARCH=amd64`, `arm64`, `riscv64` and `ppc64le`,
 `CGO_ENABLED=0`, Go 1.27.4), and from the
@@ -23,17 +24,17 @@ requirement is missing here.
 | --- | --- |
 | Apache-2.0 | 7 |
 | Apache-2.0 AND MIT | 1 |
-| BSD-2-Clause | 2 |
+| BSD-2-Clause | 3 |
 | BSD-3-Clause | 16 |
 | BSD-3-Clause AND MIT | 1 |
 | LGPL-3.0-only WITH LicenseRef-static-linking-exception | 1 |
-| MIT | 35 |
+| MIT | 38 |
 | MIT AND Apache-2.0 | 1 |
 | MIT AND BSD-3-Clause | 1 |
 | MPL-2.0 | 1 |
 | MPL-2.0 AND BSD-3-Clause | 1 |
 | MPL-2.0 AND MIT | 1 |
-| **Total** | **68** |
+| **Total** | **72** |
 
 No module in the binary is GPL-3.0, AGPL or of unknown license; the GPL-3.0 text
 appears below both because LGPL-3.0 incorporates it and because it governs the
@@ -46,21 +47,25 @@ below and in the audit record.
 
 | Module | Version | License (SPDX) | License file(s) |
 | --- | --- | --- | --- |
+| `deedles.dev/tray` | v0.2.0 | MIT | LICENSE |
 | `github.com/apernet/quic-go` | v0.61.1-0.20260806010916-184d081eef3e | MIT | LICENSE |
 | `github.com/atotto/clipboard` | v0.1.4 | BSD-3-Clause | LICENSE |
 | `github.com/aymanbagabas/go-osc52/v2` | v2.0.1 | MIT | LICENSE |
 | `github.com/catppuccin/go` | v0.3.0 | MIT | LICENSE |
 | `github.com/charmbracelet/bubbles` | v0.21.1-0.20250623103423-23b8fd6302d7 | MIT | LICENSE |
 | `github.com/charmbracelet/bubbletea` | v1.3.6 | MIT | LICENSE |
-| `github.com/charmbracelet/colorprofile` | v0.2.3-0.20250311203215-f60798e515dc | MIT | LICENSE |
+| `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | LICENSE |
 | `github.com/charmbracelet/huh` | v1.0.0 | MIT | LICENSE |
 | `github.com/charmbracelet/lipgloss` | v1.1.0 | MIT | LICENSE |
-| `github.com/charmbracelet/x/ansi` | v0.9.3 | MIT | LICENSE |
-| `github.com/charmbracelet/x/cellbuf` | v0.0.13 | MIT | LICENSE |
+| `github.com/charmbracelet/x/ansi` | v0.11.8 | MIT | LICENSE |
+| `github.com/charmbracelet/x/cellbuf` | v0.0.15 | MIT | LICENSE |
 | `github.com/charmbracelet/x/exp/strings` | v0.0.0-20240722160745-212f7b056ed0 | MIT | LICENSE |
-| `github.com/charmbracelet/x/term` | v0.2.1 | MIT | LICENSE |
+| `github.com/charmbracelet/x/term` | v0.2.2 | MIT | LICENSE |
+| `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | LICENSE |
+| `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | LICENSE |
 | `github.com/dustin/go-humanize` | v1.0.1 | MIT | LICENSE |
 | `github.com/ghodss/yaml` | v1.0.1-0.20220118164431-d8423dcdf344 | MIT AND BSD-3-Clause | LICENSE |
+| `github.com/godbus/dbus/v5` | v5.2.4 | BSD-2-Clause | LICENSE |
 | `github.com/google/gopacket` | v1.1.19 | BSD-3-Clause | LICENSE |
 | `github.com/google/uuid` | v1.6.0 | BSD-3-Clause | LICENSE |
 | `github.com/gorilla/websocket` | v1.5.3 | BSD-2-Clause | LICENSE |
@@ -72,9 +77,9 @@ below and in the audit record.
 | `github.com/koron/go-ssdp` | v0.0.4 | MIT | LICENSE |
 | `github.com/libp2p/go-nat` | v1.0.1-0.20250821073202-01afc089f138 | Apache-2.0 | LICENSE |
 | `github.com/libp2p/go-netroute` | v0.2.1 | BSD-3-Clause | LICENSE |
-| `github.com/lucasb-eyer/go-colorful` | v1.2.0 | MIT | LICENSE |
-| `github.com/mattn/go-isatty` | v0.0.20 | MIT | LICENSE |
-| `github.com/mattn/go-runewidth` | v0.0.16 | MIT | LICENSE |
+| `github.com/lucasb-eyer/go-colorful` | v1.4.1 | MIT | LICENSE |
+| `github.com/mattn/go-isatty` | v0.0.22 | MIT | LICENSE |
+| `github.com/mattn/go-runewidth` | v0.0.24 | MIT | LICENSE |
 | `github.com/miekg/dns` | v1.1.73 | BSD-3-Clause | LICENSE |
 | `github.com/mitchellh/hashstructure/v2` | v2.0.2 | MIT | LICENSE |
 | `github.com/molecule-man/go-brrr` | v1.2.0 | MIT | LICENSE |
@@ -95,7 +100,7 @@ below and in the audit record.
 | `github.com/vishvananda/netlink` | v1.3.1 | Apache-2.0 | LICENSE |
 | `github.com/vishvananda/netns` | v0.0.5 | Apache-2.0 | LICENSE |
 | `github.com/wlynxg/anet` | v0.0.5 | BSD-3-Clause | LICENSE |
-| `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | LICENSE |
+| `github.com/xo/terminfo` | v1.0.0 | MIT | LICENSE |
 | `github.com/xtls/reality` | v0.0.0-20261108101329-4bb46b2afd8b | MPL-2.0 AND BSD-3-Clause | LICENSE, LICENSE-Go |
 | `github.com/xtls/xray-core` | v1.260327.1-0.20261109052709-676eaf66f8f0 | MPL-2.0 AND MIT | LICENSE, transport/internet/masque/connectip/LICENSE |
 | `github.com/yuin/gopher-lua` | v1.1.2 | MIT | LICENSE |
@@ -191,23 +196,26 @@ Copyright notices:
 - `github.com/apernet/quic-go` v0.61.1-0.20260806010916-184d081eef3e: Copyright (c) 2016 the quic-go authors & Google, Inc.
 - `github.com/aymanbagabas/go-osc52/v2` v2.0.1: Copyright (c) 2022 Ayman Bagabas
 - `github.com/catppuccin/go` v0.3.0: Copyright (c) 2021 Catppuccin
+- `deedles.dev/tray` v0.2.0: Copyright (c) 2025 DeedleFake
+- `github.com/clipperhouse/displaywidth` v0.11.0: Copyright (c) 2025 Matt Sherman
+- `github.com/clipperhouse/uax29/v2` v2.7.0: Copyright (c) 2020 Matt Sherman
 - `github.com/charmbracelet/bubbles` v0.21.1-0.20250623103423-23b8fd6302d7: Copyright (c) 2020-2023 Charmbracelet, Inc
 - `github.com/charmbracelet/bubbletea` v1.3.6: Copyright (c) 2020-2023 Charmbracelet, Inc
-- `github.com/charmbracelet/colorprofile` v0.2.3-0.20250311203215-f60798e515dc: Copyright (c) 2020-2024 Charmbracelet, Inc
+- `github.com/charmbracelet/colorprofile` v0.4.3: Copyright (c) 2020-2024 Charmbracelet, Inc
 - `github.com/charmbracelet/huh` v1.0.0: Copyright (c) 2023 Charm
 - `github.com/charmbracelet/lipgloss` v1.1.0: Copyright (c) 2021-2023 Charmbracelet, Inc
-- `github.com/charmbracelet/x/ansi` v0.9.3: Copyright (c) 2023 Charmbracelet, Inc.
-- `github.com/charmbracelet/x/cellbuf` v0.0.13: Copyright (c) 2023 Charmbracelet, Inc.
+- `github.com/charmbracelet/x/ansi` v0.11.8: Copyright (c) 2023 Charmbracelet, Inc.
+- `github.com/charmbracelet/x/cellbuf` v0.0.15: Copyright (c) 2023 Charmbracelet, Inc.
 - `github.com/charmbracelet/x/exp/strings` v0.0.0-20240722160745-212f7b056ed0: Copyright (c) 2023 Charmbracelet, Inc.
-- `github.com/charmbracelet/x/term` v0.2.1: Copyright (c) 2023 Charmbracelet, Inc.
+- `github.com/charmbracelet/x/term` v0.2.2: Copyright (c) 2023 Charmbracelet, Inc.
 - `github.com/dustin/go-humanize` v1.0.1: Copyright (c) 2005-2008  Dustin Sallings <dustin@spy.net>
 - `github.com/ghodss/yaml` v1.0.1-0.20220118164431-d8423dcdf344: Copyright (c) 2012 The Go Authors. All rights reserved.; Copyright (c) 2014 Sam Ghods
 - `github.com/klauspost/compress` v1.20.1: Copyright (c) 2012 The Go Authors. All rights reserved.; Copyright (c) 2019 Klaus Post. All rights reserved.; Copyright (c) 2011 The Snappy-Go Authors. All rights reserved. (internal/snapref/LICENSE); Copyright (c) 2016 Caleb Spare (zstd/internal/xxhash/LICENSE.txt)
 - `github.com/klauspost/cpuid/v2` v2.4.2: Copyright (c) 2015 Klaus Post
 - `github.com/koron/go-ssdp` v0.0.4: Copyright (c) 2016 MURAOKA Taro <koron.kaoriya@gmail.com>
-- `github.com/lucasb-eyer/go-colorful` v1.2.0: Copyright (c) 2013 Lucas Beyer
-- `github.com/mattn/go-isatty` v0.0.20: Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
-- `github.com/mattn/go-runewidth` v0.0.16: Copyright (c) 2016 Yasuhiro Matsumoto
+- `github.com/lucasb-eyer/go-colorful` v1.4.1: Copyright (c) 2013 Lucas Beyer
+- `github.com/mattn/go-isatty` v0.0.22: Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
+- `github.com/mattn/go-runewidth` v0.0.24: Copyright (c) 2016 Yasuhiro Matsumoto
 - `github.com/mitchellh/hashstructure/v2` v2.0.2: Copyright (c) 2016 Mitchell Hashimoto
 - `github.com/molecule-man/go-brrr` v1.2.0: Copyright (c) 2026 Andrii Berezhynskyi
 - `github.com/muesli/ansi` v0.0.0-20230316100256-276c6243b2f6: Copyright (c) 2021 Christian Muehlhaeuser
@@ -222,7 +230,7 @@ Copyright notices:
 - `github.com/rivo/uniseg` v0.4.7: Copyright (c) 2019 Oliver Kuederle
 - `github.com/robfig/cron/v3` v3.0.1: Copyright (C) 2012 Rob Figueiredo
 - `github.com/things-go/go-socks5` v0.1.4: Copyright (c) 2014 Armon Dadgar
-- `github.com/xo/terminfo` v0.0.0-20220910002029-abceb7e1c41e: Copyright (c) 2016 Anmol Sethi
+- `github.com/xo/terminfo` v1.0.0: Copyright (c) 2016 Anmol Sethi
 - `github.com/xtls/xray-core` v1.260327.1-0.20261109052709-676eaf66f8f0: Copyright 2024 Marten Seemann (transport/internet/masque/connectip/LICENSE)
 - `github.com/yuin/gopher-lua` v1.1.2: Copyright (c) 2015 Yusuke Inuzuka
 - `golang.zx2c4.com/wireguard` v0.0.0-20250521234502-f333402bd9cb: its LICENSE has no separate copyright line; attribution is in the upstream NOTICE or source headers
@@ -311,6 +319,7 @@ Copyright notices:
 
 - `github.com/gorilla/websocket` v1.5.3: Copyright (c) 2013 The Gorilla WebSocket Authors. All rights reserved.
 - `github.com/huin/goupnp` v1.2.0: Copyright (c) 2013, John Beisley <johnbeisleyuk@gmail.com>
+- `github.com/godbus/dbus/v5` v5.2.4: Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
 
 ### Apache-2.0
 

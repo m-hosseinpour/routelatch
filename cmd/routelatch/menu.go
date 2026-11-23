@@ -18,7 +18,8 @@ type menuChoice struct {
 
 func menuChoices() []menuChoice {
 	return []menuChoice{
-		{"run", "Start the service"},
+		{"run", "Start app (tray)"},
+		{"run.headless", "Start headless (foreground)"},
 		{"status", "Status"},
 		{"mode", "Change mode"},
 		{"rules.list", "List approved destinations"},
@@ -65,6 +66,8 @@ func menuCommand(key, operand, kind, note string) ([]string, bool) {
 	switch key {
 	case "run":
 		return []string{"run"}, true
+	case "run.headless":
+		return []string{"run", "--headless"}, true
 	case "status":
 		return []string{"status"}, true
 	case "mode":

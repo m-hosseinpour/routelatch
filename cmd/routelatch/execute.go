@@ -95,6 +95,10 @@ func (c *cli) dispatch(ctx context.Context, args []string) int {
 		return 0
 	case "run":
 		return c.run(ctx, rest)
+	case "__app-supervisor":
+		return c.appSupervisor(ctx)
+	case "__app-tray":
+		return c.appTray()
 	case "menu":
 		return c.menu(ctx)
 	case "status":
@@ -636,7 +640,8 @@ func (c *cli) usage() {
 
 Usage: routelatch [--json] [--data-dir DIR] <command> [args]
 
-  run [--headless]          start the engine in the foreground (--headless is explicit)
+  run                       start the detached app and tray (returns after readiness)
+  run --headless            start the engine in the foreground (terminal, SSH, service)
   version                   show build version, commit and date
   status                    show mode, listeners, pool and connections
   mode <mode>               targeted | all-proxy | all-direct | stopped

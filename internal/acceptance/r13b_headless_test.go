@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-// R13-B phase 1: --headless is the explicit foreground mode and the canonical
-// instance directory is derived from the selected data dir, not from
-// XDG_RUNTIME_DIR (docs/contracts.md §7.1, §7.5).
+// R13-B: --headless is the explicit foreground mode; plain run is the detached
+// app/tray launcher; the canonical instance directory is derived from the
+// selected data dir, not from XDG_RUNTIME_DIR (docs/contracts.md §7.1, §7.5).
 
 func holdLegacyLock(t *testing.T, path string) *os.File {
 	t.Helper()
@@ -130,28 +130,36 @@ func TestR13BHeadlessInstanceDirAndReady(t *testing.T) {
 	}
 }
 
-func TestR13BPlainRunMatchesHeadless(t *testing.T) {
+func TestR13BPlainRunIsAppMode(t *testing.T) {
 	r := report{t: t}
 	env := newTestEnv(t)
 	dir := filepath.Join(env.home, "plain")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatalf("data dir: %v", err)
 	}
-	// Plain run is still the foreground engine in this phase; --headless is the
-	// explicit spelling. Both must produce the same ready state and stop clean.
-	plain := startServiceWithArgs(t, env, dir, serviceConfig{})
-	if res := plain.mustOK("status").mapData(t); res["ready"] == true && res["listeners_open"] == true {
-		r.pass("R13-B", "plain `run` still preserves the foreground behavior")
+	// Plain run is the detached app/tray launcher in this phase. Point the
+	// session bus at a path that does not exist so this check does not depend
+	// on whether the developer desktop happens to expose a tray host, and give
+	// the engine free ports in case a future desktop probe succeeds.
+	env.vars = append(env.vars, "DBUS_SESSION_BUS_ADDRESS=unix:path="+filepath.Join(env.tmp, "no-session-bus"))
+	writeConfig(t, dir, serviceConfig{HTTPListen: fmt.Sprintf("127.0.0.1:%d", freePort(t)), SOCKSListen: fmt.Sprintf("127.0.0.1:%d", freePort(t))})
+	code, out := startExpectingFailureWithArgs(t, env, dir, "run")
+	if code == 7 && strings.Contains(out, "tray_unavailable") {
+		r.pass("R13-B", "plain `run` without a tray host exits 7 with tray_unavailable")
 	} else {
-		r.fail("R13-B", "plain run status: ready=%v listeners_open=%v", res["ready"], res["listeners_open"])
+		r.fail("R13-B", "plain run without tray exit=%d output=%s", code, out)
 	}
-	if err := plain.stop(); err != nil {
-		r.fail("R13-B", "plain run stop: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "run", "control.sock")); !os.IsNotExist(err) {
+		r.fail("R13-B", "plain run without a tray started an engine socket: %v", err)
+	} else {
+		r.pass("R13-B", "plain run without a tray starts no engine")
 	}
-	headless := startServiceWithArgs(t, env, dir, plain.cfg, "--headless")
+	// The headless spelling keeps the foreground behavior and is the only mode
+	// that works without a desktop tray.
+	headless := startService(t, env, dir, serviceConfig{})
 	t.Cleanup(func() { _ = headless.stop() })
 	if res := headless.mustOK("status").mapData(t); res["ready"] == true && res["listeners_open"] == true {
-		r.pass("R13-B", "`run --headless` matches plain run for the same data dir")
+		r.pass("R13-B", "`run --headless` remains the foreground engine mode")
 	} else {
 		r.fail("R13-B", "headless status: ready=%v listeners_open=%v", res["ready"], res["listeners_open"])
 	}

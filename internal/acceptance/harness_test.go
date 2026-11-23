@@ -132,8 +132,7 @@ func startService(t *testing.T, env *testEnv, dir string, cfg serviceConfig) *se
 }
 
 // startServiceWithArgs is startService with extra run-mode arguments. It lets a
-// test compare plain `run` (still foreground in this phase) with `--headless`
-// without guessing the mode.
+// test start the foreground engine or plain app mode explicitly.
 func startServiceWithArgs(t *testing.T, env *testEnv, dir string, cfg serviceConfig, extra ...string) *service {
 	t.Helper()
 	if cfg.HTTPListen == "" {
@@ -201,9 +200,15 @@ func startServiceWithArgs(t *testing.T, env *testEnv, dir string, cfg serviceCon
 // instance and port collisions, where run must never become ready.
 func startExpectingFailure(t *testing.T, env *testEnv, dir string) (code int, stderr string) {
 	t.Helper()
+	return startExpectingFailureWithArgs(t, env, dir, "run", "--headless")
+}
+
+func startExpectingFailureWithArgs(t *testing.T, env *testEnv, dir string, args ...string) (code int, stderr string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, productBin, "--json", "--data-dir", dir, "run", "--headless")
+	full := append([]string{"--json", "--data-dir", dir}, args...)
+	cmd := exec.CommandContext(ctx, productBin, full...)
 	cmd.Env = env.vars
 	cmd.Dir = env.tmp
 	var out, errb strings.Builder

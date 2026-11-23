@@ -8,28 +8,92 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"routelatch/internal/app"
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
 	"routelatch/internal/instance"
 	"routelatch/internal/store"
 )
 
-// run is the foreground engine in this phase. --headless is the explicit name
-// for that behavior (contracts §7.5, A13); the detached app/tray launcher that
-// becomes the plain-run default is a later unit, so both spellings currently
-// take the same path.
+// run is the documented split from docs/contracts.md §7.5: plain run is the
+// detached app/tray launcher, while --headless keeps the foreground engine
+// behavior (A13/A15).
 func (c *cli) run(ctx context.Context, args []string) int {
 	fs := c.newFlags("run")
-	_ = fs.Bool("headless", false, "run the engine in the foreground without the tray")
+	headless := fs.Bool("headless", false, "run the engine in the foreground without the tray")
 	if err := fs.Parse(args); err != nil {
 		return c.localFailure("run", usageErr("invalid run flags"))
 	}
 	if fs.NArg() != 0 {
 		return c.localFailure("run", usageErr("run takes no positional arguments"))
+	}
+	if *headless {
+		return c.runHeadless(ctx)
+	}
+	return c.runApp(ctx)
+}
+
+// runApp starts the detached supervisor and returns only after the management
+// socket reports status.ready=true and the tray registered.
+func (c *cli) runApp(ctx context.Context) int {
+	exe, err := os.Executable()
+	if err != nil {
+		return c.localFailure("run", err)
+	}
+	supervisorArgs := make([]string, 0, 3)
+	if c.paths.DataDir != "" {
+		supervisorArgs = append(supervisorArgs, "--data-dir", c.paths.DataDir)
+	}
+	supervisorArgs = append(supervisorArgs, "__app-supervisor")
+	result, err := app.Launch(ctx, app.LaunchOptions{
+		Command: app.Command{Path: exe, Args: supervisorArgs},
+		LogDir:  c.paths.LogDir,
+	})
+	if err != nil {
+		return c.printAppFailure(err)
+	}
+	data := map[string]any{
+		"pid":       result.PID,
+		"listeners": map[string]any{"http": result.Listeners.HTTP, "socks": result.Listeners.SOCKS},
+		"log":       result.LogPath,
+	}
+	if result.AlreadyRunning {
+		data["already_running"] = true
+	}
+	if c.jsonOut {
+		return c.print(control.EnvelopeFor("run", data, nil))
+	}
+	if result.AlreadyRunning {
+		fmt.Fprintf(c.stdout, "RouteLatch app is already running (pid %d)\n", result.PID)
+	} else {
+		fmt.Fprintf(c.stdout, "RouteLatch app started (pid %d)\n", result.PID)
+	}
+	fmt.Fprintf(c.stdout, "listeners: http %s, socks %s\nlog: %s\n",
+		control.SanitizeTerminal(result.Listeners.HTTP), control.SanitizeTerminal(result.Listeners.SOCKS),
+		control.SanitizeTerminal(result.LogPath))
+	return int(contract.ExitOK)
+}
+
+func (c *cli) runHeadless(ctx context.Context) int {
+	// An app supervisor owns this data dir even while its engine child is
+	// starting. The engine lock alone is not enough to report that conflict.
+	// The supervisor's own engine child is the one exception; it is still
+	// serialized by state.lock, and it must be allowed to take that lock.
+	if os.Getenv("ROUTELATCH_APP_ENGINE") != "1" {
+		if err := app.RejectHeadlessConflict(c.paths.AppLock); err != nil {
+			return c.printAppFailure(err)
+		}
+	}
+	if parentCtx, cancel, err := app.ParentWatchFromEnv(); err != nil {
+		return c.localFailure("run", err)
+	} else if parentCtx != nil {
+		ctx = parentCtx
+		defer cancel()
 	}
 
 	st, err := store.Open(store.Options{Paths: c.paths})
@@ -104,6 +168,35 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return int(contract.ExitError)
 	}
 	return int(contract.ExitOK)
+}
+
+// printAppFailure maps a documented app-mode failure to the same envelope and
+// exit mapping every command uses.
+func (c *cli) printAppFailure(err error) int {
+	var af *app.Failure
+	if errors.As(err, &af) {
+		failure := &contract.Failure{Kind: af.Kind, Path: contract.PathLocal, Op: af.Op, Message: af.Message, Err: af.Err}
+		env := control.EnvelopeFor("run", nil, failure)
+		if env.Error != nil {
+			env.Error.Detail = map[string]any{"exit_code": int(af.Exit)}
+			if af.Reason != "" {
+				env.Error.Detail["reason"] = af.Reason
+			}
+			if af.Fix != "" {
+				env.Error.Detail["suggestion"] = af.Fix
+			}
+		}
+		if c.jsonOut {
+			_ = c.print(env)
+		} else {
+			fmt.Fprintln(c.stderr, "error:", env.Error.Message)
+			if af.Fix != "" {
+				fmt.Fprintln(c.stderr, "suggestion:", af.Fix)
+			}
+		}
+		return int(af.Exit)
+	}
+	return c.localFailure("run", err)
 }
 
 // serviceLogOutput keeps --json stdout reserved for the single envelope; in
@@ -232,4 +325,43 @@ func replaceProxyEnv(inherited []string, values map[string]any) []string {
 		}
 	}
 	return out
+}
+
+// appSupervisor is the hidden child behind plain `run`. It is not a user
+// command and never appears in help or the menu.
+func (c *cli) appSupervisor(ctx context.Context) int {
+	fd := 0
+	if raw := os.Getenv("ROUTELATCH_READY_FD"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			fd = n
+		}
+	}
+	err := app.RunSupervisor(ctx, app.SupervisorOptions{
+		Paths: c.paths, LogDir: c.paths.LogDir, ReadyFD: fd,
+	})
+	if err != nil {
+		var af *app.Failure
+		if errors.As(err, &af) {
+			return int(af.Exit)
+		}
+		return int(contract.ExitError)
+	}
+	return 0
+}
+
+// appTray is the hidden tray child. It exits when the supervisor pidfd becomes
+// readable, on Quit, or when the StatusNotifier watcher/host disappears.
+func (c *cli) appTray() int {
+	opts, err := app.TrayOptionsFromEnv()
+	if err != nil {
+		return c.localFailure("run", err)
+	}
+	if err := app.RunTray(opts); err != nil {
+		var af *app.Failure
+		if errors.As(err, &af) {
+			return int(af.Exit)
+		}
+		return int(contract.ExitError)
+	}
+	return 0
 }

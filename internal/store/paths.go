@@ -23,12 +23,14 @@ type Paths struct {
 	RuntimeDir  string
 	InstanceDir string
 
-	Config string
-	State  string
-	Backup string
-	Lock   string
-	Socket string
-	LogDir string
+	Config   string
+	State    string
+	Backup   string
+	Lock     string
+	AppLock  string
+	AppOwner string
+	Socket   string
+	LogDir   string
 
 	// LegacyLocks is the R12 migration-window lock set for this instance. The
 	// engine probes and holds it after taking Lock (docs/contracts.md §7.5).
@@ -65,6 +67,8 @@ func ResolvePathsFor(dataDir, configHome, stateHome, runtimeDir, home string) (P
 			State:       filepath.Join(abs, "state.json"),
 			Backup:      filepath.Join(abs, "backup"),
 			Lock:        filepath.Join(instanceDir, "state.lock"),
+			AppLock:     filepath.Join(instanceDir, "app.lock"),
+			AppOwner:    filepath.Join(instanceDir, "app.owner"),
 			Socket:      filepath.Join(instanceDir, "control.sock"),
 			LogDir:      filepath.Join(abs, "log"),
 			LegacyLocks: instance.LegacyPaths(abs, abs, "", os.Geteuid()),
@@ -91,6 +95,8 @@ func ResolvePathsFor(dataDir, configHome, stateHome, runtimeDir, home string) (P
 		State:       filepath.Join(stateDir, "state.json"),
 		Backup:      filepath.Join(stateDir, "backup"),
 		Lock:        filepath.Join(instanceDir, "state.lock"),
+		AppLock:     filepath.Join(instanceDir, "app.lock"),
+		AppOwner:    filepath.Join(instanceDir, "app.owner"),
 		Socket:      filepath.Join(instanceDir, "control.sock"),
 		LogDir:      filepath.Join(stateDir, "log"),
 		LegacyLocks: instance.LegacyPaths("", stateDir, runtimeDir, os.Geteuid()),

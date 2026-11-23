@@ -1,0 +1,442 @@
+package app
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"os"
+	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+	"time"
+
+	"deedles.dev/tray"
+	"github.com/godbus/dbus/v5"
+	"golang.org/x/sys/unix"
+
+	"routelatch/internal/contract"
+	"routelatch/internal/control"
+)
+
+// WatcherNames lists the StatusNotifierWatcher bus names in probe order. KDE
+// exposes the first; some implementations provide the second.
+var WatcherNames = []string{
+	"org.kde.StatusNotifierWatcher",
+	"org.freedesktop.StatusNotifierWatcher",
+}
+
+// ProbeTray verifies that a StatusNotifier watcher exists and that a host is
+// registered. The app owns this probe: the tray library does not provide a
+// readiness signal, and D26 needs it for status.ready and tray-loss handling.
+func ProbeTray() error {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		return fmt.Errorf("session bus is unavailable: %w", err)
+	}
+	defer conn.Close()
+	watcher, err := findWatcher(conn)
+	if err != nil {
+		return err
+	}
+	if watcher == "" {
+		return errors.New("no StatusNotifierWatcher on the session bus")
+	}
+	host, err := hostRegistered(conn, watcher)
+	if err != nil {
+		return err
+	}
+	if !host {
+		return errors.New("the StatusNotifierWatcher has no registered host")
+	}
+	return nil
+}
+
+func findWatcher(conn *dbus.Conn) (string, error) {
+	obj := conn.Object("org.freedesktop.DBus", "/org/freedesktop/DBus")
+	for _, name := range WatcherNames {
+		var owned bool
+		if err := obj.Call("org.freedesktop.DBus.NameHasOwner", 0, name).Store(&owned); err != nil {
+			return "", fmt.Errorf("NameHasOwner(%s): %w", name, err)
+		}
+		if owned {
+			return name, nil
+		}
+	}
+	return "", nil
+}
+
+func watcherProperty(conn *dbus.Conn, watcher, property string, out any) error {
+	ifaces := []string{watcher}
+	for _, fallback := range []string{"org.kde.StatusNotifierWatcher", "org.freedesktop.StatusNotifierWatcher"} {
+		if fallback != watcher {
+			ifaces = append(ifaces, fallback)
+		}
+	}
+	var lastErr error
+	for _, iface := range ifaces {
+		err := conn.Object(watcher, "/StatusNotifierWatcher").Call(
+			"org.freedesktop.DBus.Properties.Get", 0, iface, property,
+		).Store(out)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	return lastErr
+}
+
+func hostRegistered(conn *dbus.Conn, watcher string) (bool, error) {
+	var host bool
+	if err := watcherProperty(conn, watcher, "IsStatusNotifierHostRegistered", &host); err != nil {
+		return false, fmt.Errorf("get IsStatusNotifierHostRegistered: %w", err)
+	}
+	return host, nil
+}
+
+func registeredItems(conn *dbus.Conn, watcher string) ([]string, error) {
+	var items []string
+	if err := watcherProperty(conn, watcher, "RegisteredStatusNotifierItems", &items); err != nil {
+		return nil, fmt.Errorf("get RegisteredStatusNotifierItems: %w", err)
+	}
+	return items, nil
+}
+
+func itemRegistered(items []string, pid int) bool {
+	needle := fmt.Sprintf("-%d-", pid)
+	for _, item := range items {
+		if contains(item, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func waitRegistered(conn *dbus.Conn, watcher string, pid int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		items, err := registeredItems(conn, watcher)
+		if err == nil && itemRegistered(items, pid) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the tray item for pid %d did not register within %s", pid, timeout)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func contains(haystack, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// Notify sends one destination-free desktop notification.
+func Notify(conn *dbus.Conn, summary, body string) error {
+	if conn == nil {
+		return errors.New("no session bus")
+	}
+	var id uint32
+	return conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications").Call(
+		"org.freedesktop.Notifications.Notify", 0,
+		"RouteLatch", uint32(0), "", summary, body,
+		[]string{}, map[string]dbus.Variant{"desktop-entry": dbus.MakeVariant("routelatch")}, int32(-1),
+	).Store(&id)
+}
+
+// TrayRegistered verifies that this app's tray item is still registered with
+// the current watcher. It closes over a fresh connection so it does not depend
+// on the tray child's own bus handle.
+func TrayRegistered(pid int) error {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	watcher, err := findWatcher(conn)
+	if err != nil {
+		return err
+	}
+	if watcher == "" {
+		return errors.New("no StatusNotifierWatcher")
+	}
+	items, err := registeredItems(conn, watcher)
+	if err != nil {
+		return err
+	}
+	if !itemRegistered(items, pid) {
+		return fmt.Errorf("tray item for pid %d is not registered", pid)
+	}
+	return nil
+}
+
+// TrayOptions configures the standalone tray child.
+type TrayOptions struct {
+	ControlFD   int
+	ParentFD    int
+	ExpectedPID int
+	LogPath     string
+	ReadyWait   time.Duration
+}
+
+// RunTray is the tray child: one StatusNotifierItem, one godbus notification
+// path and a control pipe to the supervisor. It never retries tray.New on a
+// missing watcher; the supervisor restarts the process instead.
+func RunTray(opts TrayOptions) error {
+	if opts.ReadyWait <= 0 {
+		opts.ReadyWait = 3 * time.Second
+	}
+	controlFile := os.NewFile(uintptr(opts.ControlFD), "tray-control")
+	if controlFile == nil {
+		return internalFailure("app.tray", "tray control descriptor is invalid", nil)
+	}
+	defer controlFile.Close()
+	writer := bufio.NewWriter(controlFile)
+	send := func(line string) {
+		_, _ = writer.WriteString(line + "\n")
+		_ = writer.Flush()
+	}
+
+	parentGone, err := watchParent(opts.ParentFD, opts.ExpectedPID)
+	if err != nil {
+		send("error parent_watch_failed")
+		return internalFailure("app.tray", "cannot watch the supervisor pidfd", err)
+	}
+	select {
+	case <-parentGone:
+		return nil
+	default:
+	}
+
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		send("error tray_unavailable")
+		return unsupportedTray(err)
+	}
+	defer conn.Close()
+	watcher, err := findWatcher(conn)
+	if err != nil || watcher == "" {
+		send("error tray_unavailable")
+		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierWatcher")))
+	}
+	host, err := hostRegistered(conn, watcher)
+	if err != nil || !host {
+		send("error tray_unavailable")
+		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierHost")))
+	}
+
+	item, err := tray.New(
+		tray.ItemID("routelatch"),
+		tray.ItemTitle("RouteLatch"),
+		tray.ItemIconPixmap(trayIcon()),
+		tray.ItemToolTip("", nil, "RouteLatch", "local proxy with an approved-destination list"),
+		tray.ItemIsMenu(true),
+	)
+	if err != nil {
+		send("error tray_unavailable")
+		return unsupportedTray(err)
+	}
+	var closeOnce sync.Once
+	closeItem := func() {
+		closeOnce.Do(func() { _ = item.Close() })
+	}
+	defer closeItem()
+
+	quit := make(chan struct{}, 1)
+	if _, err := item.Menu().AddChild(
+		tray.MenuItemLabel("Quit RouteLatch"),
+		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
+			select {
+			case quit <- struct{}{}:
+			default:
+			}
+			return nil
+		})),
+	); err != nil {
+		send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot add the tray Quit entry", err)
+	}
+	if _, err := item.Menu().AddChild(
+		tray.MenuItemLabel("Show log path"),
+		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
+			_ = Notify(conn, "RouteLatch log", control.SanitizeTerminal(opts.LogPath))
+			return nil
+		})),
+	); err != nil {
+		send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot add the tray log entry", err)
+	}
+
+	if err := waitRegistered(conn, watcher, os.Getpid(), opts.ReadyWait); err != nil {
+		send("error tray_registration_failed")
+		return internalFailure("app.tray", "the tray item did not register", err)
+	}
+	send("ready")
+	_ = Notify(conn, "RouteLatch is running", "Tray icon is ready. Log: "+control.SanitizeTerminal(opts.LogPath))
+
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(sigCh)
+
+	monitor := time.NewTicker(2 * time.Second)
+	defer monitor.Stop()
+	for {
+		select {
+		case <-parentGone:
+			closeItem()
+			return nil
+		case <-quit:
+			send("quit")
+			closeItem()
+			return nil
+		case <-sigCh:
+			closeItem()
+			return nil
+		case <-monitor.C:
+			watcher, err := findWatcher(conn)
+			if err != nil || watcher == "" {
+				send("lost")
+				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierWatcher disappeared"}
+			}
+			host, err := hostRegistered(conn, watcher)
+			if err != nil || !host {
+				send("lost")
+				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierHost disappeared"}
+			}
+			items, err := registeredItems(conn, watcher)
+			if err != nil || !itemRegistered(items, os.Getpid()) {
+				send("lost")
+				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the tray item is no longer registered"}
+			}
+		}
+	}
+}
+
+// watchParent returns a channel that closes when the supervisor pidfd becomes
+// readable. Without an inherited pidfd it falls back to the current parent,
+// but app mode always supplies one.
+func watchParent(fd, expected int) (<-chan struct{}, error) {
+	gone := make(chan struct{})
+	if fd >= 3 {
+		f := os.NewFile(uintptr(fd), "supervisor-pidfd")
+		if f == nil {
+			return nil, errors.New("invalid supervisor pidfd")
+		}
+		go func() {
+			defer f.Close()
+			poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+			for {
+				n, err := unix.Poll(poll, -1)
+				if err == unix.EINTR {
+					continue
+				}
+				if err != nil || n > 0 {
+					close(gone)
+					return
+				}
+			}
+		}()
+		return gone, nil
+	}
+	ppid := os.Getppid()
+	if ppid <= 1 || (expected > 0 && ppid != expected) {
+		close(gone)
+		return gone, nil
+	}
+	fd, err := unix.PidfdOpen(ppid, 0)
+	if err != nil {
+		return nil, err
+	}
+	return watchParent(fd, expected)
+}
+
+func firstErr(a, b error) error {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func trayIcon() image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, 22, 22))
+	for y := 0; y < 22; y++ {
+		for x := 0; x < 22; x++ {
+			dx, dy := x-11, y-11
+			if dx*dx+dy*dy <= 100 {
+				img.Set(x, y, color.RGBA{R: 0x2f, G: 0x81, B: 0xf7, A: 0xff})
+			}
+		}
+	}
+	for y := 8; y < 14; y++ {
+		for x := 7; x < 15; x++ {
+			img.Set(x, y, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff})
+		}
+	}
+	return img
+}
+
+// TrayOptionsFromEnv is the hidden command's environment contract.
+func TrayOptionsFromEnv() (TrayOptions, error) {
+	control, err := strconv.Atoi(os.Getenv("ROUTELATCH_TRAY_CONTROL_FD"))
+	if err != nil || control < 3 {
+		return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_CONTROL_FD")
+	}
+	parent, err := strconv.Atoi(os.Getenv("ROUTELATCH_TRAY_PARENT_PIDFD"))
+	if err != nil || parent < 3 {
+		return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_PARENT_PIDFD")
+	}
+	expected, _ := strconv.Atoi(os.Getenv("ROUTELATCH_PARENT_PID"))
+	return TrayOptions{
+		ControlFD: control, ParentFD: parent, ExpectedPID: expected,
+		LogPath: os.Getenv("ROUTELATCH_LOG_PATH"),
+	}, nil
+}
+
+// ParentWatchFromEnv arms the headless engine's parent-death watchdog. It
+// returns a cancel function that stops the watcher.
+func ParentWatchFromEnv() (context.Context, context.CancelFunc, error) {
+	fdRaw := os.Getenv("ROUTELATCH_PARENT_PIDFD")
+	if fdRaw == "" {
+		return nil, nil, nil
+	}
+	fd, err := strconv.Atoi(fdRaw)
+	if err != nil || fd < 3 {
+		return nil, nil, fmt.Errorf("invalid ROUTELATCH_PARENT_PIDFD")
+	}
+	if expectedRaw := os.Getenv("ROUTELATCH_PARENT_PID"); expectedRaw != "" {
+		expected, err := strconv.Atoi(expectedRaw)
+		if err != nil || expected <= 1 {
+			return nil, nil, fmt.Errorf("invalid ROUTELATCH_PARENT_PID")
+		}
+		if os.Getppid() != expected {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, func() {}, nil
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer cancel()
+		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		for {
+			n, err := unix.Poll(fds, -1)
+			if err == unix.EINTR {
+				continue
+			}
+			if err != nil || n > 0 {
+				return
+			}
+		}
+	}()
+	return ctx, cancel, nil
+}
