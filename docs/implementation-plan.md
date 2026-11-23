@@ -221,8 +221,8 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 `contracts.md`، `research.md`) به‌روز شدند. هیچ کد، بسته، unit، autostart یا تنظیم
 میزبان تغییر نکرده است. HEAD پیش از commit مستندات: `de70f20`؛ commit D26:
 `5dbc070`؛ commit اصلاحات دور اول: `973d5a8`؛ دور دوم `76dd6d6`؛ دور سوم
-`a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`.
-بازبینی‌های دور اول تا ششم **Not ready** بودند (current-state unit، singleton/app
+`a7fa3b6`؛ دور چهارم `b623567`؛ دور پنجم `f9bcd45`؛ دور ششم `5a28874`؛ دور هفتم
+`53ebf68`. بازبینی‌های دور اول تا ششم **Not ready** بودند (current-state unit، singleton/app
 marker، tray lifetime، coexistence، migration، ownership، startup-in-progress،
 readiness/rollback، managed-path symlink، adoption، دادهٔ run، lock legacy migration،
 attribution marker، readiness listener، rollback branch، exit `1/9`، teardown
@@ -232,8 +232,9 @@ inactive rollback branch، grandchild teardown، legacy symlink dedupe و unit p
 shell/manager). اصلاحات دور هفتم repair با flock مجدد روی inode تازه، framing
 newline، شرط previous-active برای rollback، تأیید process group/فرزندان در
 timeout، Lstat/fstat بدون follow برای lockهای legacy، محدودکردن ادعای migration
-به همان data-dir و یکسان‌سازی مسیر unit با manager base را اضافه می‌کند. verdict
-دور هفتم پس از commit ثبت می‌شود.
+به همان data-dir و یکسان‌سازی مسیر unit با manager base را اضافه می‌کند
+(commit `53ebf68`). بازبینی متمرکز هفتم در حال اجراست؛ verdict نهایی پس از آن
+ثبت می‌شود.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -595,8 +596,8 @@ KDE با build static، سپس انتخاب/pin یا باز کردن تصمیم 
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
    `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6`،
-   دور چهارم `b623567`، دور پنجم `f9bcd45` و دور ششم `5a28874` (و verdict دور
-   ششم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
+   دور چهارم `b623567`، دور پنجم `f9bcd45`، دور ششم `5a28874` و دور هفتم
+   `53ebf68` (و verdict دور هفتم پس از آن در `git log`)؛ D26 ثبت شده و هیچ
    کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
    است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12 و گروه ج
    بسته‌اند؛ R13 تنها کار باز v1 است.
