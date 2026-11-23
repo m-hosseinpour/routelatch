@@ -44,12 +44,15 @@ sweep finishes.
   `GOTOOLCHAIN=local`.
 - No root, TUN, firewall change or system-wide proxy setting. TLS verification
   uses the host CA bundle; RouteLatch does not install a root CA.
+- Plain `routelatch run` (app/tray) needs a StatusNotifier tray host and
+  permitted `pidfd_open`: Linux ≥5.3, not blocked by seccomp/EPERM. Otherwise
+  use `routelatch run --headless` or the opt-in service.
 - The optional desktop-proxy commands need a GNOME (`gsettings`) or KDE Plasma
   (`kwriteconfig6`/`kwriteconfig5`) session.
 
 ## Install
 
-The current release, `v0.1.3`, publishes 17 unsigned assets on the
+The current published release, `v0.1.3`, has 17 unsigned assets on the
 [GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.3):
 four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
 packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
@@ -57,9 +60,13 @@ packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
 `SHA256SUMS` file. `v0.1.1` and `v0.1.2` have the same 17-asset layout; the
 first release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
 `SHA256SUMS`.
-Local packaging produces the same layout with `scripts/package.sh`, which writes
-the specs but not the binary RPMs. A package contains the binary, the systemd
-user unit and the license/notice files. The `amd64` and `arm64` tarballs also
+
+`v0.1.3` predates the runtime change on this page: its plain `routelatch run`
+is foreground and its packages install a systemd user unit at
+`/usr/lib/systemd/user/routelatch.service`. **Packages built from this revision
+ship no systemd unit, autostart entry or maintainer script.** A package contains
+the binary and the license/notice documents; the opt-in service unit is created
+only by `routelatch service install`. The `amd64` and `arm64` tarballs also
 ship a second binary, `bin/sing-box`: the unmodified, GPL-3.0 `sing-box` v1.14.4
 proxy runtime, distributed as a separate program and used for hysteria2/sing-box
 exits. Its per-binary SHA-256 is in `SINGBOX-INFO` and a written source offer is
@@ -98,23 +105,71 @@ sudo apt install ./routelatch_0.1.3_amd64.deb
 sudo rpm -i routelatch-0.1.3-1.x86_64.rpm
 ```
 
-Packages install `/usr/bin/routelatch`, its documents under
+Packages install `/usr/bin/routelatch` and its documents under
 `/usr/share/doc/routelatch/` (the RPM keeps `LICENSE` and `NOTICE` in
-`/usr/share/licenses/routelatch/`) and a systemd user unit. A package built from
-this revision also installs `/usr/bin/rlch` as a symlink to the main binary.
-Packages do not start or enable the service; opt in with
-`systemctl --user enable --now routelatch`.
+`/usr/share/licenses/routelatch/`). A package built from this revision also
+installs `/usr/bin/rlch` as a symlink to the main binary. It ships no systemd
+unit, autostart entry or maintainer script; the package does not start or enable
+anything.
 
-**Planned runtime model (D26):** the next release makes plain `routelatch run`
-the app/tray mode and `routelatch run --headless` the foreground/server mode;
-packages will no longer ship a systemd unit, and `autostart`/`service install`
-become explicit opt-ins. App mode will require permitted `pidfd_open`
-(Linux ≥5.3, not blocked by seccomp); otherwise it exits `7`
-(`pidfd_unavailable`) and `--headless`/the opt-in service remain available.
-The current packages and instructions on this page
-still use the user unit until R13 is implemented; see
-[docs/requirements.md](docs/requirements.md) and
-[docs/implementation-plan.md](docs/implementation-plan.md).
+## Runtime model in this revision
+
+- **`routelatch run`** starts the app with a tray icon. It detaches, returns
+  after real readiness (`status.ready`, plus open listeners unless the saved
+  mode is `stopped`), and keeps running after you close the terminal. Quit from
+  the tray icon stops it.
+- **`routelatch run --headless`** is the foreground engine: no tray, blocks in
+  the terminal, Ctrl-C stops it cleanly. Use it for SSH, containers, scripts and
+  systemd.
+- **`routelatch autostart enable|disable|status`** manages an XDG autostart
+  entry for the default instance. All three verbs reject `--data-dir` with exit
+  `2`; for a custom data directory use
+  `routelatch service install --data-dir <dir>`.
+- **`routelatch service install|uninstall|status`** is the opt-in systemd
+  **user** unit for a server/VPS. It writes and enables
+  `<manager-config-base>/systemd/user/routelatch.service`, whose command is
+  `<absolute> [--data-dir <abs>] run --headless`. Without `--data-dir` the
+  manager's XDG config/state bases are pinned in the unit. It does not use sudo;
+  when lingering is off it prints the `sudo loginctl enable-linger <user>` step.
+- **`routelatch autostart` and `routelatch service install` are mutually
+  exclusive** for one user. Each setup command refuses while the other managed
+  setup exists, and `status` reports the conflict. Pick one.
+
+App mode needs a StatusNotifier tray host and permitted `pidfd_open`: **Linux
+≥5.3**, not blocked by seccomp/EPERM (R-21). GNOME without an extension and
+SSH/no-display sessions have no tray host. In both cases plain `run` exits `7`
+with reason `tray_unavailable` or `pidfd_unavailable` and starts no process;
+`run --headless` and the opt-in service do not need either capability.
+
+### Upgrading from the old packaged unit
+
+Packages up to `v0.1.3` shipped a user unit whose `ExecStart` was the old
+foreground `routelatch run`. Stop and remove it before upgrading; a leftover
+unit would either lose its main process or start an app where a service is
+expected.
+
+```sh
+systemctl --user disable --now routelatch.service
+sudo rm -f /usr/lib/systemd/user/routelatch.service   # old package unit
+rm -f "$HOME/.config/systemd/user/routelatch.service"
+rm -f "$HOME/.config/systemd/user/default.target.wants/routelatch.service"
+systemctl --user daemon-reload
+# upgrade the package or replace the tarball binary, then choose one:
+routelatch autostart enable    # or: routelatch service install
+```
+
+If the manager's config base differs from your shell's `$XDG_CONFIG_HOME`,
+check `systemctl --user show-environment` and remove the unit/symlink there too.
+An upgraded package no longer ships the `/usr/lib` unit, but a leftover user copy
+would still name the old unit.
+
+During the one-release migration window, a new engine against the **same data
+directory** probes the old engine's legacy lock and refuses with exit `4` before
+binding, **even if the old engine is in `stopped` mode without listeners**. An
+old default engine plus a new `--data-dir` instance are independent and can
+collide on ports, so stop the old instance explicitly. A custom
+`XDG_RUNTIME_DIR` on an old default engine may be unguessable and invisible to
+the probe; always stop the old unit explicitly. `rlch` is unchanged.
 
 Debian and RPM use one unified version string derived from `BUILD-INFO` in a
 single step: a leading `v` is stripped and hyphens become dots
@@ -130,19 +185,19 @@ and no `BuildArch`: the architecture comes from `rpmbuild --target`. There is no
 dnf/yum repository and no GPG signing. Windows/macOS builds, 32-bit builds and a
 package repository remain future work.
 
-For a tarball install, `~/.local/bin` must be on `PATH`. The systemd user
-service is optional; install it only if you want the service supervised:
+For a tarball install, `~/.local/bin` must be on `PATH`. Start it whichever way
+fits the session:
 
 ```sh
-install -Dm644 share/routelatch/systemd/routelatch.service \
-    "$HOME/.config/systemd/user/routelatch.service"
-systemctl --user daemon-reload
-systemctl --user enable --now routelatch.service
+routelatch run                 # desktop app/tray (detached, survives the terminal)
+routelatch run --headless      # foreground, SSH, container or script
+routelatch autostart enable    # opt-in login start for the default instance
+routelatch service install     # opt-in systemd user service (server/VPS)
 ```
 
-Without the service, run the process in a terminal with `routelatch run`.
-Service lifecycle, failure exits and uninstall are documented in
-[deploy/README.md](deploy/README.md); package contents are described in
+Autostart/service lifecycle, failure exits, uninstall and migration are
+documented in [deploy/README.md](deploy/README.md); package contents and
+upgrading from the old unit are described in
 [packaging/README.md](packaging/README.md).
 
 From source:
@@ -182,17 +237,21 @@ Every command below is written as `routelatch`. A build from this revision also
 installs `rlch` as a shorter name for the same program and options; use whichever
 you prefer.
 
-1. Start the service in the foreground and keep the terminal open (Ctrl-C stops
-   it cleanly):
+1. Start RouteLatch. On a desktop, plain `run` starts the app/tray, returns once
+   it is ready and keeps running after the terminal closes; use the tray icon to
+   Quit. In a terminal/SSH session use the foreground engine, where Ctrl-C stops
+   it cleanly:
 
    ```sh
-   routelatch run
+   routelatch run              # desktop app + tray
+   routelatch run --headless   # foreground terminal/SSH/container
    ```
 
    It prints the two listener addresses. The CLI talks to the running process
    over a private Unix socket; most commands need it. `status` without a running
-   service exits 3 with a clear message, while `doctor`, `backup`, `restore` and
-   `desktop proxy restore` also work offline.
+   instance exits 3 with a clear message, while `doctor`, `backup`, `restore` and
+   `desktop proxy restore` also work offline. App mode exits `7` when no tray
+   host is available or pidfd is blocked; switch to `--headless` then.
 
 2. Import one or more exits:
 
@@ -323,43 +382,38 @@ other software.
 
 The current acceptance suite
 ([`internal/acceptance/`](internal/acceptance/README.md)) drives the shipped
-binary as a real process against loopback-only fixture exits and peers. A full
-run at `15d2acb` prints **222 PASS, 0 FAIL and 13 NOTE in about 122 s**. The 13
-NOTE lines are gated or impossible checks, not passes; the gated tests stay
-skipped unless a real desktop or `systemd --user` session is available.
+binary as a real process against loopback-only fixture exits and peers. The
+R13-E run prints **274 PASS, 0 FAIL and 15 NOTE in about 120 s**. NOTE means a
+gated or impossible check, not a pass; the gated tests stay skipped unless a
+real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
-Local packaging was also verified: four tarballs, four unsigned `.deb` files,
-four RPM `.spec` files and four binary RPMs were built,
+Local packaging was verified for this revision: four tarballs, four unsigned
+`.deb` files and four RPM `.spec` files were built in an isolated `DIST`, and
 `scripts/check-package.sh` passed for every architecture (metadata, payload
-paths, binary bytes, spec version/arch/layout and `SHA256SUMS`), and two
-packaging runs produced identical checksums. Negative checks confirmed the RPM
-gate fails on a wrong version, wrong architecture, injected `%post`, bad source
-digest, wrong license location, unexpected sidecar content and a missing spec.
-For `x86_64`/`amd64`, an RPM built from the generated spec was installed in a
-disposable container with no scriptlets and no service enablement (the
-container lacked `ca-certificates`, so the dependency check was skipped), and
-its `routelatch` and `sing-box` payload binaries were executed. Only `amd64`
-was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
-runtime-untested.
+paths, binary bytes, spec version/arch/layout, exact checksums, and **no
+systemd unit, autostart entry or maintainer script**). `scripts/check-artifact.sh`
+passed for the amd64 artifact. Earlier packaging runs also built four binary
+RPMs and installed one in a disposable container; this batch did not rebuild
+binary RPMs (CI does that from the specs). Only `amd64` was executed;
+`arm64`/`riscv64`/`ppc64le` were cross-built and are runtime-untested.
 
-Beyond the default suite, the Linux build was exercised on real system
-components and gated loopback checks: a real `systemd --user` service
-lifecycle (start/stop/restart, port collision, SIGKILL restart), a corrupt
-state under an isolated temporary `systemd --user` unit (truncated JSON, a
-newer schema and an unreadable file each fail closed with exit 10 and no
-listener; the file stays untouched and the documented `restore`/`chmod`
-recovery works), real KDE
-Plasma desktop-proxy set/restore/conflict/crash recovery, a limited
-public-exit case across four exits, WS/gRPC/XHTTP transports over TLS, a
-gated 30s single-tunnel WS/TLS reuse check, a gated hysteria2 traffic check
-plus a separate `RL_ACCEPT_HYSTERIA2_OBFS_TEST` cell that covers both `obfs`
-types (salamander and gecko), a rerun of both gated hysteria2 cells against
-the `bin/sing-box` sidecar from the published v0.1.2 linux-amd64 tarball
-(byte-identical to the pinned official archive), an `x86_64` RPM payload
-install-and-execute check, and automatic start-up after a real reboot with
-state and desktop-proxy settings intact. The desktop-proxy
-test changes a real desktop setting and is opt-in, like the systemd test.
+Beyond the default suite, the Linux build was historically exercised on real
+system components and gated loopback checks: the old packaged unit under a real
+`systemd --user` manager (start/stop/restart, port collision, SIGKILL restart),
+corrupt state under an isolated temporary unit, real KDE Plasma desktop-proxy
+set/restore/conflict/crash recovery, a limited public-exit case across four
+exits, WS/gRPC/XHTTP transports over TLS, a gated 30s single-tunnel WS/TLS
+reuse check, a gated hysteria2 traffic check plus a separate
+`RL_ACCEPT_HYSTERIA2_OBFS_TEST` cell (salamander and gecko), a rerun of both
+hysteria2 cells against the `bin/sing-box` sidecar from the published v0.1.2
+linux-amd64 tarball (byte-identical to the pinned official archive), an
+`x86_64` RPM payload install-and-execute check, and automatic start-up after a
+real reboot with state and desktop-proxy settings intact. The old unit
+lifecycle/corrupt-state cells were retired with the packaged unit; the opt-in
+`service install` path is covered by fake-manager unit tests, and a real
+install/uninstall/rollback and linger remain unverified on this host. The
+desktop-proxy test changes a real desktop setting and is opt-in.
 
 Three different kinds of gap are kept separate:
 

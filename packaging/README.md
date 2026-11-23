@@ -9,15 +9,18 @@ the user's install steps. **The build never installs anything** — no service i
 enabled, no desktop proxy or network setting is touched, and nothing is
 published or downloaded.
 
-**Planned runtime model (D26, 2026-11-23):** the next release removes the
-packaged systemd user unit. `routelatch run` becomes the app/tray mode,
-`run --headless` the foreground/server mode, and `routelatch autostart ...` /
-`routelatch service install` become explicit opt-ins. App mode needs permitted
-`pidfd_open` (Linux ≥5.3, not seccomp-blocked; otherwise exit `7`
-`pidfd_unavailable`, with `--headless`/service as the alternative). The current
-package layout and install steps below still describe the shipped artifacts
-until R13 lands;
-see `docs/requirements.md` D26 and `docs/implementation-plan.md` R13.
+**Runtime model (D26, shipped from this revision):** packages built from this
+revision contain **no systemd unit, autostart entry or maintainer script**.
+Plain `routelatch run` starts the detached app/tray, returns after readiness and
+survives closing the terminal; `routelatch run --headless` is the foreground
+mode for terminals, SSH, containers and services. `routelatch autostart ...`
+and `routelatch service install` are the explicit opt-ins; `service install`
+writes the user unit at runtime. App mode needs permitted `pidfd_open` (Linux
+≥5.3, not seccomp-blocked; otherwise exit `7` `pidfd_unavailable`, with
+`--headless`/the opt-in service as the alternative). The published `v0.1.3`
+packages predate this change and still contain the old unit and old foreground
+`run`; see "Upgrading from a package with the old unit" below. Requirements:
+`docs/requirements.md` D26; contract: `docs/contracts.md` §7.5.
 
 The default answer for "how do I get a package" is `scripts/build.sh` followed
 by `scripts/package.sh`. Both are local build steps. The packaging step writes
@@ -39,9 +42,7 @@ scripts/check-artifact.sh  static-link and empty-environment smoke check for one
 scripts/check-package.sh   checksum, tarball-layout, .deb metadata/payload and static RPM spec check
 dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
 packaging/README.md        this file; it is shipped inside the package as INSTALL.md
-deploy/systemd/routelatch.service
-                           the one copy of the systemd user unit (the package copies it)
-deploy/README.md           service lifecycle: install, check, uninstall, crash recovery
+deploy/README.md           app/tray, autostart, opt-in service, migration and crash recovery
 ```
 
 `dist/` is gitignored build output, not a distributed directory.
@@ -58,7 +59,7 @@ routelatch-<version>-linux-<arch>/
   bin/sing-box                          optional: separate GPL-3.0 sidecar (pinned v1.14.4)
   share/doc/routelatch/README.md        what RouteLatch is; quick start; limits
   share/doc/routelatch/INSTALL.md       this file
-  share/doc/routelatch/SERVICE.md       systemd unit lifecycle, uninstall, crash recovery
+  share/doc/routelatch/SERVICE.md       app/tray, autostart, opt-in service and migration
   share/doc/routelatch/LICENSE          Apache-2.0 license text
   share/doc/routelatch/NOTICE           project attribution and MPL source pointer
   share/doc/routelatch/THIRD-PARTY-NOTICES.md
@@ -69,8 +70,10 @@ routelatch-<version>-linux-<arch>/
   share/doc/routelatch/BUILD-INFO       version, commit, date, Go version, cgo=0
   share/doc/routelatch/SINGBOX-INFO     optional: sidecar tag/commit and per-arch SHA-256
   share/doc/routelatch/PACKAGE-NOTES    "local build, not published" notice
-  share/routelatch/systemd/routelatch.service
 ```
+
+There is no `share/routelatch/systemd/`, no autostart entry and no maintainer
+script in the tarball.
 
 and `dist/packages/SHA256SUMS` plus, for each architecture,
 `routelatch-<version>-linux-<arch>.tar.gz`,
@@ -91,19 +94,15 @@ The `.deb` payload maps the tarball root onto `/usr`:
 /usr/bin/rlch                             symlink -> routelatch (short command)
 /usr/bin/sing-box                         optional sidecar, amd64/arm64 only
 /usr/share/doc/routelatch/...             same documents as the tarball
-/usr/share/routelatch/systemd/routelatch.service
-                                          the unchanged source-tree unit
-/usr/lib/systemd/user/routelatch.service  standard user unit for a .deb install
 ```
 
-The packaged unit in `/usr/lib/systemd/user` is generated from the one copy in
-`deploy/systemd/routelatch.service` with only `ExecStart` changed to
-`/usr/bin/routelatch run`, because `%h/.local/bin` is not a package path. The
-`.deb` has no `postinst`, `preinst`, `prerm` or `postrm`: it does not enable a
-service, change a desktop proxy setting or touch user configuration. Control
-metadata is `Package: routelatch`, the shared package version, the target
-architecture, `Depends: ca-certificates` (the static binary uses the host CA
-bundle for TLS) and a description; `scripts/check-package.sh` asserts these.
+There is no `/usr/lib/systemd/user` or `/usr/share/routelatch/systemd` payload.
+The `.deb` has no `postinst`, `preinst`, `prerm` or `postrm`: it does not enable
+a service, create an autostart entry, change a desktop proxy setting or touch
+user configuration. Control metadata is `Package: routelatch`, the shared
+package version, the target architecture, `Depends: ca-certificates` (the
+static binary uses the host CA bundle for TLS) and a description;
+`scripts/check-package.sh` asserts these and rejects any unit/autostart path.
 The version comes from the single normalisation in "Version stamping", not a
 Debian-only rewriting of the build stamp.
 The sidecar has to stay next to the main binary for the runtime's lookup, so an
@@ -140,20 +139,15 @@ standard RPM paths:
 /usr/share/doc/routelatch/...               all other documents (README, INSTALL,
                                             SERVICE, notices, licensing, go.sum,
                                             BUILD-INFO, PACKAGE-NOTES)
-/usr/lib/systemd/user/routelatch.service    the unit as data only, with
-                                            ExecStart rewritten to /usr/bin/routelatch run
 /usr/bin/sing-box                           optional sidecar, amd64/arm64 only
 /usr/share/doc/routelatch/SINGBOX-INFO      optional sidecar provenance
 ```
 
-The unit's `ExecStart` is rewritten during `%install` from the tarball's
-`%h/.local/bin/routelatch` path to `/usr/bin/routelatch run`, with a grep guard,
-exactly as for the `.deb`; otherwise the documented `systemctl --user enable
---now routelatch` would start a nonexistent path. There are no
+There is no unit or autostart entry in `%files`. There are no
 `%pre`/`%post`/`%preun`/`%postun` scriptlets, no `systemctl` call and no
 desktop/user setting change: installing an RPM does not enable a service. The
-sidecar, when present, is a separate GPL-3.0 executable and is not linked into
-RouteLatch.
+opt-in unit is created only by `routelatch service install`. The sidecar, when
+present, is a separate GPL-3.0 executable and is not linked into RouteLatch.
 
 No `.rpm` file is produced or checksummed on a host without `rpmbuild`: local
 verification is static spec validation in `scripts/check-package.sh`. CI
@@ -187,12 +181,6 @@ cd routelatch-<version>-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 # short command; the same relative link is inside newer tarballs as bin/rlch
 ln -sf routelatch "$HOME/.local/bin/rlch"
-
-# optional systemd user service; same unit as deploy/systemd/routelatch.service
-install -Dm644 share/routelatch/systemd/routelatch.service \
-    "$HOME/.config/systemd/user/routelatch.service"
-systemctl --user daemon-reload
-systemctl --user enable --now routelatch.service
 ```
 
 For a tarball install, `~/.local/bin` must be on `PATH` for the `routelatch`
@@ -203,37 +191,76 @@ verify `SHA256SUMS` first):
 sudo apt install ./routelatch_<debian-version>_amd64.deb
 ```
 
-The `.deb` installs `/usr/bin/routelatch`, its `/usr/bin/rlch` symlink, the
-documents under `/usr/share/doc/routelatch/`, and a standard systemd user unit.
-On `amd64` and `arm64` it also installs the `/usr/bin/sing-box` sidecar described
-above. It does not start or enable anything; opt in with:
+The `.deb` installs `/usr/bin/routelatch`, its `/usr/bin/rlch` symlink and the
+documents under `/usr/share/doc/routelatch/`. On `amd64` and `arm64` it also
+installs the `/usr/bin/sing-box` sidecar described above. It does **not** ship a
+systemd unit or start/enable anything.
+
+After installation nothing is running. Choose how to start it:
 
 ```sh
-systemctl --user daemon-reload
-systemctl --user enable --now routelatch.service
+# desktop: detached app/tray; returns after readiness and survives the terminal
+routelatch run
+
+# foreground/SSH/container/script: blocks without a tray; Ctrl-C stops it
+routelatch run --headless
+
+# desktop login start (default instance only)
+routelatch autostart enable
+
+# server/VPS supervision: writes and enables an opt-in systemd user unit
+routelatch service install
 ```
 
-For a `.deb` install, `/usr/bin` is already on `PATH`, so `routelatch` and its
-`rlch` symlink resolve without further setup. To remove the package, disable the
-service first and use the package manager, which also removes its documents and
-unit:
+App mode needs a StatusNotifier tray host and permitted `pidfd_open` (Linux
+≥5.3, not seccomp-blocked). Otherwise it exits `7` with `tray_unavailable` or
+`pidfd_unavailable`; use `run --headless` or `service install` there. Autostart
+manages only the default instance and rejects `--data-dir`; for a custom data
+directory use `routelatch service install --data-dir <dir>`.
+
+Check the result with `routelatch status`, `routelatch doctor`,
+`routelatch service status` or `systemctl --user status routelatch.service` when
+you installed the service. To remove the package, disable the opt-in setup first
+and use the package manager:
+
+```sh
+routelatch desktop proxy restore
+routelatch service uninstall     # only if installed
+routelatch autostart disable     # only if enabled
+sudo apt remove routelatch       # or: sudo rpm -e routelatch
+```
+
+Tarball uninstall, crash recovery and the GNOME/KDE desktop-proxy restore step
+are documented in `SERVICE.md` (the source tree's `deploy/README.md`); the
+desktop proxy is opt-in and is not changed by installing or starting anything.
+
+### Upgrading from a package with the old unit
+
+The published `v0.1.1`–`v0.1.3` packages (and the `v0.1.0` tarball) contain a
+systemd user unit and an old foreground `run`. Stop and disable it before
+upgrading, remove leftover user copies/symlinks, reload the manager, then
+upgrade and choose autostart or the service:
 
 ```sh
 systemctl --user disable --now routelatch.service
-sudo apt remove routelatch
+sudo rm -f /usr/lib/systemd/user/routelatch.service
+rm -f "$HOME/.config/systemd/user/routelatch.service"
+rm -f "$HOME/.config/systemd/user/default.target.wants/routelatch.service"
+systemctl --user daemon-reload
+# upgrade the package or replace the tarball binary, then:
+routelatch autostart enable    # or: routelatch service install
 ```
 
-Without the service, run the foreground command in your own terminal instead:
-
-```sh
-routelatch run
-```
-
-Check the result with `routelatch status`, `routelatch doctor`, or
-`systemctl --user status routelatch.service`. Tarball uninstall, crash recovery
-and the GNOME/KDE desktop-proxy restore step are documented in `SERVICE.md`
-(the source tree's `deploy/README.md`); the desktop proxy is opt-in and is not
-changed by installing or starting the service.
+If the manager config base differs from your shell's `$XDG_CONFIG_HOME`, check
+`systemctl --user show-environment` and remove the unit/symlink there too. An
+upgraded package no longer contains the `/usr/lib` unit, but a leftover user copy
+would still name the old unit. Starting the new engine against the same data
+directory while an old engine (even in `stopped` mode) holds its legacy lock
+exits `4` before binding; a new `--data-dir` instance is independent of an old
+default instance and can collide on ports, so stop the old one explicitly.
+A custom `XDG_RUNTIME_DIR` on an old default engine may be unguessable and hence
+invisible to the probe; always stop the old unit explicitly. The legacy-lock
+window lasts one release. `rlch` is unchanged.
 
 ## Architecture and platform
 
@@ -332,8 +359,9 @@ Installing a tarball does not install or enable sing-box; it is just a file unde
 - `ldd` reports `not a dynamic executable` and there is no `PT_INTERP` header;
 - `env -i … version` and `env -i … --json version` report the version, commit and
   build date recorded in `dist/BUILD-INFO` (the script fails on any mismatch);
-- `run` starts with `env -i` and temporary XDG directories, listens only on
-  `127.0.0.1`, answers `status` with exit 0, and exits 0 on `SIGTERM`.
+- `run --headless` starts with `env -i` and temporary XDG directories, listens
+  only on `127.0.0.1`, answers `status` with exit 0, and exits 0 on `SIGTERM`
+  (the foreground mode; no tray or pidfd is needed).
 
 Reproducibility: `scripts/build.sh --reproducible` builds each architecture
 twice with the same inputs and compares the checksums. Same toolchain, source,
@@ -365,14 +393,16 @@ scripts); compares the exact payload file set, the `0755 root:root` binary mode
 and the `0644` document mode against the documented layout; requires `bin/rlch`
 in the tarball and `/usr/bin/rlch` in the `.deb` to be relative symlinks to
 `routelatch`; compares `/usr/bin/routelatch` and an optional `/usr/bin/sing-box` byte-for-byte
-with the dist binaries; and verifies the generated user unit. For the RPM spec it
-checks the version/architecture/name/release/license/`Requires`/`Source0`
+with the dist binaries; and rejects any `.service`, `.desktop`, `/systemd/` or
+`/autostart/` path (the package ships no unit/autostart entry). For the RPM spec
+it checks the version/architecture/name/release/license/`Requires`/`Source0`
 fields, the BUILD-INFO stamp comments, the pinned source digest against the
 actual tarball, the `%files` install layout (licenses under `licenses/`, other
-docs under `doc/`), the absence of scriptlets or service enablement, and sidecar presence
-only on `amd64`/`arm64`. Negative checks (wrong version, wrong arch, injected
-`%post`, bad source digest, license in the wrong directory, unexpected sidecar,
-missing spec) all fail the gate. It installs nothing and does not run rpmbuild.
+docs under `doc/`, no unit), the absence of scriptlets or service enablement,
+and sidecar presence only on `amd64`/`arm64`. Negative checks (wrong version,
+wrong arch, injected `%post`, bad source digest, license in the wrong directory,
+unexpected sidecar, missing spec, injected unit/autostart path) all fail the
+gate. It installs nothing and does not run rpmbuild.
 
 ## Version stamping
 

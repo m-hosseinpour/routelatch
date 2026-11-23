@@ -2,7 +2,9 @@
 # Assemble local Linux packages from binaries that scripts/build.sh already
 # produced. Nothing here is installed, enabled or published: the output is a
 # directory tree, a .tar.gz, a .deb and an RPM .spec under ./dist for inspection
-# and for the user's own install steps (packaging/README.md).
+# and for the user's own install steps (packaging/README.md). Packages ship no
+# systemd unit and no maintainer scripts; the opt-in user unit is written only
+# by `routelatch service install` (docs/contracts.md §7.5).
 #
 # Usage: scripts/package.sh            (after scripts/build.sh)
 #
@@ -157,7 +159,7 @@ for arch in $arches; do
 		echo "missing $bin; run scripts/build.sh first" >&2
 		exit 2
 	fi
-	mkdir -p "$root/bin" "$root/share/doc/routelatch/docs" "$root/share/routelatch/systemd"
+	mkdir -p "$root/bin" "$root/share/doc/routelatch/docs"
 	install -m 0755 "$bin" "$root/bin/routelatch"
 	# The short command is a relative symlink so the tarball works under any
 	# prefix and the package does not carry a second copy of the binary.
@@ -254,9 +256,6 @@ for arch in $arches; do
 	# sidecar is recorded in SINGBOX-INFO so the stamp check above and this file
 	# remain consistent with the binary built by scripts/build.sh.
 	install -m 0644 "$info" "$root/share/doc/routelatch/BUILD-INFO"
-	# The unit lives in deploy/ in the source tree; the package copies it
-	# instead of keeping a second copy in packaging/.
-	install -m 0644 "$repo/deploy/systemd/routelatch.service" "$root/share/routelatch/systemd/routelatch.service"
 	install -m 0644 "$repo/README.md" "$root/share/doc/routelatch/README.md"
 	install -m 0644 "$repo/packaging/README.md" "$root/share/doc/routelatch/INSTALL.md"
 	# INSTALL.md sends readers to deploy/README.md for uninstall and crash
@@ -265,12 +264,11 @@ for arch in $arches; do
 	{
 		cat <<'SERVICE_HEADER'
 This is deploy/README.md from the RouteLatch source tree, shipped as SERVICE.md
-so the install notes resolve inside this package. Paths written as
-deploy/systemd/... and references such as docs/contracts.md §7.1 refer to the
-source tree, not to this package. The unit in this package is
-share/routelatch/systemd/routelatch.service, and INSTALL.md has the install
-commands that work from the extracted package. The readiness checks that run
-tests and gated systemd tests describe the source tree, not this package.
+so the install notes resolve inside this package. References such as
+docs/contracts.md §7.5 and paths written as deploy/... name the source tree,
+not this package. The package ships no systemd unit and no maintainer scripts:
+the only way to create the opt-in user unit is `routelatch service install`
+(see INSTALL.md). Test and gated-check instructions describe the source tree.
 SERVICE_HEADER
 		cat "$repo/deploy/README.md"
 	} >"$root/share/doc/routelatch/SERVICE.md"
@@ -298,7 +296,10 @@ release checklist.
 
 Installing is the user's action. This package was built without enabling a
 service, without touching desktop proxy or network settings, and without a
-system-wide install.
+system-wide install. It ships no systemd unit, autostart entry or maintainer
+script: plain 'routelatch run' starts the detached app/tray, and creating the
+opt-in user unit or login autostart is an explicit 'routelatch service install'
+or 'routelatch autostart enable'.
 EOF
 	if [ "$singbox_present" = 1 ] && [ "$sidecar_arch" = 1 ]; then
 		cat >>"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
@@ -323,27 +324,18 @@ EOF
 		# The tarball root maps onto /usr in the .deb: bin/routelatch becomes
 		# /usr/bin/routelatch, share/doc/routelatch stays under /usr/share/doc,
 		# and the sidecar stays next to the main binary so the runtime's sibling
-		# lookup still finds it. A standard user unit is added because the
-		# tarball unit's %h/.local/bin path is not an installed package path.
+		# lookup still finds it. No systemd unit or maintainer script is added;
+		# `routelatch service install` writes the opt-in unit at runtime.
 		deb_arch=$(deb_arch_for "$arch")
 		deb="$stage/routelatch_${deb_version}_${deb_arch}.deb"
 		deb_root="$stage/.deb-$name"
 		rm -rf "$deb_root"
 		mkdir -p "$deb_root/usr"
 		cp -a "$root/bin" "$root/share" "$deb_root/usr/"
-		unit="$deb_root/usr/lib/systemd/user/routelatch.service"
-		mkdir -p "$(dirname "$unit")"
-		sed 's|^ExecStart=%h/.local/bin/routelatch run$|ExecStart=/usr/bin/routelatch run|' \
-			"$repo/deploy/systemd/routelatch.service" >"$unit"
-		chmod 0644 "$unit"
-		if ! grep -q '^ExecStart=/usr/bin/routelatch run$' "$unit"; then
-			echo "cannot adapt the systemd unit for the .deb; deploy/systemd/routelatch.service changed" >&2
-			exit 1
-		fi
-		# Measure the installed payload, including the generated unit, so the
-		# estimate is not taken from the slightly smaller tarball tree. Sum file
-		# bytes rather than disk blocks so the value does not depend on the
-		# builder's filesystem block size.
+		# Measure the installed payload so the estimate is not taken from the
+		# slightly different tarball tree. Sum file bytes rather than disk
+		# blocks so the value does not depend on the builder's filesystem block
+		# size.
 		installed_size=$(find "$deb_root/usr" -type f -printf '%s\n' |
 			awk '{ total += $1 } END { printf "%d\n", (total + 1023) / 1024 }')
 		mkdir -p "$deb_root/DEBIAN"
@@ -379,7 +371,8 @@ EOF
 	# from these specs. The spec pins the tarball by SHA-256 so a wrong source
 	# cannot silently become an RPM. LICENSE/NOTICE use the standard RPM
 	# /usr/share/licenses/routelatch location; all other docs stay under
-	# /usr/share/doc/routelatch. There are no scriptlets and no service enable.
+	# /usr/share/doc/routelatch. There are no scriptlets, no packaged systemd
+	# unit and no service enable.
 	rpm_arch=$(rpm_arch_for "$arch")
 	spec="$stage/routelatch-$rpm_arch.spec"
 	tar_hash=$(sha256sum "$stage/$name.tar.gz" | awk '{print $1}')
@@ -397,7 +390,8 @@ EOF
 # BUILD-INFO date: $spec_date
 # Source0 SHA-256: $tar_hash
 # Local, unsigned build: SHA256SUMS is the only trust anchor. No GPG signing,
-# no package repository, no service enable and no maintainer scriptlets.
+# no package repository, no packaged unit, no service enable and no maintainer
+# scriptlets.
 # CI builds the binary RPM with rpmbuild --target $rpm_arch from this spec.
 # No BuildArch: the arch comes from --target so foreign arches build on any host.
 Name:           routelatch
@@ -448,10 +442,6 @@ install -m 0644 share/doc/routelatch/BUILD-INFO %{buildroot}%{_datadir}/doc/rout
 install -m 0644 share/doc/routelatch/go.sum %{buildroot}%{_datadir}/doc/routelatch/go.sum
 install -d -m 0755 %{buildroot}%{_datadir}/doc/routelatch/docs
 install -m 0644 share/doc/routelatch/docs/licensing.md %{buildroot}%{_datadir}/doc/routelatch/docs/licensing.md
-install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
-# The tarball unit uses %h/.local/bin; a package installs the binary in /usr/bin.
-sed -i 's|^ExecStart=%h/.local/bin/routelatch run\$|ExecStart=/usr/bin/routelatch run|' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
-grep -q '^ExecStart=/usr/bin/routelatch run\$' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service
 EOF
 		if [ "$with_sidecar" = 1 ]; then
 			cat <<'EOF'
@@ -474,7 +464,6 @@ EOF
 %{_datadir}/doc/routelatch/BUILD-INFO
 %{_datadir}/doc/routelatch/go.sum
 %{_datadir}/doc/routelatch/docs/licensing.md
-%{_prefix}/lib/systemd/user/routelatch.service
 EOF
 		if [ "$with_sidecar" = 1 ]; then
 			cat <<'EOF'

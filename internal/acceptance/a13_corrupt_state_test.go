@@ -4,130 +4,61 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
-// TestA13SystemdCorruptState exercises docs/contracts.md §4.5 under a real
-// `systemd --user` manager: a state file that is truncated JSON, from a newer
-// schema, or unreadable must fail closed with the documented exit status, stay
-// byte-identical, bind no traffic listener, never fall back to direct, and
-// leave the explicit operator recovery (restore from a valid backup, or chmod
-// for an unreadable file) working. It is gated like
-// TestA13SystemdUserLifecycle because it installs a temporary unit into the
-// caller's real user-manager unit directory; the data dir, ports and backup
-// stay isolated and the unit is removed afterwards.
-func TestA13SystemdCorruptState(t *testing.T) {
-	if os.Getenv("ROUTELATCH_SYSTEMD_TEST") != "1" {
-		t.Skip("set ROUTELATCH_SYSTEMD_TEST=1 to exercise corrupt state under a real systemd --user unit (installs a temporary unit)")
-	}
-	if runtime.GOOS != "linux" {
-		t.Skip("systemd user services are Linux-only")
-	}
-	systemctl, err := exec.LookPath("systemctl")
-	if err != nil {
-		t.Skipf("systemctl is not available: %v", err)
-	}
-	manager := managerEnvironment(t, systemctl)
-	unitDir, err := managerUnitDir(manager)
-	if err != nil {
-		t.Skipf("user manager unit directory is unknown: %v", err)
-	}
+// TestA13CorruptStateRecovery exercises docs/contracts.md §4.5 with the
+// supported foreground mode (`run --headless`), not a packaged systemd unit:
+// a state file that is truncated JSON, from a newer schema, or unreadable must
+// fail closed with the documented exit status, stay byte-identical, bind no
+// traffic listener, never fall back to direct, and leave the explicit operator
+// recovery (restore from a valid backup, or chmod for an unreadable file)
+// working. Data dir, ports and backup are isolated; no service manager is
+// touched.
+func TestA13CorruptStateRecovery(t *testing.T) {
 	r := report{t: t}
-
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o700); err != nil {
-		t.Fatalf("chmod data dir: %v", err)
+	env := newTestEnv(t)
+	dir := filepath.Join(env.home, "corrupt")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("data dir: %v", err)
 	}
 	httpPort, socksPort := freePort(t), freePort(t)
-	for socksPort == httpPort {
-		socksPort = freePort(t)
-	}
-	writeConfig(t, dir, serviceConfig{
+	cfg := serviceConfig{
 		HTTPListen:  fmt.Sprintf("127.0.0.1:%d", httpPort),
 		SOCKSListen: fmt.Sprintf("127.0.0.1:%d", socksPort),
-	})
-	httpAddr := fmt.Sprintf("127.0.0.1:%d", httpPort)
-	socksAddr := fmt.Sprintf("127.0.0.1:%d", socksPort)
+	}
+	httpAddr := cfg.HTTPListen
+	socksAddr := cfg.SOCKSListen
 	statePath := filepath.Join(dir, "state.json")
 	backupPath := ""
 
-	unit := fmt.Sprintf("routelatch-acceptance-corrupt-%d.service", os.Getpid())
-	unitPath := filepath.Join(unitDir, unit)
-	if _, err := os.Stat(unitPath); err == nil {
-		t.Fatalf("refusing to overwrite existing unit %s", unitPath)
-	}
-	createdUnitDir := false
-	if _, err := os.Stat(unitDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(unitDir, 0o755); err != nil {
-			t.Fatalf("create user unit directory %s: %v", unitDir, err)
-		}
-		createdUnitDir = true
-	}
-	if err := os.WriteFile(unitPath, renderUnit(t, dir), 0o644); err != nil {
-		t.Fatalf("write temporary unit: %v", err)
-	}
-	t.Cleanup(func() {
-		if out, err := sdRun(t, systemctl, "stop", unit); err != nil {
-			t.Logf("cleanup: systemctl --user stop %s failed: %v (%s)", unit, err, strings.TrimSpace(out))
-			_, _ = sdRun(t, systemctl, "kill", unit)
-		}
-		if out, err := sdRun(t, systemctl, "reset-failed", unit); err != nil {
-			t.Logf("cleanup: reset-failed %s: %v (%s)", unit, err, strings.TrimSpace(out))
-		}
-		activeOut, _ := sdRun(t, systemctl, "is-active", unit)
-		state := strings.TrimSpace(activeOut)
-		keep := state == "active" || state == "activating" || state == "reloading" || state == "deactivating"
-		if keep {
-			t.Logf("temporary unit %s is still %s after cleanup; left %s in place", unit, state, unitPath)
-		} else {
-			_ = os.Remove(unitPath)
-		}
-		_, _ = sdRun(t, systemctl, "daemon-reload")
-		if createdUnitDir {
-			_ = os.Remove(unitDir)
-		}
-		if _, err := os.Stat(unitPath); err == nil && !keep {
-			t.Logf("temporary unit %s still exists after cleanup", unitPath)
-		}
-	})
-	if _, err := sdRun(t, systemctl, "daemon-reload"); err != nil {
-		t.Fatalf("daemon-reload: %v", err)
-	}
-
-	// Baseline: this unit and its isolated ports work before the state is
-	// damaged, so a later failure cannot be attributed to the unit setup.
-	baselinePID := sdStart(t, systemctl, unit, dir)
-	if waitDial(httpAddr, 15*time.Second) && waitDial(socksAddr, 15*time.Second) {
-		r.pass("A13", "corrupt-state cell baseline: the temporary unit serves both isolated loopback listeners (main pid %d)", baselinePID)
+	// Baseline: this data dir and its isolated ports work before the state is
+	// damaged, so a later failure cannot be attributed to setup.
+	svc := startService(t, env, dir, cfg)
+	t.Cleanup(func() { _ = svc.stop() })
+	if !listenerRefuses(t, httpAddr) && !listenerRefuses(t, socksAddr) {
+		r.pass("A13", "corrupt-state cell baseline: the headless process serves both isolated loopback listeners")
 	} else {
-		r.fail("A13", "corrupt-state cell baseline: listeners http=%v socks=%v", dialOK(httpAddr), dialOK(socksAddr))
-	}
-	stopUnit := func(t *testing.T) {
-		t.Helper()
-		if _, err := sdRun(t, systemctl, "stop", unit); err != nil {
-			t.Fatalf("stop: %v", err)
-		}
-		final := waitUnitStatus(t, systemctl, unit, func(u unitStatus) bool { return u.ActiveState == "inactive" }, 20*time.Second)
-		if final.ExecMainStatus == "0" && !dialOK(httpAddr) && !dialOK(socksAddr) {
-			r.pass("A13", "the unit stops cleanly (ExecMainStatus=0) and closes both listeners before the next corruption case")
-		} else {
-			r.fail("A13", "pre-case stop: state=%s/%s exit=%s http=%v socks=%v", final.ActiveState, final.SubState, final.ExecMainStatus, dialOK(httpAddr), dialOK(socksAddr))
-		}
+		r.fail("A13", "corrupt-state cell baseline: listeners http=%v socks=%v", !listenerRefuses(t, httpAddr), !listenerRefuses(t, socksAddr))
 	}
 	// Seed a real rule through the running service, then stop it cleanly and
 	// take the backup offline: restore in §4.5 is an offline operation against
 	// the same data dir.
-	if res := cliAt(t, dir, "rules", "add", "--kind", "domain", "sd-corrupt.rl.test"); res.code != 0 || !res.env.OK {
+	if res := svc.cli("rules", "add", "--kind", "domain", "sd-corrupt.rl.test"); res.code != 0 || !res.env.OK {
 		t.Fatalf("seed state: exit=%d stdout=%q stderr=%s", res.code, res.stdout, res.stderr)
 	}
-	stopUnit(t)
+	if err := svc.stop(); err != nil {
+		r.fail("A13", "the headless process did not stop cleanly before the backup: %v", err)
+	} else {
+		r.pass("A13", "the headless process stops cleanly (SIGINT) and closes both listeners before the backup")
+	}
+	if !listenerRefuses(t, httpAddr) || !listenerRefuses(t, socksAddr) {
+		r.fail("A13", "a listener still accepts after the clean stop")
+	}
 
-	backup := cliAt(t, dir, "backup")
+	backup := svc.cli("backup")
 	ref, _ := backup.mapData(t)["ref"].(map[string]any)
 	backupPath = str(ref["path"])
 	if backup.code != 0 || !backup.env.OK || backupPath == "" {
@@ -135,91 +66,75 @@ func TestA13SystemdCorruptState(t *testing.T) {
 	}
 	r.pass("A13", "an offline backup of the healthy state exists at %s and is the documented recovery source", filepath.Base(backupPath))
 
-	// expectFailClosed starts the unit and asserts the documented fail-closed
-	// shape: state_corrupt maps to exit 10 (the mode-000 case is the
-	// unreadable-state path, not the too-permissive 9 path), and wantLog is a
+	// expectFailClosed starts the foreground engine and asserts the documented
+	// fail-closed shape: state_corrupt maps to exit 10 and wantLog is a
 	// fragment of the operator-visible reason.
 	expectFailClosed := func(t *testing.T, label, wantLog string) {
 		t.Helper()
-		_, _ = sdRun(t, systemctl, "reset-failed", unit)
-		startOut, startErr := sdRun(t, systemctl, "start", unit)
-		status := waitUnitStatus(t, systemctl, unit, func(u unitStatus) bool {
-			return u.ActiveState == "failed"
-		}, 20*time.Second)
-		switch {
-		case status.ActiveState != "failed":
-			r.fail("A13", "%s: unit is %s/%s after start, want failed (start: %v %s)", label, status.ActiveState, status.SubState, startErr, strings.TrimSpace(startOut))
-		case status.ExecMainStatus != "10":
-			r.fail("A13", "%s: ExecMainStatus=%s, want 10", label, status.ExecMainStatus)
-		case status.NRestarts != "0":
-			r.fail("A13", "%s: NRestarts=%s; systemd restarted a state that cannot be fixed by restarting", label, status.NRestarts)
-		default:
-			r.pass("A13", "%s: the unit fails closed with ExecMainStatus=%s and NRestarts=0", label, status.ExecMainStatus)
+		code, out := startExpectingFailure(t, env, dir)
+		if code != 10 {
+			r.fail("A13", "%s: run exited %d, want 10; output=%s", label, code, out)
+		} else {
+			r.pass("A13", "%s: run --headless fails closed with exit 10", label)
 		}
-		if status.MainPID != "0" {
-			r.fail("A13", "%s: a main pid %s survived the failed start", label, status.MainPID)
+		if !strings.Contains(out, wantLog) {
+			r.fail("A13", "%s: output does not contain %q: %s", label, wantLog, out)
+		} else {
+			r.pass("A13", "%s: the operator-visible reason contains %q", label, wantLog)
 		}
-		if dialOK(httpAddr) || dialOK(socksAddr) {
+		if !listenerRefuses(t, httpAddr) || !listenerRefuses(t, socksAddr) {
 			r.fail("A13", "%s: a listener accepts on http=%s socks=%s after the failed start", label, httpAddr, socksAddr)
 		} else {
 			r.pass("A13", "%s: neither traffic listener remains bound after the failed start, so no request can be routed (no silent direct fallback)", label)
 		}
-		if status := cliAt(t, dir, "status"); status.code != 3 || status.env.OK {
+		if status := svc.cli("status"); status.code != 3 || status.env.OK {
 			r.fail("A13", "%s: offline `status` exits %d ok=%v; want exit 3 with no service claiming success", label, status.code, status.env.OK)
 		} else {
 			r.pass("A13", "%s: no management service claims success (offline `status` exit 3)", label)
-		}
-		var statusOut string
-		foundReason := waitFor(3*time.Second, func() bool {
-			statusOut, _ = sdRun(t, systemctl, "status", unit, "--no-pager", "-n", "30")
-			return strings.Contains(statusOut, wantLog)
-		})
-		if foundReason {
-			r.pass("A13", "%s: systemctl status shows the documented reason (%q)", label, wantLog)
-		} else {
-			r.fail("A13", "%s: systemctl status does not show %q: %q", label, wantLog, statusOut)
 		}
 	}
 	// doctorReportsCorrupt proves the offline diagnostic reports state_corrupt
 	// with exit 10 instead of hiding it behind "not running".
 	doctorReportsCorrupt := func(t *testing.T, label string) {
 		t.Helper()
-		doctor := cliAt(t, dir, "doctor")
+		doctor := svc.cli("doctor")
 		if doctor.code != 10 || doctor.env.Error == nil || doctor.env.Error.Kind != "state_corrupt" {
 			r.fail("A13", "%s: offline doctor exit=%d kind=%v, want exit 10 state_corrupt", label, doctor.code, errorKind(doctor))
 			return
 		}
 		r.pass("A13", "%s: offline doctor reports state_corrupt with exit 10 (no silent repair)", label)
 	}
-	// restoresAndServes runs the documented recovery and proves the unit is
-	// healthy again on the same data dir and ports.
+	// restoresAndServes runs the documented recovery and proves the foreground
+	// process is healthy again on the same data dir and ports.
 	restoresAndServes := func(t *testing.T, label string) {
 		t.Helper()
-		restored := cliAt(t, dir, "restore", backupPath)
+		restored := svc.cli("restore", backupPath)
 		if restored.code != 0 || !restored.env.OK {
 			r.fail("A13", "%s: explicit restore: exit=%d stdout=%q stderr=%s", label, restored.code, restored.stdout, restored.stderr)
 			return
 		}
 		r.pass("A13", "%s: the documented explicit restore from a valid backup exits 0", label)
-		_, _ = sdRun(t, systemctl, "reset-failed", unit)
-		pid := sdStart(t, systemctl, unit, dir)
-		if !waitDial(httpAddr, 20*time.Second) || !waitDial(socksAddr, 20*time.Second) {
-			r.fail("A13", "%s: listeners after restore http=%v socks=%v", label, dialOK(httpAddr), dialOK(socksAddr))
+		recovered := startService(t, env, dir, cfg)
+		t.Cleanup(func() { _ = recovered.stop() })
+		if listenerRefuses(t, httpAddr) || listenerRefuses(t, socksAddr) {
+			r.fail("A13", "%s: listeners after restore http=%v socks=%v", label, listenerRefuses(t, httpAddr), listenerRefuses(t, socksAddr))
 			return
 		}
-		rules := cliAt(t, dir, "rules", "list")
+		rules := recovered.cli("rules", "list")
 		found := false
 		for _, rule := range rules.list(t, "rules") {
 			if str(rule["host"]) == "sd-corrupt.rl.test" {
 				found = true
 			}
 		}
-		if pid != 0 && found {
-			r.pass("A13", "%s: after restore the unit starts (main pid %d), serves both listeners and keeps the backed-up rule", label, pid)
+		if found {
+			r.pass("A13", "%s: after restore the process serves both listeners and keeps the backed-up rule", label)
 		} else {
-			r.fail("A13", "%s: post-restore pid=%d rule-present=%v", label, pid, found)
+			r.fail("A13", "%s: restored rule is missing", label)
 		}
-		stopUnit(t)
+		if err := recovered.stop(); err != nil {
+			r.fail("A13", "%s: post-restore stop: %v", label, err)
+		}
 	}
 
 	// 1. Truncated JSON: fail closed, file untouched, no listener, restore.
@@ -237,7 +152,7 @@ func TestA13SystemdCorruptState(t *testing.T) {
 		info, statErr := os.Stat(statePath)
 		unchanged := bytes.Equal(before, after) && statErr == nil && info.Mode().Perm() == 0o600
 		if unchanged {
-			r.pass("A13", "truncated JSON state: the service and doctor left all %d bytes byte-identical at mode 0600 (no rewrite, no restore from state.json.bak)", len(after))
+			r.pass("A13", "truncated JSON state: the process and doctor left all %d bytes byte-identical at mode 0600 (no rewrite, no restore from state.json.bak)", len(after))
 		} else {
 			r.fail("A13", "truncated JSON state: bytes-identical=%v stat-err=%v", bytes.Equal(before, after), statErr)
 		}
@@ -258,7 +173,7 @@ func TestA13SystemdCorruptState(t *testing.T) {
 		}
 		info, statErr := os.Stat(statePath)
 		if bytes.Equal(before, after) && statErr == nil && info.Mode().Perm() == 0o600 {
-			r.pass("A13", "newer-schema state: the service left the file byte-identical at mode 0600 (refused to downgrade or guess the structure)")
+			r.pass("A13", "newer-schema state: the process left the file byte-identical at mode 0600 (refused to downgrade or guess the structure)")
 		} else {
 			r.fail("A13", "newer-schema state was rewritten or its mode changed: bytes=%q stat-err=%v", after, statErr)
 		}
@@ -280,7 +195,7 @@ func TestA13SystemdCorruptState(t *testing.T) {
 		doctorReportsCorrupt(t, "unreadable state (mode 000)")
 		info, statErr := os.Stat(statePath)
 		if statErr == nil && info.Mode().Perm() == 0o000 {
-			r.pass("A13", "unreadable state: the service did not loosen or change the file mode (still 000)")
+			r.pass("A13", "unreadable state: the process did not loosen or change the file mode (still 000)")
 		} else {
 			r.fail("A13", "unreadable state: mode changed or stat failed: %v", statErr)
 		}
@@ -296,20 +211,22 @@ func TestA13SystemdCorruptState(t *testing.T) {
 		if bytes.Equal(before, after) {
 			r.pass("A13", "unreadable state: after the explicit chmod the file is byte-identical to before the corruption (no wipe)")
 		} else {
-			r.fail("A13", "unreadable state bytes changed while the service refused to read it")
+			r.fail("A13", "unreadable state bytes changed while the process refused to read it")
 		}
-		if doctor := cliAt(t, dir, "doctor"); doctor.code != 0 || !doctor.env.OK {
+		if doctor := svc.cli("doctor"); doctor.code != 0 || !doctor.env.OK {
 			r.fail("A13", "offline doctor after chmod: exit=%d ok=%v", doctor.code, doctor.env.OK)
 		} else {
 			r.pass("A13", "offline doctor after the explicit chmod exits 0")
 		}
-		_, _ = sdRun(t, systemctl, "reset-failed", unit)
-		pid := sdStart(t, systemctl, unit, dir)
-		if waitDial(httpAddr, 20*time.Second) && waitDial(socksAddr, 20*time.Second) {
-			r.pass("A13", "unreadable state: after the explicit chmod the unit starts (main pid %d) and serves both listeners with the original state", pid)
+		recovered := startService(t, env, dir, cfg)
+		t.Cleanup(func() { _ = recovered.stop() })
+		if listenerRefuses(t, httpAddr) || listenerRefuses(t, socksAddr) {
+			r.fail("A13", "unreadable state after chmod: listeners http=%v socks=%v", listenerRefuses(t, httpAddr), listenerRefuses(t, socksAddr))
 		} else {
-			r.fail("A13", "unreadable state after chmod: listeners http=%v socks=%v", dialOK(httpAddr), dialOK(socksAddr))
+			r.pass("A13", "unreadable state: after the explicit chmod the process serves both listeners with the original state")
 		}
-		stopUnit(t)
+		if err := recovered.stop(); err != nil {
+			r.fail("A13", "unreadable state stop: %v", err)
+		}
 	})
 }

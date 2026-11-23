@@ -20,42 +20,41 @@ prober's hard-coded 60 s destination cooldown, and A07 waits one 30 s rotation
 tick to observe startup health. Run `-v -run TestEndToEnd` for the main flow, or
 `-v -run 'TestFailureAndLimits|TestResourceBaseline'` for the cheap checks.
 
-### Gated real-systemd check (R1)
+### Gated read-only real-manager check
 
-One test needs a real `systemd --user` manager and installs a temporary unit, so
-it is skipped by default and stays out of the offline suite:
-
-```sh
-ROUTELATCH_SYSTEMD_TEST=1 go test -count=1 -v -run TestA13SystemdUserLifecycle ./internal/acceptance/
-```
-
-It takes the shipped `deploy/systemd/routelatch.service`, points `ExecStart` at
-the built binary plus an isolated `--data-dir` and random loopback ports, writes
-that unit into the caller's real user-manager unit directory and removes it
-afterwards (`systemctl --user daemon-reload` is part of the run). It asserts
-start/restart, loopback-only listeners, a foreign listener on the configured
-HTTP port (exit 6, `NRestarts=0`, no fallback), SIGKILL followed by the
-on-failure restart with byte-identical state and no silent direct, and a clean
-exit 0 stop. Only run it where installing a user service is authorized; a
-reboot/re-login is never performed.
-
-### Gated corrupt-state check (A13, docs/contracts.md §4.5)
-
-The same gated cell family covers startup with a damaged `state.json`:
+The old gated cells that installed a temporary systemd user unit and ran the
+packaged unit were retired together with the packaged unit. Service and
+autostart behavior is covered offline by fake-manager unit tests that never
+touch a real manager:
 
 ```sh
-ROUTELATCH_SYSTEMD_TEST=1 go test -count=1 -v -run TestA13SystemdCorruptState ./internal/acceptance/
+go test -count=1 ./cmd/routelatch ./internal/service
 ```
 
-It runs the shipped unit with an isolated data dir and ports, seeds one rule and
-takes an offline backup, then repeats three cases: truncated JSON, valid JSON
-with an unknown newer `schema_version`, and a `chmod 000` file. For each it
-asserts the unit fails with `ExecMainStatus=10` and `NRestarts=0`, neither
-traffic listener is bound (no direct fallback), offline `status` exits 3,
-offline `doctor` exits 10 with `state_corrupt`, the file stays byte-identical
-and mode-unchanged, and `systemctl status` shows the reason. It then proves the
-documented recovery — offline `restore` from the backup, or an explicit
-`chmod 600` for the unreadable case — brings the same unit and state back.
+One opt-in acceptance-adjacent check reads the real user manager without
+writing, starting, stopping or reloading anything:
+
+```sh
+ROUTELATCH_SYSTEMD_SERVICE_STATUS=1 go test -count=1 -v -run TestRealUserManagerServiceStatus ./cmd/routelatch/
+```
+
+A real `service install`/uninstall/rollback or linger run is not part of this
+suite; it needs explicit authorization and must not disturb an existing live
+unit. The shipped `service install` path writes `run --headless` and is tested
+with fake `systemctl`/`loginctl`, isolated XDG bases and an injected readiness
+probe.
+
+### Corrupt-state recovery (A13, docs/contracts.md §4.5)
+
+`TestA13CorruptStateRecovery` runs offline against `run --headless` with an
+isolated data dir and ports. It seeds one rule and takes an offline backup, then
+repeats three cases: truncated JSON, valid JSON with an unknown newer
+`schema_version`, and a `chmod 000` file. For each it asserts the process exits
+`10`, neither traffic listener is bound (no direct fallback), offline `status`
+exits 3, offline `doctor` exits 10 with `state_corrupt`, the file stays
+byte-identical and mode-unchanged. It then proves the documented recovery —
+offline `restore` from the backup, or an explicit `chmod 600` for the unreadable
+case — brings the same data dir back and serves both listeners.
 
 ### Gated real-desktop check (R2)
 
@@ -154,8 +153,9 @@ it to close. "Long duration" for the v1 record is defined by these parameters.
 ## Fixtures
 
 * The test builds `./cmd/routelatch` once (`TestMain`) and starts it with
-  `run --data-dir <tmp>`; each test has its own temp `HOME`, `XDG_CONFIG_HOME`,
-  `XDG_STATE_HOME`, `XDG_RUNTIME_DIR` and data dir.
+  `run --headless --data-dir <tmp>`; each test has its own temp `HOME`,
+  `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_RUNTIME_DIR` and data dir. The
+  foreground flag is explicit: plain `run` is the detached app/tray.
 * A local fixture file carries a VLESS node, a Trojan node and a SOCKS5 node.
   The VLESS/Trojan exits are **child processes** of this test binary running the
   pinned core (the T1 technique), each with static DNS entries so the *exit*
@@ -210,8 +210,8 @@ can change a desktop proxy setting.
 | A11 (gated desktop) | `ROUTELATCH_DESKTOP_TEST=1`: the real KDE/GNOME setting is applied and read back from the OS, the state records the previous value, stopping the service leaves the desktop pointing at RouteLatch (never silent direct) with a closed listener, offline restore returns the exact snapshot, and the marker stops claiming ownership. |
 | A12 | HEAD (headers only), POST with body, chunked request framing, an incremental streaming response (first bytes before the origin finishes), an unbounded stream (64 KiB in ~0.35 s, no cap), SOCKS5 UDP/BIND `0x07` with no UDP socket in the process, an absolute `https` request refused with exactly 501 and zero origin accepts/bytes (no MITM), and an unsupported scheme 405/501. |
 | A13 | SIGKILL with an idle tunnel and an in-flight streaming request (the request is cut, not completed): state byte-identical after restart, 3 exits/2 rules usable, approved and direct tunnels work; corrupt state/config exit 10 without overwrite; newer schema rejected; second instance exit 4 with the first still serving; port collision exit 6 with no fallback; SIGINT exit 0 with state byte-identical; stopped mode persists across SIGKILL+restart and a new process may leave it once. |
-| A13 (gated systemd) | `ROUTELATCH_SYSTEMD_TEST=1`: the shipped unit runs under a real `systemd --user` manager; start/restart replace the main pid and both listeners answer; a foreign listener on the configured HTTP port yields exit 6, `NRestarts=0`, the foreign listener still serves and no SOCKS/fallback listener appears; SIGKILL triggers the unit's on-failure restart with byte-identical state and the approved destination still answers 502 `pool unavailable` (no silent direct); `systemctl stop` exits 0 and closes both listeners. |
-| A13 (gated corrupt state) | `ROUTELATCH_SYSTEMD_TEST=1`: the same shipped unit, isolated data dir and random ports, seeds a rule and an offline backup, then for truncated JSON, `schema_version: 99` and `chmod 000` state fails closed with `ExecMainStatus=10`/`NRestarts=0`/`MainPID=0`, binds neither listener, reports `state_corrupt` from offline `doctor` (exit 10), leaves bytes and mode untouched with no automatic `.bak` restore, and shows the reason in `systemctl status`; offline `restore` (or an explicit `chmod 600` for the unreadable case) then starts the same unit with the backed-up rule. |
+| A13 (corrupt-state recovery) | Offline `run --headless`, isolated data dir and random ports, seeds a rule and an offline backup, then for truncated JSON, `schema_version: 99` and `chmod 000` state exits 10, binds neither listener, reports `state_corrupt` from offline `doctor` (exit 10), leaves bytes and mode untouched with no automatic `.bak` restore; offline `restore` (or an explicit `chmod 600` for the unreadable case) then restarts the same data dir with the backed-up rule and both listeners. |
+| R13-E (packaging) | `scripts/check-package.sh` asserts the tarball, `.deb` and RPM spec contain no unit, autostart entry, systemd path or maintainer script, and CI repeats the artifact-level check; the public install documents contain no reference to the removed source-tree unit path. The service unit path/ownership/`run --headless`/adoption/rollback cases are fake-manager unit tests, not real-manager runs. |
 | R5 (legacy status) | An undialable protocol persisted as `unknown`, `healthy`, `cooling` (expired or live cooldown), or `unsupported`/`engine_record_rejected` reports `unsupported` with the importer's reason in `pool list` rows and counts, `status` warnings and `doctor`; a stored `invalid` stays `invalid`; a supported-protocol record keeps `engine_record_rejected`; `pool test` rejects each before any TCP connection (0 endpoint connections); the derivation never persists `unsupported` (the only write after a probe is the documented cooldown expiry). |
 | R6 (optional) | WS/TLS (`http/1.1`), gRPC/TLS (`h2`) and XHTTP/TLS (`h2`) each: a pinned link imports as valid, the approved rule and `pool select` use it, and one CONNECT request reaches a loopback HTTP destination and returns its 207, header and body unmodified (exactly 1 destination request). A flipped pin delivers no destination request, leaves the service answering, and the good pin still tunnels afterward. |
 | R6 (gated long reuse) | `RL_ACCEPT_LONG_REUSE_TEST=1`: one client CONNECT tunnel over WS/TLS carries 3 requests across 32.0s (30.0s idle), each body byte-identical to the origin echo and each causing exactly 1 destination request; the client's exit connection stays alive and carries all three (1 client connection), 1 destination connection, no direct delivery (the fixture name does not resolve on the host), no 502/timeout; the first eligible 30s rotation probe's extra short-lived exit connection contacts no destination and closes. |
@@ -301,13 +301,13 @@ them until the suite is updated.
   evidence rather than automated here.
 * **A12:** redirects, `101` upgrades, slowloris/size limits and real IPv6 egress
   are not exercised; UDP is asserted only as an explicit refusal.
-* **A13 / platform:** systemd lifecycle is covered by the gated test above and
-  the R1 install run. The harness does not execute a real reboot/re-login (a
-  separate post-reboot observation on 2026-11-20 confirmed automatic login
-  start-up; see `docs/implementation-plan.md`), and linger was
-  already enabled on the R1 machine, so only `enable`'s symlink and the
-  `WantedBy=default.target` configuration were inspected for login start-up.
-  Windows, Android and TUN are out of scope.
+* **A13 / platform:** the old packaged-unit lifecycle cell was retired with the
+  unit; the default suite covers crash recovery and corrupt state with
+  `run --headless`. A real `service install`/uninstall/rollback and real linger
+  are not executed here (a live unit on the host must not be touched), and the
+  harness does not reboot/re-login. The opt-in real-manager check above is
+  read-only; historical R1 reboot evidence remains in
+  `docs/implementation-plan.md`. Windows, Android and TUN are out of scope.
 * **R11 real traffic:** the real hysteria2 handshake needs the opt-in cell above;
   the default suite proves only the import shape, the generated handoff config
   and the fail-closed exclusion with a fake sidecar. The gated run cannot use a

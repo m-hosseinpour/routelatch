@@ -34,10 +34,10 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        # The gated real-systemd and real-desktop checks stay skipped: a hosted
-        # runner has no desktop session and installing a user service is not
-        # part of CI. Set ROUTELATCH_SYSTEMD_TEST or ROUTELATCH_DESKTOP_TEST
-        # only on an authorized machine.
+        # The gated real-desktop check and the read-only real user-manager
+        # status check stay skipped: a hosted runner has no desktop session and
+        # installing a service is not part of CI. Set ROUTELATCH_DESKTOP_TEST
+        # or ROUTELATCH_SYSTEMD_SERVICE_STATUS only on an authorized machine.
         run: go test -count=1 ./...
 
   cross-build:
@@ -112,6 +112,36 @@ jobs:
 
       - name: Validate package metadata, payload and checksums
         run: scripts/check-package.sh
+
+      - name: Assert packages ship no systemd unit or autostart entry
+        run: |
+          set -eu
+          failed=0
+          for artifact in dist/packages/*.tar.gz; do
+            if tar -tzf "$artifact" | grep -Eq '(\.service$|\.desktop$|(^|/)systemd(/|$)|(^|/)autostart/)'; then
+              echo "$artifact contains a unit or autostart path"; failed=1
+            fi
+          done
+          for artifact in dist/packages/*.deb; do
+            if dpkg-deb --fsys-tarfile "$artifact" | tar -tf - |
+              grep -Eq '(\.service$|\.desktop$|/usr/lib/systemd/|/usr/share/routelatch/systemd/)'; then
+              echo "$artifact contains a unit or autostart path"; failed=1
+            fi
+          done
+          if grep -Eiq 'systemd|routelatch\.service|\.desktop' dist/packages/*.spec; then
+            echo "an RPM spec references a unit or autostart entry"; failed=1
+          fi
+          test "$failed" -eq 0
+          echo "packages ship no systemd unit and no autostart entry"
+
+      - name: Assert public install docs name no packaged unit
+        run: |
+          set -eu
+          if grep -RFn 'deploy/systemd' README.md packaging deploy CONTRIBUTING.md internal/acceptance/README.md; then
+            echo "a public install document still points at the removed packaged unit"
+            exit 1
+          fi
+          echo "public install documents contain no deploy/systemd reference"
 
       - name: Assert .deb and RPM specs share one unified version
         run: |
@@ -203,7 +233,6 @@ jobs:
           cat >"$top/expected-files" <<'EOF'
           /usr/bin/routelatch
           /usr/bin/rlch
-          /usr/lib/systemd/user/routelatch.service
           /usr/share/doc/routelatch/BUILD-INFO
           /usr/share/doc/routelatch/INSTALL.md
           /usr/share/doc/routelatch/PACKAGE-NOTES
@@ -239,7 +268,10 @@ jobs:
             if printf '%s\n' "$scripts_out" | grep -Eq '^(preinstall|postinstall|preuninstall|postuninstall) scriptlet'; then
               echo "RPM has maintainer scriptlets"; exit 1
             fi
-            echo "RPM $(basename "$f") inspected: version/arch/license/requires/layout/scripts OK"
+            if rpm -qpl "$f" | grep -Eq '(\.service$|\.desktop$|/systemd/|/autostart/)'; then
+              echo "RPM ships a systemd unit or autostart entry"; exit 1
+            fi
+            echo "RPM $(basename "$f") inspected: version/arch/license/requires/layout/scripts/no-unit OK"
           done
           [ "$count" -eq 4 ] || { echo "expected 4 RPMs, built $count"; exit 1; }
           ( cd "$top/RPMS" && sha256sum $(find . -name '*.rpm' | sort) > SHA256SUMS )

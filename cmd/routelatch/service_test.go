@@ -232,6 +232,31 @@ func oldManagedUnit() string {
 	return systemd.OwnershipMarker + "\n[Service]\nExecStart=/usr/bin/old-routelatch run --headless\n"
 }
 
+// historicalR12Unit is the markerless packaged unit shipped up to v0.1.3. Its
+// ExecStart is the old foreground `run`; the unit is kept only as a migration
+// fixture for `service install --force`, not as a file in the source tree.
+func historicalR12Unit() string {
+	return `[Unit]
+Description=RouteLatch local proxy
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/routelatch run
+Restart=on-failure
+RestartSec=2s
+RestartPreventExitStatus=4 6 10
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=default.target
+`
+}
+
 func holdLock(t *testing.T, path string) func() {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -446,6 +471,52 @@ func TestServiceInstallAdoptsInactiveMarkerlessWithForce(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(raw), systemd.OwnershipMarker) {
 		t.Fatalf("adopted unit has no marker: %s, %v", raw, err)
+	}
+}
+
+// TestServiceInstallMigratesHistoricalR12Unit proves the documented upgrade
+// path from the old packaged unit: an inactive, user-owned, markerless unit is
+// refused without --force and adopted with it, and the adopted unit runs the
+// new `run --headless` form with the current restart policy.
+func TestServiceInstallMigratesHistoricalR12Unit(t *testing.T) {
+	fake := &fakeSystemd{statuses: []fakeUnitState{inactiveUnit(), activeUnit(3, 4, true)}}
+	_, managerBase := isolateService(t, fake, nil)
+	path := unitPath(managerBase)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(historicalR12Unit()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if res := runCLI(t, t.TempDir(), "service", "install"); res.code != 6 {
+		t.Fatalf("old unit without --force = %+v (code %d)", res.env, res.code)
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != historicalR12Unit() {
+		t.Fatal("old unit changed without --force")
+	}
+
+	fake.statuses = []fakeUnitState{inactiveUnit(), activeUnit(3, 4, true)}
+	if res := runCLI(t, t.TempDir(), "service", "install", "--force"); res.code != 0 {
+		t.Fatalf("migrating old unit = %+v (code %d, %s)", res.env, res.code, res.stderr)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, want := range []string{
+		systemd.OwnershipMarker,
+		`ExecStart="` + defaultServiceExe + `" --data-dir `,
+		" run --headless",
+		"RestartPreventExitStatus=1 4 6 7 9 10",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("migrated unit is missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "routelatch run\n") ||
+		strings.Contains(text, "RestartPreventExitStatus=4 6 10") {
+		t.Fatalf("migrated unit still contains the old foreground command or restart policy:\n%s", text)
 	}
 }
 

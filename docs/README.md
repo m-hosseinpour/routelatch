@@ -9,14 +9,14 @@ R1/R2/R4 اثبات شده‌اند. A01 در ۲۰۲۶-۱۱-۲۱ با شهادت
 `T1` در `spike/`، قراردادهای ساخت در `contracts.md` و `internal/contract/`، و
 آزمون پذیرش در `internal/acceptance/` هستند.
 
-**مدل اجرای بعدی (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
-`run --headless` engine foreground می‌شود؛ بستهٔ بعدی unit ندارد و `autostart`/`service
-install` opt-in خواهند بود. این تصمیم در [نیازمندی‌ها](requirements.md) و
-[قراردادها](contracts.md) ثبت شده و پیاده‌سازی آن R13 در [پلن](implementation-plan.md)
-است؛ بسته‌ها و سندهای نصب فعلی تا پایان R13 همان رفتار foreground/unit را دارند.
-حالت اپ به `pidfd_open` مجاز نیاز دارد (Linux ≥5.3 و مسدودنشده با seccomp)؛ در
-غیر این صورت `run` با `unsupported`/`7` و دلیل `pidfd_unavailable` متوقف می‌شود و
-`--headless`/سرویس opt-in جایگزین است.
+**مدل اجرا (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
+`run --headless` engine foreground است؛ بسته هیچ unit/autostart/postinst ندارد و
+`autostart`/`service install` opt-in هستند (R13-B/C/D در درخت پیاده شده‌اند و
+R13-E بسته‌بندی/مستندات/migration را به همین مدل آورده است). رلیز `v0.1.3` و
+بسته‌های منتشرشدهٔ آن همچنان رفتار foreground/unit قدیمی را دارند؛ انتشار مدل
+جدید پس از R13-F تصمیم جدا می‌خواهد. حالت اپ به `pidfd_open` مجاز نیاز دارد
+(Linux ≥5.3 و مسدودنشده با seccomp)؛ در غیر این صورت `run` با `unsupported`/`7`
+و دلیل `pidfd_unavailable` متوقف می‌شود و `--headless`/سرویس opt-in جایگزین است.
 
 | سند | مرجع اصلی برای |
 | --- | --- |

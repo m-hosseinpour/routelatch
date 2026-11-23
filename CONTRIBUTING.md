@@ -28,30 +28,37 @@ built binary as a real process and takes about two minutes:
 go test -count=1 -v ./internal/acceptance/
 ```
 
-It is expected to print 208 PASS, 0 FAIL and 13 NOTE. NOTE means a gated or
-environment-limited check, not a pass. Two checks are skipped by default because
-they touch real system state:
+It prints one PASS/FAIL/NOTE line per assertion; NOTE means a gated or
+environment-limited check, not a pass. The default suite is offline and
+loopback-only. Opt-in checks that touch real system state are:
 
-- `ROUTELATCH_SYSTEMD_TEST=1` installs a temporary `systemd --user` unit.
 - `ROUTELATCH_DESKTOP_TEST=1` changes the real KDE/GNOME desktop proxy.
+- `ROUTELATCH_SYSTEMD_SERVICE_STATUS=1` reads the real user manager's
+  `service status` without writing, starting, stopping or reloading anything.
 
-Run them only on a machine where you are authorized to install a user service or
-change the desktop setting, and read the prerequisites in
-[internal/acceptance/README.md](internal/acceptance/README.md) first. CI runs the
-default, offline suite only.
+The old gated "install a temporary systemd unit and run it" cells were retired
+with the packaged unit. Service/autostart behavior is covered by fake-manager
+unit tests (`go test ./cmd/routelatch ./internal/service`) that never touch a
+real systemd manager. Run the gated desktop/status checks only on a machine
+where that scope is authorized, and read the prerequisites in
+[internal/acceptance/README.md](internal/acceptance/README.md) first. CI runs
+the default, offline suite only.
 
 `./scripts/build.sh` produces the static release binaries under `dist/`,
 `./scripts/package.sh` writes the tarballs, unsigned `.deb` files and one RPM
 `.spec` per architecture, and `./scripts/check-package.sh` validates their
-checksums, layout and metadata (including RPM version, arch, license layout and
-no scriptlets). `./scripts/check-artifact.sh` checks the amd64 artifact. Debian
-and RPM share one `Version` derived from `BUILD-INFO` (`v0.1.0-r12.1` →
-`0.1.0.r12.1`). `package.sh` does not build binary RPMs: the CI `rpm-packages`
-job builds and inspects them from the generated specs with `rpmbuild`/`rpm`, and
-local binary RPM builds used an extracted rpm 6.0.1 toolchain or a disposable
-container without installing RPM tooling on the host. See
-[packaging/README.md](packaging/README.md) for package layout and
-[deploy/README.md](deploy/README.md) for the service unit.
+checksums, layout and metadata (including no systemd unit, autostart entry or
+maintainer script, and RPM version/arch/license layout). Packages ship no unit;
+`routelatch service install` writes the opt-in user unit at runtime.
+`./scripts/check-artifact.sh` checks the amd64 artifact with
+`run --headless`. Debian and RPM share one `Version` derived from `BUILD-INFO`
+(`v0.1.0-r12.1` → `0.1.0.r12.1`). `package.sh` does not build binary RPMs: the
+CI `rpm-packages` job builds and inspects them from the generated specs with
+`rpmbuild`/`rpm`, and local binary RPM builds used an extracted rpm 6.0.1
+toolchain or a disposable container without installing RPM tooling on the host.
+See [packaging/README.md](packaging/README.md) for package layout and
+[deploy/README.md](deploy/README.md) for app/tray, autostart, the opt-in service
+and migration from the old unit.
 
 ## Test norms
 

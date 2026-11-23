@@ -5,7 +5,9 @@
 # payload file set, modes and the binary bytes in both containers. RPM specs
 # are checked statically: Name/Version/Arch/License/Requires/Source0, the
 # source digest pin, the %files install layout and the absence of scriptlets
-# or service enablement. Binary RPMs are built and inspected by CI.
+# or service enablement. Packages must ship no systemd unit, autostart entry or
+# maintainer script; `routelatch service install` writes the opt-in unit at
+# runtime (docs/contracts.md §7.5). Binary RPMs are built and inspected by CI.
 #
 # It reads BUILD-INFO for the expected version and never installs anything.
 # Usage: scripts/check-package.sh [dist/packages]
@@ -140,10 +142,15 @@ for arch in $arches; do
 		share/doc/routelatch/docs/licensing.md \
 		share/doc/routelatch/go.sum \
 		share/doc/routelatch/BUILD-INFO \
-		share/doc/routelatch/PACKAGE-NOTES \
-		share/routelatch/systemd/routelatch.service; do
+		share/doc/routelatch/PACKAGE-NOTES; do
 		expect_file "$tar_files" "$name/$path" "$tar"
 	done
+	# The package carries no install-time service or desktop integration: no
+	# unit, no autostart entry and no systemd path.
+	if printf '%s\n' "$tar_files" |
+		grep -Eq '(\.service$|\.desktop$|(^|/)systemd(/|$)|(^|/)autostart/)'; then
+		fail "$tar ships a systemd unit, autostart entry or systemd path"
+	fi
 	# tar -t output is "mode owner/group size date time path -> target"; require
 	# the exact relative link, not a second copy of the binary.
 	tar_link_mode=$(tar -tvzf "$tar" |
@@ -202,9 +209,7 @@ for arch in $arches; do
 			usr/share/doc/routelatch/docs/licensing.md \
 			usr/share/doc/routelatch/go.sum \
 			usr/share/doc/routelatch/BUILD-INFO \
-			usr/share/doc/routelatch/PACKAGE-NOTES \
-			usr/share/routelatch/systemd/routelatch.service \
-			usr/lib/systemd/user/routelatch.service; do
+			usr/share/doc/routelatch/PACKAGE-NOTES; do
 			printf '%s\n' "$path"
 		done
 		if [ "$sidecar" = 1 ]; then
@@ -215,6 +220,10 @@ for arch in $arches; do
 		grep -v '/$' | grep -v '^\./$' | sed 's|^\./||' | sort >"$tmp/deb.actual"
 	diff -u "$tmp/deb.expected" "$tmp/deb.actual" ||
 		fail "$deb payload file set does not match the expected layout"
+	if printf '%s\n' "$deb_listing" |
+		grep -Eq '(\.service$|\.desktop$|/usr/lib/systemd/|/usr/share/routelatch/systemd/)'; then
+		fail "$deb ships a systemd unit, autostart entry or systemd path"
+	fi
 
 	printf '%s\n' "$deb_listing" |
 		grep -Eq '^-rwxr-xr-x root/root +[0-9]+ .* \./usr/bin/routelatch$' ||
@@ -230,15 +239,6 @@ for arch in $arches; do
 	deb_bin_hash=$(dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/bin/routelatch | sha256sum | awk '{print $1}')
 	[ "$deb_bin_hash" = "$dist_bin_hash" ] ||
 		fail "$deb /usr/bin/routelatch does not match $dist_bin"
-	if dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/share/routelatch/systemd/routelatch.service |
-		cmp -s - "$repo/deploy/systemd/routelatch.service"; then
-		:
-	else
-		fail "$deb share unit differs from deploy/systemd/routelatch.service"
-	fi
-	dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/lib/systemd/user/routelatch.service |
-		grep -q '^ExecStart=/usr/bin/routelatch run$' ||
-		fail "$deb user unit does not start /usr/bin/routelatch"
 
 	if [ "$sidecar" = 1 ]; then
 		deb_sidecar_hash=$(dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/bin/sing-box | sha256sum | awk '{print $1}')
@@ -280,11 +280,6 @@ for arch in $arches; do
 	expect_spec_line 'ln -s routelatch %{buildroot}%{_bindir}/rlch'
 	expect_spec_line 'install -m 0644 share/doc/routelatch/LICENSE %{buildroot}%{_datadir}/licenses/routelatch/LICENSE'
 	expect_spec_line 'install -m 0644 share/doc/routelatch/NOTICE %{buildroot}%{_datadir}/licenses/routelatch/NOTICE'
-	expect_spec_line 'install -D -m 0644 share/routelatch/systemd/routelatch.service %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service'
-	# The package path is /usr/bin, so the installed unit must be rewritten like
-	# the .deb's; shipping the tarball unit unchanged would break `enable --now`.
-	expect_spec_line "sed -i 's|^ExecStart=%h/.local/bin/routelatch run\$|ExecStart=/usr/bin/routelatch run|' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service"
-	expect_spec_line "grep -q '^ExecStart=/usr/bin/routelatch run\$' %{buildroot}%{_prefix}/lib/systemd/user/routelatch.service"
 	expect_spec_line '%license %{_datadir}/licenses/routelatch/LICENSE'
 	expect_spec_line '%license %{_datadir}/licenses/routelatch/NOTICE'
 	for path in \
@@ -297,8 +292,7 @@ for arch in $arches; do
 		%{_datadir}/doc/routelatch/PACKAGE-NOTES \
 		%{_datadir}/doc/routelatch/BUILD-INFO \
 		%{_datadir}/doc/routelatch/go.sum \
-		%{_datadir}/doc/routelatch/docs/licensing.md \
-		%{_prefix}/lib/systemd/user/routelatch.service; do
+		%{_datadir}/doc/routelatch/docs/licensing.md; do
 		expect_spec_line "$path"
 	done
 	if grep -Fq '%{_datadir}/doc/routelatch/LICENSE' "$spec" ||
@@ -311,6 +305,11 @@ for arch in $arches; do
 	fi
 	if grep -Eiq 'systemctl|%systemd_|enable --now|chkconfig' "$spec"; then
 		fail "$spec enables a service"
+	fi
+	# The unit/autostart entry are created only by `routelatch service install`
+	# or `routelatch autostart enable`, never by the package.
+	if grep -Eiq 'systemd|routelatch\.service|\.desktop' "$spec"; then
+		fail "$spec ships a systemd unit or autostart entry"
 	fi
 	if [ "$sidecar" = 1 ]; then
 		expect_spec_line 'install -D -m 0755 bin/sing-box %{buildroot}%{_bindir}/sing-box'
