@@ -189,8 +189,10 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   event-driven است: پیش از restart/Quit/tray-loss، `starting`/`stopping` نوشته
   می‌شود و `ready` فقط پس از `status.ready` کودک جدید و tray؛ `run` جدید علاوه
   بر marker، با یک negative check از socket مطمئن می‌شود `ready` کهنه نیست
-  (socket هرگز به‌تنهایی `0` نمی‌سازد). supervisor مالک
-  lockها است و engine child آن‌ها را با `CLOEXEC` به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
+  (socket هرگز به‌تنهایی `0` نمی‌سازد). supervisor در عملیات عادی مالک lockها
+  است؛ در پنجرهٔ fail-closed `app.owner` اول آزاد می‌شود و `app.lock` تا توقف
+  child/tray می‌ماند و پیش از خروج آزاد می‌شود. engine child lockها را با
+  `CLOEXEC` به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
   می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
   ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.

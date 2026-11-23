@@ -1253,8 +1253,8 @@ refuse می‌شود. نگه‌داشتن این lockها مانع شروع engi
 **`run` پیش‌فرض (حالت اپ).** launcher فقط supervisor را detached می‌کند و از طریق
 pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و نه engine child) در
 عملیات عادی مالک `InstanceDir/app.lock` و یک `flock(LOCK_EX)` دوم روی
-`InstanceDir/app.owner` است و هر دو را تا خروج نگه می‌دارد؛ استثنای fail-closed
-در ادامه توضیح داده شده است.
+`InstanceDir/app.owner` است و در عملیات عادی هر دو را تا خروج نگه می‌دارد؛
+استثنای fail-closed در ادامه توضیح داده شده است.
 `app.owner` یک regular file پایدار است: اگر وجود ندارد یک‌بار با
 `O_CREAT|O_EXCL|O_NOFOLLOW` و `0600` ساخته می‌شود و در اجراهای بعدی همان inode با
 `O_NOFOLLOW` باز می‌شود. رکورد آن شامل `state=starting|ready|stopping`، `generation`،
@@ -1266,8 +1266,9 @@ pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و ن�
 
 ترتیب startup: supervisor `app.lock` را می‌گیرد؛ سپس `app.owner` را
 باز/می‌سازد و **پیش از گرفتن flock آن** رکورد `starting` را می‌نویسد تا هیچ
-`ready` قبلی معتبر نماند؛ بعد `flock(LOCK_EX)` را با retry کوتاه می‌گیرد و تا
-خروج نگه می‌دارد. سپس engine lock/tray را preflight می‌کند، engine child را با
+`ready` قبلی معتبر نماند؛ بعد `flock(LOCK_EX)` را با retry کوتاه می‌گیرد و
+**در عملیات عادی** تا خروج نگه می‌دارد (استثنای fail-closed در ادامه). سپس
+engine lock/tray را preflight می‌کند، engine child را با
 `CLOEXEC` (بدون ارث‌بردن lockها) اجرا می‌کند، هویت `(pid, starttime)` خودش و
 engine و هر sidecar شناخته‌شده را برای teardown نگه می‌دارد و از طریق pipe
 readiness گزارش می‌کند (هیچ فرزندی نباید بدون گزارش هویت از process group خارج
@@ -1539,9 +1540,9 @@ exit `6`). بسته هیچ unit/postinst ندارد (از R13 به بعد) و ا
 جاری و داخل دایرکتوری مورد انتظار باشند؛ symlink/non-regular/مالک دیگر بدون
 side-effect رد می‌شود (exit `6`؛ برای `app.owner` عدم دنبال‌کردن + abort startup
 با دلیل `app_marker_invalid`، نه overwrite). `app.lock` یک‌بار با
-`O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته می‌شود، fd آن تا خروج supervisor نگه
-داشته می‌شود (در مسیر fail-closed فقط پس از توقف child/tray آزاد می‌شود) و
-RouteLatch هرگز آن را unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن توسط همان uid
+`O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته می‌شود، fd آن در عملیات عادی تا خروج
+supervisor نگه داشته می‌شود و در مسیر fail-closed پس از توقف child/tray و پیش از
+خروج آزاد می‌شود؛ RouteLatch هرگز آن را unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن توسط همان uid
 خارج از تضمین single-instance است (root/همان uid مرز امنیتی نیست).
 `app.owner` هم یک inode پایدار است: یک‌بار ساخته می‌شود، lock آن در عملیات عادی
 تا خروج supervisor نگه داشته می‌شود (در مسیر fail-closed پیش از `app.lock` آزاد
