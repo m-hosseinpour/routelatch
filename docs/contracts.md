@@ -585,10 +585,15 @@ probe استفاده شد.
 | app lock/owner | `<InstanceDir>/app.lock` و `<InstanceDir>/app.owner` (D26) | `0600` |
 | log | `$XDG_STATE_HOME/routelatch/log/routelatch.log` | پوشه `0700`، فایل `0600` (append-only) |
 
-> **وضعیت:** R12 فعلی `state.lock`/socket را زیر `$XDG_RUNTIME_DIR/routelatch`
-> می‌گذارد؛ D26/R13 آن‌ها را به `InstanceDir` مشتق از state/data منتقل می‌کند تا
-> desktop و SSH با `XDG_RUNTIME_DIR` متفاوت همان lock/socket را ببینند. این یک
-> migration آگاهانه در R13-B است.
+> **وضعیت:** R12 فعلی بسته به محیط سه چیدمان دارد: با `XDG_RUNTIME_DIR`، lock در
+> `$XDG_RUNTIME_DIR/routelatch/state.lock` و socket در همان پوشه؛ بدون آن، lock در
+> `<StateDir>/state.lock` و socket در `<StateDir>/run/control.sock`؛ و با
+> `--data-dir <abs>`، lock در `<abs>/state.lock` و socket در `<abs>/run/control.sock`.
+> D26/R13 همه را به `InstanceDir` مشتق از state/data
+> (`<StateDir>/run` یا `<data-dir>/run`) منتقل می‌کند تا desktop و SSH با
+> `XDG_RUNTIME_DIR` متفاوت همان lock/socket را ببینند. این migration آگاهانه در
+> R13-B انجام می‌شود و در پنجرهٔ گذار، lockهای legacy هم probe/نگه داشته می‌شوند
+> (§۷.۵).
 
 **لاگ.** فایل فقط append می‌شود، در پوشهٔ `0700` با فایل `0600` ساخته می‌شود، از
 `log_level` پیروی می‌کند و در ۴ MiB می‌چرخد و سه فایل چرخیده (`routelatch.log.1`–`.3`)
@@ -1100,8 +1105,8 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 `data` دقیقاً همان کلیدهای ستون دوم است؛ دو نمونهٔ کامل:
 
 ```json
-{ "mode": "targeted", "policy_version": 7,
-  "selected_exit": "",
+{ "mode": "targeted", "ready": true, "listeners_open": true,
+  "policy_version": 7, "selected_exit": "",
   "listeners": { "http": "127.0.0.1:8317", "socks": "127.0.0.1:8318" },
   "pool": { "total": 12, "usable": 9, "healthy": 6, "cooling": 2 },
   "connections": { "open": 3, "dialing": 1, "proofs": { "confirmed": 0, "accepted": 2 } },
@@ -1118,7 +1123,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `autostart enable\|disable\|status` | `path, enabled, managed, conflict?` | 0، 1، 2، 6، 7 | — |
 | `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10 | — |
 | `version` | `version, commit, build_date` | 0 | — |
-| `status` | `mode, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
+| `status` | `mode, ready, listeners_open, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
@@ -1142,6 +1147,16 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 `pool remove <id>` تنها مسیر حذف رکورد است (از جمله رکورد `unsupported` با دلیل
 `engine_record_rejected`)؛ v1 هیچ فرمان حذف آفلاین ندارد.
+
+**`ready` و `listeners_open`.** management socket پیش از `StartNetwork` هم پاسخ
+می‌دهد، بنابراین `status` به‌تنهایی آمادگی نیست. `ready=true` فقط وقتی است که
+management در حال سرویس‌دهی و — اگر mode ذخیره‌شده `stopped` نیست — هر دو listener
+لازم bind/پذیرش‌شده باشند؛ در `stopped` معتبر، `ready=true` و `listeners_open=false`
+است. `listeners_open` فقط بازبودن listenerهای لازم همان mode را نشان می‌دهد.
+`ready=false` وضعیت startup/transition است، نه خطا؛ `service install`، supervisor
+اپ و بازبینی `already_running` همه باید همین فیلد را (به‌جای `ActiveState` یا
+وجود listener address) ملاک بگیرند. این دو فیلد additive هستند و schema_version
+را تغییر نمی‌دهند.
 
 شمارندهٔ unsupported در هشدارهای `status` و در checkهای `doctor` از همان نمای مشتق‌شدهٔ
 `pool list` می‌آید: رکورد قدیمی با پروتکل غیرقابل‌dial در هر status ذخیره‌شده به‌جز
@@ -1207,35 +1222,72 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 و SSH/headless را با `XDG_RUNTIME_DIR` متفاوت به همان lock/socket canonical
 می‌رساند؛ service unit و readiness check هم همان socket را می‌بینند.
 
+**پنجرهٔ migration lock.** برای یک نسخه (R13)، engine پس از گرفتن
+`InstanceDir/state.lock` و پیش از هر کار دیگری، همان lock legacy را که R12 در آن
+مسیر اجرا می‌شد نیز می‌گیرد و تا خروج نگه می‌دارد: `<StateDir>/state.lock`،
+`<data-dir>/state.lock` (با `--data-dir`)،
+`$XDG_RUNTIME_DIR/routelatch/state.lock` (اگر set باشد) و
+`/run/user/<uid>/routelatch/state.lock` (اگر وجود دارد/قابل دسترسی است و با مورد
+قبلی یکی نیست). ترتیب ثابت است و هر lock با `O_CREAT|O_NOFOLLOW` و `0600` باز
+می‌شود. اگر یکی در اختیار دیگری باشد — حتی engine قدیمی در mode `stopped` — همه
+آزاد و exit `4` با پیام «نمونهٔ قدیمی RouteLatch را stop/upgrade کنید» داده
+می‌شود. اگر مسیر legacy وجود دارد ولی بازکردنش (مثلاً به‌خاطر مجوز) ممکن نیست،
+socket متناظر با deadline کوتاه dial می‌شود و پاسخ‌گویی آن هم exit `4` است؛ اگر
+نه lock و نه socket قابل بررسی نباشد، startup برای تضعیف‌نشدن بی‌صدای invariant
+با خطای روشن و exit `6` refuse می‌شود. نگه‌داشتن این lockها مانع شروع engine
+قدیمی (unit فراموش‌شده) هم می‌شود. این سازگاری فقط برای پنجرهٔ migration است و
+پس از یک نسخه حذف می‌شود.
+
 **`run` پیش‌فرض (حالت اپ).** launcher فقط supervisor را detached می‌کند و از طریق
 pipe منتظر readiness می‌ماند؛ **supervisor** (نه launcher و نه engine child) مالک
-`InstanceDir/app.lock` است. supervisor پس از گرفتن lock، marker
-`InstanceDir/app.owner` را با `state=starting` و `generation`/`pid`/`started_at`
-اتمیک می‌نویسد، سپس engine lock/tray را preflight می‌کند، engine child را با
-`CLOEXEC` (بدون ارث‌بردن app.lock) اجرا می‌کند و پس از readiness marker را به
-`state=ready` تغییر می‌دهد؛ readiness یعنی management socket پاسخ `status`
-می‌دهد و tray ثبت شده؛ listenerها فقط اگر mode ذخیره‌شده `stopped` نباشد لازم‌اند.
-lock تا خروج supervisor نگه داشته می‌شود. اگر نوشتن
-marker شکست بخورد، startup abort و lock آزاد می‌شود.
+`InstanceDir/app.lock` و یک `flock(LOCK_EX)` دوم روی `InstanceDir/app.owner` است.
+`app.owner` یک regular file پایدار است: اگر وجود ندارد یک‌بار با
+`O_CREAT|O_EXCL|O_NOFOLLOW` و `0600` ساخته می‌شود و در اجراهای بعدی همان inode با
+`O_NOFOLLOW` باز و قفل می‌شود؛ محتوای `state=starting|ready`، `generation`،
+`pid` و `started_at` با نوشتن در همان fd (نه rename) به‌روز می‌شود و lock آن تا
+خروج supervisor نگه داشته می‌شود. supervisor پس از گرفتن lockها marker `starting` را
+می‌نویسد، سپس engine lock/tray را preflight می‌کند، engine child را با `CLOEXEC`
+(بدون ارث‌بردن lockها) اجرا می‌کند و پس از readiness marker را به `ready` تغییر
+می‌دهد؛ readiness یعنی management socket پاسخ `status` با `ready=true` می‌دهد و
+tray ثبت شده؛ listenerها فقط اگر mode ذخیره‌شده `stopped` نباشد لازم‌اند. lockها
+تا خروج supervisor نگه داشته می‌شوند. اگر نوشتن marker شکست بخورد، startup abort
+و lockها آزاد می‌شوند.
 
-ترتیب بررسی یک `run` جدید: (۱) اگر `app.lock` در اختیار دیگری است و marker
-ready با generation زنده دارد → `ok=true`، `already_running=true` و exit `0` با
-دادهٔ همان app؛ اگر marker ready نیست، exit `6` «startup in progress/repair؛
-retry» (نه موفقیت کاذب). supervisor در runtime marker missing/invalid را اتمیک
-repair می‌کند و اگر repair ممکن نباشد، برای جلوگیری از app بدون marker معتبر
-fail-closed متوقف می‌شود؛
-(۲) اگر lock را گرفتیم ولی engine lock در اختیار یک `--headless` است، lock آزاد و
+**liveness و `already_running`.** supervisor در حین اجرا هر چند ثانیه (پیشنهاد
+۱۰s) وجود/اعتبار `app.owner` را بررسی و در صورت حذف/خرابی با همان قاعدهٔ
+no-follow بازسازی می‌کند؛ مسیر symlink/non-regular/مالک دیگر را overwrite نمی‌کند
+و فقط `app_marker_invalid` را لاگ می‌کند. `run` جدید هیچ‌گاه به `pid` برای liveness
+تکیه نمی‌کند: اگر `app.lock` آزاد است آن را می‌گیرد و ادامه می‌دهد؛ اگر در اختیار
+دیگری است، با `flock(LOCK_EX|LOCK_NB)` روی `app.owner` بررسی می‌کند: گرفتن موفق
+یعنی هیچ supervisor زنده‌ای مالک marker نیست و محتوای آن stale است (فوراً آزاد
+می‌شود)؛ شکست یعنی supervisor زنده است. فقط در حالت دوم marker `ready` معتبر است
+و `ok=true`/`already_running=true`/exit `0` با دادهٔ همان app برمی‌گردد؛
+listenerها/log از `status` همان socket خوانده می‌شوند و فیلد ناموجود حذف می‌شود؛
+marker `starting` یا نامعتبر → exit `6`. اگر marker موجود نیست یا محتوای آن معتبر نیست،
+یک ready-check کوتاه روی management socket (`status.ready`، و `listeners_open` در
+mode غیر `stopped`) انجام می‌شود: پاسخ مثبت → exit `0` با دادهٔ socket و بدون
+`pid`، وگرنه exit `6` «startup in-progress/repair؛ retry». بنابراین marker
+هرگز به‌تنهایی gate موفقیت نیست و حذف/خرابی آن app در حال اجرا را به exit دائمی
+`6` تبدیل نمی‌کند. مسیر symlink/non-regular/مالک دیگر در startup باعث abort با
+دلیل `app_marker_invalid` می‌شود، نه overwrite.
+
+اگر lock را گرفتیم ولی engine lock در اختیار یک `--headless` است، lockها آزاد و
 **صرف‌نظر از marker** exit `4` با پیام «ابتدا نمونهٔ headless را متوقف کنید یا
-`--headless` اجرا کنید»؛ (۳) نبود tray/StatusNotifier → lock آزاد و
+`--headless` اجرا کنید» داده می‌شود؛ نبود tray/StatusNotifier → lockها آزاد و
 `unsupported`/exit `7` با دلیل پایدار `tray_unavailable` و پیشنهاد `--headless`؛
-(۴) شروع. پس از گرفتن lock، marker کهنه/غیرمعتبر حذف/بازنویسی می‌شود؛
-symlink/non-regular/مالک دیگر/`data_dir` متفاوت دنبال یا حذف نمی‌شود و نوشتن
-marker abort می‌شود. launcher readiness deadline دارد (پیشنهاد ۱۰s) و در timeout
-با exit `8` برمی‌گردد. دو `run` هم‌زمان: supervisor بازنده lock را نمی‌گیرد و
-طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت پیش‌فرض یک envelope زمان startup
-با `pid`، listenerها، log path و `already_running?` یا `state/reason` می‌دهد؛
-`--headless --json` رفتار blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray
-نباید مقصد، credential یا URL منبع داشته باشد (D21).
+سپس شروع. پس از گرفتن lock، marker کهنه/غیرمعتبر بازنویسی می‌شود؛
+symlink/non-regular/مالک دیگر/`data_dir` متفاوت دنبال یا حذف نمی‌شود.
+
+**timeout و دو `run` هم‌زمان.** launcher readiness deadline دارد (پیشنهاد ۱۰s). در
+timeout، pipe readiness بسته می‌شود، به process group supervisor `SIGTERM`
+فرستاده می‌شود، تا ۵s برای خروج supervisor/child و آزادشدن lockها صبر می‌شود و
+در صورت نیاز `SIGKILL` می‌شود؛ launcher فقط پس از اطمینان از اینکه هیچ app/childی
+باقی نمانده و lock آزاد است با exit `8` برمی‌گردد. دو `run` هم‌زمان: دومی با
+`app.lock` سریال می‌شود و طبق بالا exit `6`/`0` می‌گیرد. `--json` در حالت
+پیش‌فرض یک envelope زمان startup با `pid`، listenerها، log path و
+`already_running?` یا `state/reason` می‌دهد؛ `--headless --json` رفتار
+blocking/shutdown فعلی را دارد. log/نوتیفیکیشن tray نباید مقصد، credential یا URL
+منبع داشته باشد (D21).
 
 `--headless` هیچ‌گاه tray را باز نمی‌کند و داخل systemd/ترمینال بلاک می‌ماند؛ unitها
 باید `--headless` داشته باشند. plain `run` عمداً detach می‌شود و برای unit مناسب
@@ -1267,20 +1319,29 @@ unit را در `$XDG_CONFIG_HOME/systemd/user/routelatch.service` (fallback
 `~/.config/systemd/user/...`) می‌نویسد، با یک marker مالکیت در فایل
 (`# Managed by RouteLatch service install`). محتوای unit:
 `Type=simple`، `ExecStart=<absolute> [--data-dir <abs>] run --headless`،
-`Restart=on-failure`، `RestartSec=2s`، `RestartPreventExitStatus=4 6 7 10`،
+`Restart=on-failure`، `RestartSec=2s`، `RestartPreventExitStatus=4 6 7 9 10`،
 `KillSignal=SIGTERM`، `KillMode=mixed`، `TimeoutStopSec=20s`،
 `WantedBy=default.target`. unit هیچ `User=`/`Group=` ندارد و root لازم نیست.
+`install` مسیر مطلق config/state را در زمان نصب resolve می‌کند و — وقتی
+`--data-dir` نیست — با
+`Environment="XDG_CONFIG_HOME=<abs>" "XDG_STATE_HOME=<abs>"` در unit pin می‌کند
+(quoting/escape طبق systemd، از جمله `%` → `%%`) تا service و readiness check،
+مستقل از محیط shell و
+`XDG_RUNTIME_DIR`، همان socket را ببینند. با `--data-dir <abs>`، همان مسیر مطلق
+همهٔ ریشه‌ها را تعیین می‌کند و Environment لازم نیست.
 `install` idempotent است: اگر unit نیست، اتمیک می‌نویسد،
 `systemctl --user daemon-reload` و `enable --now` می‌زند؛ اگر همان unit هست، بدون
 بازنویسی/restart فقط enabled/active را همگرا می‌کند؛ اگر محتوا متفاوت است، بدون
 `--force` بازنویسی نمی‌کند و exit `6` می‌دهد. `Type=simple` «active» را زودتر از
 آمادگی listenerها اعلام می‌کند، پس install فقط به `ActiveState` تکیه نمی‌کند: تا
-یک deadline محدود (پیشنهاد ۱۰s) منتظر می‌ماند تا management socket همان data-dir
-به `status` پاسخ دهد و — فقط اگر mode ذخیره‌شده `stopped` نیست — listenerها آماده
-باشند؛ اگر child با exit documented `4/6/7/10` مرد، همان exit/kind به install
-منتقل می‌شود (4→6، 6→6، 7→7، 10→10) و rollback اجرا می‌شود. انقضای deadline با
-child زنده exit `8` است و rollback می‌شود؛ `stopped` معتبر بدون listener رد
-نمی‌شود.
+یک deadline محدود (پیشنهاد ۱۰s) مدیریت همان data-dir را poll می‌کند و فقط
+`status.ready=true` (و در mode غیر `stopped`، `listeners_open=true`) را قبول
+می‌کند. اگر child با exit مستند `4/6/7/9/10` مرد، install همان را منتقل می‌کند
+(4→6، 6→6، 7→7، 9→9، 10→10) و rollback اجرا می‌شود؛ child exit `1` هم به `1`
+منتقل و rollback می‌شود، ولی در اجرای عادی systemd آن را طبق
+`Restart=on-failure` (چون در `RestartPreventExitStatus` نیست) دوباره امتحان
+می‌کند. انقضای deadline با child زنده exit `8` است و rollback می‌شود؛ `stopped`
+معتبر بدون listener رد نمی‌شود.
 `--force` unit را به‌روزرسانی می‌کند، daemon-reload و enable می‌زند و اگر unit از
 قبل active بود restart/try-restart می‌کند؛ اگر inactive بود `enable --now` آن را
 start می‌کند. `--force` می‌تواند unit قدیمی/بدون marker را در مسیر هدف، فقط اگر
@@ -1293,22 +1354,31 @@ overwrite نمی‌شود و exit `6` می‌دهد.
 پیش از preflight، `install` ابتدا target managed unit را مشخص می‌کند: اگر همان unit
 managed خودش active است، engine آن **مجاز** است و install/`--force` همان unit را
 همگرا/restart می‌کند؛ فقط اگر app یا headless engine دیگری با همان data-dir در حال
-اجرا باشد (یعنی engine مالک این unit نیست)، بدون نوشتن/فعال‌سازی unit با exit `6`
-refuse می‌کند. اگر managed autostart وجود داشته باشد، `install` هم برای جلوگیری از
+اجرا باشد (یعنی engine مالک این unit نیست؛ شامل lockهای legacy پنجرهٔ migration)،
+بدون نوشتن/فعال‌سازی unit با exit `6` refuse می‌کند. اگر managed autostart وجود داشته باشد، `install` هم برای جلوگیری از
 دو supervisor exit `6` می‌دهد. `ExecStart` و `--data-dir` با quoting/escape صحیح
 systemd نوشته می‌شوند (از جمله `%` → `%%` و `$` → `$$`) تا مسیرهای دارای
 فاصله/کاراکتر ویژه معتبر بمانند.
 
-قبل از هر نوشتن، `install` یک snapshot از محتوای unit قبلی (در صورت وجود) و
-وضعیت enabled/active آن می‌گیرد. اگر یکی از مراحل اصلی پس از نوشتن
-(`daemon-reload`، `enable`، readiness) شکست بخورد، دقیقاً یک rollback اجرا
-می‌شود: اگر process قبلی هرگز stop نشده بود، همان را حفظ می‌کند؛ فقط unit تازه را
-stop/disable و حذف می‌کند؛ محتوای قبلی را byte-for-byte restore و enabled/active
-را به حالت قبل برمی‌گرداند و فقط اگر process قبلی stop شده و قبلاً active بود
-restart می‌کند؛ سپس daemon-reload. برای adoption markerless هم فایل قبلی backup و
-در شکست restore می‌شود. اگر خود rollback شکست بخورد، آن حالت terminal است: هر دو
-خطا گزارش و unit برای بررسی دستی باقی می‌ماند (exit `1`). خروجی برای bind/port documented `6` و برای شکست ابزار `1`
-(`external_tool_failed`) است. اگر `Linger=no` باشد،
+قبل از هر نوشتن، `install` snapshot می‌گیرد: محتوای unit قبلی (در صورت وجود)،
+enabled، active و اینکه process قبلی توسط install متوقف شده است یا نه. اگر یکی
+از مراحل اصلی پس از نوشتن (`daemon-reload`، `enable`، `start`/`restart`،
+readiness) شکست بخورد، دقیقاً یک rollback اجرا می‌شود:
+
+- اگر process قبلی هرگز متوقف نشده بود، آن را stop نمی‌کند و unit را حذف
+  نمی‌کند؛ فقط فایل قبلی را byte-for-byte restore، enabled را به snapshot
+  برمی‌گرداند (disable فقط وضعیت boot را عوض می‌کند، نه process در حال اجرا) و
+  `daemon-reload` می‌زند؛ process در حال اجرا دست‌نخورده می‌ماند.
+- اگر process قبلی متوقف شده بود یا unit قبلی inactive بود، unit جدید را
+  stop/disable و حذف می‌کند، فایل قبلی را restore، enabled قبلی را برمی‌گرداند و
+  فقط اگر process قبلی stop شده و قبلاً active بود آن را start/restart می‌کند.
+- نصب تازه بدون unit قبلی: unit جدید stop/disable و حذف می‌شود.
+- برای adoption یک unit markerless، فایل قبلی backup و در شکست byte-for-byte
+  restore می‌شود (بدون تغییر stateای که قبلاً وجود نداشت).
+
+rollback یک‌بار اجرا می‌شود؛ شکست خود آن terminal است: هر دو خطا گزارش و unit برای
+بررسی دستی باقی می‌ماند (exit `1`). خروجی برای bind/port مستند `6` و برای شکست
+ابزار `1` (`external_tool_failed`) است. اگر `Linger=no` باشد،
 فقط دستور `sudo loginctl enable-linger <user>` را چاپ می‌کند و خودش sudo اجرا
 نمی‌کند. اجرای فرمان با `SUDO_USER`/`PKEXEC_UID` برای کاربر دیگر refuse می‌شود
 (exit `9`)؛ فقط کاربر هدف باید آن را اجرا کند. اگر systemd user manager در دسترس
@@ -1325,12 +1395,15 @@ exit `6`). بسته هیچ unit/postinst ندارد (از R13 به بعد) و ا
 **مسیرهای managed.** برای `app.lock`، `app.owner`، فایل autostart و unit سرویس یک
 قاعدهٔ واحد است: با `Lstat`/`O_NOFOLLOW` بررسی می‌شوند، باید regular file، مالک uid
 جاری و داخل دایرکتوری مورد انتظار باشند؛ symlink/non-regular/مالک دیگر بدون
-side-effect رد می‌شود (exit `6`؛ برای `app.owner` عدم دنبال‌کردن + fail-closed/abort
-با دلیل `app_marker_invalid`، نه overwrite). `app.lock` یک‌بار با `O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته
-می‌شود، fd آن تا خروج supervisor نگه داشته می‌شود و RouteLatch هرگز آن را
-unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن توسط همان uid خارج از تضمین
-single-instance است (root/همان uid مرز امنیتی نیست). `app.owner` با temp+rename
-اتمیک نوشته می‌شود. `service install` بدون `--force` فقط unit regular/مالک را
+side-effect رد می‌شود (exit `6`؛ برای `app.owner` عدم دنبال‌کردن + abort startup
+با دلیل `app_marker_invalid`، نه overwrite). `app.lock` یک‌بار با
+`O_CREAT|O_RDWR|O_NOFOLLOW` و `0600` ساخته می‌شود، fd آن تا خروج supervisor نگه
+داشته می‌شود و RouteLatch هرگز آن را unlink/replace نمی‌کند؛ حذف/جایگزینی دستی آن
+توسط همان uid خارج از تضمین single-instance است (root/همان uid مرز امنیتی نیست).
+`app.owner` هم یک inode پایدار است: یک‌بار ساخته می‌شود، lock آن تا خروج supervisor
+نگه داشته می‌شود و محتوا در همان fd نوشته می‌شود (نه temp+rename) تا lock و
+محتوا از هم جدا نشوند؛ بازسازی پس از حذف/خرابی فقط با همان قاعدهٔ no-follow و
+بدون overwrite مسیر غیرمجاز است. `service install` بدون `--force` فقط unit regular/مالک را
 همان می‌داند؛ `--force` symlink را overwrite نمی‌کند. `disable`/`uninstall` برای
 مسیر symlink/non-regular/غیرمالک هیچ stop/disable/حذفی انجام نمی‌دهند و exit `6`
 می‌دهند.
@@ -1343,8 +1416,9 @@ single-instance است (root/همان uid مرز امنیتی نیست). `app.ow
 باشند، `status` باید تعارض را گزارش کند و کاربر باید یکی را انتخاب/حذف کند.
 restart همیشه در سطح process است (tray child یا systemd)؛ restart درون‌process ممنوع
 می‌ماند. tray supervisor خروج غیرمنتظره child را با backoff و سقف (پیشنهاد: ۵ بار
-در ۶۰ ثانیه) restart می‌کند؛ exitهای مستند 4/6/7/10 بدون restart گزارش می‌شوند و
-child متوقف می‌ماند. پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن را خودکار
+در ۶۰ ثانیه) restart می‌کند؛ exitهای مستند 4/6/7/9/10 بدون restart گزارش
+می‌شوند و child متوقف می‌ماند؛ exit `1` خطای داخلی گذرا تلقی و با همان backoff
+دوباره امتحان می‌شود (systemd هم آن را طبق `Restart=on-failure` retry می‌کند). پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن را خودکار
 restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان `run` پیش‌فرض
 را GUI+tray می‌کند و فرمان `gui` جدا ندارد.
 
@@ -1355,15 +1429,24 @@ markerless `$XDG_CONFIG_HOME/systemd/user/routelatch.service` و symlinkهای
 `/usr/lib/systemd/user/routelatch.service` با upgrade حذف می‌شود، ولی باید بررسی و
 در صورت باقی‌ماندن symlink/user unit پاک شود. سپس `systemctl --user daemon-reload`،
 نصب بستهٔ جدید و انتخاب `autostart enable` یا `service install` انجام می‌شود. اگر
-unit قدیمی فراموش شود، engine آن lock همان data-dir را نگه می‌دارد و plain `run`
-با exit `4` رد می‌شود؛ ابتدا باید stop/disable شود.
+unit قدیمی فراموش شود، دو حالت دارد و هر دو باید امن بمانند: engine قدیمی که
+همین حالا در حال اجراست، lock legacy خود را (زیر `XDG_RUNTIME_DIR`، `<StateDir>`
+یا `<data-dir>`) نگه می‌دارد؛ engine جدید همان lock legacy را در پنجرهٔ migration
+می‌گیرد و نمی‌تواند، پس قبل از هر bind با exit `4` رد می‌شود — حتی اگر آن engine
+در mode `stopped` و بدون listener باشد. unit فراموش‌شده‌ای که هنوز engine جدید
+را start می‌کند، چون lockهای legacy در اختیار app جدید هستند نمی‌تواند engine
+دوم بسازد و خودش fail می‌شود. در هر دو حالت ابتدا stop/disable و سپس upgrade
+لازم است.
 `service install --force` می‌تواند unit قدیمی markerless را فقط در صورت regular
 file/مالکیت کاربر adopt کند؛ بدون `--force` unit متفاوت exit `6` می‌دهد. اسکریپت‌ها
 و تست‌های داخلی که foreground می‌خواهند باید `run --headless` را صدا بزنند.
 R13-E باید upgrade با unit کهنه را با نتیجهٔ قابل مشاهده بیازمايد: unit قدیمی
 stop/disabled می‌ماند، بستهٔ جدید هیچ unit در `/usr/lib` ندارد، هیچ restart loop،
 orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌شده (`autostart` یا `service`)
-سالم بالا می‌آید. `run` بدون `--headless` در unit جدید عمداً پشتیبانی نمی‌شود.
+سالم بالا می‌آید. این آزمون باید engine قدیمی فعال و `stopped` را، با و بدون
+`XDG_RUNTIME_DIR` و با `--data-dir`، پوشش دهد و ثابت کند lock/socket قدیمی به
+engine دوم اجازه نمی‌دهد. `run` بدون `--headless` در unit جدید عمداً پشتیبانی
+نمی‌شود.
 ## ۸. پوشش پذیرش
 
 | معیار | task | check |
@@ -1382,7 +1465,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | A12 | T3 | status/redirect/body/stream بایت‌به‌بایت؛ HEAD/POST/body؛ UDP صریحاً `0x07` بدون سوکت UDP |
 | A13 | R13 | `run --headless` foreground، crash/port collision، config خراب، shutdown تمیز با دادهٔ سالم؛ restart فقط در سطح process |
 | A14 | T7 — **D20 بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
-| A15 | R13 | `run` پیش‌فرض detached/tray فقط بعد از readiness برمی‌گردد؛ `--headless` foreground؛ `autostart`/`service install` idempotent؛ بسته بدون unit/postinst؛ نبود tray fail صریح |
+| A15 | R13 | `run` پیش‌فرض detached/tray فقط بعد از readiness واقعی (`status.ready` و listenerهای لازم بر اساس mode) برمی‌گردد؛ `--headless` foreground؛ `autostart`/`service install` idempotent؛ بسته بدون unit/postinst؛ نبود tray fail صریح؛ migration از lock/unit قدیمی engine دوم نمی‌سازد |
 
 ## ۹. محدودیت‌های ثبت‌شده و کار باز
 

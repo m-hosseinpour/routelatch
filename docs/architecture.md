@@ -155,15 +155,23 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   جایگزین است: engine foreground بدون tray/GUI برای ترمینال، SSH، container، تست و
   systemd. فرمان جدا برای `tray`/`gui` وجود ندارد؛ اگر GUI بعداً اضافه شود، همان
   `run` پیش‌فرض GUI+tray می‌شود و `--headless` دست‌نخورده می‌ماند (D26).
-- launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط پس از bind listenerها و
-  ثبت tray برمی‌گردد؛ خطای startup با exit code به فراخواننده می‌رسد. engine child
-  state lock و management socket قبل را دارد؛ invariant دقیق «یک engine در هر data
-  directory» است، نه هر کاربر. همهٔ lock/socket/app files از یک `InstanceDir`
-  مشتق از state/data directory (`<StateDir>/run` یا `<data-dir>/run`) می‌آیند، نه
-  از `XDG_RUNTIME_DIR`؛ بنابراین desktop و SSH با runtime env متفاوت همان lock و
-  socket را می‌بینند. app-mode یک `flock` روی `InstanceDir/app.lock` و یک marker
-  تشخیصی/`pid` در همان‌جا می‌نویسد؛ liveness را lock تعیین می‌کند، نه PID؛
-  supervisor مالک lock است و engine child آن را به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
+- launcher با `setsid`/readiness از ترمینال جدا می‌شود و فقط وقتی برمی‌گردد که
+  management socket با `status.ready=true` پاسخ دهد و tray ثبت شده باشد؛
+  listenerها فقط در mode غیر `stopped` برای readiness لازم‌اند. در timeout،
+  launcher فرایند supervisor/child را خاتمه می‌دهد و فقط پس از آزادشدن lock با
+  exit `8` برمی‌گردد، پس exit `8` یعنی هیچ appی باقی نمانده. خطای startup با exit
+  code به فراخواننده می‌رسد. engine child state lock و management socket قبل را
+  دارد؛ invariant دقیق «یک engine در هر data directory» است، نه هر کاربر. همهٔ
+  lock/socket/app files از یک `InstanceDir` مشتق از state/data directory
+  (`<StateDir>/run` یا `<data-dir>/run`) می‌آیند، نه از `XDG_RUNTIME_DIR`؛ بنابراین
+  desktop و SSH با runtime env متفاوت همان lock و socket را می‌بینند. در پنجرهٔ
+  migration، engine lockهای legacy مسیرهای R12 را هم probe/نگه می‌دارد تا engine
+  قدیمی (حتی در mode `stopped`) دیده شود. app-mode یک `flock` روی
+  `InstanceDir/app.lock` و یک `flock` دوم روی `InstanceDir/app.owner` دارد که
+  supervisor تا خروج نگه می‌دارد؛ محتوای marker (`starting`/`ready`، `generation`،
+  `pid`) فقط تشخیصی/دادهٔ `already_running` است و liveness را lock تعیین می‌کند،
+  نه PID. supervisor مالک lockها است و engine child آن‌ها را با `CLOEXEC` به ارث
+  نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
   می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
   ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
@@ -178,12 +186,16 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   بخشی از مدل دسکتاپ نیست.
 - برای VPS/server یک سرویس opt-in وجود دارد: `routelatch service install` یک systemd
   **user unit** در `$XDG_CONFIG_HOME/systemd/user` (fallback `~/.config/systemd/user`)
-  با `ExecStart=<absolute> run --headless` می‌سازد، enable/start می‌کند و اگر linger
+  با `ExecStart=<absolute> [--data-dir <abs>] run --headless` می‌سازد،
+  config/state مطلق را در unit pin می‌کند، enable/start می‌کند و فقط وقتی
+  `status.ready` واقعی شد (نه فقط `ActiveState`) موفقیت اعلام می‌کند؛ در شکست
+  محتوای unit و enabled/active قبلی را در یک rollback برمی‌گرداند. اگر linger
   خاموش باشد فقط `sudo loginctl enable-linger <user>` را چاپ می‌کند؛ خودش sudo
-  نمی‌زند. unit با یک marker مالکیت مشخص می‌شود؛ uninstall فقط unit مالک را حذف
-  می‌کند. `autostart` و `service` برای یک کاربر هم‌زمان فعال نمی‌شوند و install هر
-  کدام دیگری را detect و refuse می‌کند. unit نصب‌شده بخشی از بسته نیست و بستهٔ فعلی
-  R12 unit دارد؛ حذف آن در R13 انجام می‌شود. جزئیات در `docs/contracts.md §۷.۵` است.
+  نمی‌زند. unit با یک marker مالکیت مشخص می‌شود؛ uninstall اول ownership را
+  می‌سنجد و فقط unit مالک را حذف می‌کند. `autostart` و `service` برای یک کاربر
+  هم‌زمان فعال نمی‌شوند و install هر کدام دیگری را detect و refuse می‌کند. unit
+  نصب‌شده بخشی از بسته نیست و بستهٔ فعلی R12 unit دارد؛ حذف آن در R13 انجام
+  می‌شود. جزئیات در `docs/contracts.md §۷.۵` است.
 - آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، در R12 unit را دارد و از R13 طبق D26 هیچ unit/postinst یا فعالسازی سرویسی ندارد؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند، و انتشار آن مجوز جدا می‌خواهد. نصب واقعی تحت RPM و اجرای سرویس opt-in روی معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
