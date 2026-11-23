@@ -286,6 +286,20 @@ supervisor/autostart/doctor، حذف نشت goroutine، رد `--data-dir` با e
 root (skip چون non-root)، رفتار `disable`/`status` علیه user manager واقعی، و
 `umask` غیرعادی.
 
+**R13-D انجام شد (۲۰۲۶-۱۱-۲۴):** `service install|uninstall|status` و helper
+`internal/service` در `ea18f31` پیاده شد: unit دقیق §۷.۵ در base همان user
+manager، pin کردن baseهای XDG یا `--data-dir`، quoting systemd،
+idempotent/force/adoption، تعارض autostart/engine، readiness واقعی
+(`status.ready`/`listeners_open`)، نگاشت exitهای child، snapshot/rollback با
+precedence، linger hint بدون sudo، refuse کاربر دیگر، و uninstall
+ownership-first. بازبینی مستقل یافته‌های مادی (از جمله هویت argv دقیق و تست
+prefix-collision) داد که رفع و **Ready** شد. checks: `gofmt`/`go vet`/`go
+build` (همراه `CGO_ENABLED=0`)، full tests (acceptance ~۱۱۹s)، `-race` روی
+service/cmd، `scripts/check-artifact.sh`، و `systemd-analyze verify` روی unit
+موقت. **آزمون‌نشده:** نصب/stop/restart/rollback/linger واقعی user manager
+(سرویس زندهٔ میزبان دست‌نخورده)، branchهای PID/starttime فقط unit-tested، و
+گیت‌شدهٔ status واقعی پیش‌فرض skip است.
+
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
 `autostart` و `service install` idempotent باشند؛ بسته هیچ unit/postinst نداشته باشد؛
@@ -342,16 +356,16 @@ exitهای `1/4/6/7/9/10` child را terminal map می‌کند، و در هر �
 (شامل start/restart) با snapshot و precedence `MainPID`/starttime محتوا و
 enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-follow را می‌سنجد.
 
-**تصمیم‌های باز تا R13-D:** جزئیات تشخیص دقیق user manager/linger روی
-توزیع‌های مختلف؛ مرز GUI آینده. انتخاب/pin library tray، اجرای R13-B و R13-C
-بسته شدند.
+**تصمیم‌های باز تا R13-E:** آزمون واقعی user manager/linger روی توزیع‌های
+مختلف (R13-F)؛ مرز GUI آینده. انتخاب/pin library tray، اجرای R13-B/C/D بسته
+شدند.
 
-**قدم بعدی:** R13-D (service) روی helper `internal/systemd` و runtime R13-B؛
-سپس R13-E (بسته‌بندی/مستندات/migration) و R13-F (acceptance/review).
+**قدم بعدی:** R13-E (بسته‌بندی/مستندات/migration) روی runtime و service نهایی؛
+سپس R13-F (acceptance/review).
 
 ### وضعیت فعلی
 
-- **R13 — R13-A/B/C بسته شدند (۲۰۲۶-۱۱-۲۳، ارکستریتور):** D26 ثبت و
+- **R13 — R13-A/B/C/D بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
   `deedles.dev/tray v0.2.0` (MIT) را pin کرد (`77a5d22`؛ Plasma 6.6.7، build
   استاتیک چهار معماری، pidfd parent-death؛ تأیید بصری/GNOME/SSH/runtime دو
@@ -359,11 +373,14 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
   `run --headless` foreground، launcher/supervisor و tray پیش‌فرض، InstanceDir/
   lock/marker/pidfd/readiness و تست‌های جدول. R13-C در `c113dde` و `bd16367`
   پیاده شد: autostart، helper `internal/systemd`، probe احرازشده با deadline،
-  رد `--data-dir`، و gated KDE واقعی **PASS**. بازبینی‌های B و C ابتدا
-  **Not ready** و پس از اصلاح **Ready** بودند؛ full tests/-race/check-artifact
-  سبز. tray واقعی KDE، بستن ترمینال واقعی، pidfd ENOSYS/EPERM و runtime
-  غیر-amd64 هنوز آزمون‌نشده‌اند. هیچ سرویس، unit، autostart یا تنظیم دسکتاپ
-  تغییر نکرد. کار باز: R13-D تا R13-F؛ قدم بعدی R13-D.
+  رد `--data-dir`، و gated KDE واقعی **PASS**. R13-D در `ea18f31` پیاده شد:
+  `service install/uninstall/status`، unit دقیق، base pinning، readiness،
+  rollback، force/adoption و تعارض‌ها. بازبینی‌های B/C/D ابتدا **Not ready**
+  (یا یافتهٔ مادی) و پس از اصلاح **Ready** بودند؛ full tests/-race/
+  check-artifact سبز. tray واقعی KDE، بستن ترمینال واقعی، pidfd
+  ENOSYS/EPERM، نصب/rollback واقعی systemd و runtime غیر-amd64 هنوز
+  آزمون‌نشده‌اند. هیچ سرویس، unit، autostart یا تنظیم دسکتاپ تغییر نکرد. کار
+  باز: R13-E تا R13-F؛ قدم بعدی R13-E.
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
