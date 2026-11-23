@@ -52,19 +52,22 @@ sweep finishes.
 
 ## Install
 
-The current published release, `v0.1.3`, has 17 unsigned assets on the
-[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v0.1.3):
+The current published release, `v1.0.0`, has 17 unsigned assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.0.0):
 four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
 packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
-`.spec` files, four binary RPMs (`routelatch-0.1.3-1.<arch>.rpm`) and a
-`SHA256SUMS` file. `v0.1.1` and `v0.1.2` have the same 17-asset layout; the
-first release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
+`.spec` files, four binary RPMs (`routelatch-1.0.0-1.<arch>.rpm`) and a
+`SHA256SUMS` file. `v0.1.1`–`v0.1.3` have the same 17-asset layout; the first
+release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
 `SHA256SUMS`.
 
-`v0.1.3` predates the runtime change on this page: its plain `routelatch run`
-is foreground and its packages install a systemd user unit at
-`/usr/lib/systemd/user/routelatch.service`. **Packages built from this revision
-ship no systemd unit, autostart entry or maintainer script.** A package contains
+`v1.0.0` is the runtime release on this page: plain `routelatch run` is the
+detached app/tray, `run --headless` is the foreground engine, and packages
+install no systemd unit, autostart entry or maintainer script. **Upgrade from
+`v0.1.3` requires stopping and removing its old user unit** (`/usr/lib/systemd/user/routelatch.service`)
+before installing; a leftover unit would either lose its main process or start
+an app where a service is expected. The opt-in service unit is created only by
+`routelatch service install`. A package contains
 the binary and the license/notice documents; the opt-in service unit is created
 only by `routelatch service install`. The `amd64` and `arm64` tarballs also
 ship a second binary, `bin/sing-box`: the unmodified, GPL-3.0 `sing-box` v1.14.4
@@ -86,23 +89,22 @@ file whose check fails.
 From a tarball:
 
 ```sh
-tar xzf routelatch-v0.1.3-linux-amd64.tar.gz
-cd routelatch-v0.1.3-linux-amd64
+tar xzf routelatch-v1.0.0-linux-amd64.tar.gz
+cd routelatch-v1.0.0-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ln -sf routelatch "$HOME/.local/bin/rlch"
 ```
 
-The last command creates `rlch`, a short alias for `routelatch`. Package builds
-from this revision also ship that link; the manual `ln -s` works with an older
-binary too. The published v0.1.3 assets predate the alias unless you create it
-yourself.
+The last command creates `rlch`, a short alias for `routelatch`. The v1.0.0
+tarballs and packages ship that link; older published assets predate it, and
+the manual `ln -s` works with an older binary too.
 
 Or install a package (all release packages are **unsigned**; the only
 integrity check is the generated `SHA256SUMS`):
 
 ```sh
-sudo apt install ./routelatch_0.1.3_amd64.deb
-sudo rpm -i routelatch-0.1.3-1.x86_64.rpm
+sudo apt install ./routelatch_1.0.0_amd64.deb
+sudo rpm -i routelatch-1.0.0-1.x86_64.rpm
 ```
 
 Packages install `/usr/bin/routelatch` and its documents under
@@ -181,8 +183,8 @@ the spec `Version:` field carry that exact value.
 
 `package.sh` generates and checksums the specs, while a binary RPM needs
 `rpmbuild`. CI builds and inspects all four binary RPMs with `rpmbuild`/`rpm`;
-the published `v0.1.1`, `v0.1.2` and `v0.1.3` RPMs were built separately from the
-same specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs
+the published `v0.1.1`, `v0.1.2`, `v0.1.3` and `v1.0.0` RPMs were built separately
+from the same specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs
 carry a CI-only stamp and are not shipped. The spec has no service-enable scriptlets
 and no `BuildArch`: the architecture comes from `rpmbuild --target`. There is no
 dnf/yum repository and no GPG signing. Windows/macOS builds, 32-bit builds and a
