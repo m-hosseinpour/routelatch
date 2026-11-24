@@ -306,8 +306,10 @@ green commit (`fb969fb`, CI `45490941645`) contains no Go files — only the
 workflow and two documents — so the failure is not attributable to this change.
 The same full suite passed locally on 2026-11-25 with the pinned Go 1.27.4
 (`CGO_ENABLED=0 GOPROXY=off go test -count=1 ./...`: all 22 packages, including
-`internal/acceptance` in 118s). A follow-up document commit retriggers CI; the
-release gate still requires a green push run on the eventual tag commit.
+`internal/acceptance` in 118s). A follow-up document commit (`0131688`) retriggered
+CI; that run (`45496529871`) failed the same `Test` step while the other five jobs
+stayed green, so a further retry follows. The release gate still requires a green
+push run on the eventual tag commit.
 
 ## v0.1.3 release (historical)
 
