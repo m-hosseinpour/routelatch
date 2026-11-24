@@ -215,6 +215,73 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ، خروجی عمومی و انتشار همیشه مجوز جدا می‌خواهند.
 
+### R14 — ساخت و انتشار ریلیز در GitHub Actions (تعریف ۲۰۲۶-۱۱-۲۴؛ شروع نشده)
+
+**وضعیت:** تعریف شد؛ هیچ workflow، کد یا اجرای CI برای این کار نوشته نشده است.
+تصمیم D27: از این پس ریلیز در CI ساخته و منتشر می‌شود و هیچ دارایی‌ای از ماشین
+محلی آپلود نمی‌شود. trigger انتخاب‌شده **push تگ annotated `v*`** است و همان
+push مجوز انتشار خودکار است؛ توقف برای تأیید دستی در جریان عادی وجود ندارد
+(draft فقط برای اتمیک‌بودن آپلود است و همان workflow آن را عمومی می‌کند).
+
+**نتیجهٔ قابل مشاهده:** push یک تگ نسخه، یک GitHub Release عمومی با همان ۱۷
+دارایی (چهار tarball، چهار `.deb`، چهار spec، چهار RPM باینری و `SHA256SUMS`)
+می‌سازد؛ هیچ مرحله‌ای روی ماشین کاربر اجرا نمی‌شود. ریلیزهای `v0.1.0` تا
+`v1.0.0` و دارایی‌هایشان دست‌نخورده می‌مانند. Forgejo فقط ref/tag را mirror
+می‌کند و دارایی Release ندارد.
+
+**دامنه:**
+- workflow جدید `.github/workflows/release.yml` (نام پیشنهادی) با
+  `on: push: tags: ['v*']` و `permissions: contents: write` فقط برای job
+  انتشار؛ checkout با تاریخچهٔ کامل برای خواندن پیام تگ annotated.
+- بازاستفاده از `scripts/build.sh`، `scripts/package.sh`،
+  `scripts/check-artifact.sh` و `scripts/check-package.sh` با `VERSION` برابر
+  نام تگ، `COMMIT` برابر commit تگ، `CGO_ENABLED=0` و
+  `SOURCE_DATE_EPOCH=1700000000`.
+- دانلود آرشیوهای رسمی pin‌شدهٔ sing-box v1.14.4 برای amd64/arm64، تأیید
+  SHA-256 با مقادیر داخل `scripts/package.sh` و استخراج در `dist/singbox`؛
+  `REQUIRE_SINGBOX=1` تا release بدون sidecar منتشر نشود.
+- ساخت چهار RPM باینری در CI (همان روش job `rpm-packages` یا container
+  `ubuntu:26.04`)، بازرسی متادیتا/payload و افزودن آن‌ها به دارایی‌ها؛
+  `SHA256SUMS` نهایی باید هر ۱۶ فایل را پوشش دهد.
+- publish اتمیک: ابتدا draft Release ساخته شود، هر ۱۷ دارایی آپلود و
+  نام/اندازه/digest آن‌ها از API تأیید شود، سپس همان workflow draft را عمومی
+  کند؛ اگر هر مرحله شکست بخورد Release عمومی ناقص باقی نمی‌ماند.
+- یادداشت انتشار از پیام تگ annotated خوانده شود؛ release note خالی مجاز
+  نیست. مستندات `README.md` و `packaging/README.md` دربارهٔ مسیر release،
+  sidecar و PACKAGE-NOTES در همان تغییر به‌روز شوند؛ PACKAGE-NOTES بسته‌های
+  CI نباید بگوید «local build, not published».
+
+**خارج از دامنه:** بازسازی/جابه‌جایی ریلیزهای گذشته؛ انتشار دارایی روی Forgejo؛
+امضای GPG، مخزن بسته، Windows و آزمون runtime معماری‌های غیر amd64؛ تغییر
+رفتار محصول.
+
+**پیش‌نیازها و ریسک‌ها:**
+- تگ باید annotated و روی `main` باشد و full CI روی همان commit سبز باشد
+  (اجرای دوبارهٔ همان jobها در release workflow یا خواندن نتیجهٔ CI همان SHA)؛
+  هیچ releaseای از commit ناموفق ساخته نمی‌شود.
+- «انتشار خودکار با push تگ» یعنی یک تگ اشتباه می‌تواند عمومی شود؛ محافظ‌ها
+  الگوی `v*`، الزام annotated tag، بررسی `main`، اجرای کامل gate و publish
+  فقط پس از تأیید دارایی‌هاست. اصلاح/حذف Release اشتباه یک عملیات دستی جدا و
+  نیازمند مجوز است.
+- `GITHUB_TOKEN` تنها credential است؛ هیچ secret، مسیر شخصی یا ابزار محلی
+  وارد workflow نمی‌شود.
+- برای آزمون بدون انتشار، یک حالت `workflow_dispatch` با `publish=false`
+  (یا اجرای همان jobها روی branch) پیش‌بینی شود که کل ساخت و بازرسی را اجرا
+  می‌کند و Release نمی‌سازد؛ اولین انتشار واقعی همچنان مجوز صریح کاربر
+  می‌خواهد.
+
+**معیار پذیرش:**
+- YAML و shellها parse شوند؛ dry-run کامل روی branch، هر ۱۷ دارایی را بسازد،
+  `check-artifact.sh` و `check-package.sh` pass شوند، دو اجرای packaging همان
+  `SHA256SUMS` را بدهد و `sha256sum -c` سبز باشد، بدون ایجاد Release.
+- یک شکست کنترل‌شده در dry-run (مثلاً checker) ثابت کند Release عمومی ساخته
+  نمی‌شود.
+- اولین push تگ واقعی (با مجوز جدا) Release عمومی با ۱۷ دارایی بسازد؛ API
+  نام/اندازه/digest هر دارایی را برابر artifact CI نشان دهد، تگ به commit
+  موردنظر اشاره کند و هیچ دارایی اضافه/ناقص نباشد.
+- شاهد ثبت‌شده در `docs/release-readiness.md` و همین بخش: run id، commit،
+  checksumها و نتیجهٔ verify.
+
 ### R13 — مدل اجرای app/tray و سرویس اختیاری (شروع ۲۰۲۶-۱۱-۲۳)
 
 **وضعیت:** تصمیم D26 ثبت شد و مستندات طراحی (`requirements.md`، `architecture.md`،
@@ -466,7 +533,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 
 - **گروه ج — بخش ۳ انجام شد (۲۰۲۶-۱۱-۲۱، ارکستریتور؛ شکست TLS-pin روی یک عضو واقعی اثبات شد، بدون تعمیم؛ wire-level replay روی pool واقعی اثبات نشد):** طبق دامنهٔ همین واحد فقط دو مورد باقی‌مانده تعیین شد. **نمونهٔ ایزوله:** data-dir زیر `/tmp/opencode/rl-part3/instance` (0700؛ فایل‌ها 0600) با portهای ۱۸۳۱۷/۱۸۳۱۸ و process foreground بدون unit؛ seed همان کپی فقط‌خواندنی `state.json` سرویس زنده (۱۷۶ رکورد) بود که sourceهای حاوی origin و همهٔ rules در آن حذف و فقط یک rule دقیق برای مقصد آزمون اضافه شد. **pin:** یک عضو واقعی TLS pool (trojan/ws/tls) با افزودن `pinned_peer_cert_sha256` اشتباه (۶۴ hex صفر) و بدون تغییر هیچ فیلد دیگر انتخاب شد. یک CONNECT به مقصد تأییدشده از proxy ایزوله: curl با **rc=35** و «TLS connect error: unexpected eof» در **۰٫۲۵s**، **۰ بایت** پاسخ، **۰ درخواست در شمارندهٔ سمت مقصد** (سرویس ثبت درخواست عمومی؛ بازبینی دوباره پس از فاز کنترل هم ۰)، `proofs={accepted:0,confirmed:0}` و `open=0`، بدون fallback مستقیم؛ رکورد cooling شد و دو نمونهٔ شکست ثبت شد؛ مسیر CONNECT کاربر شکست pre-byte را با kind `destination_unconfirmed` ثبت می‌کند و reason نهایی **`cooling:exit_unreachable`** فقط از یک نمونهٔ probe همان رکورد می‌آید (probe هم pin را بررسی می‌کند؛ tick خودکار ۳۰s با gate چرخش ۱۰ دقیقه)، پس هر دو نمونه به یک CONNECT نسبت داده نمی‌شوند؛ `status` سرویس خوانا ماند. پس از شکست، pin حفظ می‌شود: مسیر شکست فقط health/status را می‌نویسد و هیچ کدی `pinned_peer_cert_sha256` را پاک یا `insecure_tls` را فعال نمی‌کند (تأیید منبع‌کدی؛ state ایزوله حذف شد؛ `internal/pool/health.go`، `internal/engine/config.go`). **کنترل در همان نمونه (همان data-dir/ports؛ process فقط برای بازگرداندن رکورد ری‌استارت شد):** پس از حذف pin، انتخاب دستی همان رکورد cooling پذیرفته شد و یک CONNECT به همان مقصد **200 با ۱۵۶ بایت** در **۰٫۹۰s** و **دقیقاً ۱ درخواست** در شمارندهٔ مقصد داد؛ `proofs.accepted=1`/`confirmed=0` و رکورد دوباره healthy شد. **wire-level replay:** شمارندهٔ سمت مقصد اکنون در دسترس است، ولی پنجرهٔ D22 به exitی نیاز دارد که درخواست را بپذیرد/forward کند و پیش از اولین بایت پاسخ بمیرد؛ exit عمومی ثالث را نمی‌توان دقیقاً در آن نقطه شکست داد و شکست pre-byte آن از این میزبان قابل مشاهده نیست. در مسیر core-backed، CONNECT محلی پیش از تماس با exit برمی‌گردد (proof class `accepted`) و شکست pin بعد از آن تونل را می‌بندد؛ exit هرگز درخواست را نپذیرفت و شمارندهٔ مقصد ۰ ماند، پس pin غلط پنجرهٔ replay را فعال نکرد. بنابراین نیمهٔ pool واقعی **اثبات‌نشده** ماند و اجرا نشد؛ شاهد fixture محلی بخش ۲ (exit اول ۱۳۹ بایت را forward کرد و origin درخواست ۱ را دید، exit دوم همان درخواست را دید و کلاینت فقط یک پاسخ گرفت) به‌عنوان کران بالای پنجره معتبر است. **قابلیت گمشده در آن تاریخ:** یک exit تحت کنترل ما (مثلاً VPS) در لبهٔ pool که درخواست نشان‌دار را forward کند و پیش از اولین بایت پاسخ قطع شود، به‌همراه مقصد شمارنده. **در ۲۰۲۶-۱۱-۲۲ این نیاز با یک gate/مقصد تحت کنترل (نه exit) و دو exit واقعی برآورده شد** (رکورد بالاتر)؛ واریانت «exit تحت کنترل» جداگانه آزموده نشد. **حدود:** فقط یک عضو TLS و یک تلاش pin آزموده شد و نتیجه به سایر exitها/پروتکل‌ها تعمیم نمی‌یابد؛ کنترل نیازمند ری‌استارت process بود (نه همان process)؛ شمارندهٔ مقصد یک سرویس ثالث است، نه میزبان ما؛ pin failure در سطح محصول `exit_unreachable` گزارش شد و خطای Xray عمداً لاگ نمی‌شود. **ایزولاسیون/secrets:** سرویس زنده پیش از آزمون و بلافاصله پس از خاموشی نمونه `active` با `MainPID=2026`، `NRestarts=0`، `ExecMainStatus=0` و listenerهای ۸۳۱۷/۸۳۱۸ بود؛ در بازبینی نهایی (۱۶:۴۲:۴۱) یک restart تمیز که این واحد صادر نکرد (`Stopping`→`Started`، بدون failure و با `NRestarts=0`) با `MainPID=79606` و باینری عادی `/usr/bin/routelatch` دیده شد، نه باینری/دادهٔ ایزوله؛ علت آن تعیین نشد و هیچ فرمان تغییردهنده‌ای از این واحد به unit زنده فرستاده نشد. هیچ listener/process آزمایشی نماند؛ اسکن پیش از حذف روی log و شاهد حفظ‌شده **۰** hit برای server/display/credential هر ۱۷۶ رکورد و **۰** URL/UUID داد (خروجی خام اسکن نگه داشته نشد؛ خلاصه در شاهد)؛ کپی seed، state/log ایزوله، بدنه‌ها و token مقصد حذف شدند. **HEAD پیش از commit: `d50db6f`؛ بدون تغییر کد محصول؛ نقص محصول یافت نشد.** این مورد در ۲۰۲۶-۱۱-۲۲ با gate/مقصد تحت کنترل کاربر اثبات شد (رکورد جدید بالاتر)؛ محدودیت‌های همان اثبات به قوت خود باقی است.
 
-- **پس‌گرفتن ریلیز `v0.1.4` و اصلاح قاعدهٔ تحویل (۲۰۲۶-۱۱-۲۱، ارکستریتور):** batch شواهد گروه ج (`1be8e9f`، `79c0e53`) فقط push شد و ریلیز نمی‌شود. تگ annotated `v0.1.4` (شیء تگ `8e224a7`) و ریلیز عمومی GitHub آن (id `453655267`، ۱۵ دارایی از ۱۷ آپلود شده) در همان روز به درخواست کاربر پس‌گرفته شدند، چون ریلیزی که ارزش کاربری اضافه نمی‌کند نباید منتشر شود: ریلیز با API حذف شد (HTTP 204) و تگ محلی و روی هر دو remote حذف شد. **تأیید:** `git tag -l v0.1.4` خالی است، `git ls-remote --tags` روی `github` و `origin` هیچ `v0.1.4` ندارد، `main` هر دو remote روی `79c0e53` است و `v0.1.0`–`v0.1.3` دست‌نخورده‌اند؛ آخرین ریلیز همان `v0.1.3` است. قاعدهٔ تحویل در `AGENTS.md` بازنویسی شد: push همچنان بدون درخواست جدا انجام می‌شود، ولی tag/release فقط برای batchی است که چیزی را که کاربر دریافت می‌کند تغییر می‌دهد (رفتار برنامه، قابلیت، بسته‌بندی/artifact، امنیت یا قرارداد کاربرمحور)؛ batch فقط‌مستند/شاهد push می‌شود و ریلیز نمی‌شود. جزئیات در `docs/release-readiness.md` است.
+- **پس‌گرفتن ریلیز `v0.1.4` و اصلاح قاعدهٔ تحویل (۲۰۲۶-۱۱-۲۱، ارکستریتور):** batch شواهد گروه ج (`1be8e9f`، `79c0e53`) فقط push شد و ریلیز نمی‌شود. تگ annotated `v0.1.4` (شیء تگ `8e224a7`) و ریلیز عمومی GitHub آن (id `453655267`، ۱۵ دارایی از ۱۷ آپلود شده) در همان روز به درخواست کاربر پس‌گرفته شدند، چون ریلیزی که ارزش کاربری اضافه نمی‌کند نباید منتشر شود: ریلیز با API حذف شد (HTTP 204) و تگ محلی و روی هر دو remote حذف شد. **تأیید:** `git tag -l v0.1.4` خالی است، `git ls-remote --tags` روی `github` و `origin` هیچ `v0.1.4` ندارد، `main` هر دو remote روی `79c0e53` است و `v0.1.0`–`v0.1.3` دست‌نخورده‌اند؛ آخرین ریلیز در آن تاریخ همان `v0.1.3` بود. قاعدهٔ تحویل در `AGENTS.md` بازنویسی شد: push همچنان بدون درخواست جدا انجام می‌شود، ولی tag/release فقط برای batchی است که چیزی را که کاربر دریافت می‌کند تغییر می‌دهد (رفتار برنامه، قابلیت، بسته‌بندی/artifact، امنیت یا قرارداد کاربرمحور)؛ batch فقط‌مستند/شاهد push می‌شود و ریلیز نمی‌شود. جزئیات در `docs/release-readiness.md` است.
 
 - **رد gecko بدون رمز obfs در import (۲۰۲۶-۱۱-۲۱، ارکستریتور — رفع یافتهٔ ب/۲):** لینک `hysteria2://…?obfs=gecko` بدون `obfs-password` (یا با مقدار خالی) حالا در import با status `invalid` و دلیل پایدار **`missing_obfs_password`** رد می‌شود؛ پیش از این `unknown` وارد می‌شد و sing-box v1.14.4 بعداً کانفیگ تولیدشده را با «missing obfs password» رد می‌کرد، خلاف invariant «اعتبارسنجی پیش از ساخت engine». تغییر در `internal/imports/record.go` (دروازهٔ `validateNode`) و ثابت/متن دلیل در `internal/imports/sanitize.go` است؛ `obfs` همچنان اختیاری است، salamander بدون رمز رفتار پیشین (`invalid_obfs`) را نگه می‌دارد و نوع ناشناخته هم `invalid_obfs` می‌ماند. همین دروازه برای outbound JSON هیستریا۲ هم کار می‌کند. قرارداد عمومی در `docs/contracts.md` §۵.۴ ثبت شد. **شواهد:** تست `TestHysteria2ObfsPasswordRequired` پیش از تغییر روی gecko بدون رمز `status=unknown` داد و پس از تغییر pass (شامل `hy2://`، alias `obfsPassword` و رمز خالی)؛ `gofmt -l` روی چهار فایل Go تغییریافته خالی؛ `go vet ./...` و `go build ./...` exit 0؛ `go test -count=1 ./internal/imports/...` سبز؛ `go test -count=1 ./...` سبز (۱۷/۱۷ پکیج، acceptance **۱۱۶٫۹۹۷s**، گیت‌ها خاموش). **بازبینی مستقل:** `Ready with nits` — یک نادرستی سند در توضیح مکانیسم دادهٔ قدیمی و دو nit (کامنت فیلد قرارداد، پوشش alias شامل حالت مثبت `obfsPassword`) رفع شدند؛ دور تأیید: **Ready** (تنها nit باقی‌مانده، مثبت‌کردن تست alias بود که همان‌جا اعمال شد). **باقی (که بعداً رفع شد — «تصمیم‌های باز» مورد ۱، ۲۰۲۶-۱۱-۲۱):** در آن زمان رکورد gecko بدون رمزی که پیش از این تغییر ذخیره شده بود در import جدید ساخته نمی‌شد؛ اگر در state قدیمی می‌ماند، دو validator آن دورهٔ engine/singbox (که رمز را فقط برای salamander اجباری می‌کردند) آن را نمی‌گرفتند و هنگام Sync کانفیگ sidecar، sing-box آن را رد می‌کرد و همهٔ exitهای hysteria2 با `sidecar_unavailable` کنار گذاشته می‌شدند — fail-closed و بدون direct، ولی بدون جداسازی per-record. رفع بعدی مشتق‌سازی `unsupported`/`missing_obfs_password`، کنارگذاری per-record و validator جدید gecko را اضافه کرد، بدون migration یا بازنویسی state. commit محلی: `fix(imports): reject gecko obfs without obfs-password`.
 
@@ -630,12 +697,13 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
+| R14 | **تعریف شد، شروع نشده:** انتقال ساخت/انتشار ریلیز به GitHub Actions روی push تگ annotated `v*`؛ ساخت ۱۷ دارایی، تأیید checksumها و publish خودکار اتمیک، بدون ساخت/آپلود از ماشین محلی (D27). | A14 (انتشار) | پیاده‌سازی workflow و dry-run پس از شروع task؛ اولین push تگ/انتشار واقعی مجوز صریح کاربر می‌خواهد |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 
-**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12، R13 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 کامل و `v1.0.0` منتشر شد.**
+**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12، R13 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 کامل و `v1.0.0` منتشر شد. R14 تنها کار باز است.**
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -644,7 +712,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 `v0.1.1`، `v0.1.2` و `v0.1.3` با مجوز صریح کاربر انجام شدند؛ انتشار `v0.1.3` برای
 همین batch در ۲۰۲۶-۱۱-۲۱ مجاز شد و در همان تاریخ منتشر شد (قاعدهٔ تحویل در
 `AGENTS.md`). batch شواهد گروه ج (`1be8e9f`، `79c0e53`) فقط push شد؛ ریلیز `v0.1.4`
-که برایش ساخته شده بود به درخواست کاربر پس‌گرفته شد و آخرین ریلیز `v0.1.3` است.
+که برایش ساخته شده بود به درخواست کاربر پس‌گرفته شد و آخرین ریلیز در آن تاریخ `v0.1.3` بود.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -656,7 +724,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | A13 | **مدل D26 پیاده شد (R13-B/C/D)؛ smoke واقعی app/tray روی KDE PASS؛ نصب/rollback واقعی service و reboot آزمون‌نشده** | smoke واقعی با data-dir ایزوله: `run --json` پس از readiness برگشت، `status.ready`/`listeners_open`، tray روی watcher ثبت شد، SIGHUP/بستن pty ادامه داد، SIGTERM/SIGKILL supervisor بدون orphan و با بستن listener؛ گیت‌شدهٔ autostart واقعی PASS. **مدل قبلی (R1 + بررسی ۲۰۲۶-۱۱-۲۰ + corrupt-state ۲۰۲۶-۱۱-۲۱)** شاهد تاریخی است؛ corrupt-state حالا آفلاین با `run --headless` پوشش داده می‌شود. **باقی:** نصب/rollback/linger واقعی user manager و upgrade unit قدیمی `/usr/lib` آزمون‌نشده؛ فقط host/amd64 |
 | A01 | **پذیرفته و بسته (شهادت کاربر، ۲۰۲۶-۱۱-۲۱)** | معیار با شهادت کاربر برآورده شد، نه با اجرای ما: کاربر build محلی را از این ماشین برداشت و `.deb` منتشرشدهٔ `v0.1.2` را روی آن نصب کرد و طبق انتظار کار کرد. ما محیط پاک را نیازمودیم و ادعای آزمون آن را نمی‌کنیم؛ شاهدهای محلی همچنان مسیر نصب واقعی/launch (R1)، metadata/payload `.deb`، اسپک RPM و اجرای payload `0.1.2.8.g42b9e4e`/amd64 در container یک‌بارمصرف‌اند. آزمون آیندهٔ VPS به تصمیم کاربر است و کار باز پذیرش شمرده نمی‌شود |
 | A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **GNOME به‌تعویق‌افتاد (اولویت پایین، تصمیم کاربر ۲۰۲۶-۱۱-۲۱):** نشست واقعی GNOME آزموده نشده و این یک محدودیت شناخته‌شده است، نه کار معلق این چرخه |
-| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیز `v0.1.1`، `v0.1.2` و `v0.1.3` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند |
+| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیزهای `v0.1.1`، `v0.1.2`، `v0.1.3` و `v1.0.0` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند |
 | A15 | **پیاده‌سازی شد (R13-A..E)؛ smoke واقعی app/tray و package checks pass؛ نصب واقعی service/autostart login و کلیک Quit در tray آزمون‌نشده** | `run` پیش‌فرض detached/tray/readiness، `--headless` foreground، autostart و service idempotent، حذف unit/autostart/postinst از بسته، fail صریح نبود tray/pidfd؛ fake-tray/child و package checks برای idempotency/rollback؛ smoke واقعی KDE (readiness، tray registration، SIGHUP، SIGTERM/SIGKILL بدون orphan) و گیت‌شدهٔ autostart PASS. **باقی:** نصب/rollback/linger واقعی و Quit با کلیک منو؛ GNOME/SSH واقعی؛ pidfd ENOSYS/EPERM؛ runtime غیر-amd64 |
 | `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری (`amd64`، `arm64`، `riscv64`، `ppc64el`)؛ `check-package.sh` مجموعهٔ دقیق `SHA256SUMS`، control بدون maintainer script، مجموعهٔ دقیق payload، mode/owner و اعتبار نام معماری Debian را میسنجد؛ تکرار بایتیکسان؛ تستهای منفی حذف خط checksum/postinst/فایل اضافه/mode غلط همه fail شدند؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | اسپک/باینری RPM (R12 فاز ۲) | **اسپک: ساخت/اعتبارسنجی محلی؛ باینری: ساخت/بازرسی و اجرای payload روی amd64** | چهار اسپک (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) با Version برابر `.deb`، منبع pin‌شده با SHA256، `%files` شامل LICENSE/NOTICE در `/usr/share/licenses/routelatch/` و بقیه اسناد در `/usr/share/doc/routelatch/`، بدون scriptlet/فعال‌سازی سرویس؛ تست منفی ۷ حالت fail کرد؛ rpmbuild/rpm/rpmspec به‌صورت سیستمی نصب نشدند؛ rpm 6.0.1 استخراج‌شده باینری‌های `0.1.1` را ساخت/بازرسی کرد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد؛ jobCI `rpm-packages` در اجرای `44682457124` سبز شد |
@@ -718,31 +786,26 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 
 ### نقطهٔ شروع جلسهٔ بعد
 
-1. `AGENTS.md` و همین بخش (مخصوصاً R13) را بخوان؛ `git status` و
+1. `AGENTS.md` و همین بخش (مخصوصاً R14) را بخوان؛ `git status` و
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۳): HEAD پیش از commit مستندات `de70f20`، commit D26
-   `5dbc070`، اصلاحات دور اول `973d5a8`، دور دوم `76dd6d6`، دور سوم `a7fa3b6`،
-   دور چهارم `b623567`، دور پنجم `f9bcd45`، دور ششم `5a28874`، دور هفتم
-   `53ebf68`، دور هشتم `eddcc4e`، دور نهم `58c4430`، دور دهم `2d5db69`، دور
-   یازدهم `7407a6d` و دور دوازدهم `ee28f23` (verdict دور دوازدهم **Ready**، فقط
-   مستندات)؛ D26 ثبت شده و هیچ
-   کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
-   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12، گروه ج،
-   R13-A..F و انتشار `v1.0.0` بسته شده‌اند؛ کار باز v1 نمانده است.
-3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
-   `--headless` تنها حالت جایگزین؛ فرمان `tray`/`gui` جدا نیست؛ `autostart` XDG؛
-   `service install` فقط systemd user unit + linger؛ بسته هیچ unit/postinst ندارد.
-4. ترتیب: R13-A (spike tray pure-Go) → R13-B (runtime) → R13-C/D (autostart/service)
-   → R13-E (packaging/docs/migration) → R13-F (acceptance/review/release). C و D
-   بعد از B مستقل‌اند؛ E بعد از C/D؛ B1/B2 بدون release میانی.
-5. برای هر تغییر: تست واحد + harness جریان کامل؛ `gofmt -l`، `go vet ./...`،
-   `go build ./...`، `go test -count=1 ./...`؛ تست‌های گیت‌شدهٔ tray/service فقط با
-   مجوز میزبان؛ بازبینی مستقل؛ commit محلی. نصب/فعال‌سازی سرویس، تغییر autostart،
-   تغییر پروکسی دسکتاپ و اجرای tray واقعی روی میزبان مجوز جدا می‌خواهند.
-6. شواهد را از `docs/contracts.md` و `spike/*/FINDINGS.md` بردار، نه از حافظه. اگر
-   spike tray شکست خورد، تصمیم cgo/کتابخانه/تعویق tray را با کاربر باز کن و تضمین
-   static یا «همیشه tray» را بی‌صدا ضعیف نکن.
-7. پایان هر task: ردیف R13، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۴): `v1.0.0` آخرین ریلیز است و R1–R13 و انتشار بسته
+   شده‌اند؛ تنها کار باز **R14** است (ساخت/انتشار ریلیز در GitHub Actions،
+   تصمیم D27). R13-F با verdict **Ready** بسته شد و R14 هنوز هیچ فایل workflow،
+   کد یا اجرای CI ندارد.
+3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
+   ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
+   ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
+   تگ دست‌نخورده‌اند.
+4. ترتیب R14: (a) workflow release + dry-run بدون انتشار → (b) بازبینی مستقل →
+   (c) اولین انتشار واقعی با مجوز جدا. قبل از (a) هیچ فایل workflow ایجاد نشده
+   است.
+5. برای هر تغییر: YAML/shell parse، dry-run کامل، دو اجرای packaging با
+   `SHA256SUMS` یکسان، `check-artifact.sh`/`check-package.sh`، و بازبینی مستقل.
+   ایجاد تگ/انتشار عمومی و هر تغییر میزبان مجوز جدا می‌خواهد.
+6. شواهد را از `docs/contracts.md`، `packaging/README.md` و اجرای واقعی CI
+   بردار، نه از حافظه؛ اگر رفتار GitHub Actions یا محدودیت runner با فرض‌ها فرق
+   داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
+7. پایان هر task: ردیف R14، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
 
 ### مسائل و حدود مجوز
 

@@ -14,6 +14,13 @@ v0.1.0 sections, the history scan, name check and dependency audit remain
 historical evidence; they are not repeated here. The tags, pushes and releases
 were explicitly authorized by the project owner.
 
+**Future releases (D27, 2026-11-24).** From the next release on, the plan is for
+GitHub Actions to build all 17 assets and create the public GitHub Release on an
+annotated `v*` tag push; nothing is to be built or uploaded from a local machine.
+That path is defined but **not implemented or exercised** yet, so no statement
+below should be read as evidence for it. Everything below remains historical
+evidence of the local build/upload process used for `v0.1.0`–`v1.0.0`.
+
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
 `c1e60ea`). Redaction rule used throughout: findings name the commit, path and
