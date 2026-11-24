@@ -19,9 +19,9 @@ builds all 17 assets and creates the public GitHub Release on an annotated `v*`
 tag push; nothing is built or uploaded from a local machine. The workflow is
 implemented in `.github/workflows/release.yml` and was exercised by complete
 pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below); the first real
-tag and release still need the project owner's separate authorization.
-Everything below remains historical evidence of the local build/upload process
-used for `v0.1.0`–`v1.0.0`.
+tag and release still need the project owner's separate authorization. The
+historical release sections below remain evidence of the local build/upload
+process used for `v0.1.0`–`v1.0.0`; the CI pipeline section is current.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
