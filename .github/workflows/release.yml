@@ -200,13 +200,6 @@ jobs:
       - name: Validate package metadata, payload and release notes (scripts/check-package.sh)
         run: scripts/check-package.sh
 
-      - name: Controlled failure dry-run (temporary)
-        run: |
-          set -eu
-          tar_file=$(find dist/packages -maxdepth 1 -name '*.tar.gz' | LC_ALL=C sort | head -1)
-          printf 'controlled-failure' >>"$tar_file"
-          scripts/check-package.sh
-
       - name: Assert packaging is reproducible (second package.sh run)
         run: |
           set -eu
@@ -403,6 +396,11 @@ jobs:
 
       - name: Re-verify the final asset set
         run: scripts/release-assets.sh verify release/assets
+
+      - name: List the 17 release assets and their SHA-256
+        run: |
+          set -eu
+          ( cd release/assets && LC_ALL=C ls -1 && cat SHA256SUMS )
 
       - name: Upload the 17 release assets
         uses: actions/upload-artifact@v4
