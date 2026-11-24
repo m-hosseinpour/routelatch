@@ -221,7 +221,11 @@ apply only to tags. The binary RPMs are built with the runner's unpinned `rpm`
 package, so only the tarballs, `.deb` files and specs are deterministic for the
 same inputs; the run records the RPM tool versions and `SHA256SUMS` is the
 binding record of the published RPMs. The `release-dryrun` branch trigger is
-permanent, so a push to that branch still costs a full build without publishing.
+permanent, so a push to that branch normally costs a full build without
+publishing. A docs-only push whose head commit message carries `[skip ci]` is
+skipped: the documentation commit `e85b9b7` produced no workflow run, while the
+earlier documentation commit `f99aa71` without the marker triggered Release
+`45425595274` and CI `45425595160`.
 
 ## v0.1.3 release (historical)
 
