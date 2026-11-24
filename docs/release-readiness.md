@@ -181,8 +181,20 @@ Evidence:
   inspected RPMs and `scripts/release-assets.sh verify` over exactly the
   17-asset set. Publish was skipped and the releases/tags API still listed only
   the five existing releases and five tags. The workflow blob is
-  `e723d83a83a9e86bf3c5c0d3e1ae7abf5fffd2c3`; the following documentation-only
-  commit changes no workflow or script content.
+  `e723d83a83a9e86bf3c5c0d3e1ae7abf5fffd2c3`.
+- Executable-bit fix `2c8fa1c` (mode `100644` → `100755` on
+  `scripts/release-verify-upload.sh`, blob `79cd521` unchanged): Release
+  `45427473470` and CI `45427473102` were green on that commit; publish was
+  skipped and the workflow blob stayed
+  `e723d83a83a9e86bf3c5c0d3e1ae7abf5fffd2c3`.
+- Final green dry-run `45463989732` on commit `02e3226` (the
+  verification-failure message now names missing or extra assets;
+  `scripts/release-verify-upload.sh` blob `105ad6e`): the plan, package, RPM and
+  assemble jobs succeeded over exactly the 17-asset set, publish was skipped,
+  and CI `45463989826` was green. The workflow blob is still
+  `e723d83a83a9e86bf3c5c0d3e1ae7abf5fffd2c3`, so every run since the
+  guard/cleanup fix has exercised the same workflow; the commits after
+  `02e3226` are documentation-only and change no workflow or script content.
 
 The dry-runs proved: all 12 package artifacts and four RPMs were built and
 inspected; `check-artifact.sh` and `check-package.sh` passed; the second

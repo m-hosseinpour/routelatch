@@ -402,8 +402,9 @@ gated or impossible check, not a pass; the gated tests stay skipped unless a
 real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
-Packaging was verified for this revision in the green release dry-run
-`45422318159`: four tarballs, four unsigned `.deb` files and four RPM specs
+Packaging was verified for this revision in the final green release dry-run
+`45463989732` (commit `02e3226`, the same workflow blob as the guard-fix run
+`45422318159`): four tarballs, four unsigned `.deb` files and four RPM specs
 were built in CI, the four binary RPMs were built and inspected there, two
 packaging runs produced an identical `SHA256SUMS`, and the final 17-file set
 passed `scripts/release-assets.sh verify`. `scripts/check-artifact.sh` passed for
