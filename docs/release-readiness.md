@@ -20,12 +20,15 @@ tag push; nothing is built or uploaded from a local machine. The workflow is
 implemented in `.github/workflows/release.yml`, was exercised by complete
 pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
 into `main` (head `0183e3f`, 2026-11-24). On 2026-11-25 the project owner
-authorized the first CI-built release, **v1.0.1** (patch); the start commit
-passed CI and the annotated tag was pushed, but the Release run failed in the
-tag-SHA gate and published nothing. The gate was fixed on 2026-11-25 (see "First
-v1.0.1 attempt (2026-11-25): blocked, gate fixed"); the historical release
-sections below remain evidence of the local build/upload process used for
-`v0.1.0`–`v1.0.0`.
+authorized the first CI-built release, **v1.0.1** (patch). Two attempts were made;
+both Release runs failed in the plan gate with `tag v1.0.1 is not annotated` and
+published nothing. The cause was `actions/checkout` rewriting the local tag ref as
+a lightweight ref, not a wrong `github.sha`; see "First v1.0.1 attempts
+(2026-11-25)". The gate now force-fetches the real tag object before checking it.
+Tag `v1.0.1` (object `3b9a8620`) still points at `5ebbf57` and must be recreated
+on the fixed, CI-green commit after this fix is reviewed and merged; no release is
+claimed. The historical release sections below remain evidence of the local
+build/upload process used for `v0.1.0`–`v1.0.0`.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -129,13 +132,18 @@ invoked, and the branch trigger is the path actually exercised.
 Gates before any build: the ref must be an annotated `v*` tag, the tag must point
 at the pushed commit, its message must be non-empty, the commit must be an
 ancestor of `main`, and the `CI` workflow must have a successful push run on
-`main` for that exact commit. On a tag push `github.sha` is the tag object, so
-the plan step peels it to a commit first and uses that commit for the tag
-comparison, the on-main check, the CI query and the `commit` output. The workflow
-reads that CI conclusion instead of re-running the test suite; the build and
-verification jobs below repeat the package, artifact and RPM checks. The gates
-are not weakened for a dry run — they are not applicable to a branch run, which
-never publishes.
+`main` for that exact commit. `github.sha` is a commit on both branch and tag
+pushes; the plan still peels it once, defensively, and uses that commit for the
+tag comparison, the on-main check, the CI query and the `commit` output. Because
+`actions/checkout` fetches a tag event's ref as `+<commit>:refs/tags/<tag>` — a
+lightweight ref even when the pushed tag is annotated — the plan force-fetches
+`+refs/tags/<tag>:refs/tags/<tag>` from `origin` before the annotated check, then
+requires `git cat-file -t` on that ref to be `tag`, reads the message from that
+exact object, peels it, and fails closed if the fetch or any check fails. The
+workflow reads that CI conclusion instead of re-running the test suite; the build
+and verification jobs below repeat the package, artifact and RPM checks. The
+gates are not weakened for a dry run — they are not applicable to a branch run,
+which never publishes.
 
 Every build uses `VERSION` (the tag name, or `v0.0.0-dryrun` for a dry run),
 `COMMIT`, `CGO_ENABLED=0` and `SOURCE_DATE_EPOCH=1700000000`. The package job runs
@@ -214,11 +222,11 @@ package/RPM set; its extra-file and corrupted-checksum negative cases failed as
 intended.
 
 Limits: the publish job (draft creation, 17 uploads, API digest comparison and
-the final publish) has never executed; the first real tag (`v1.0.1`, 2026-11-25)
-did not reach it because the plan gate failed (see "First v1.0.1 attempt" above).
-The gate is fixed locally but no tag push has exercised the fix yet, so the
-publish job remains unexecuted and the next attempt needs the fix merged,
-independent review, and a recreated tag. Its guard, cleanup and digest polling
+the final publish) has never executed; both real `v1.0.1` attempts (2026-11-25)
+stopped earlier, in the plan gate (see "First v1.0.1 attempts" below), and no
+release or draft exists. The gate is fixed locally but no tag push has exercised
+the fix yet, so the publish job remains unexecuted and the next attempt needs the
+fix merged, independent review, and a recreated tag. Its guard, cleanup and digest polling
 were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
 public release, pre-existing draft, guard API/transport error, own-draft
 deletion, null digest appearing on a later poll and a digest mismatch), not
@@ -236,80 +244,138 @@ skipped: the documentation commit `e85b9b7` produced no workflow run, while the
 earlier documentation commit `f99aa71` without the marker triggered Release
 `45425595274` and CI `45425595160`.
 
-## First v1.0.1 attempt (2026-11-25): blocked, gate fixed
+## First v1.0.1 attempts (2026-11-25): blocked, gate fixed
 
-The start commit `fb969fb` ("docs(plan): start first CI release v1.0.1", no
-`[skip ci]`) was pushed to both remotes. GitHub Actions CI run `45490941645`
-(`push`, `main`, `fb969fb`) completed green with all six jobs. Annotated tag
-`v1.0.1` (tag object `da6307e4d28fd0d09bbafae0888506c6858ea691`, tagger
-Mahdi Hosseinpour) was created on `fb969fb` (peeled commit
-`fb969fb767f60e1894e7071ba808c5dd0ac87901`) and pushed to both remotes.
+Two attempts were made; both stopped in the plan gate before any build and
+published nothing.
 
-Release run `45492100825` failed in its first job, "Check the release gates and
-resolve the version" (job `138792821952`), about six seconds after it started.
-The public check-run annotation points at `.github/workflows/release.yml` line
-78, the comparison `[ "$(git rev-parse "refs/tags/$tag^{commit}")" = "$SHA" ]`;
-the step exited 1. The later steps did not run, so the package, RPM, assemble and
-publish jobs were all skipped. No release or draft was created: the publish job
-never ran, and the public releases API still lists `v1.0.0` (id `456148592`) as
-the newest release.
+**Attempt 1.** The start commit `fb969fb` ("docs(plan): start first CI release
+v1.0.1", no `[skip ci]`) was pushed to both remotes. GitHub Actions CI run
+`45490941645` (`push`, `main`, `fb969fb`) completed green with all six jobs.
+Annotated tag `v1.0.1` (tag object
+`da6307e4d28fd0d09bbafae0888506c6858ea691`, tagger Mahdi Hosseinpour) was created
+on `fb969fb` (peeled commit `fb969fb767f60e1894e7071ba808c5dd0ac87901`) and
+pushed to both remotes. Release run `45492100825` failed in its first job, "Check
+the release gates and resolve the version" (job `138792821952`), about six
+seconds after it started. The package, RPM, assemble and publish jobs were all
+skipped, no release or draft was created, and the public releases API still lists
+`v1.0.0` (id `456148592`) as the newest release.
 
-Cause: on a push of an annotated tag, GitHub Actions sets `${{ github.sha }}` to
-the tag object, not the commit it peels to. The tag is annotated and points at
-the intended commit, so line 78 fails on that identity comparison. The
-`release-dryrun` branch path skips this gate, which is why no dry-run caught it.
-The run's `head_sha` is normalised to `fb969fb`; the failed comparison is the
-evidence that the gate's value was the tag object.
+**Attempt 2.** After the first gate change (`4f282a4`), commit `5ebbf57` was
+pushed to record the next CI retry after the flaky `Test` failures described
+below. Tag `v1.0.1` was recreated (tag object
+`3b9a86204fc2616897a8f40bdc96a36e35aee702`) on `5ebbf57` and pushed. Release run
+`45502745805` failed in the same plan job (`138829983146`) with the authenticated
+log line `release gate FAILED: tag v1.0.1 is not annotated` and `SHA:
+5ebbf57...` (the commit). No release or draft was created; the public releases
+still end at `v1.0.0`.
 
-The attempt stopped here: re-pushing the same tag cannot pass the old gate. The
-tag was left in place as evidence; its message claims a publication that did not
-happen, so the release step recreates it before a later attempt (this fix does
-not create, delete or move any tag). No release was edited or deleted, and
-nothing was built or uploaded outside CI.
+**Cause (both attempts).** `actions/checkout@v4` with `fetch-depth: 0` first
+fetches all branches and tags, then checks whether the tag ref resolves to
+`github.sha`. `git rev-parse refs/tags/v1.0.1` returns the tag object for an
+annotated tag, which differs from the commit, so checkout fetches again with the
+targeted refspec `+<commit>:refs/tags/v1.0.1`. Git stores that as a lightweight
+ref pointing at the commit; the `[tag update] ... -> v1.0.1` line in the log is
+that forced update. `git cat-file -t refs/tags/v1.0.1` then returns `commit`, so
+the annotated gate failed even though the pushed tag was annotated. The checkout
+source states the behaviour: `getRefSpec` for a `refs/tags/*` ref with a commit
+returns `+${commit}:${ref}` (actions/checkout v4.2.2, `src/ref-helper.ts`). The
+`release-dryrun` branch path never runs the tag gate, which is why no dry-run
+caught it.
+
+The earlier diagnosis was wrong. This document previously said `github.sha` is
+the tag object and that the line-78 `^{commit}`-versus-`$SHA` comparison failed;
+the public check-run annotation named the step, not the failing comparison, and
+it was read as the comparison. Attempt 2's authenticated log shows the real
+error, and attempt 1's real failure was the same annotated check. The change in
+`4f282a4` (peel `$SHA` once, use the commit everywhere) is harmless and remains
+as a defensive guard, but it did not address the cause: `$SHA` is already the
+commit on a tag push. The earlier local harness that "reproduced" the failure by
+setting `$SHA` to the tag object tested a shape GitHub does not produce.
+
+The failed attempts left the tag in place as evidence; its message claims a
+publication that did not happen, so the tag must be recreated before a later
+attempt (this fix does not create, delete or move any tag). No release was
+edited or deleted, and nothing was built or uploaded outside CI.
 
 ### Gate fix (2026-11-25)
 
-`.github/workflows/release.yml` now resolves the pushed identity to a commit once
-at line 70 (`commit=$(git rev-parse --verify "$SHA^{commit}")`, with a named
-failure if it does not resolve) and uses `$commit` for every tag gate:
-the tag comparison at lines 84-87 compares the tag's peeled commit with it and
-names both the tag object and the peeled commit on failure; the on-main check at
-line 94 and the CI `head_sha=` query at line 103 use it. The plan job exports it
-as the `commit` output (line 125), and the package job stamps `COMMIT` from that
-output (line 143) instead of `github.sha`, so a release build records the commit
-rather than the tag object. The annotated-tag check, the non-empty tag message
-check, the `v*` pattern, the on-main requirement, the CI-green requirement, the
-dry-run branch path and the `workflow_dispatch` behaviour are unchanged. No
-build, publish or permission block changed.
+In the tag branch of the plan gate, `.github/workflows/release.yml` now restores
+the real tag object before any tag check:
 
-Local verification (disposable `/tmp/opencode` harness that extracts the plan
-`run:` block from the workflow and stubs the CI query; 11/11 cases behaved as
-required): annotated tag with `SHA` set to the tag object and the commit on main
-passed and produced `version=v1.0.1`, `publish=true`, `tag=v1.0.1` and the peeled
-`commit`; the CI URL carried `head_sha=<peeled commit>`, not the tag object; the
-same case with the peeled commit as `SHA` also passed. The old line-78 comparison
-still failed on the tag object, reproducing the reported failure. These were all
-still rejected: lightweight tag, empty annotated-tag message, tag pointing at a
-different commit (message named both the tag object and both commits), a commit
-not on main, and no successful CI run. The dry-run branch passed with
-`v0.0.0-dryrun`/`publish=false`, `workflow_dispatch` on a branch with
-`publish=true` was rejected, and `workflow_dispatch` on the tag with
-`publish=false` passed without publishing. `bash -n` on the extracted block and
-`yaml.safe_load` on the workflow both passed. This is local evidence only: no tag
-push has run the fixed gate, the publish job is still unexecuted, and `v1.0.1`
-remains unpublished (the public releases still end at `v1.0.0`).
+```
+git fetch --force --quiet origin "+refs/tags/$tag:refs/tags/$tag" ||
+  fail "could not fetch tag $tag from origin"
+```
 
-The first CI run on the fix (`45494443321`, commit `4f282a4`) passed five of six
-jobs but failed the `Test` step of "Build, vet and test"; the step log needs
-repository authentication and is not available here. The diff from the last
-green commit (`fb969fb`, CI `45490941645`) contains no Go files — only the
-workflow and two documents — so the failure is not attributable to this change.
-The same full suite passed locally on 2026-11-25 with the pinned Go 1.27.4
+It then requires `git cat-file -t refs/tags/$tag` to be `tag` — the failure names
+the actual type — reads the message from that exact ref with `git for-each-ref
+--format='%(contents)'`, peels the object to its commit, and compares that commit
+with the defensively peeled `$SHA`. The peeled commit is still used for the
+on-main check, the CI `head_sha` query, the `commit` output and `COMMIT`. The
+`$SHA` peel, the `v*` pattern, the annotated and non-empty checks, the
+tag↔commit check, the on-main and CI-green requirements, the dry-run and
+`workflow_dispatch` behaviour, and every permission are unchanged; a failed
+fetch, a missing ref or a non-tag ref now has its own fail-closed message. No
+build or publish step changed, and the workflow was not restructured.
+
+Local verification (2026-11-25, disposable `/tmp/opencode/rl-gate2`): the plan
+`run:` block is extracted from the workflow with PyYAML and run against a bare
+remote plus a clone in which `refs/tags/v1.0.1` is lightweight, the checkout
+shape; `curl` is stubbed and its URL recorded. 14/14 cases behaved as required:
+
+- annotated remote tag with the lightweight local ref: passed, restored the local
+  ref to a tag object, produced `version=v1.0.1`, `publish=true`, `tag=v1.0.1`
+  and the peeled commit, and queried CI with `head_sha=<peeled commit>`;
+- the same case under the pre-fix gate failed with `release gate FAILED: tag
+  v1.0.1 is not annotated`, reproducing the reported message; the same setup
+  with an annotated local ref passed the old gate, which isolates the ref shape
+  as the cause;
+- a direct checkout simulation (all-history fetch, then `git fetch --no-tags
+  origin +<commit>:refs/tags/v1.0.1`, then the gate's force-fetch) showed the ref
+  type go `tag` → `commit` → `tag` with the correct peeled commit;
+- rejected: lightweight remote tag (`is not annotated (refs/tags/v1.0.1 is a
+  commit)`), empty message, whitespace-only message, tag moved to another commit
+  (message names the tag object and both commits), tag commit off main, and no
+  successful CI push run;
+- a missing remote tag reported `could not fetch tag v1.0.1 from origin` and did
+  not pass as annotated; a missing local tag ref was recreated by the explicit
+  fetch and passed; `$SHA` set to a tag object still peeled to the commit;
+- a non-`v*` tag was rejected; the dry-run branch produced
+  `v0.0.0-dryrun`/`publish=false` with no CI query; `workflow_dispatch` on a
+  branch with `publish=true` was rejected; on the tag with `publish=false`, the
+  tag gates ran and publish stayed `false`.
+
+`bash -n` on the extracted block and `yaml.safe_load` on the workflow passed.
+This is local evidence only: no tag push has run the new gate, the publish job is
+still unexecuted, and `v1.0.1` remains unpublished.
+
+### CI Test retries and next step
+
+The first CI run on the earlier gate change (`45494443321`, commit `4f282a4`)
+passed five of six jobs but failed the `Test` step of "Build, vet and test"; the
+step log needs repository authentication and is not available here. The diff from
+the last green commit (`fb969fb`, CI `45490941645`) contains no Go files — only
+the workflow and documents — so the failure is not attributable to that change.
+The full suite passed locally on 2026-11-25 with the pinned Go 1.27.4
 (`CGO_ENABLED=0 GOPROXY=off go test -count=1 ./...`: all 22 packages, including
-`internal/acceptance` in 118s). A follow-up document commit (`0131688`) retriggered
-CI; that run (`45496529871`) failed the same `Test` step while the other five jobs
-stayed green, so a further retry follows. The release gate still requires a green
-push run on the eventual tag commit.
+`internal/acceptance` in 118s). Follow-up run `45496529871` (commit `0131688`)
+failed the same `Test` step while the other five jobs stayed green, and a further
+retry was recorded at `5ebbf57`; attempt 2's failure happened earlier, in the
+annotated gate, so the CI-green gate was not evaluated. That gate still requires a
+green push run on the eventual tag commit.
+
+Current state: tag `v1.0.1` (object `3b9a8620`) still points at `5ebbf57` and must
+be recreated on the fixed, CI-green commit after this workflow fix is reviewed and
+merged. No release or draft exists, the public releases still end at `v1.0.0`,
+the publish job has still never executed, and `workflow_dispatch` has not been
+invoked (it still needs an authenticated dispatch that this session did not
+perform; the branch-triggered dry run is the path actually exercised). Residual
+risk: the gate trusts the remote tag at run time, so someone with write access who
+moves the tag to another on-main, CI-green commit between the tag push and the
+fetch would release that re-pointed tag; the tag↔commit check still binds the
+release to the commit the tag names. A dry run exercises neither the tag gates nor
+the publish job.
 
 ## v0.1.3 release (historical)
 

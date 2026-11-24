@@ -540,9 +540,16 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   **آزمون‌نشده:** job انتشار و اولین تگ واقعی؛ gateهای tag/on-main/CI-green در
   dry-run اجرا نمی‌شوند. جزئیات در `docs/release-readiness.md`.
   **شروع واحد (c) (۲۰۲۶-۱۱-۲۵):** انتشار `v1.0.1` (patch) با مجوز کاربر آغاز شد؛
-  `CI` `45490941645` روی `fb969fb` سبز شد و تگ `v1.0.1` push شد، ولی `Release`
-  `45492100825` در gate مقایسهٔ `github.sha` با commit peelشده شکست خورد؛ بدون
-  Release. کار متوقف و برای اصلاح workflow/بازبینی باز است.
+  دو تلاش انجام شد. تلاش اول: `CI` `45490941645` روی `fb969fb` سبز شد و تگ
+  `v1.0.1` (شیء `da6307e`) push شد، ولی `Release` `45492100825` در gate
+  annotated شکست خورد. تلاش دوم: تگ روی `5ebbf57` بازسازی شد (شیء `3b9a8620`) و
+  `Release` `45502745805` (job `138829983146`) با پیام
+  `tag v1.0.1 is not annotated` و `SHA: 5ebbf57...` شکست خورد؛ بدون Release.
+  علت واقعی: `actions/checkout` با `fetch-depth: 0` با refspec
+  `+<commit>:refs/tags/<tag>` تگ محلی را lightweight می‌کند، نه اینکه
+  `github.sha` شیء تگ باشد. gate اصلاح شد: تگ واقعی از `origin` force-fetch
+  می‌شود و نوع آن باید `tag` باشد؛ ۱۴/۱۴ سناریوی محلی pass. تگ باید روی commit
+  اصلاح‌شدهٔ CI-سبز بازسازی شود.
 
 - **R13 — R13-A..F بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
@@ -765,7 +772,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
-| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (متوقف، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ `CI` سبز و تگ push شد، ولی اجرای `Release` در gate تطابق `github.sha` با commit peelشده شکست خورد و هیچ Release ساخته نشد. gate اصلاح شد: `github.sha` یک‌بار به commit peel می‌شود و همان commit در مقایسهٔ تگ، بررسی on-main، پرس‌وجوی CI و خروجی `commit` استفاده می‌شود؛ ۱۱/۱۱ سناریوی محلی pass و مقایسهٔ قدیمی همان شکست گزارش‌شده را بازتولید کرد. publish هنوز اجرا نشده و تگ `v1.0.1` باید در مرحلهٔ انتشار بازسازی شود. جزئیات در `docs/release-readiness.md`. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
+| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (متوقف، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ دو تلاش در gate annotated شکست خورد (`45492100825` روی `fb969fb` و `45502745805` روی `5ebbf57`؛ log احرازشده: `tag v1.0.1 is not annotated`, `SHA: 5ebbf57...`). علت: `actions/checkout` ref تگ را lightweight می‌کند، نه `github.sha`؛ تغییر `4f282a4` (peel `$SHA`) بی‌ضرر ولی رفع‌کننده نبود. رفع: force-fetch تگ واقعی از `origin` و الزام `cat-file -t = tag` پیش از خواندن پیام و peel؛ ۱۴/۱۴ سناریوی محلی pass و gate قدیمی همان خطا را بازتولید کرد. publish هنوز اجرا نشده و تگ `v1.0.1` باید روی commit اصلاح‌شدهٔ CI-سبز بازسازی شود. جزئیات در `docs/release-readiness.md`. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
@@ -791,43 +798,83 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 **نتیجهٔ تلاش اول (۲۰۲۶-۱۱-۲۵) — متوقف:** commit شروع `fb969fb` push شد و `CI`
 `45490941645` روی همان SHA سبز شد (هر شش job). تگ annotated `v1.0.1` (شیء
 `da6307e`) روی `fb969fb` ساخته و به هر دو remote push شد؛ اجرای `Release`
-`45492100825` در job «Check the release gates» شکست خورد و annotation آن خط ۷۸
-workflow، یعنی مقایسهٔ `refs/tags/v1.0.1^{commit}` با `${{ github.sha }}`، را نشان
-می‌دهد. هیچ Release یا draft ساخته نشد: jobهای package/RPM/assemble/publish همه
-skip شدند و فهرست عمومی releases هنوز به `v1.0.0` ختم می‌شود. علت منطقی: در push
-تگ annotated، `github.sha` خود شیء تگ است نه commit peelشده، پس این gate در اولین
-اجرای واقعی همیشه fail می‌شود (در dry-runهای branch اجرا نمی‌شد). رفع آن تغییر
-workflow و بازبینی مستقل می‌خواست؛ در آن لحظه pipeline تغییر نکرد و تگ برای شاهد
-دست‌نخورده ماند. پیام تگ انتشار را ادعا می‌کند که رخ نداده است؛ پیش از تلاش بعدی
-باید تگ بازسازی/اصلاح شود. اصلاح و شاهد محلی آن در ادامه ثبت شده است.
+`45492100825` (job `138792821952`) در gate شکست خورد و jobهای
+package/RPM/assemble/publish همه skip شدند؛ هیچ Release یا draft ساخته نشد و
+فهرست عمومی releases هنوز به `v1.0.0` ختم می‌شود.
 
-**رفع gate (۲۰۲۶-۱۱-۲۵):** `.github/workflows/release.yml` حالا `$SHA` را یک‌بار
-با `git rev-parse --verify "$SHA^{commit}"` به commit peel می‌کند (خط ۷۰) و همان
-`$commit` را در مقایسهٔ تگ (خط ۸۴–۸۷؛ پیام شکست هم شیء تگ و هم commit peelشده را
-نام می‌برد)، بررسی on-main (خط ۹۴) و پرس‌وجوی `head_sha=` CI (خط ۱۰۳) به کار
-می‌برد؛ خروجی `commit` در خط ۱۲۵ و `COMMIT` بسته در خط ۱۴۳ هم از همین commit
-می‌آیند. الزام annotated بودن، پیام غیرخالی، الگوی `v*`، on-main، CI سبز، مسیر
-dry-run و `workflow_dispatch` تضعیف نشدند. آزمون محلی در پوشهٔ دورانداختنی
-`/tmp/opencode` با استخراج همان بلوک `run:` و stub کردن پرس‌وجوی CI: ۱۱/۱۱ سناریو
-مطابق انتظار؛ تگ annotated با `SHA` برابر شیء تگ و commit روی main pass شد و
-خروجی‌های `version`/`publish`/`tag`/`commit` درست بودند؛ URL پرس‌وجو
-`head_sha=<commit peelشده>` داشت؛ مقایسهٔ قدیمی روی شیء تگ همان‌طور fail شد؛ تگ
-lightweight، پیام خالی، تگ روی commit دیگر، commit خارج از main و نبود CI سبز
-همه رد شدند؛ مسیر dry-run و dispatch مطابق قبل ماند؛ `bash -n` و
-`yaml.safe_load` هم pass. این شاهد محلی است: هیچ push تگی gate اصلاح‌شده را اجرا
-نکرده، job انتشار هنوز اجرا نشده و `v1.0.1` منتشر نشده است (آخرین Release عمومی
-همان `v1.0.0` است). تگ فعلی دست‌نخورده است و در مرحلهٔ انتشار بازسازی می‌شود.
+**نتیجهٔ تلاش دوم (۲۰۲۶-۱۱-۲۵) — متوقف:** پس از تغییر اول gate (`4f282a4`)،
+commit `5ebbf57` push شد و retry مربوط به step ناپایدار `Test` ثبت شد؛ تگ
+`v1.0.1` بازسازی شد (شیء `3b9a8620`) روی `5ebbf57` و push شد. اجرای `Release`
+`45502745805` در همان job (`138829983146`) با log احرازشدهٔ
+`release gate FAILED: tag v1.0.1 is not annotated` و `SHA: 5ebbf57...` شکست
+خورد؛ بدون Release یا draft.
 
-**CI روی commit اصلاح (۲۰۲۶-۱۱-۲۵):** اجرای `45494443321` روی `4f282a4` پنج job
-از شش را سبز کرد ولی step «Test» در job «Build, vet and test» شکست خورد؛ لاگ step
-بدون احراز هویت در دسترس نیست. diff از آخرین commit سبز (`fb969fb`، اجرای
-`45490941645`) هیچ فایل Go ندارد (فقط workflow و دو سند)، پس شکست به این تغییر
-نسبت داده نمی‌شود. همان مجموعهٔ کامل تست محلی در ۲۰۲۶-۱۱-۲۵ با Go پین‌شدهٔ
-1.27.4 pass شد (`CGO_ENABLED=0 GOPROXY=off go test -count=1 ./...`: هر ۲۲ پکیج،
-شامل `internal/acceptance` در ۱۱۸ ثانیه). یک commit مستندات تازه (`0131688`) CI
-را دوباره trigger کرد؛ آن اجرا (`45496529871`) هم در همان step «Test» شکست خورد و
-پنج job دیگر سبز ماندند، پس یک retry دیگر انجام می‌شود. دروازهٔ انتشار همچنان به
-اجرای سبز روی commit نهایی تگ نیاز دارد.
+**علت واقعی (هر دو تلاش):** `actions/checkout@v4` با `fetch-depth: 0` ابتدا همهٔ
+branchها/tagها را fetch می‌کند، سپس چون `git rev-parse refs/tags/v1.0.1` برای تگ
+annotated شیء تگ را برمی‌گرداند (نه `github.sha` که commit است)، با refspec
+هدفمند `+<commit>:refs/tags/v1.0.1` دوباره fetch می‌کند. Git این را به‌صورت ref
+lightweight روی commit ذخیره می‌کند؛ خط `[tag update] ... -> v1.0.1` در log همان
+به‌روزرسانی اجباری است. بنابراین `git cat-file -t refs/tags/v1.0.1` مقدار `commit`
+داد و gate annotated شکست خورد، هرچند تگ pushشده annotated بود. منبع checkout:
+`getRefSpec` برای `refs/tags/*` با commit مقدار `+${commit}:${ref}` می‌دهد
+(actions/checkout v4.2.2، `src/ref-helper.ts`). مسیر branch در dry-run این gate را
+اجرا نمی‌کند.
+
+**تشخیص قبلی غلط بود:** ادعای «`github.sha` شیء تگ است و مقایسهٔ خط ۷۸ شکست
+خورد» از annotation عمومی check-run که فقط نام step را نشان می‌داد برداشت شده
+بود. log احرازشدهٔ تلاش دوم خطای واقعی را صریح می‌گوید و تلاش اول هم همان خطای
+annotated را داشت. تغییر `4f282a4` (peel یک‌بارهٔ `$SHA`) بی‌ضرر است و به‌عنوان
+guard دفاعی می‌ماند، ولی علت را رفع نمی‌کرد: در push تگ `$SHA` همان commit است.
+هارنس محلی قبلی که با قرار دادن شیء تگ در `$SHA` خطا را «بازتولید» می‌کرد،
+شکلی را می‌آزمود که GitHub تولید نمی‌کند.
+
+**رفع gate (۲۰۲۶-۱۱-۲۵):** در شاخهٔ tag، workflow پیش از هر بررسی تگ، تگ واقعی را
+restore می‌کند
+(`git fetch --force --quiet origin "+refs/tags/$tag:refs/tags/$tag"`) و سپس
+`git cat-file -t refs/tags/$tag` باید `tag` باشد (پیام شکست نوع واقعی را نام
+می‌برد)؛ پیام با `git for-each-ref --format='%(contents)'` از همان ref خوانده
+می‌شود، شیء به commit peel می‌شود و با `$commit` (که از peel دفاعی `$SHA` آمده)
+مقایسه می‌شود. `$commit` همچنان در on-main، پرس‌وجوی `head_sha=` CI، خروجی
+`commit` و `COMMIT` استفاده می‌شود. peel `$SHA`، الگوی `v*`، الزام annotated و
+پیام غیرخالی، تطابق تگ↔commit، on-main، CI سبز، رفتار dry-run و
+`workflow_dispatch` و permissionها تضعیف نشدند؛ fetch ناموفق، ref غایب یا ref
+غیر-tag پیام fail-closed جدا دارند. هیچ step ساخت/انتشار تغییر نکرد و ساختار
+workflow بازچینی نشد.
+
+**آزمون محلی (۲۰۲۶-۱۱-۲۵، `/tmp/opencode/rl-gate2`):** بلوک `run:` با PyYAML
+استخراج و روی یک remote bare و cloneی که `refs/tags/v1.0.1` در آن lightweight است
+(شکل checkout) اجرا شد؛ `curl` stub و URL آن ثبت شد. ۱۴/۱۴ سناریو مطابق انتظار:
+تگ annotated با ref محلی lightweight pass شد، ref را به شیء تگ برگرداند و
+`version=v1.0.1`/`publish=true`/`tag=v1.0.1`/commit peelشده را داد و CI را با
+`head_sha=<commit>` پرسید؛ همان سناریو با gate قبلی با پیام
+`tag v1.0.1 is not annotated` شکست خورد (بازتولید همان پیام گزارش‌شده) و همان
+setup با ref محلی annotated از gate قبلی pass شد (جداسازی علت)؛ شبیه‌سازی مستقیم
+checkout (fetch همهٔ تاریخچه، سپس
+`git fetch --no-tags origin +<commit>:refs/tags/v1.0.1`، سپس force-fetch gate)
+نوع ref را `tag` → `commit` → `tag` با commit درست نشان داد. رد شدند: تگ lightweight
+روی remote، پیام خالی، پیام فقط‌فاصله، تگ روی commit دیگر (پیام شیء تگ و هر دو
+commit را نام می‌برد)، commit خارج از main، و نبود CI سبز. تگ غایب روی remote با
+`could not fetch tag v1.0.1 from origin` رد شد و به‌عنوان annotated pass نشد؛ نبود
+ref محلی با fetch صریح بازسازی و pass شد؛ `$SHA` برابر شیء تگ هم به commit peel
+شد؛ تگ غیر-`v*` رد شد؛ dry-run با `v0.0.0-dryrun`/`publish=false` و بدون
+پرس‌وجوی CI ماند؛ `workflow_dispatch` روی branch با `publish=true` رد شد و روی تگ
+با `publish=false` فقط gateها را اجرا کرد. `bash -n` بلوک و `yaml.safe_load`
+workflow pass. این شاهد محلی است؛ هیچ push تگی gate جدید را اجرا نکرده، job انتشار
+هنوز اجرا نشده و `v1.0.1` منتشر نشده است (آخرین Release عمومی همان `v1.0.0` است).
+
+**CI و retry (۲۰۲۶-۱۱-۲۵):** اجرای `45494443321` روی `4f282a4` پنج job از شش را
+سبز کرد ولی step «Test» شکست خورد؛ لاگ step بدون احراز هویت در دسترس نیست. diff از
+آخرین commit سبز (`fb969fb`) هیچ فایل Go ندارد (فقط workflow و دو سند)، پس شکست به
+این تغییر نسبت داده نمی‌شود. مجموعهٔ کامل تست محلی با Go پین‌شدهٔ 1.27.4 pass شد
+(`CGO_ENABLED=0 GOPROXY=off go test -count=1 ./...`: هر ۲۲ پکیج،
+`internal/acceptance` در ۱۱۸ ثانیه). `0131688` (`45496529871`) هم همان step را
+شکست داد و `5ebbf57` retry بعدی را ثبت کرد؛ شکست تلاش دوم پیش از gate CI رخ داد،
+پس آن gate ارزیابی نشد. دروازهٔ انتشار همچنان به اجرای سبز روی commit نهایی تگ
+نیاز دارد.
+
+**قدم بعد:** بازبینی مستقل این رفع، سپس بازسازی تگ `v1.0.1` روی commit
+اصلاح‌شدهٔ CI-سبز و اجرای `Release`. تگ فعلی (شیء `3b9a8620` روی `5ebbf57`) تا آن
+مرحله دست‌نخورده می‌ماند.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -907,11 +954,15 @@ lightweight، پیام خالی، تگ روی commit دیگر، commit خارج 
    **R14 واحد (a) انجام، بازبینی مستقل شده و merge شده است** (merge در `0183e3f`
    و سپس یک commit مستندات)؛ branch `release-dryrun` همان درخت را دارد. dry-run
    سبز نهایی `45463989732` (workflow blob `e723d83`) شاهد مسیر ساخت/تأیید است.
-   **واحد (c) تلاش شد و متوقف است:** `fb969fb` و `CI` سبز `45490941645`، تگ
-   `v1.0.1` (شیء `da6307e`) push شد، ولی `Release` `45492100825` در gate خط ۷۸
-   (`github.sha` برابر شیء تگ، نه commit peelشده) شکست خورد و هیچ Release ساخته
-   نشد. gate اصلاح شد و ۱۱/۱۱ آزمون محلی pass شدند؛ تنها کار باز R14: بازبینی
-   مستقل این اصلاح، سپس انتشار با تگ بازسازی‌شده.
+   **واحد (c) دو بار تلاش شد و متوقف است:** تلاش اول روی `fb969fb` (CI سبز
+   `45490941645`، تگ `da6307e`) و تلاش دوم روی `5ebbf57` (تگ بازسازی‌شده
+   `3b9a8620`؛ `Release` `45502745805`، job `138829983146`) هر دو در gate
+   annotated شکست خوردند؛ log احرازشده: `tag v1.0.1 is not annotated`, `SHA:
+   5ebbf57...`. علت `actions/checkout` است که ref محلی تگ را lightweight می‌کند،
+   نه `github.sha`؛ `4f282a4` بی‌ضرر ولی رفع‌کننده نبود. gate حالا تگ واقعی را از
+   `origin` force-fetch می‌کند و نوع `tag` را الزام می‌کند؛ ۱۴/۱۴ آزمون محلی pass
+   شدند. تنها کار باز R14: بازبینی مستقل این اصلاح، سپس انتشار با تگ
+   بازسازی‌شده روی commit اصلاح‌شدهٔ CI-سبز.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -920,11 +971,12 @@ lightweight، پیام خالی، تگ روی commit دیگر، commit خارج 
    `45397329232`، `45399453678`، `45400769014`، `45422318159` و dry-run نهایی
    `45463989732` روی `02e3226`؛ رفع یافته‌ها `952276e`/`02e3226`)
    → (b) بازبینی مستقل انجام شد (دور اول Not ready، دور دوم Ready with findings،
-   تأیید نهایی بسته) و merge شد → (c) در ۲۰۲۶-۱۱-۲۵ آغاز شد؛ `CI` سبز و تگ
-   `v1.0.1` push شد ولی gate خط ۷۸ شکست خورد و بدون Release متوقف شد. **بعدی:**
-   بازبینی مستقل gate اصلاح‌شده، CI سبز روی commit اصلاح، سپس تگ بازسازی‌شده (یا
-   `workflow_dispatch` با `publish=true` روی ref تگ). dry-run قبل از merge با push
-   به branch دائمی `release-dryrun` بود؛ `workflow_dispatch` هنوز اجرا نشده.
+   تأیید نهایی بسته) و merge شد → (c) در ۲۰۲۶-۱۱-۲۵ آغاز شد؛ دو تلاش تگ/Release
+   در gate annotated شکست خوردند (علت checkout؛ بالا) و بدون Release متوقف شد.
+   **بعدی:** بازبینی مستقل رفع gate، CI سبز روی commit اصلاح، سپس تگ
+   بازسازی‌شده (یا `workflow_dispatch` با `publish=true` روی ref تگ). dry-run
+   قبل از merge با push به branch دائمی `release-dryrun` بود؛
+   `workflow_dispatch` هنوز اجرا نشده.
 5. برای هر تغییر: YAML/shell parse، dry-run کامل، دو اجرای packaging با
    `SHA256SUMS` یکسان، `check-artifact.sh`/`check-package.sh`، و بازبینی مستقل.
    ایجاد تگ/انتشار عمومی و هر تغییر میزبان مجوز جدا می‌خواهد.

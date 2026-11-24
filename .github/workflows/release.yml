@@ -64,8 +64,8 @@ jobs:
           tag=""
           version=""
           publish=false
-          # On an annotated-tag push, $SHA is the tag object, not the commit it
-          # peels to. Resolve it once and use that commit for every check and
+          # GitHub reports the pushed commit as $SHA. Peel it defensively (a tag
+          # object would also resolve), then use that commit for every check and
           # output below.
           commit=$(git rev-parse --verify "$SHA^{commit}") ||
             fail "pushed SHA $SHA does not resolve to a commit"
@@ -78,14 +78,24 @@ jobs:
             version=$tag
 
             # The release notes come from the annotated tag itself, so the tag
-            # must be annotated and carry a non-empty message.
-            [ "$(git cat-file -t "refs/tags/$tag")" = tag ] ||
-              fail "tag $tag is not annotated"
+            # must be annotated and carry a non-empty message. actions/checkout
+            # fetches the tag as a lightweight ref that points straight at the
+            # commit, so the local ref is not evidence of the pushed tag's type.
+            # Restore the real tag object from origin first, then prove its type;
+            # a failed fetch or a non-tag ref fails closed.
+            git fetch --force --quiet origin "+refs/tags/$tag:refs/tags/$tag" ||
+              fail "could not fetch tag $tag from origin"
+            tag_type=$(git cat-file -t "refs/tags/$tag") ||
+              fail "tag $tag is missing after fetching refs/tags/$tag"
+            [ "$tag_type" = tag ] ||
+              fail "tag $tag is not annotated (refs/tags/$tag is a $tag_type)"
             tag_object=$(git rev-parse "refs/tags/$tag")
-            tag_commit=$(git rev-parse "refs/tags/$tag^{commit}")
+            tag_commit=$(git rev-parse "refs/tags/$tag^{commit}") ||
+              fail "tag object $tag_object does not peel to a commit"
             [ "$commit" = "$tag_commit" ] ||
               fail "tag $tag (object $tag_object) points at commit $tag_commit, but the pushed SHA $SHA peels to commit $commit"
-            git tag -l --format='%(contents)' "$tag" >tag-message.txt
+            git for-each-ref --format='%(contents)' "refs/tags/$tag" >tag-message.txt ||
+              fail "could not read the message of tag object $tag_object"
             grep -q '[^[:space:]]' tag-message.txt ||
               fail "annotated tag $tag has an empty message"
 
