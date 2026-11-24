@@ -17,8 +17,9 @@ were explicitly authorized by the project owner.
 **Future releases (D27, 2026-11-24).** From the next release on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
 tag push; nothing is built or uploaded from a local machine. The workflow is
-implemented in `.github/workflows/release.yml` and was exercised by complete
-pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below); the first real
+implemented in `.github/workflows/release.yml`, was exercised by complete
+pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
+into `main` (head `0183e3f`, 2026-11-24); the first real
 tag and release still need the project owner's separate authorization. The
 historical release sections below remain evidence of the local build/upload
 process used for `v0.1.0`–`v1.0.0`; the CI pipeline section is current.
@@ -118,10 +119,9 @@ repository is claimed.
 
 `.github/workflows/release.yml` implements D27. An annotated `v*` tag push is
 the production trigger; the dry-run path is a push to the permanent
-`release-dryrun` branch. GitHub requires a `workflow_dispatch` workflow to exist
-on the default branch, so the `workflow_dispatch` input (`publish=false`) is only
-usable after this file is merged; the branch trigger is the path actually
-exercised before merge.
+`release-dryrun` branch. The workflow is now on the default branch (`main`), so
+the `workflow_dispatch` input (`publish=false`) is available; it has not been
+invoked, and the branch trigger is the path actually exercised.
 
 Gates before any build: the ref must be an annotated `v*` tag, the tag must point
 at the pushed commit, its message must be non-empty, the commit must be an
@@ -214,9 +214,9 @@ were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
 public release, pre-existing draft, guard API/transport error, own-draft
 deletion, null digest appearing on a later poll and a digest mismatch), not
 against the real GitHub API: the API's transient null `.digest` behaviour and the
-draft delete remain untested live. `workflow_dispatch` was not invoked
-pre-merge because it requires an authenticated write and the workflow file on the
-default branch. A dry run does not exercise the CI-green or on-main gates, which
+draft delete remain untested live. `workflow_dispatch` has not been invoked:
+before merge it required the workflow file on the default branch, and after merge
+it still requires an authenticated dispatch that this session did not perform. A dry run does not exercise the CI-green or on-main gates, which
 apply only to tags. The binary RPMs are built with the runner's unpinned `rpm`
 package, so only the tarballs, `.deb` files and specs are deterministic for the
 same inputs; the run records the RPM tool versions and `SHA256SUMS` is the

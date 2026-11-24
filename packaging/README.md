@@ -494,9 +494,9 @@ message, is not on `main`, or whose commit has no successful `CI` push run on
   it is still a draft, so a failure never leaves a public incomplete release and
   can never delete a published one.
 
-The pre-merge dry-run path is a push to the permanent `release-dryrun` branch
-(or `workflow_dispatch` with `publish=false` after the workflow is on the
-default branch, which GitHub requires for dispatch). A dry run uses the
+The dry-run path is a push to the permanent `release-dryrun` branch, or
+`workflow_dispatch` with `publish=false` now that the workflow is on the default branch
+(GitHub requires that for dispatch). A dry run uses the
 synthetic version `v0.0.0-dryrun`, runs every build and verification job and
 **skips the publishing job**. Pushing an actual `v*` tag is the release action
 and still needs the project owner's separate authorization.
