@@ -1,0 +1,503 @@
+name: Release
+
+# D27: the public GitHub Release is built and published by this workflow on an
+# annotated v* tag push; nothing is built or uploaded from a workstation.
+#
+# GitHub only offers workflow_dispatch for a workflow that exists on the default
+# branch, so the pre-merge dry-run path is a push to the permanent
+# release-dryrun branch. That path runs every build and verification job with a
+# synthetic version and never runs the publishing job.
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - release-dryrun
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a GitHub Release (only honoured on a v* tag ref)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Check the release gates and resolve the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - name: Check out the full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce the release gates
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          DISPATCH_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
+        run: |
+          set -eu
+          fail() { echo "release gate FAILED: $*" >&2; exit 1; }
+
+          tag=""
+          version=""
+          publish=false
+          if [ "$REF_TYPE" = tag ]; then
+            tag=$REF_NAME
+            case $tag in
+              v*) ;;
+              *) fail "tag '$tag' does not match v*" ;;
+            esac
+            version=$tag
+
+            # The release notes come from the annotated tag itself, so the tag
+            # must be annotated and carry a non-empty message.
+            [ "$(git cat-file -t "refs/tags/$tag")" = tag ] ||
+              fail "tag $tag is not annotated"
+            [ "$(git rev-parse "refs/tags/$tag^{commit}")" = "$SHA" ] ||
+              fail "tag $tag does not point at $SHA"
+            git tag -l --format='%(contents)' "$tag" >tag-message.txt
+            grep -q '[^[:space:]]' tag-message.txt ||
+              fail "annotated tag $tag has an empty message"
+
+            # A release is only cut from a commit that main already carries.
+            git fetch --no-tags --quiet origin main
+            git merge-base --is-ancestor "$SHA" FETCH_HEAD ||
+              fail "commit $SHA is not on main"
+
+            # Full CI must be green on the tag commit. The gate reads the CI
+            # workflow's own conclusion for a push of main at this exact SHA;
+            # the tag push's CI run is excluded by head_branch.
+            runs=$(curl -fsS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              "$API_URL/repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100")
+            count=$(printf '%s' "$runs" | jq \
+              '[.workflow_runs[] | select(.name == "CI" and .event == "push" and .head_branch == "main" and .conclusion == "success")] | length')
+            [ "$count" -ge 1 ] ||
+              fail "no successful CI push run on main for commit $SHA"
+
+            publish=true
+          else
+            version=v0.0.0-dryrun
+            echo "dry run on $REF_TYPE '$REF_NAME': build and verify only, never publish"
+          fi
+
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            publish=$DISPATCH_PUBLISH
+            if [ "$publish" = true ] && [ -z "$tag" ]; then
+              fail "publish=true needs a v* tag ref; this is $REF_TYPE '$REF_NAME'"
+            fi
+          fi
+
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "publish=$publish" >>"$GITHUB_OUTPUT"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Release plan"
+            echo ""
+            echo "- version: \`$version\`"
+            echo "- publish: \`$publish\`"
+            echo "- tag: \`${tag:-none (dry run)}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  packages:
+    name: Build and verify tarballs, .deb packages and checksums
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CGO_ENABLED: "0"
+      VERSION: ${{ needs.plan.outputs.version }}
+      COMMIT: ${{ github.sha }}
+      SOURCE_DATE_EPOCH: "1700000000"
+      REQUIRE_DEB: "1"
+      REQUIRE_SINGBOX: "1"
+      RELEASE_BUILD: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the Go version pinned in go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download pinned modules
+        run: go mod download
+
+      - name: Build all four architectures (scripts/build.sh)
+        run: scripts/build.sh
+
+      - name: Check the amd64 artifact (scripts/check-artifact.sh)
+        run: scripts/check-artifact.sh
+
+      - name: Download and verify the pinned sing-box v1.14.4 archives
+        run: |
+          set -eu
+          tag=$(sed -n 's/^SINGBOX_TAG=//p' scripts/package.sh)
+          [ -n "$tag" ] || { echo "scripts/package.sh has no SINGBOX_TAG"; exit 1; }
+          mkdir -p dist/singbox
+          for arch in amd64 arm64; do
+            case $arch in
+              amd64) expected=$(sed -n 's/^SINGBOX_ARCHIVE_AMD64_SHA256=//p' scripts/package.sh) ;;
+              arm64) expected=$(sed -n 's/^SINGBOX_ARCHIVE_ARM64_SHA256=//p' scripts/package.sh) ;;
+            esac
+            [ "${#expected}" -eq 64 ] ||
+              { echo "no 64-character pinned digest for linux/$arch"; exit 1; }
+            archive="sing-box-${tag#v}-linux-$arch.tar.gz"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 3 \
+              -o "dist/singbox/$archive" \
+              "https://github.com/SagerNet/sing-box/releases/download/$tag/$archive"
+            got=$(sha256sum "dist/singbox/$archive" | awk '{print $1}')
+            if [ "$got" != "$expected" ]; then
+              echo "official archive checksum FAILED for linux/$arch: $archive"
+              echo "got $got"
+              echo "expected $expected"
+              exit 1
+            fi
+            echo "sing-box official archive linux/$arch: sha256 $got matches the pinned $tag digest"
+            extract=$(mktemp -d)
+            tar -xzf "dist/singbox/$archive" -C "$extract"
+            source="$extract/sing-box-${tag#v}-linux-$arch/sing-box"
+            [ -f "$source" ] ||
+              { echo "archive $archive has no sing-box-${tag#v}-linux-$arch/sing-box"; exit 1; }
+            install -m 0755 "$source" "dist/singbox/sing-box-linux-$arch"
+            rm -rf "$extract"
+          done
+          ( cd dist/singbox && sha256sum sing-box-linux-amd64 sing-box-linux-arm64 >SHA256SUMS )
+          env -i "$PWD/dist/singbox/sing-box-linux-amd64" version |
+            grep -F "${tag#v}" >/dev/null ||
+            { echo "extracted amd64 sing-box does not report ${tag#v}"; exit 1; }
+
+      - name: Package tarballs and .deb files (scripts/package.sh)
+        run: scripts/package.sh
+
+      - name: Validate package metadata, payload and release notes (scripts/check-package.sh)
+        run: scripts/check-package.sh
+
+      - name: Assert packaging is reproducible (second package.sh run)
+        run: |
+          set -eu
+          cp dist/packages/SHA256SUMS /tmp/SHA256SUMS.first
+          scripts/package.sh
+          diff -u /tmp/SHA256SUMS.first dist/packages/SHA256SUMS
+
+      - name: Verify every checksum with sha256sum -c
+        run: |
+          set -eu
+          ( cd dist && sha256sum -c SHA256SUMS )
+          ( cd dist/packages && sha256sum -c SHA256SUMS )
+
+      - name: Assert the 12 package artifacts and SHA256SUMS are present
+        run: |
+          set -eu
+          [ "$(wc -l < dist/packages/SHA256SUMS)" -eq 12 ]
+          [ "$(find dist/packages -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 4 ]
+          [ "$(find dist/packages -maxdepth 1 -name '*.deb' | wc -l)" -eq 4 ]
+          [ "$(find dist/packages -maxdepth 1 -name '*.spec' | wc -l)" -eq 4 ]
+          mkdir -p release/packages
+          cp dist/packages/*.tar.gz dist/packages/*.deb dist/packages/*.spec \
+            dist/packages/SHA256SUMS release/packages/
+          [ "$(find release/packages -maxdepth 1 -type f | wc -l)" -eq 13 ]
+          echo "12 package artifacts plus SHA256SUMS are present"
+
+      - name: Show the package checksums
+        run: cat dist/packages/SHA256SUMS
+
+      - name: Upload the 12 package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: release/packages
+          if-no-files-found: error
+
+  rpms:
+    name: Build and inspect the four binary RPMs
+    needs:
+      - plan
+      - packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_DATE_EPOCH: "1700000000"
+    steps:
+      - name: Download the verified package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: release/packages
+
+      - name: Install RPM tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          command -v rpmbuild >/dev/null
+          command -v rpm >/dev/null
+
+      - name: Build the four binary RPMs from the generated specs
+        run: |
+          set -eu
+          expected_version=$(sed -n 's/^Version:[[:space:]]*//p' release/packages/routelatch-x86_64.spec)
+          [ -n "$expected_version" ] || { echo "no version in the x86_64 spec"; exit 1; }
+          top="$PWD/rpmbuild"
+          mkdir -p "$top/BUILD" "$top/RPMS" "$top/SOURCES" "$top/SPECS" "$top/SRPMS"
+          cp release/packages/*.tar.gz "$top/SOURCES/"
+          for arch in amd64 arm64 riscv64 ppc64le; do
+            case $arch in
+              amd64) rpm_arch=x86_64 ;;
+              arm64) rpm_arch=aarch64 ;;
+              *) rpm_arch=$arch ;;
+            esac
+            spec="release/packages/routelatch-$rpm_arch.spec"
+            [ -f "$spec" ] || { echo "missing $spec"; exit 1; }
+            source=$(sed -n 's/^Source0:[[:space:]]*//p' "$spec")
+            source_hash=$(sha256sum "release/packages/$source" | awk '{print $1}')
+            grep -Fxq "# Source0 SHA-256: $source_hash" "$spec" ||
+              { echo "$spec does not pin the tarball it ships"; exit 1; }
+            [ "$(sed -n 's/^Version:[[:space:]]*//p' "$spec")" = "$expected_version" ] ||
+              { echo "$spec version differs from the x86_64 spec"; exit 1; }
+            cp "$spec" "$top/SPECS/"
+            SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" rpmbuild \
+              --define "_topdir $top" --target "$rpm_arch" \
+              -bb "$top/SPECS/$(basename "$spec")"
+          done
+
+      - name: Inspect RPM metadata, payload and checksums
+        run: |
+          set -eu
+          expected_version=$(sed -n 's/^Version:[[:space:]]*//p' release/packages/routelatch-x86_64.spec)
+          cat >"$PWD/expected-files" <<'EOF'
+          /usr/bin/routelatch
+          /usr/bin/rlch
+          /usr/share/doc/routelatch/BUILD-INFO
+          /usr/share/doc/routelatch/INSTALL.md
+          /usr/share/doc/routelatch/PACKAGE-NOTES
+          /usr/share/doc/routelatch/README.md
+          /usr/share/doc/routelatch/SERVICE.md
+          /usr/share/doc/routelatch/THIRD-PARTY-NOTICES.md
+          /usr/share/doc/routelatch/docs/licensing.md
+          /usr/share/doc/routelatch/go.sum
+          /usr/share/licenses/routelatch/LICENSE
+          /usr/share/licenses/routelatch/NOTICE
+          EOF
+          count=0
+          for file in $(find "$PWD/rpmbuild/RPMS" -name '*.rpm' | LC_ALL=C sort); do
+            count=$((count + 1))
+            echo "== $(basename "$file") =="
+            [ "$(rpm -qp --qf '%{NAME}' "$file")" = routelatch ] ||
+              { echo "wrong RPM name"; exit 1; }
+            [ "$(rpm -qp --qf '%{VERSION}' "$file")" = "$expected_version" ] ||
+              { echo "wrong RPM version: $(rpm -qp --qf '%{VERSION}' "$file")"; exit 1; }
+            [ "$(rpm -qp --qf '%{RELEASE}' "$file")" = 1 ] || { echo "wrong RPM release"; exit 1; }
+            [ "$(rpm -qp --qf '%{LICENSE}' "$file")" = Apache-2.0 ] ||
+              { echo "wrong RPM license"; exit 1; }
+            rpm_arch=$(rpm -qp --qf '%{ARCH}' "$file")
+            case $rpm_arch in
+              x86_64 | aarch64 | riscv64 | ppc64le) ;;
+              *) echo "unexpected RPM arch $rpm_arch"; exit 1 ;;
+            esac
+            [ "$(basename "$file")" = "routelatch-$expected_version-1.$rpm_arch.rpm" ] ||
+              { echo "unexpected RPM file name $(basename "$file")"; exit 1; }
+            rpm -qR "$file" | grep -Fxq ca-certificates ||
+              { echo "missing ca-certificates"; exit 1; }
+            cp "$PWD/expected-files" "$PWD/expected-$rpm_arch"
+            case $rpm_arch in
+              x86_64 | aarch64)
+                # The release tarballs for these architectures carry the
+                # separate sing-box sidecar and its provenance file.
+                cat >>"$PWD/expected-$rpm_arch" <<'EOF'
+          /usr/bin/sing-box
+          /usr/share/doc/routelatch/SINGBOX-INFO
+          EOF
+                ;;
+            esac
+            sort -o "$PWD/expected-$rpm_arch" "$PWD/expected-$rpm_arch"
+            rpm -qpl "$file" | sort | diff -u "$PWD/expected-$rpm_arch" - ||
+              { echo "unexpected RPM payload layout"; exit 1; }
+            rpm -qp --qf '[%{FILENAMES}\t%{FILEMODES:perms}\t%{FILELINKTOS}\n]' "$file" |
+              grep -Fxq $'/usr/bin/rlch\tlrwxrwxrwx\troutelatch' ||
+              { echo "/usr/bin/rlch is not a symlink to routelatch"; exit 1; }
+            if rpm -qp --scripts "$file" |
+              grep -Eq '^(preinstall|postinstall|preuninstall|postuninstall) scriptlet'; then
+              echo "RPM has maintainer scriptlets"; exit 1
+            fi
+            if rpm -qpl "$file" | grep -Eq '(\.service$|\.desktop$|/systemd/|/autostart/)'; then
+              echo "RPM ships a systemd unit or autostart entry"; exit 1
+            fi
+            echo "RPM $(basename "$file") inspected: version/arch/license/requires/layout/scripts/no-unit OK"
+          done
+          [ "$count" -eq 4 ] || { echo "expected 4 RPMs, built $count"; exit 1; }
+          mkdir -p release/rpms
+          cp "$PWD"/rpmbuild/RPMS/*/*.rpm release/rpms/
+          [ "$(find release/rpms -maxdepth 1 -name '*.rpm' | wc -l)" -eq 4 ] ||
+            { echo "expected 4 RPM files in release/rpms"; exit 1; }
+          echo "four binary RPMs built and inspected"
+
+      - name: Upload the four binary RPMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-rpms
+          path: release/rpms
+          if-no-files-found: error
+
+  assemble:
+    name: Assemble and verify the 17 release assets
+    needs:
+      - plan
+      - packages
+      - rpms
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Download the package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: release/packages
+
+      - name: Download the binary RPMs
+        uses: actions/download-artifact@v4
+        with:
+          name: release-rpms
+          path: release/rpms
+
+      - name: Assemble the 16 checksummed files and SHA256SUMS
+        run: scripts/release-assets.sh assemble release/packages release/rpms release/assets
+
+      - name: Re-verify the final asset set
+        run: scripts/release-assets.sh verify release/assets
+
+      - name: Upload the 17 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release/assets
+          if-no-files-found: error
+
+  publish:
+    name: Publish the GitHub Release
+    needs:
+      - plan
+      - packages
+      - rpms
+      - assemble
+    if: needs.plan.outputs.publish == 'true' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Check out the full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download the verified release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release/assets
+
+      - name: Re-verify the 17 assets and read the tag message
+        run: |
+          set -eu
+          scripts/release-assets.sh verify release/assets
+          git tag -l --format='%(contents)' "$TAG" >"$RUNNER_TEMP/release-notes.md"
+          grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md" ||
+            { echo "tag $TAG has an empty message"; exit 1; }
+
+      - name: Refuse to touch an existing public release; delete a stale draft
+        run: |
+          set -eu
+          existing=$(gh api "repos/$REPO/releases/tags/$TAG" 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            draft=$(printf '%s' "$existing" | jq -r '.draft')
+            if [ "$draft" = true ]; then
+              echo "deleting a stale draft release for $TAG"
+              gh release delete "$TAG" --yes
+            else
+              echo "a public release already exists for $TAG; refusing to change it" >&2
+              exit 1
+            fi
+          fi
+
+      - name: Create the draft release
+        run: |
+          set -eu
+          gh release create "$TAG" \
+            --draft \
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Upload all 17 assets to the draft
+        run: gh release upload "$TAG" release/assets/*
+
+      - name: Verify name, size and digest of every uploaded asset
+        run: |
+          set -eu
+          gh api "repos/$REPO/releases/tags/$TAG" >"$RUNNER_TEMP/release.json"
+          jq -e '.draft == true' "$RUNNER_TEMP/release.json" >/dev/null ||
+            { echo "the release is not a draft"; exit 1; }
+          [ "$(jq -r '.tag_name' "$RUNNER_TEMP/release.json")" = "$TAG" ] ||
+            { echo "the draft release has the wrong tag"; exit 1; }
+          [ "$(jq -r '.assets | length' "$RUNNER_TEMP/release.json")" -eq 17 ] ||
+            { echo "the draft release does not hold 17 assets"; exit 1; }
+          jq -r '.assets[] | "\(.name)\t\(.size)\t\(.digest)"' "$RUNNER_TEMP/release.json" |
+            LC_ALL=C sort >"$RUNNER_TEMP/assets.api"
+          for file in release/assets/*; do
+            printf '%s\t%s\tsha256:%s\n' "$(basename "$file")" "$(stat -c '%s' "$file")" \
+              "$(sha256sum "$file" | awk '{print $1}')"
+          done | LC_ALL=C sort >"$RUNNER_TEMP/assets.local"
+          diff -u "$RUNNER_TEMP/assets.local" "$RUNNER_TEMP/assets.api" ||
+            { echo "uploaded asset name/size/digest differs from the built files"; exit 1; }
+          echo "all 17 uploaded assets match the built name, size and sha256 digest"
+
+      - name: Delete the draft if upload or verification failed
+        if: failure()
+        run: gh release delete "$TAG" --yes || true
+
+      - name: Publish the release
+        run: |
+          set -eu
+          gh release edit "$TAG" --draft=false
+          echo "published https://github.com/$REPO/releases/tag/$TAG"
+
+      - name: Delete the draft if publishing failed
+        if: failure()
+        run: gh release delete "$TAG" --yes || true

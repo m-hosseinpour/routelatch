@@ -12,6 +12,8 @@
 # It reads BUILD-INFO for the expected version and never installs anything.
 # Usage: scripts/check-package.sh [dist/packages]
 #        DIST=/path/to/dist scripts/check-package.sh
+#        RELEASE_BUILD=1 scripts/check-package.sh   # CI release build; also
+#                                                     # requires release notes
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -145,6 +147,17 @@ for arch in $arches; do
 		share/doc/routelatch/PACKAGE-NOTES; do
 		expect_file "$tar_files" "$name/$path" "$tar"
 	done
+	# A package built by the release workflow is published, so its notes must
+	# not describe it as an unpublished local build (scripts/package.sh selects
+	# the text with RELEASE_BUILD=1).
+	if [ "${RELEASE_BUILD:-0}" = 1 ]; then
+		notes=$(tar -xOzf "$tar" "$name/share/doc/routelatch/PACKAGE-NOTES")
+		printf '%s\n' "$notes" | grep -q 'published with this version' ||
+			fail "$tar PACKAGE-NOTES does not describe a published release"
+		if printf '%s\n' "$notes" | grep -qi 'local build'; then
+			fail "$tar PACKAGE-NOTES still describes a local build"
+		fi
+	fi
 	# The package carries no install-time service or desktop integration: no
 	# unit, no autostart entry and no systemd path.
 	if printf '%s\n' "$tar_files" |

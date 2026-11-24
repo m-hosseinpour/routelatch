@@ -284,7 +284,29 @@ SERVICE_HEADER
 	# hashes quoted in the audit.
 	install -m 0644 "$repo/docs/licensing.md" "$root/share/doc/routelatch/docs/licensing.md"
 	install -m 0644 "$repo/go.sum" "$root/share/doc/routelatch/go.sum"
-	cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
+	# RELEASE_BUILD=1 is set by the GitHub Actions release workflow: the same
+	# package is built there and published with the release, so it must not
+	# claim to be an unpublished local build. Local builds keep the default.
+	if [ "${RELEASE_BUILD:-0}" = 1 ]; then
+		cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
+This package was built by the RouteLatch release workflow in GitHub Actions from
+BUILD-INFO (version/commit/date above) and is published with this version's
+GitHub Release, together with SHA256SUMS and the binary RPMs. It is reproducible
+for the same inputs.
+
+RouteLatch is licensed under the Apache License, Version 2.0; see LICENSE,
+NOTICE and THIRD-PARTY-NOTICES.md in this directory. Verify the download with
+the release's SHA256SUMS before installing it.
+
+Installing is the user's action. This package was built without enabling a
+service, without touching desktop proxy or network settings, and without a
+system-wide install. It ships no systemd unit, autostart entry or maintainer
+script: plain 'routelatch run' starts the detached app/tray, and creating the
+opt-in user unit or login autostart is an explicit 'routelatch service install'
+or 'routelatch autostart enable'.
+EOF
+	else
+		cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 This is a local build assembled by scripts/package.sh from BUILD-INFO
 (version/commit/date above). It is reproducible for the same inputs.
 
@@ -301,6 +323,7 @@ script: plain 'routelatch run' starts the detached app/tray, and creating the
 opt-in user unit or login autostart is an explicit 'routelatch service install'
 or 'routelatch autostart enable'.
 EOF
+	fi
 	if [ "$singbox_present" = 1 ] && [ "$sidecar_arch" = 1 ]; then
 		cat >>"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 
@@ -389,9 +412,21 @@ EOF
 # BUILD-INFO commit: $spec_commit
 # BUILD-INFO date: $spec_date
 # Source0 SHA-256: $tar_hash
+EOF
+		if [ "${RELEASE_BUILD:-0}" = 1 ]; then
+			cat <<EOF
+# Unsigned CI build: SHA256SUMS is the only trust anchor. No GPG signing, no
+# package repository, no packaged unit, no service enable and no maintainer
+# scriptlets.
+EOF
+		else
+			cat <<EOF
 # Local, unsigned build: SHA256SUMS is the only trust anchor. No GPG signing,
 # no package repository, no packaged unit, no service enable and no maintainer
 # scriptlets.
+EOF
+		fi
+		cat <<EOF
 # CI builds the binary RPM with rpmbuild --target $rpm_arch from this spec.
 # No BuildArch: the arch comes from --target so foreign arches build on any host.
 Name:           routelatch
