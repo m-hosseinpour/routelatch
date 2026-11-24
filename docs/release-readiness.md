@@ -19,8 +19,9 @@ builds all 17 assets and creates the public GitHub Release on an annotated `v*`
 tag push; nothing is built or uploaded from a local machine. The workflow is
 implemented in `.github/workflows/release.yml`, was exercised by complete
 pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
-into `main` (head `0183e3f`, 2026-11-24); the first real
-tag and release still need the project owner's separate authorization. The
+into `main` (head `0183e3f`, 2026-11-24). On 2026-11-25 the project owner
+authorized the first CI-built release, **v1.0.1** (patch); the release start is
+recorded in the implementation plan and the release is not yet published. The
 historical release sections below remain evidence of the local build/upload
 process used for `v0.1.0`–`v1.0.0`; the CI pipeline section is current.
 
