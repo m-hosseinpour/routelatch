@@ -327,7 +327,21 @@ tray registration، SIGHUP/بستن pty، SIGTERM/SIGKILL بدون orphan)، و
 **آزمون‌نشده (نیازمند مجوز/محیط):** نصب/rollback/linger واقعی user manager و
 upgrade unit قدیمی `/usr/lib`، کلیک Quit در tray، GNOME/SSH واقعی، pidfd
 `ENOSYS`/`EPERM`، runtime غیر-amd64، و سلول default+data-dir (NOTE به‌خاطر
-engine زندهٔ R12). **انتشار:** tag/release انجام نشد و تصمیم جدا می‌خواهد.
+engine زندهٔ R12). **انتشار:** در واحد جدا با مجوز کاربر انجام شد (پایین).
+
+**انتشار v1.0.0 انجام شد (۲۰۲۶-۱۱-۲۴):** تگ annotated `v1.0.0` (شیء
+`e6515c47d47f28510b942d7e2fc7e662bc82cc3c`) روی `782e243` ساخته و به هر دو
+remote push شد. GitHub Release عمومی id `456148592` است:
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.0.0>. **۱۷ دارایی**
+(چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM و `SHA256SUMS`؛ SHA-256 برابر
+`5b6964a1…aed7`) از `git archive 782e243` با `VERSION=v1.0.0`،
+`COMMIT=782e243` و `SOURCE_DATE_EPOCH=1700000000` ساخته شدند؛
+`check-artifact`/`check-package` pass، packaging دوم بایتیکسان، RPMها در
+container یک‌بارمصرف rpm 6.0.1 ساخته/بازرسی و payload x86_64 اجرا شد؛ CI سبز
+`45293072576` روی `782e243` دروازه بود. جزئیات و digestها در
+`docs/release-readiness.md`. **آزمون‌نشده:** نصب/rollback/linger واقعی service،
+upgrade unit قدیمی `/usr/lib`، کلیک Quit، GNOME/SSH، pidfd
+`ENOSYS`/`EPERM`، runtime غیر-amd64 و default+data-dir.
 
 **هدف و معیار:** A13/A15 — `run --headless` به‌عنوان engine foreground پایدار بماند؛
 `run` پیش‌فرض app/tray باشد، بعد از readiness برگردد و با بستن ترمینال متوقف نشود؛
@@ -389,9 +403,9 @@ enabled/active را restore می‌کند؛ `uninstall` اول ownership/no-foll
 مختلف؛ مرز GUI آینده؛ و تصمیم release/tag جدا. انتخاب/pin library tray و
 اجرای R13-B/C/D/E بسته شدند.
 
-**قدم بعدی:** تصمیم انتشار/tag جدا؛ آزمون‌های واقعی user manager/linger،
-کلیک Quit و پلتفرم‌های غیر-amd64 فقط با مجوز/محیط جدا. هیچ کار پیاده‌سازی باز
-v1 نمانده است.
+**قدم بعدی:** هیچ کار پیاده‌سازی یا انتشار باز v1 نمانده است. آزمون‌های واقعی
+user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌های غیر-amd64 فقط
+با مجوز/محیط جدا انجام می‌شوند.
 
 ### وضعیت فعلی
 
@@ -414,7 +428,8 @@ v1 نمانده است.
   package checks چهارمعماری pass. **آزمون‌نشده:** نصب/rollback/linger واقعی
   user manager، upgrade unit قدیمی `/usr/lib`، کلیک Quit، GNOME/SSH، pidfd
   ENOSYS/EPERM، runtime غیر-amd64 و default+data-dir (NOTE). هیچ سرویس، unit،
-  autostart یا تنظیم دسکتاپ تغییر نکرد. تصمیم tag/release جدا است.
+  autostart یا تنظیم دسکتاپ تغییر نکرد. `v1.0.0` با ۱۷ دارایی منتشر شد
+  (release id `456148592`؛ `e6515c4` روی `782e243`).
 
 > **توجه به هشها:** تاریخچه در انتشار بازنویسی شد؛ هشهای کوتاهی که در ردیفهای پایین
 > برای کارهای R1–R10 آمدهاند مربوط به قبل از بازنویسیاند و در مخزن عمومی وجود
@@ -620,7 +635,7 @@ v1 نمانده است.
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 
-**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12، R13 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 کامل شد و تصمیم انتشار/tag جداست.**
+**قاعدهٔ انتخاب:** R1–R8، R10، R11، R12، R13 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **R13 کامل و `v1.0.0` منتشر شد.**
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -712,8 +727,8 @@ v1 نمانده است.
    یازدهم `7407a6d` و دور دوازدهم `ee28f23` (verdict دور دوازدهم **Ready**، فقط
    مستندات)؛ D26 ثبت شده و هیچ
    کد/بسته/unit/autostart/سرویس/دسکتاپ تغییر نکرده است. آخرین ریلیز `v0.1.3`
-   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12، گروه ج
-   و R13-A..F بسته‌اند؛ تنها تصمیم باز، انتشار/tag جداست.
+   است؛ نصب فعلی طبق آخرین خواندن v0.1.2 و unit فعال/active است. R1–R12، گروه ج،
+   R13-A..F و انتشار `v1.0.0` بسته شده‌اند؛ کار باز v1 نمانده است.
 3. تصمیم D26: پیش‌فرض `run` app/tray با detach و child `run --headless`؛
    `--headless` تنها حالت جایگزین؛ فرمان `tray`/`gui` جدا نیست؛ `autostart` XDG؛
    `service install` فقط systemd user unit + linger؛ بسته هیچ unit/postinst ندارد.

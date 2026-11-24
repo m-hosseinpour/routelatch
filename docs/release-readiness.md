@@ -6,12 +6,13 @@ history.** The current tree is clean of absolute personal paths.
 The first public release, **v0.1.0**, is tagged on `main` and publishes two Linux
 tarballs as assets on the GitHub Release. **v0.1.1** added four-architecture
 tarballs, Debian packages and RPM packages. **v0.1.2** patched the desktop-proxy
-`set` behaviour. The current release, **v0.1.3**, is a patch of import
-validation and derived status with the same 17-asset layout; its evidence is in
-"v0.1.3 release (current)" below. The v0.1.2, v0.1.1 and v0.1.0 sections, the
-history scan, name check and dependency audit remain historical evidence; they
-are not repeated here. The tags, pushes and releases were explicitly authorized
-by the project owner.
+`set` behaviour. **v0.1.3** patched import validation and derived status with
+the same 17-asset layout. The current release, **v1.0.0**, ships the D26
+app/tray runtime, `autostart`, the opt-in `service` and unit-free packages; its
+evidence is in "v1.0.0 release (current)" below. The v0.1.3, v0.1.2, v0.1.1 and
+v0.1.0 sections, the history scan, name check and dependency audit remain
+historical evidence; they are not repeated here. The tags, pushes and releases
+were explicitly authorized by the project owner.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -26,9 +27,85 @@ release that adds no user-facing value must not be published. The release was
 deleted through the API (HTTP 204) and the tag was deleted locally and on both
 remotes. `git tag -l v0.1.4` is empty, neither remote lists the tag, both `main`
 heads point at `79c0e53`, and `v0.1.0`–`v0.1.3` are unchanged. That batch was
-pushed only; **`v0.1.3` remains the current release.**
+pushed only; **`v1.0.0` is now the current release.**
 
-## v0.1.3 release (current)
+## v1.0.0 release (current)
+
+Tag `v1.0.0` is an annotated tag (tag object `e6515c47d47f28510b942d7e2fc7e662bc82cc3c`)
+on `main` commit `782e243de01bb4753fc73ec0099553fb6b24c10b` (`782e243`). The
+commit and tag were pushed to both `github` and `origin` (forgejo); both remotes
+report the same tag object and peeled commit. The public GitHub Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.0.0> (release id
+`456148592`); the repository is public and the release is neither a draft nor a
+prerelease.
+
+This is the D26 runtime release: plain `routelatch run` is the detached
+app/tray, `run --headless` is the foreground engine, `autostart` is
+default-instance-only, and `service install` is the opt-in systemd user unit.
+The change is breaking relative to v0.1.3: the default `run` meaning changed and
+packages no longer ship the old foreground unit, so the documented stop/remove
+step for `/usr/lib/systemd/user/routelatch.service` is required before upgrade.
+The `rlch` symlink remains.
+
+The release publishes **17 unsigned assets**: four Linux tarballs, four `.deb`
+files, four RPM specs, four binary RPMs (`routelatch-1.0.0-1.<arch>.rpm`) and
+one `SHA256SUMS`. Evidence: the tarballs, `.deb` files and specs were built from
+a clean `git archive 782e243` export in an isolated `DIST` with `VERSION=v1.0.0`,
+`COMMIT=782e243`, `SOURCE_DATE_EPOCH=1700000000`, Go 1.27.4 and
+`CGO_ENABLED=0`; `scripts/check-artifact.sh` passed for amd64 and
+`scripts/check-package.sh` passed once over all four architectures. A second
+packaging run produced a byte-identical `SHA256SUMS`
+(`5b6964a1c4637ce861e25cea92ff2bb6d2eb991bb546809aa67044edf464aed7`; both
+runs), and `sha256sum -c` passed 16/16. The pinned sing-box v1.14.4 archives
+were re-verified against the digests pinned in `scripts/package.sh` before use;
+`bin/sing-box` and `SINGBOX-INFO` are present only in amd64/arm64 packages.
+
+The four binary RPMs were built from the v1.0.0 specs inside a disposable
+`ubuntu:26.04` container with rpm 6.0.1 (nothing installed on the host, where
+`rpmbuild`/`rpm` remain absent), using `rpmbuild --target <arch> -bb`. Each was
+inspected for `Name=routelatch`, `Version=1.0.0`, `Release=1`, the expected
+`Arch`, `License=Apache-2.0`, `Requires: ca-certificates`, `/usr/bin/routelatch`
+and `/usr/bin/rlch`, no scriptlets/triggers and no systemd/autostart path. The
+x86_64 RPM was installed with `rpm -i --nodeps` in the same container; its
+`/usr/bin/routelatch version` reported `v1.0.0`/`782e243`, then it was removed.
+Green GitHub Actions run `45293072576` on `782e243` (all six jobs, including
+`rpm-packages`) is the CI gate. The upload had one operational retry: the amd64
+tarball upload was cut off by a workstation restart; its partial `starter`
+asset was deleted and the file was uploaded again. The final public API check
+confirmed all 17 asset names, sizes and `sha256:` digests match the local files
+exactly, with no extras, and that the annotated tag points at `782e243`.
+
+Authoritative digests (also in the uploaded `SHA256SUMS`, whose own SHA-256 is
+`5b6964a1c4637ce861e25cea92ff2bb6d2eb991bb546809aa67044edf464aed7`):
+
+```
+1fcb6c3d55be77662bb7ed32c5c1dd4341fc762cc7f1943e1f040edd363cd1ed  routelatch-1.0.0-1.aarch64.rpm
+2026252dc1a1d838dece6fa677a8af32362abd5d7ba0d539cec66c37b8d7a9a2  routelatch-1.0.0-1.ppc64le.rpm
+1d93076379df76c539e3c84bb85dc1cccdbe20b59f63ea49444d79f8c6c7d578  routelatch-1.0.0-1.riscv64.rpm
+59f6aae7e8ca7f5407fc13693f5af3316656a39d2b5102fea86921cf9ceab6aa  routelatch-1.0.0-1.x86_64.rpm
+24683e339d23346b9130c25f54ca22c1dd272d9309500bb86c99e8aff6f35f2f  routelatch-aarch64.spec
+914a718919a0317881a0c7ee33cae78b3619663060917939906ddb3437bb455b  routelatch-ppc64le.spec
+7a669aadfce4772aeea655ca8237ae4b05ecb33799b1bc4d9f93cd08b8da1dc6  routelatch-riscv64.spec
+fc99e117cb2ed853a9292d052c408e69811d549aaeb74817ca308ba12d201e2e  routelatch-v1.0.0-linux-amd64.tar.gz
+8c941d9834b148d47cc6462115c995ea4860125288a961f76a8761b84b2e11ec  routelatch-v1.0.0-linux-arm64.tar.gz
+76f83b3516f0a7428558e395d610821a4b7d20a8948dd8aed47bbc97c6044620  routelatch-v1.0.0-linux-ppc64le.tar.gz
+a88f1e4ec51004a6e9edbe5a240e9de5e7a4827833899e70fe68547b6bd341e7  routelatch-v1.0.0-linux-riscv64.tar.gz
+a36e9b499e70ccae378d149a50d13057cb7bb136d4724710a0cd00cd96a9f6a8  routelatch-x86_64.spec
+5fd9e9edc315ac765d72f2f2e5819bdf63f4a518f906b04270244fdccf66d614  routelatch_1.0.0_amd64.deb
+a4142d6c40bd28af84524b9a51fad9674989e439a9765b1d0dbc80fc5bd5c51b  routelatch_1.0.0_arm64.deb
+b416e4d3dbe11a15681736b84cd911712676eebb023f24270884ed279e8e3eb3  routelatch_1.0.0_ppc64el.deb
+016ab50e670962468a655d0075a0814f719fb171e077a5922c09159a1f158f8f  routelatch_1.0.0_riscv64.deb
+```
+
+Limits: `amd64` is runtime-exercised; `arm64` is cross-built and
+runtime-untested; `riscv64` and `ppc64le` are cross-build-only. Real
+`service install`/uninstall/rollback/linger, the stale `/usr/lib` unit upgrade,
+a tray Quit click, GNOME/SSH, pidfd `ENOSYS`/`EPERM`, non-amd64 runtime and the
+default+`--data-dir` coexistence cell remain unverified. The sidecar is pinned
+only for amd64/arm64. No clean-machine install, GPG signature or package
+repository is claimed.
+
+## v0.1.3 release (historical)
 
 Tag `v0.1.3` is an annotated tag (tag object `6f226688c8e48ecbc7570383b6e86df259b7b58c`) on
 `main` commit `a32b033daca0ed2e964ad4870f5511ff0bc0a2c7` (`a32b033`). The

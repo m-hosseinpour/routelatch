@@ -21,7 +21,7 @@
 | `golang.org/x/net` | `v0.62.0` به‌صورت direct (برای `publicsuffix`؛ `idna` و `proxy` هم از همین ماژول) |
 | وابستگی جدید | ممنوع بدون تغییر قرارداد |
 
-**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمیدهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند؛ بستهٔ فعلی R12 unit دارد و از R13 طبق D26 هیچ user unit/postinst نخواهد داشت. سرویس فقط با `routelatch service install` (user unit، D26) به‌صورت opt-in ساخته می‌شود و فعال‌سازی سرویس/تنظیم دسکتاپ در نصب نیست. برای RPM یک اسپک در هر معماری (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) ساخته و در SHA256SUMS ثبت میشود؛ Version آن دقیقاً برابر Version `.deb` است (نرمالسازی واحد: `v0.1.0-r12.1` → `0.1.0.r12.1`). `%files` LICENSE/NOTICE را در `/usr/share/licenses/routelatch` و بقیهٔ اسناد را در `/usr/share/doc/routelatch` قرار میدهد و هیچ scriptlet یا %post ندارد. باینری RPM روی host ساخته نمی‌شود (rpmbuild نصب نیست)؛ ساخت/بازرسی محلی فقط در container یک‌بارمصرف انجام شده است و CI نیز آن را با rpmbuild می‌سازد و با rpm بازرسی می‌کند.
+**مرز بسته‌بندی R12:** آرتیفکت‌های `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند و ماتریس پشتیبانی runtime نسخهٔ v1 (`amd64`/`arm64`) را تغییر نمیدهند. بستهٔ `.deb` محلی محتوای همان tarball را زیر `/usr` نصب می‌کند؛ بسته‌های منتشرشده تا `v0.1.3` unit دارند و از `v1.0.0` طبق D26 هیچ user unit/postinst ندارند. سرویس فقط با `routelatch service install` (user unit، D26) به‌صورت opt-in ساخته می‌شود و فعال‌سازی سرویس/تنظیم دسکتاپ در نصب نیست. برای RPM یک اسپک در هر معماری (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) ساخته و در SHA256SUMS ثبت میشود؛ Version آن دقیقاً برابر Version `.deb` است (نرمالسازی واحد: `v0.1.0-r12.1` → `0.1.0.r12.1`). `%files` LICENSE/NOTICE را در `/usr/share/licenses/routelatch` و بقیهٔ اسناد را در `/usr/share/doc/routelatch` قرار میدهد و هیچ scriptlet یا %post ندارد. باینری RPM روی host ساخته نمی‌شود (rpmbuild نصب نیست)؛ ساخت/بازرسی محلی فقط در container یک‌بارمصرف انجام شده است و CI نیز آن را با rpmbuild می‌سازد و با rpm بازرسی می‌کند.
 
 ماژول‌های بالا در `go.mod` پین‌اند؛ `internal/contract/pins.go` با build tag `tools`
 فقط برای این وجود دارد که `go mod tidy` قبل از ورود importکننده‌ها آن‌ها را حذف نکند.
@@ -1213,8 +1213,8 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 ### ۷.۵ مدل اجرا، tray، autostart و service (D26)
 
 این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. R13 در درخت کامل شده است
-(R13-F verdict **Ready**)؛ تا انتشار R13، بستهٔ منتشرشدهٔ فعلی (v0.1.3) همان
-`run` foreground و unit را دارد.
+(R13-F verdict **Ready**) و `v1.0.0` همین مدل را منتشر کرده است؛ بسته‌های
+`v0.1.3` و پیش از آن همان `run` foreground و unit قدیمی را دارند.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق
