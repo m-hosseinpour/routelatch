@@ -540,7 +540,9 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   **آزمون‌نشده:** job انتشار و اولین تگ واقعی؛ gateهای tag/on-main/CI-green در
   dry-run اجرا نمی‌شوند. جزئیات در `docs/release-readiness.md`.
   **شروع واحد (c) (۲۰۲۶-۱۱-۲۵):** انتشار `v1.0.1` (patch) با مجوز کاربر آغاز شد؛
-  در جریان است و تکمیل اعلام نشده.
+  `CI` `45490941645` روی `fb969fb` سبز شد و تگ `v1.0.1` push شد، ولی `Release`
+  `45492100825` در gate مقایسهٔ `github.sha` با commit peelشده شکست خورد؛ بدون
+  Release. کار متوقف و برای اصلاح workflow/بازبینی باز است.
 
 - **R13 — R13-A..F بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
@@ -763,7 +765,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
-| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (در جریان، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ نتیجه در همین ردیف و `docs/release-readiness.md` ثبت می‌شود. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
+| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (متوقف، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ `CI` سبز و تگ push شد، ولی اجرای `Release` در gate تطابق `github.sha` با commit peelشده شکست خورد و هیچ Release ساخته نشد؛ رفع نیازمند اصلاح workflow و بازبینی مستقل است. جزئیات در `docs/release-readiness.md`. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
@@ -785,6 +787,22 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 مستندات روی `main` بدون `[skip ci]` (همین commit شروع؛ بدون ادعای تکمیل)، سبز شدن
 `CI` روی همان SHA، سپس تگ annotated `v1.0.1` روی همان commit و push آن برای اجرای
 `Release`. تا پایان موفق run انتشار، تکمیل اعلام نمی‌شود.
+
+**نتیجهٔ تلاش اول (۲۰۲۶-۱۱-۲۵) — متوقف:** commit شروع `fb969fb` push شد و `CI`
+`45490941645` روی همان SHA سبز شد (هر شش job). تگ annotated `v1.0.1` (شیء
+`da6307e`) روی `fb969fb` ساخته و به هر دو remote push شد؛ اجرای `Release`
+`45492100825` در job «Check the release gates» شکست خورد و annotation آن خط ۷۸
+workflow، یعنی مقایسهٔ `refs/tags/v1.0.1^{commit}` با `${{ github.sha }}`، را نشان
+می‌دهد. هیچ Release یا draft ساخته نشد: jobهای package/RPM/assemble/publish همه
+skip شدند و فهرست عمومی releases هنوز به `v1.0.0` ختم می‌شود. علت منطقی: در push
+تگ annotated، `github.sha` خود شیء تگ است نه commit peelشده، پس این gate در اولین
+اجرای واقعی همیشه fail می‌شود (در dry-runهای branch اجرا نمی‌شد). رفع آن تغییر
+workflow و بازبینی مستقل می‌خواهد؛ در این جلسه pipeline تغییر نکرد و تگ برای شاهد
+دست‌نخورده ماند. پیام تگ انتشار را ادعا می‌کند که رخ نداده است؛ پیش از تلاش بعدی
+باید تگ بازسازی/اصلاح شود. **قدم بعدی:** اصلاح gate برای پذیرش تطابق با شیء تگ
+یا commit peelشده (بدون تضعیف الزام annotated/on-main)، بازبینی مستقل، سبز شدن
+`CI` روی commit اصلاح، سپس حذف و بازpush تگ یا `workflow_dispatch` روی ref تگ با
+`publish=true`.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -860,12 +878,14 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 
 1. `AGENTS.md` و همین بخش (مخصوصاً R14) را بخوان؛ `git status` و
    `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۴): `v1.0.0` آخرین ریلیز است و R1–R13 بسته‌اند؛
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۵): `v1.0.0` آخرین ریلیز است و R1–R13 بسته‌اند؛
    **R14 واحد (a) انجام، بازبینی مستقل شده و merge شده است** (merge در `0183e3f`
-   و سپس یک commit مستندات)؛
-   branch `release-dryrun` همان درخت را دارد. dry-run سبز نهایی `45463989732`
-   (workflow blob `e723d83`) شاهد مسیر ساخت/تأیید است.
-   تنها کار باز R14: (c) اولین انتشار واقعی با مجوز جدا.
+   و سپس یک commit مستندات)؛ branch `release-dryrun` همان درخت را دارد. dry-run
+   سبز نهایی `45463989732` (workflow blob `e723d83`) شاهد مسیر ساخت/تأیید است.
+   **واحد (c) تلاش شد و متوقف است:** `fb969fb` و `CI` سبز `45490941645`، تگ
+   `v1.0.1` (شیء `da6307e`) push شد، ولی `Release` `45492100825` در gate خط ۷۸
+   (`github.sha` برابر شیء تگ، نه commit peelشده) شکست خورد و هیچ Release ساخته
+   نشد. تنها کار باز R14: اصلاح همین gate با بازبینی مستقل.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -874,10 +894,11 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
    `45397329232`، `45399453678`، `45400769014`، `45422318159` و dry-run نهایی
    `45463989732` روی `02e3226`؛ رفع یافته‌ها `952276e`/`02e3226`)
    → (b) بازبینی مستقل انجام شد (دور اول Not ready، دور دوم Ready with findings،
-   تأیید نهایی بسته) و merge شد → (c) اولین تگ annotated
-   و انتشار واقعی با مجوز جدا. dry-run قبل از merge با push به branch دائمی
-   `release-dryrun` بود؛ اکنون `workflow_dispatch` با `publish=false` هم در
-   دسترس است ولی هنوز اجرا نشده.
+   تأیید نهایی بسته) و merge شد → (c) در ۲۰۲۶-۱۱-۲۵ آغاز شد؛ `CI` سبز و تگ
+   `v1.0.1` push شد ولی gate خط ۷۸ شکست خورد و بدون Release متوقف شد. **بعدی:**
+   اصلاح gate، بازبینی مستقل، CI سبز، سپس تگ بازسازی‌شده یا
+   `workflow_dispatch` با `publish=true` روی ref تگ. dry-run قبل از merge با push
+   به branch دائمی `release-dryrun` بود؛ `workflow_dispatch` هنوز اجرا نشده.
 5. برای هر تغییر: YAML/shell parse، dry-run کامل، دو اجرای packaging با
    `SHA256SUMS` یکسان، `check-artifact.sh`/`check-package.sh`، و بازبینی مستقل.
    ایجاد تگ/انتشار عمومی و هر تغییر میزبان مجوز جدا می‌خواهد.

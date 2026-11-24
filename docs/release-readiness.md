@@ -20,10 +20,11 @@ tag push; nothing is built or uploaded from a local machine. The workflow is
 implemented in `.github/workflows/release.yml`, was exercised by complete
 pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
 into `main` (head `0183e3f`, 2026-11-24). On 2026-11-25 the project owner
-authorized the first CI-built release, **v1.0.1** (patch); the release start is
-recorded in the implementation plan and the release is not yet published. The
-historical release sections below remain evidence of the local build/upload
-process used for `v0.1.0`–`v1.0.0`; the CI pipeline section is current.
+authorized the first CI-built release, **v1.0.1** (patch); the start commit
+passed CI and the annotated tag was pushed, but the Release run failed in the
+tag-SHA gate and published nothing. The attempt is recorded under "First
+v1.0.1 attempt (2026-11-25): blocked"; the historical release sections below
+remain evidence of the local build/upload process used for `v0.1.0`–`v1.0.0`.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -209,8 +210,10 @@ package/RPM set; its extra-file and corrupted-checksum negative cases failed as
 intended.
 
 Limits: the publish job (draft creation, 17 uploads, API digest comparison and
-the final publish) has never executed; the first real tag will be its first run
-and still needs explicit authorization. Its guard, cleanup and digest polling
+the final publish) has never executed; the first real tag (`v1.0.1`, 2026-11-25)
+did not reach it because the plan gate failed (see "First v1.0.1 attempt" above),
+so it remains unexecuted and needs the fixed gate plus authorization for the next
+attempt. Its guard, cleanup and digest polling
 were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
 public release, pre-existing draft, guard API/transport error, own-draft
 deletion, null digest appearing on a later poll and a digest mismatch), not
@@ -227,6 +230,37 @@ publishing. A docs-only push whose head commit message carries `[skip ci]` is
 skipped: the documentation commit `e85b9b7` produced no workflow run, while the
 earlier documentation commit `f99aa71` without the marker triggered Release
 `45425595274` and CI `45425595160`.
+
+## First v1.0.1 attempt (2026-11-25): blocked
+
+The start commit `fb969fb` ("docs(plan): start first CI release v1.0.1", no
+`[skip ci]`) was pushed to both remotes. GitHub Actions CI run `45490941645`
+(`push`, `main`, `fb969fb`) completed green with all six jobs. Annotated tag
+`v1.0.1` (tag object `da6307e4d28fd0d09bbafae0888506c6858ea691`, tagger
+Mahdi Hosseinpour) was created on `fb969fb` (peeled commit
+`fb969fb767f60e1894e7071ba808c5dd0ac87901`) and pushed to both remotes.
+
+Release run `45492100825` failed in its first job, "Check the release gates and
+resolve the version" (job `138792821952`), about six seconds after it started.
+The public check-run annotation points at `.github/workflows/release.yml` line
+78, the comparison `[ "$(git rev-parse "refs/tags/$tag^{commit}")" = "$SHA" ]`;
+the step exited 1. The later steps did not run, so the package, RPM, assemble and
+publish jobs were all skipped. No release or draft was created: the publish job
+never ran, and the public releases API still lists `v1.0.0` (id `456148592`) as
+the newest release.
+
+Cause: on a push of an annotated tag, GitHub Actions sets `${{ github.sha }}` to
+the tag object, not the commit it peels to. The tag is annotated and points at
+the intended commit, so line 78 fails on that identity comparison. The
+`release-dryrun` branch path skips this gate, which is why no dry-run caught it.
+The run's `head_sha` is normalised to `fb969fb`; the failed comparison is the
+evidence that the gate's value was the tag object.
+
+The attempt stopped here: the fix is a workflow change (accept the tag object or
+its peeled commit) and needs independent review, and re-pushing the same tag
+cannot pass. The tag was left in place as evidence; its message claims a
+publication that did not happen, so it must be recreated before a later attempt.
+No release was edited or deleted, and nothing was built or uploaded outside CI.
 
 ## v0.1.3 release (historical)
 
