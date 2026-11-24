@@ -3,11 +3,12 @@
 RouteLatch's own program ships as a single Go binary. Users do not need Go,
 Python, Node or a separate Xray installation: the pinned Xray core is compiled
 into that binary. A release package can additionally carry `bin/sing-box`, a
-**separate, unmodified GPL-3.0 executable** supplied by the release operator (see
-"The sing-box sidecar" below). This directory documents the package layout and
-the user's install steps. **The build never installs anything** — no service is
-enabled, no desktop proxy or network setting is touched, and nothing is
-published or downloaded.
+**separate, unmodified GPL-3.0 executable** provided by the release workflow or
+a local operator (see "The sing-box sidecar" below). This directory documents the package layout and
+the user's install steps. **A local build never installs anything** — no service
+is enabled, no desktop proxy or network setting is touched, and the local
+scripts download and publish nothing (the release workflow only downloads the
+pinned sing-box archives described below).
 
 **Runtime model (D26, shipped from this revision):** packages built from this
 revision contain **no systemd unit, autostart entry or maintainer script**.
@@ -22,15 +23,18 @@ packages predate this change and still contain the old unit and old foreground
 `run`; see "Upgrading from a package with the old unit" below. Requirements:
 `docs/requirements.md` D26; contract: `docs/contracts.md` §7.5.
 
-The default answer for "how do I get a package" is `scripts/build.sh` followed
-by `scripts/package.sh`. Both are local build steps. The packaging step writes
-reproducible `.tar.gz` files, unsigned Debian `.deb` files and one RPM `.spec`
-per architecture; the only trust anchor is the generated `SHA256SUMS`, as for
-the v0.1.0 tarballs. There is no GPG signing, apt/dnf repository or
-package-service integration. Debian and RPM use the **same** `Version` string,
-normalised once from `BUILD-INFO` (see "Version stamping"). Binary RPMs are not
-built by `scripts/package.sh`: `rpmbuild` is not assumed to be installed, so CI
-builds and inspects them from the generated specs.
+The default answer for "how do I get a package" is the published GitHub Release:
+from D27 (2026-11-24), `.github/workflows/release.yml` builds all 17 assets and
+publishes them when an annotated `v*` tag is pushed (see "Release builds in
+GitHub Actions"). For development and inspection, `scripts/build.sh` followed by
+`scripts/package.sh` still builds everything locally without publishing. Both
+local steps write reproducible `.tar.gz` files, unsigned Debian `.deb` files and
+one RPM `.spec` per architecture; the only trust anchor is the generated
+`SHA256SUMS`. There is no GPG signing, apt/dnf repository or package-service
+integration. Debian and RPM use the **same** `Version` string, normalised once
+from `BUILD-INFO` (see "Version stamping"). Binary RPMs are not built by
+`scripts/package.sh`: `rpmbuild` is not assumed to be installed, so CI builds and
+inspects them from the generated specs.
 
 ## Source tree layout
 
@@ -40,6 +44,9 @@ scripts/build.sh           static build for linux/amd64, arm64, riscv64, ppc64le
 scripts/package.sh         assembles package trees, .tar.gz files, .deb files and RPM specs under dist/packages/
 scripts/check-artifact.sh  static-link and empty-environment smoke check for one binary
 scripts/check-package.sh   checksum, tarball-layout, .deb metadata/payload and static RPM spec check
+scripts/release-assets.sh  assembles and verifies the exact 17 GitHub Release assets
+.github/workflows/release.yml
+                           D27 release workflow: tag push builds and publishes; release-dryrun branch only verifies
 dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
 packaging/README.md        this file; it is shipped inside the package as INSTALL.md
 deploy/README.md           app/tray, autostart, opt-in service, migration and crash recovery
@@ -69,7 +76,7 @@ routelatch-<version>-linux-<arch>/
   share/doc/routelatch/go.sum           module hashes quoted by the audit
   share/doc/routelatch/BUILD-INFO       version, commit, date, Go version, cgo=0
   share/doc/routelatch/SINGBOX-INFO     optional: sidecar tag/commit and per-arch SHA-256
-  share/doc/routelatch/PACKAGE-NOTES    "local build, not published" notice
+  share/doc/routelatch/PACKAGE-NOTES    build/publishing notice (local build vs. published GitHub Release)
 ```
 
 There is no `share/routelatch/systemd/`, no autostart entry and no maintainer
@@ -152,18 +159,22 @@ present, is a separate GPL-3.0 executable and is not linked into RouteLatch.
 No `.rpm` file is produced or checksummed on a host without `rpmbuild`: local
 verification is static spec validation in `scripts/check-package.sh`. CI
 (`rpm-packages` in `.github/workflows/ci.yml`) installs RPM tooling, runs
-`rpmbuild --target <rpm-arch> -bb` from each spec and inspects the results with
-`rpm` (name, version, release, architecture, license, `Requires: ca-certificates`,
-exact installed file list and absence of scriptlets). That CI step has been
-green (`rpm-packages` in run `44682457124`). The v0.1.1, v0.1.2 and v0.1.3
-release RPMs were built separately from these specs with an extracted, not
-installed, rpm 6.0.1 toolchain. The CI-built RPMs carry a CI-only version and are not
-published, and the generated specs are not a dnf/yum repository.
+`rpmbuild --target <rpm-arch> -bb` from each spec with a CI-only version and
+inspects the results with `rpm` (name, version, release, architecture, license,
+`Requires: ca-certificates`, exact installed file list and absence of
+scriptlets). The `Release` workflow builds the four **published** binary RPMs
+from the same generated specs with the release version, re-inspects metadata and
+payload (including the amd64/arm64 `sing-box` sidecar files) and adds them to the
+release assets. From D27 nothing is built on a maintainer's machine. The
+v0.1.1–v1.0.0 release RPMs predate that path and were built separately from
+these specs with an extracted, not installed, rpm 6.0.1 toolchain; they are
+historical evidence, not the current process. The generated specs are not a
+dnf/yum repository.
 
 Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
-generated for these local, unsigned packages; the Apache-2.0 text and the full
-third-party notices ship under `/usr/share/doc/routelatch/`. A future apt
-repository or public distribution phase must add them.
+generated for these unsigned packages, local or CI-built; the Apache-2.0 text
+and the full third-party notices ship under `/usr/share/doc/routelatch/`. A
+future apt repository or public distribution phase must add them.
 
 There are no runtime data files in the package. On first run the directories
 `$XDG_CONFIG_HOME/routelatch/` and `$XDG_STATE_HOME/routelatch/` are created
@@ -285,8 +296,10 @@ stay `unsupported`/`sidecar_unavailable`.
 
 `bin/sing-box` is not built by `scripts/build.sh` and is not linked into
 RouteLatch. It is an optional input: an **already extracted, unmodified upstream
-binary** for each sidecar architecture (`amd64`, `arm64`), supplied by the
-release operator under `dist/singbox/` (gitignored together with `dist/`).
+binary** for each sidecar architecture (`amd64`, `arm64`), supplied under
+`dist/singbox/` (gitignored together with `dist/`). The `Release` workflow
+downloads the official archives, checks the pinned digests and extracts both
+binaries before packaging; a local operator can do the same steps by hand.
 `scripts/package.sh` pins
 upstream tag `v1.14.4` (commit `c005f35300ce76427dc285481ec5695f5b179cd2`) and the
 sidecar's identity is recorded in the package's `SINGBOX-INFO`.
@@ -303,8 +316,8 @@ sing-box-1.14.4-linux-amd64.tar.gz   official v1.14.4 archive for amd64
 sing-box-1.14.4-linux-arm64.tar.gz   official v1.14.4 archive for arm64
 ```
 
-How to obtain and pin them — done by the operator at release time; **this script
-and this change download nothing**:
+How to obtain and pin them locally (the `Release` workflow performs these steps
+automatically); **`scripts/package.sh` itself downloads nothing**:
 
 1. Fetch the **official** `v1.14.4` release archives
    `sing-box-1.14.4-linux-amd64.tar.gz` and `sing-box-1.14.4-linux-arm64.tar.gz`
@@ -449,6 +462,41 @@ when one names the current commit (for example `v0.1.0` at the tag), a
 reachable. Override `VERSION`, `COMMIT` and `SOURCE_DATE_EPOCH` for a named
 build.
 
+## Release builds in GitHub Actions (D27)
+
+`.github/workflows/release.yml` is the release path from D27. An annotated `v*`
+tag push runs it automatically; a tag that is not annotated, has an empty
+message, is not on `main`, or whose commit has no successful `CI` push run on
+`main` is rejected before any build. The workflow then:
+
+- builds the four static binaries with `scripts/build.sh` (`VERSION` = tag,
+  `COMMIT` = tag commit, `CGO_ENABLED=0`, `SOURCE_DATE_EPOCH=1700000000`);
+- downloads the official sing-box v1.14.4 `amd64`/`arm64` archives, verifies
+  them against the digests pinned in `scripts/package.sh` and extracts them;
+- runs `scripts/package.sh` with `REQUIRE_DEB=1`, `REQUIRE_SINGBOX=1` and
+  `RELEASE_BUILD=1`, runs `check-package.sh` and `check-artifact.sh`, repeats
+  packaging and requires an identical `SHA256SUMS`, and runs `sha256sum -c`;
+- builds and inspects the four binary RPMs from the generated specs;
+- joins the 12 package files and four RPMs, extends `SHA256SUMS` to all 16 and
+  verifies the exact 17-file set with `scripts/release-assets.sh`;
+- creates a **draft** release, uploads all 17 assets, verifies every uploaded
+  name, size and `sha256:` digest through the API, and publishes the draft only
+  after that check. Any failure before publishing deletes the draft, so a
+  failure never leaves a public incomplete release.
+
+The pre-merge dry-run path is a push to the permanent `release-dryrun` branch
+(or `workflow_dispatch` with `publish=false` after the workflow is on the
+default branch, which GitHub requires for dispatch). A dry run uses the
+synthetic version `v0.0.0-dryrun`, runs every build and verification job and
+**skips the publishing job**. Pushing an actual `v*` tag is the release action
+and still needs the project owner's separate authorization.
+
+`RELEASE_BUILD=1` changes the generated text only for these CI packages:
+`PACKAGE-NOTES` says the package is published with the GitHub Release, and the
+spec header says "Unsigned CI build" instead of "Local, unsigned build". Local
+builds keep the old text, and `RELEASE_BUILD=1 scripts/check-package.sh` fails
+if a release package still claims to be an unpublished local build.
+
 ## Licensing and publication
 
 The project is licensed under **Apache-2.0** (D20, decided 2026-11-18). Every
@@ -459,9 +507,12 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2` and `v0.1.3` each
-published all 17 assets (four tarballs, four `.deb` files, four RPM specs, four
-binary RPMs and `SHA256SUMS`). Building a package still does not publish it: do not publish,
-release, tag, push or upload new artifacts without a separate decision from the
-project owner. `PACKAGE-NOTES` in every tarball/deb says it is a local build for
-that reason; the generated spec carries the same "local, unsigned" header.
+The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2`, `v0.1.3` and
+`v1.0.0` each published all 17 assets (four tarballs, four `.deb` files, four RPM
+specs, four binary RPMs and `SHA256SUMS`). From D27 those assets are built and
+published by the `Release` workflow described above. Building a package locally
+still does not publish it: do not release, tag, push or upload new artifacts
+without a separate decision from the project owner. `PACKAGE-NOTES` in a local
+tarball/deb says it is a local build for that reason; a package built by the
+release workflow says it is published, and the generated spec header follows the
+same mode.

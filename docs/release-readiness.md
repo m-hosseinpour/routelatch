@@ -14,12 +14,14 @@ v0.1.0 sections, the history scan, name check and dependency audit remain
 historical evidence; they are not repeated here. The tags, pushes and releases
 were explicitly authorized by the project owner.
 
-**Future releases (D27, 2026-11-24).** From the next release on, the plan is for
-GitHub Actions to build all 17 assets and create the public GitHub Release on an
-annotated `v*` tag push; nothing is to be built or uploaded from a local machine.
-That path is defined but **not implemented or exercised** yet, so no statement
-below should be read as evidence for it. Everything below remains historical
-evidence of the local build/upload process used for `v0.1.0`–`v1.0.0`.
+**Future releases (D27, 2026-11-24).** From the next release on, GitHub Actions
+builds all 17 assets and creates the public GitHub Release on an annotated `v*`
+tag push; nothing is built or uploaded from a local machine. The workflow is
+implemented in `.github/workflows/release.yml` and was exercised by complete
+pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below); the first real
+tag and release still need the project owner's separate authorization.
+Everything below remains historical evidence of the local build/upload process
+used for `v0.1.0`–`v1.0.0`.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -111,6 +113,78 @@ a tray Quit click, GNOME/SSH, pidfd `ENOSYS`/`EPERM`, non-amd64 runtime and the
 default+`--data-dir` coexistence cell remain unverified. The sidecar is pinned
 only for amd64/arm64. No clean-machine install, GPG signature or package
 repository is claimed.
+
+## CI release pipeline (R14 unit a, 2026-11-24)
+
+`.github/workflows/release.yml` implements D27. An annotated `v*` tag push is
+the production trigger; the dry-run path is a push to the permanent
+`release-dryrun` branch. GitHub requires a `workflow_dispatch` workflow to exist
+on the default branch, so the `workflow_dispatch` input (`publish=false`) is only
+usable after this file is merged; the branch trigger is the path actually
+exercised before merge.
+
+Gates before any build: the ref must be an annotated `v*` tag, the tag must point
+at the pushed commit, its message must be non-empty, the commit must be an
+ancestor of `main`, and the `CI` workflow must have a successful push run on
+`main` for that exact SHA. The workflow reads that CI conclusion instead of
+re-running the test suite; the build and verification jobs below repeat the
+package, artifact and RPM checks. The gates are not weakened for a dry run — they
+are not applicable to a branch run, which never publishes.
+
+Every build uses `VERSION` (the tag name, or `v0.0.0-dryrun` for a dry run),
+`COMMIT`, `CGO_ENABLED=0` and `SOURCE_DATE_EPOCH=1700000000`. The package job runs
+`scripts/build.sh`, `scripts/check-artifact.sh`, downloads the official sing-box
+v1.14.4 amd64/arm64 archives and verifies them against the digests pinned in
+`scripts/package.sh`, runs `scripts/package.sh` twice and requires identical
+`SHA256SUMS`, runs `sha256sum -c` in `dist` and `dist/packages`, and runs
+`RELEASE_BUILD=1 scripts/check-package.sh` (which also rejects a release package
+whose `PACKAGE-NOTES` still says "local build"). The RPM job builds the four
+binary RPMs from the generated specs and inspects name/version/release/arch/
+license/`Requires`, the exact payload (with `sing-box` and `SINGBOX-INFO` on
+amd64/arm64), the `rlch` symlink and the absence of scriptlets or units.
+`scripts/release-assets.sh` joins the 12 package files and four RPMs, extends
+`SHA256SUMS` to all 16 files and verifies the exact 17-file set.
+
+The publish job is the only job with `contents: write`; it runs only for a tag
+ref whose plan says `publish=true`. It re-verifies the assets, creates a
+**draft** release, uploads all 17 assets, compares every uploaded name, size and
+`sha256:` digest through the API, and only then publishes the draft. A failure
+before publishing deletes the draft.
+
+Evidence:
+
+- Green dry-run `45397329232` on commit `57e162c` (`release-dryrun`): the plan,
+  package, RPM and assemble jobs succeeded, the publish job was skipped, and the
+  releases API listed only the five existing releases before and after; no draft
+  was created.
+- Controlled failure `45399453678` on commit `37208c8`: a temporary step
+  corrupted one built tarball before `check-package.sh`; the checker failed the
+  job, the RPM/assemble/publish jobs were skipped, and the releases API again
+  listed only the five existing releases, with no draft.
+- Final green dry-run `45400769014` on commit `2cdf05f` — the committed workflow
+  without the injection, plus a step that lists the 17 names and 16 hashes: the
+  same four jobs succeeded, publish was skipped, and no release or draft
+  appeared. The workflow blob at that commit and in this batch is
+  `6be8e479777c78578dd1ec9687ae00d8698acffa`.
+
+The dry-runs proved: all 12 package artifacts and four RPMs were built and
+inspected; `check-artifact.sh` and `check-package.sh` passed; the second
+packaging run produced the same `SHA256SUMS`; `sha256sum -c` passed; both pinned
+sing-box archive digests matched; and the exact 17-file set passed
+`scripts/release-assets.sh verify`. The logs API needs repository
+authentication, so this evidence is the public jobs API (job and step names with
+their conclusions) plus the public releases API for the absence of a release.
+`scripts/release-assets.sh` was also exercised locally on a synthetic
+package/RPM set; its extra-file and corrupted-checksum negative cases failed as
+intended.
+
+Limits: the publish job (draft creation, 17 uploads, API digest comparison and
+the final publish) has never executed; the first real tag will be its first run
+and still needs explicit authorization. `workflow_dispatch` was not invoked
+pre-merge because it requires an authenticated write and the workflow file on the
+default branch. A dry run does not exercise the CI-green or on-main gates, which
+apply only to tags. The `release-dryrun` branch trigger is permanent, so a push
+to that branch still costs a full build without publishing.
 
 ## v0.1.3 release (historical)
 
@@ -612,7 +686,9 @@ binaries, the official archives and the checksum file under `dist/singbox/`
 (see `packaging/README.md` for the authoritative obtain-and-verify procedure and
 the pinned archive digests). Without them, a routine build packages without the
 sidecar and prints a notice; `REQUIRE_SINGBOX=1` makes any missing input a hard
-error. This work does not download, install or publish anything.
+error. This work does not download, install or publish anything. (Historical:
+the `Release` workflow now performs these download-and-verify steps itself for
+a tag push; the local procedure above still applies to a manual build.)
 
 ## 3. Name check (RouteLatch)
 

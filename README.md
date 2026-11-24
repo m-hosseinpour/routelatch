@@ -75,6 +75,13 @@ proxy runtime, distributed as a separate program and used for hysteria2/sing-box
 exits. Its per-binary SHA-256 is in `SINGBOX-INFO` and a written source offer is
 in the notices. RouteLatch itself stays Apache-2.0; see [License](#license).
 
+From D27 (2026-11-24), the next releases are built and published by the
+`.github/workflows/release.yml` GitHub Actions workflow when an annotated `v*`
+tag is pushed; no asset is built or uploaded from a maintainer's machine. It
+verifies the pinned sing-box archives, runs the package checkers and publishes
+only after every uploaded asset's name, size and SHA-256 digest matches the
+build. Until a newer release is published, `v1.0.0` remains current.
+
 Verify a download before unpacking it. From the directory holding the downloaded
 file and the release's `SHA256SUMS`:
 
@@ -182,13 +189,15 @@ single step: a leading `v` is stripped and hyphens become dots
 the spec `Version:` field carry that exact value.
 
 `package.sh` generates and checksums the specs, while a binary RPM needs
-`rpmbuild`. CI builds and inspects all four binary RPMs with `rpmbuild`/`rpm`;
-the published `v0.1.1`, `v0.1.2`, `v0.1.3` and `v1.0.0` RPMs were built separately
-from the same specs with the same extracted rpm 6.0.1 toolchain, while the CI-built RPMs
-carry a CI-only stamp and are not shipped. The spec has no service-enable scriptlets
-and no `BuildArch`: the architecture comes from `rpmbuild --target`. There is no
-dnf/yum repository and no GPG signing. Windows/macOS builds, 32-bit builds and a
-package repository remain future work.
+`rpmbuild`. CI builds and inspects all four binary RPMs with `rpmbuild`/`rpm`.
+The published `v0.1.1`–`v1.0.0` RPMs were built separately from the same specs
+with the same extracted rpm 6.0.1 toolchain; from D27 the `Release` workflow
+builds the published RPMs in CI with the release version, while the
+`rpm-packages` job in the regular CI keeps its CI-only stamp and is not shipped.
+The spec has no service-enable scriptlets and no `BuildArch`: the architecture
+comes from `rpmbuild --target`. There is no dnf/yum repository and no GPG
+signing. Windows/macOS builds, 32-bit builds and a package repository remain
+future work.
 
 For a tarball install, `~/.local/bin` must be on `PATH`. Start it whichever way
 fits the session:
@@ -393,15 +402,18 @@ gated or impossible check, not a pass; the gated tests stay skipped unless a
 real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
-Local packaging was verified for this revision: four tarballs, four unsigned
-`.deb` files and four RPM `.spec` files were built in an isolated `DIST`, and
-`scripts/check-package.sh` passed for every architecture (metadata, payload
-paths, binary bytes, spec version/arch/layout, exact checksums, and **no
-systemd unit, autostart entry or maintainer script**). `scripts/check-artifact.sh`
-passed for the amd64 artifact. Earlier packaging runs also built four binary
-RPMs and installed one in a disposable container; this batch did not rebuild
-binary RPMs (CI does that from the specs). Only `amd64` was executed;
-`arm64`/`riscv64`/`ppc64le` were cross-built and are runtime-untested.
+Packaging was verified for this revision in the green release dry-run
+`45400769014`: four tarballs, four unsigned `.deb` files and four RPM specs
+were built in CI, the four binary RPMs were built and inspected there, two
+packaging runs produced an identical `SHA256SUMS`, and the final 17-file set
+passed `scripts/release-assets.sh verify`. `scripts/check-artifact.sh` passed for
+the amd64 artifact, and `scripts/check-package.sh` passed for every architecture
+(metadata, payload paths, binary bytes, spec version/arch/layout, exact
+checksums, and **no systemd unit, autostart entry or maintainer script**). This
+batch also re-ran `package.sh`/`check-package.sh` locally in an isolated `DIST`
+for amd64/arm64 in both local and `RELEASE_BUILD=1` release mode. Only `amd64`
+was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
+runtime-untested.
 
 Beyond the default suite, the Linux build was historically exercised on real
 system components and gated loopback checks: the old packaged unit under a real
