@@ -180,11 +180,19 @@ intended.
 
 Limits: the publish job (draft creation, 17 uploads, API digest comparison and
 the final publish) has never executed; the first real tag will be its first run
-and still needs explicit authorization. `workflow_dispatch` was not invoked
+and still needs explicit authorization. Its guard, cleanup and digest polling
+were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
+public release, pre-existing draft, guard API/transport error, own-draft
+deletion, null digest appearing on a later poll and a digest mismatch), not
+against the real GitHub API: the API's transient null `.digest` behaviour and the
+draft delete remain untested live. `workflow_dispatch` was not invoked
 pre-merge because it requires an authenticated write and the workflow file on the
 default branch. A dry run does not exercise the CI-green or on-main gates, which
-apply only to tags. The `release-dryrun` branch trigger is permanent, so a push
-to that branch still costs a full build without publishing.
+apply only to tags. The binary RPMs are built with the runner's unpinned `rpm`
+package, so only the tarballs, `.deb` files and specs are deterministic for the
+same inputs; the run records the RPM tool versions and `SHA256SUMS` is the
+binding record of the published RPMs. The `release-dryrun` branch trigger is
+permanent, so a push to that branch still costs a full build without publishing.
 
 ## v0.1.3 release (historical)
 

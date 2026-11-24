@@ -45,6 +45,11 @@ scripts/package.sh         assembles package trees, .tar.gz files, .deb files an
 scripts/check-artifact.sh  static-link and empty-environment smoke check for one binary
 scripts/check-package.sh   checksum, tarball-layout, .deb metadata/payload and static RPM spec check
 scripts/release-assets.sh  assembles and verifies the exact 17 GitHub Release assets
+scripts/release-guard.sh   refuses an existing public release or draft; deletes only
+                           the draft this run created
+scripts/release-verify-upload.sh
+                           polls the release API and compares every uploaded
+                           asset name, size and sha256 digest with the built file
 .github/workflows/release.yml
                            D27 release workflow: tag push builds and publishes; release-dryrun branch only verifies
 dist/singbox/              optional supplied sing-box binaries, official archives + SHA256SUMS (gitignored with dist/)
@@ -479,10 +484,15 @@ message, is not on `main`, or whose commit has no successful `CI` push run on
 - builds and inspects the four binary RPMs from the generated specs;
 - joins the 12 package files and four RPMs, extends `SHA256SUMS` to all 16 and
   verifies the exact 17-file set with `scripts/release-assets.sh`;
-- creates a **draft** release, uploads all 17 assets, verifies every uploaded
-  name, size and `sha256:` digest through the API, and publishes the draft only
-  after that check. Any failure before publishing deletes the draft, so a
-  failure never leaves a public incomplete release.
+- creates a **draft** release, uploads all 17 assets, polls the API until every
+  uploaded name, size and `sha256:` digest is reported, compares them with the
+  built files, and publishes the draft only after that check. If the tag
+  already carries a public release **or** a draft, the job refuses with an
+  actionable message and touches nothing: a leftover draft needs a deliberate
+  manual decision, so it is neither adopted nor deleted. A failure after this
+  run's own draft exists deletes that draft only, after the guard re-reads that
+  it is still a draft, so a failure never leaves a public incomplete release and
+  can never delete a published one.
 
 The pre-merge dry-run path is a push to the permanent `release-dryrun` branch
 (or `workflow_dispatch` with `publish=false` after the workflow is on the
@@ -493,9 +503,20 @@ and still needs the project owner's separate authorization.
 
 `RELEASE_BUILD=1` changes the generated text only for these CI packages:
 `PACKAGE-NOTES` says the package is published with the GitHub Release, and the
-spec header says "Unsigned CI build" instead of "Local, unsigned build". Local
-builds keep the old text, and `RELEASE_BUILD=1 scripts/check-package.sh` fails
-if a release package still claims to be an unpublished local build.
+spec header says "Unsigned CI build" instead of "Local, unsigned build". The
+flag is honoured only together with the `GITHUB_ACTIONS=true` marker that the
+runner sets; `RELEASE_BUILD=1 scripts/package.sh` on a workstation fails with an
+explicit message instead of producing a package that claims a publication which
+did not happen. Local builds keep the old text, and
+`RELEASE_BUILD=1 scripts/check-package.sh` fails if a release package still
+claims to be an unpublished local build.
+
+The tarballs, `.deb` files and specs are deterministic for the same inputs. The
+binary RPMs are not built by `scripts/package.sh`: the release workflow builds
+them from the shipped specs with the runner's `rpmbuild`, whose distro package is
+not pinned, so their exact bytes can vary with that tooling. The workflow records
+`rpm --version`/`rpmbuild --version` with the run, and the published
+`SHA256SUMS` is the binding record of the RPMs that were actually released.
 
 ## Licensing and publication
 

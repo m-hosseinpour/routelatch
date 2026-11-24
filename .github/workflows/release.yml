@@ -258,6 +258,20 @@ jobs:
           sudo apt-get install -y rpm
           command -v rpmbuild >/dev/null
           command -v rpm >/dev/null
+          # The binary RPM bytes depend on this runner's RPM tooling, so record
+          # its version with the run. The distro package is not pinned: the
+          # tarball, .deb and spec are the deterministic artifacts; SHA256SUMS
+          # is the binding record of the RPMs that were actually published.
+          rpm --version
+          rpmbuild --version
+          {
+            echo "### RPM tooling on this runner"
+            echo ""
+            echo '```'
+            rpm --version
+            rpmbuild --version
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Build the four binary RPMs from the generated specs
         run: |
@@ -424,6 +438,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
+      API_URL: ${{ github.api_url }}
       TAG: ${{ needs.plan.outputs.tag }}
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
@@ -446,22 +461,14 @@ jobs:
           grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md" ||
             { echo "tag $TAG has an empty message"; exit 1; }
 
-      - name: Refuse to touch an existing public release; delete a stale draft
-        run: |
-          set -eu
-          existing=$(gh api "repos/$REPO/releases/tags/$TAG" 2>/dev/null || true)
-          if [ -n "$existing" ]; then
-            draft=$(printf '%s' "$existing" | jq -r '.draft')
-            if [ "$draft" = true ]; then
-              echo "deleting a stale draft release for $TAG"
-              gh release delete "$TAG" --yes
-            else
-              echo "a public release already exists for $TAG; refusing to change it" >&2
-              exit 1
-            fi
-          fi
+      # A tag that already carries a public release must stay untouched; a
+      # leftover draft needs a human decision and is neither adopted nor
+      # deleted. The guard refuses on both and on an unreadable API answer.
+      - name: Refuse an existing release or draft for this tag
+        run: scripts/release-guard.sh check
 
       - name: Create the draft release
+        id: draft
         run: |
           set -eu
           gh release create "$TAG" \
@@ -469,33 +476,15 @@ jobs:
             --verify-tag \
             --title "$TAG" \
             --notes-file "$RUNNER_TEMP/release-notes.md"
+          # Emit the marker only after a successful create: the cleanup step is
+          # gated on it, so no failure before this point can delete anything.
+          echo "created=true" >>"$GITHUB_OUTPUT"
 
       - name: Upload all 17 assets to the draft
         run: gh release upload "$TAG" release/assets/*
 
       - name: Verify name, size and digest of every uploaded asset
-        run: |
-          set -eu
-          gh api "repos/$REPO/releases/tags/$TAG" >"$RUNNER_TEMP/release.json"
-          jq -e '.draft == true' "$RUNNER_TEMP/release.json" >/dev/null ||
-            { echo "the release is not a draft"; exit 1; }
-          [ "$(jq -r '.tag_name' "$RUNNER_TEMP/release.json")" = "$TAG" ] ||
-            { echo "the draft release has the wrong tag"; exit 1; }
-          [ "$(jq -r '.assets | length' "$RUNNER_TEMP/release.json")" -eq 17 ] ||
-            { echo "the draft release does not hold 17 assets"; exit 1; }
-          jq -r '.assets[] | "\(.name)\t\(.size)\t\(.digest)"' "$RUNNER_TEMP/release.json" |
-            LC_ALL=C sort >"$RUNNER_TEMP/assets.api"
-          for file in release/assets/*; do
-            printf '%s\t%s\tsha256:%s\n' "$(basename "$file")" "$(stat -c '%s' "$file")" \
-              "$(sha256sum "$file" | awk '{print $1}')"
-          done | LC_ALL=C sort >"$RUNNER_TEMP/assets.local"
-          diff -u "$RUNNER_TEMP/assets.local" "$RUNNER_TEMP/assets.api" ||
-            { echo "uploaded asset name/size/digest differs from the built files"; exit 1; }
-          echo "all 17 uploaded assets match the built name, size and sha256 digest"
-
-      - name: Delete the draft if upload or verification failed
-        if: failure()
-        run: gh release delete "$TAG" --yes || true
+        run: scripts/release-verify-upload.sh release/assets
 
       - name: Publish the release
         run: |
@@ -503,6 +492,9 @@ jobs:
           gh release edit "$TAG" --draft=false
           echo "published https://github.com/$REPO/releases/tag/$TAG"
 
-      - name: Delete the draft if publishing failed
-        if: failure()
-        run: gh release delete "$TAG" --yes || true
+      # The only delete path: this run's own draft, confirmed still a draft by
+      # scripts/release-guard.sh immediately before the delete. A failure in the
+      # guard, in create, or before this step cannot reach it.
+      - name: Delete only a draft this run created
+        if: failure() && steps.draft.outputs.created == 'true'
+        run: scripts/release-guard.sh delete-draft

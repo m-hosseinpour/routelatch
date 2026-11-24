@@ -227,7 +227,15 @@ releases API هیچ Release یا draft تازه‌ای نداشت. شکست کن
 workflow `6be8e479777c78578dd1ec9687ae00d8698acffa` است. `RELEASE_BUILD=1` فقط
 برای بسته‌های CI متن `PACKAGE-NOTES` و هدر spec را عوض می‌کند و
 `check-package.sh` در همین حالت ادعای «local build» را رد می‌کند؛ رفتار محلی
-بدون این متغیر دست‌نخورده و آزموده شد. **آزمون‌نشده:** job انتشار (draft، ۱۷
+بدون این متغیر دست‌نخورده و آزموده شد. **دور اصلاح بازبینی:** guard انتشار
+اصلاح شد؛ `scripts/release-guard.sh` وجود Release عمومی یا draft از پیش موجود را
+با پیام قابل‌اقدام رد می‌کند و چیزی را حذف نمی‌کند، و پاکسازی فقط draftی را حذف
+می‌کند که output مرحلهٔ ساختِ همان run (`created=true`) آن را مجاز کرده و
+بلافاصله پیش از حذف دوباره `.draft == true` خوانده شده باشد. بررسی آپلود با
+`scripts/release-verify-upload.sh` به‌جای یک خواندن، digest/size را با polling
+محدود می‌سنجد و publish تا کامل‌شدن آن اجرا نمی‌شود. RPMهای باینری با rpm
+بدون‌pin رانر ساخته می‌شوند؛ متن `PACKAGE-NOTES`/README همین را می‌گوید و
+`RELEASE_BUILD=1` فقط همراه `GITHUB_ACTIONS=true` پذیرفته می‌شود. **آزمون‌نشده:** job انتشار (draft، ۱۷
 آپلود، مقایسهٔ digest و publish) هرگز اجرا نشده و اولین run آن همان اولین تگ
 واقعی با مجوز جداست؛ gateهای tag/on-main/CI-green در dry-run اجرا نمی‌شوند.
 جزئیات و شواهد در `docs/release-readiness.md` («CI release pipeline»).

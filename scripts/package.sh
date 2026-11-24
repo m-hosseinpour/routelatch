@@ -11,9 +11,12 @@
 # DIST overrides the build/output directory (default ./dist). REQUIRE_DEB=1
 # makes a missing dpkg-deb a hard error; otherwise the .deb step is skipped
 # with a notice. REQUIRE_SINGBOX=1 keeps the existing release-build gate.
-# Binary RPMs are not built here: rpmbuild is not assumed to exist locally. One
-# .spec per architecture is generated and checksummed instead; CI builds and
-# inspects the binary RPMs from those specs (see .github/workflows/ci.yml).
+# RELEASE_BUILD=1 (the published-package text) is accepted only together with
+# GITHUB_ACTIONS=true, so a local build cannot claim a publication that did not
+# happen. Binary RPMs are not built here: rpmbuild is not assumed to exist
+# locally. One .spec per architecture is generated and checksummed instead; CI
+# builds and inspects the binary RPMs from those specs (see
+# .github/workflows/ci.yml).
 set -eu
 # Directory modes come from mkdir's umask; pin it so the tarball does not change
 # with the builder's shell settings (a 002 umask produced group-writable dirs).
@@ -284,15 +287,31 @@ SERVICE_HEADER
 	# hashes quoted in the audit.
 	install -m 0644 "$repo/docs/licensing.md" "$root/share/doc/routelatch/docs/licensing.md"
 	install -m 0644 "$repo/go.sum" "$root/share/doc/routelatch/go.sum"
-	# RELEASE_BUILD=1 is set by the GitHub Actions release workflow: the same
-	# package is built there and published with the release, so it must not
-	# claim to be an unpublished local build. Local builds keep the default.
+	# RELEASE_BUILD=1 is set by the GitHub Actions release workflow, and only
+	# there: the same package is built and published with the release, so it
+	# must not claim to be an unpublished local build. The CI marker is required
+	# too, so a local run cannot make the package assert a publication that did
+	# not happen.
+	release_build=0
 	if [ "${RELEASE_BUILD:-0}" = 1 ]; then
+		[ "${GITHUB_ACTIONS:-}" = true ] || {
+			echo "RELEASE_BUILD=1 is only for the GitHub Actions release workflow;" \
+				"run without it for a local build" >&2
+			exit 1
+		}
+		release_build=1
+	fi
+	if [ "$release_build" = 1 ]; then
 		cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 This package was built by the RouteLatch release workflow in GitHub Actions from
 BUILD-INFO (version/commit/date above) and is published with this version's
-GitHub Release, together with SHA256SUMS and the binary RPMs. It is reproducible
-for the same inputs.
+GitHub Release, together with SHA256SUMS and the binary RPMs.
+
+The tarball, the .deb and the spec are built deterministically from the same
+inputs (pinned Go toolchain, source, VERSION, COMMIT and SOURCE_DATE_EPOCH). The
+binary RPM is built from the shipped spec by the release runner's rpmbuild, so
+its exact bytes also depend on that RPM tooling version. SHA256SUMS in the
+release is the binding record of the bytes that were published.
 
 RouteLatch is licensed under the Apache License, Version 2.0; see LICENSE,
 NOTICE and THIRD-PARTY-NOTICES.md in this directory. Verify the download with
@@ -308,7 +327,8 @@ EOF
 	else
 		cat >"$root/share/doc/routelatch/PACKAGE-NOTES" <<EOF
 This is a local build assembled by scripts/package.sh from BUILD-INFO
-(version/commit/date above). It is reproducible for the same inputs.
+(version/commit/date above). The tarball, the .deb and the RPM spec are
+reproducible from the same inputs; no binary RPM is built locally.
 
 RouteLatch is licensed under the Apache License, Version 2.0; see LICENSE,
 NOTICE and THIRD-PARTY-NOTICES.md in this directory. Assembling this package
@@ -413,7 +433,7 @@ EOF
 # BUILD-INFO date: $spec_date
 # Source0 SHA-256: $tar_hash
 EOF
-		if [ "${RELEASE_BUILD:-0}" = 1 ]; then
+		if [ "$release_build" = 1 ]; then
 			cat <<EOF
 # Unsigned CI build: SHA256SUMS is the only trust anchor. No GPG signing, no
 # package repository, no packaged unit, no service enable and no maintainer

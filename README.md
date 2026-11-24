@@ -411,7 +411,9 @@ the amd64 artifact, and `scripts/check-package.sh` passed for every architecture
 (metadata, payload paths, binary bytes, spec version/arch/layout, exact
 checksums, and **no systemd unit, autostart entry or maintainer script**). This
 batch also re-ran `package.sh`/`check-package.sh` locally in an isolated `DIST`
-for amd64/arm64 in both local and `RELEASE_BUILD=1` release mode. Only `amd64`
+for amd64/arm64 in local mode; the release `PACKAGE-NOTES`/spec text is produced
+only under `GITHUB_ACTIONS=true`, so that mode is checked in the CI dry-run.
+Only `amd64`
 was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 

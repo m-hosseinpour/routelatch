@@ -4,6 +4,7 @@
 # Build output
 /routelatch
 /dist/
+/release/
 *.tar.gz
 
 # Spike binaries and Go test/profile output

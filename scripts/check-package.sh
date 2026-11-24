@@ -12,8 +12,10 @@
 # It reads BUILD-INFO for the expected version and never installs anything.
 # Usage: scripts/check-package.sh [dist/packages]
 #        DIST=/path/to/dist scripts/check-package.sh
-#        RELEASE_BUILD=1 scripts/check-package.sh   # CI release build; also
-#                                                     # requires release notes
+#        RELEASE_BUILD=1 scripts/check-package.sh   # release-package text check
+#                                                     # (package.sh writes that
+#                                                     # text only when
+#                                                     # GITHUB_ACTIONS=true)
 set -eu
 
 cd "$(dirname "$0")/.."
