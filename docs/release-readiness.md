@@ -299,6 +299,16 @@ not on main, and no successful CI run. The dry-run branch passed with
 push has run the fixed gate, the publish job is still unexecuted, and `v1.0.1`
 remains unpublished (the public releases still end at `v1.0.0`).
 
+The first CI run on the fix (`45494443321`, commit `4f282a4`) passed five of six
+jobs but failed the `Test` step of "Build, vet and test"; the step log needs
+repository authentication and is not available here. The diff from the last
+green commit (`fb969fb`, CI `45490941645`) contains no Go files — only the
+workflow and two documents — so the failure is not attributable to this change.
+The same full suite passed locally on 2026-11-25 with the pinned Go 1.27.4
+(`CGO_ENABLED=0 GOPROXY=off go test -count=1 ./...`: all 22 packages, including
+`internal/acceptance` in 118s). A follow-up document commit retriggers CI; the
+release gate still requires a green push run on the eventual tag commit.
+
 ## v0.1.3 release (historical)
 
 Tag `v0.1.3` is an annotated tag (tag object `6f226688c8e48ecbc7570383b6e86df259b7b58c`) on
