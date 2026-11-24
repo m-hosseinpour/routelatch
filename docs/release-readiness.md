@@ -146,26 +146,43 @@ amd64/arm64), the `rlch` symlink and the absence of scriptlets or units.
 `SHA256SUMS` to all 16 files and verifies the exact 17-file set.
 
 The publish job is the only job with `contents: write`; it runs only for a tag
-ref whose plan says `publish=true`. It re-verifies the assets, creates a
-**draft** release, uploads all 17 assets, compares every uploaded name, size and
-`sha256:` digest through the API, and only then publishes the draft. A failure
-before publishing deletes the draft.
+ref whose plan says `publish=true`. It re-verifies the assets, then refuses if
+the tag already carries a public release **or** any draft, naming the existing
+release id and telling the operator to resolve a leftover draft by hand; it never
+adopts or deletes a release it did not create. Only after that guard passes does
+it create a **draft**, upload all 17 assets, poll the release API (bounded) until
+every asset reports a size and `sha256:` digest, compare every uploaded name,
+size and digest with the built files, and publish the draft. A failure after its
+own draft exists deletes that draft only: a `draft-created` step output gates the
+cleanup, and the cleanup re-reads `.draft == true` immediately before deleting.
+A guard error or an unreadable API state therefore cannot reach a delete.
 
 Evidence:
 
 - Green dry-run `45397329232` on commit `57e162c` (`release-dryrun`): the plan,
   package, RPM and assemble jobs succeeded, the publish job was skipped, and the
-  releases API listed only the five existing releases before and after; no draft
-  was created.
+  releases API listed only the five existing releases before and after; no
+  public release appeared. The unauthenticated releases listing cannot show
+  drafts, so this run does not evidence the absence of a draft.
 - Controlled failure `45399453678` on commit `37208c8`: a temporary step
   corrupted one built tarball before `check-package.sh`; the checker failed the
   job, the RPM/assemble/publish jobs were skipped, and the releases API again
-  listed only the five existing releases, with no draft.
-- Final green dry-run `45400769014` on commit `2cdf05f` — the committed workflow
-  without the injection, plus a step that lists the 17 names and 16 hashes: the
-  same four jobs succeeded, publish was skipped, and no release or draft
-  appeared. The workflow blob at that commit and in this batch is
-  `6be8e479777c78578dd1ec9687ae00d8698acffa`.
+  listed only the five existing releases, with no public release (same listing
+  limitation for drafts).
+- Final green dry-run of the first round `45400769014` on commit `2cdf05f` — the
+  committed workflow without the injection, plus a step that lists the 17 names
+  and 16 hashes: the same four jobs succeeded, publish was skipped, and no
+  public release appeared. The workflow blob at that commit is
+  `6be8e479777c78578dd1ec9687ae00d8698acffa`; a later documentation-only commit
+  (`6b18145`, green run `45404439737`) ran the same blob.
+- Green dry-run `45422318159` on commit `952276e` (guard/cleanup fix): the plan,
+  package, RPM and assemble jobs succeeded — including the second packaging run
+  with an identical `SHA256SUMS`, `sha256sum -c` in both directories, the four
+  inspected RPMs and `scripts/release-assets.sh verify` over exactly the
+  17-asset set. Publish was skipped and the releases/tags API still listed only
+  the five existing releases and five tags. The workflow blob is
+  `e723d83a83a9e86bf3c5c0d3e1ae7abf5fffd2c3`; the following documentation-only
+  commit changes no workflow or script content.
 
 The dry-runs proved: all 12 package artifacts and four RPMs were built and
 inspected; `check-artifact.sh` and `check-package.sh` passed; the second

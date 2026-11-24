@@ -403,7 +403,7 @@ real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
 Packaging was verified for this revision in the green release dry-run
-`45400769014`: four tarballs, four unsigned `.deb` files and four RPM specs
+`45422318159`: four tarballs, four unsigned `.deb` files and four RPM specs
 were built in CI, the four binary RPMs were built and inspected there, two
 packaging runs produced an identical `SHA256SUMS`, and the final 17-file set
 passed `scripts/release-assets.sh verify`. `scripts/check-artifact.sh` passed for
@@ -413,8 +413,7 @@ checksums, and **no systemd unit, autostart entry or maintainer script**). This
 batch also re-ran `package.sh`/`check-package.sh` locally in an isolated `DIST`
 for amd64/arm64 in local mode; the release `PACKAGE-NOTES`/spec text is produced
 only under `GITHUB_ACTIONS=true`, so that mode is checked in the CI dry-run.
-Only `amd64`
-was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
+Only `amd64` was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 
 Beyond the default suite, the Linux build was historically exercised on real
