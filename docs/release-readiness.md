@@ -22,9 +22,10 @@ pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
 into `main` (head `0183e3f`, 2026-11-24). On 2026-11-25 the project owner
 authorized the first CI-built release, **v1.0.1** (patch); the start commit
 passed CI and the annotated tag was pushed, but the Release run failed in the
-tag-SHA gate and published nothing. The attempt is recorded under "First
-v1.0.1 attempt (2026-11-25): blocked"; the historical release sections below
-remain evidence of the local build/upload process used for `v0.1.0`–`v1.0.0`.
+tag-SHA gate and published nothing. The gate was fixed on 2026-11-25 (see "First
+v1.0.1 attempt (2026-11-25): blocked, gate fixed"); the historical release
+sections below remain evidence of the local build/upload process used for
+`v0.1.0`–`v1.0.0`.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -128,10 +129,13 @@ invoked, and the branch trigger is the path actually exercised.
 Gates before any build: the ref must be an annotated `v*` tag, the tag must point
 at the pushed commit, its message must be non-empty, the commit must be an
 ancestor of `main`, and the `CI` workflow must have a successful push run on
-`main` for that exact SHA. The workflow reads that CI conclusion instead of
-re-running the test suite; the build and verification jobs below repeat the
-package, artifact and RPM checks. The gates are not weakened for a dry run — they
-are not applicable to a branch run, which never publishes.
+`main` for that exact commit. On a tag push `github.sha` is the tag object, so
+the plan step peels it to a commit first and uses that commit for the tag
+comparison, the on-main check, the CI query and the `commit` output. The workflow
+reads that CI conclusion instead of re-running the test suite; the build and
+verification jobs below repeat the package, artifact and RPM checks. The gates
+are not weakened for a dry run — they are not applicable to a branch run, which
+never publishes.
 
 Every build uses `VERSION` (the tag name, or `v0.0.0-dryrun` for a dry run),
 `COMMIT`, `CGO_ENABLED=0` and `SOURCE_DATE_EPOCH=1700000000`. The package job runs
@@ -211,9 +215,10 @@ intended.
 
 Limits: the publish job (draft creation, 17 uploads, API digest comparison and
 the final publish) has never executed; the first real tag (`v1.0.1`, 2026-11-25)
-did not reach it because the plan gate failed (see "First v1.0.1 attempt" above),
-so it remains unexecuted and needs the fixed gate plus authorization for the next
-attempt. Its guard, cleanup and digest polling
+did not reach it because the plan gate failed (see "First v1.0.1 attempt" above).
+The gate is fixed locally but no tag push has exercised the fix yet, so the
+publish job remains unexecuted and the next attempt needs the fix merged,
+independent review, and a recreated tag. Its guard, cleanup and digest polling
 were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
 public release, pre-existing draft, guard API/transport error, own-draft
 deletion, null digest appearing on a later poll and a digest mismatch), not
@@ -231,7 +236,7 @@ skipped: the documentation commit `e85b9b7` produced no workflow run, while the
 earlier documentation commit `f99aa71` without the marker triggered Release
 `45425595274` and CI `45425595160`.
 
-## First v1.0.1 attempt (2026-11-25): blocked
+## First v1.0.1 attempt (2026-11-25): blocked, gate fixed
 
 The start commit `fb969fb` ("docs(plan): start first CI release v1.0.1", no
 `[skip ci]`) was pushed to both remotes. GitHub Actions CI run `45490941645`
@@ -256,11 +261,43 @@ the intended commit, so line 78 fails on that identity comparison. The
 The run's `head_sha` is normalised to `fb969fb`; the failed comparison is the
 evidence that the gate's value was the tag object.
 
-The attempt stopped here: the fix is a workflow change (accept the tag object or
-its peeled commit) and needs independent review, and re-pushing the same tag
-cannot pass. The tag was left in place as evidence; its message claims a
-publication that did not happen, so it must be recreated before a later attempt.
-No release was edited or deleted, and nothing was built or uploaded outside CI.
+The attempt stopped here: re-pushing the same tag cannot pass the old gate. The
+tag was left in place as evidence; its message claims a publication that did not
+happen, so the release step recreates it before a later attempt (this fix does
+not create, delete or move any tag). No release was edited or deleted, and
+nothing was built or uploaded outside CI.
+
+### Gate fix (2026-11-25)
+
+`.github/workflows/release.yml` now resolves the pushed identity to a commit once
+at line 70 (`commit=$(git rev-parse --verify "$SHA^{commit}")`, with a named
+failure if it does not resolve) and uses `$commit` for every tag gate:
+the tag comparison at lines 84-87 compares the tag's peeled commit with it and
+names both the tag object and the peeled commit on failure; the on-main check at
+line 94 and the CI `head_sha=` query at line 103 use it. The plan job exports it
+as the `commit` output (line 125), and the package job stamps `COMMIT` from that
+output (line 143) instead of `github.sha`, so a release build records the commit
+rather than the tag object. The annotated-tag check, the non-empty tag message
+check, the `v*` pattern, the on-main requirement, the CI-green requirement, the
+dry-run branch path and the `workflow_dispatch` behaviour are unchanged. No
+build, publish or permission block changed.
+
+Local verification (disposable `/tmp/opencode` harness that extracts the plan
+`run:` block from the workflow and stubs the CI query; 11/11 cases behaved as
+required): annotated tag with `SHA` set to the tag object and the commit on main
+passed and produced `version=v1.0.1`, `publish=true`, `tag=v1.0.1` and the peeled
+`commit`; the CI URL carried `head_sha=<peeled commit>`, not the tag object; the
+same case with the peeled commit as `SHA` also passed. The old line-78 comparison
+still failed on the tag object, reproducing the reported failure. These were all
+still rejected: lightweight tag, empty annotated-tag message, tag pointing at a
+different commit (message named both the tag object and both commits), a commit
+not on main, and no successful CI run. The dry-run branch passed with
+`v0.0.0-dryrun`/`publish=false`, `workflow_dispatch` on a branch with
+`publish=true` was rejected, and `workflow_dispatch` on the tag with
+`publish=false` passed without publishing. `bash -n` on the extracted block and
+`yaml.safe_load` on the workflow both passed. This is local evidence only: no tag
+push has run the fixed gate, the publish job is still unexecuted, and `v1.0.1`
+remains unpublished (the public releases still end at `v1.0.0`).
 
 ## v0.1.3 release (historical)
 

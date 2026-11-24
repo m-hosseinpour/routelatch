@@ -39,6 +39,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       publish: ${{ steps.plan.outputs.publish }}
       tag: ${{ steps.plan.outputs.tag }}
+      commit: ${{ steps.plan.outputs.commit }}
     steps:
       - name: Check out the full history and tags
         uses: actions/checkout@v4
@@ -63,6 +64,11 @@ jobs:
           tag=""
           version=""
           publish=false
+          # On an annotated-tag push, $SHA is the tag object, not the commit it
+          # peels to. Resolve it once and use that commit for every check and
+          # output below.
+          commit=$(git rev-parse --verify "$SHA^{commit}") ||
+            fail "pushed SHA $SHA does not resolve to a commit"
           if [ "$REF_TYPE" = tag ]; then
             tag=$REF_NAME
             case $tag in
@@ -75,28 +81,30 @@ jobs:
             # must be annotated and carry a non-empty message.
             [ "$(git cat-file -t "refs/tags/$tag")" = tag ] ||
               fail "tag $tag is not annotated"
-            [ "$(git rev-parse "refs/tags/$tag^{commit}")" = "$SHA" ] ||
-              fail "tag $tag does not point at $SHA"
+            tag_object=$(git rev-parse "refs/tags/$tag")
+            tag_commit=$(git rev-parse "refs/tags/$tag^{commit}")
+            [ "$commit" = "$tag_commit" ] ||
+              fail "tag $tag (object $tag_object) points at commit $tag_commit, but the pushed SHA $SHA peels to commit $commit"
             git tag -l --format='%(contents)' "$tag" >tag-message.txt
             grep -q '[^[:space:]]' tag-message.txt ||
               fail "annotated tag $tag has an empty message"
 
             # A release is only cut from a commit that main already carries.
             git fetch --no-tags --quiet origin main
-            git merge-base --is-ancestor "$SHA" FETCH_HEAD ||
-              fail "commit $SHA is not on main"
+            git merge-base --is-ancestor "$commit" FETCH_HEAD ||
+              fail "commit $commit is not on main"
 
             # Full CI must be green on the tag commit. The gate reads the CI
-            # workflow's own conclusion for a push of main at this exact SHA;
+            # workflow's own conclusion for a push of main at this exact commit;
             # the tag push's CI run is excluded by head_branch.
             runs=$(curl -fsS \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H 'Accept: application/vnd.github+json' \
-              "$API_URL/repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100")
+              "$API_URL/repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$commit&per_page=100")
             count=$(printf '%s' "$runs" | jq \
               '[.workflow_runs[] | select(.name == "CI" and .event == "push" and .head_branch == "main" and .conclusion == "success")] | length')
             [ "$count" -ge 1 ] ||
-              fail "no successful CI push run on main for commit $SHA"
+              fail "no successful CI push run on main for commit $commit"
 
             publish=true
           else
@@ -114,12 +122,14 @@ jobs:
           echo "version=$version" >>"$GITHUB_OUTPUT"
           echo "publish=$publish" >>"$GITHUB_OUTPUT"
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "commit=$commit" >>"$GITHUB_OUTPUT"
           {
             echo "### Release plan"
             echo ""
             echo "- version: \`$version\`"
             echo "- publish: \`$publish\`"
             echo "- tag: \`${tag:-none (dry run)}\`"
+            echo "- commit: \`$commit\`"
           } >>"$GITHUB_STEP_SUMMARY"
 
   packages:
@@ -130,7 +140,7 @@ jobs:
     env:
       CGO_ENABLED: "0"
       VERSION: ${{ needs.plan.outputs.version }}
-      COMMIT: ${{ github.sha }}
+      COMMIT: ${{ needs.plan.outputs.commit }}
       SOURCE_DATE_EPOCH: "1700000000"
       REQUIRE_DEB: "1"
       REQUIRE_SINGBOX: "1"
