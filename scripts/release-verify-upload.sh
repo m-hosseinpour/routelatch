@@ -47,12 +47,22 @@ while :; do
 		{ echo "cannot read the draft release for $TAG" >&2; exit 1; }
 	complete "$json" && break
 	if [ "$attempt" -ge "$attempts" ]; then
+		jq -r '.assets[]?.name' "$json" | LC_ALL=C sort >"$tmp/api.names"
+		for file in "$assets"/*; do
+			basename "$file"
+		done | LC_ALL=C sort >"$tmp/local.names"
+		comm -23 "$tmp/local.names" "$tmp/api.names" |
+			sed 's/^/built file missing from the release: /' >&2
+		comm -13 "$tmp/local.names" "$tmp/api.names" |
+			sed 's/^/release asset not among the built files: /' >&2
 		jq -r '.assets[]?
 			| select(((.digest | type) != "string")
 				or ((.size | type) != "number") or (.size <= 0))
 			| "asset without a complete digest/size: \(.name)"' "$json" >&2 || true
-		echo "the release API did not report the draft, 17 assets and every" \
-			"sha256 digest after $attempt checks; not publishing" >&2
+		echo "the release API reports $(jq -r '(.assets // []) | length' "$json")" \
+			"assets, expected $(wc -l <"$tmp/local.names" | tr -d ' '), and did" \
+			"not report the draft, the exact asset set and every sha256 digest" \
+			"after $attempt checks; not publishing" >&2
 		exit 1
 	fi
 	sleep "$delay"
