@@ -173,8 +173,9 @@ payload (including the amd64/arm64 `sing-box` sidecar files) and adds them to th
 release assets. From D27 nothing is built on a maintainer's machine. The
 v0.1.1–v1.0.0 release RPMs predate that path and were built separately from
 these specs with an extracted, not installed, rpm 6.0.1 toolchain; they are
-historical evidence, not the current process. The generated specs are not a
-dnf/yum repository.
+historical evidence, not the current process. `v1.0.1` is the first release
+whose RPMs were built by the `Release` workflow in CI. The generated specs are
+not a dnf/yum repository.
 
 Debian Policy files (`copyright`, `changelog.Debian.gz`) are deliberately not
 generated for these unsigned packages, local or CI-built; the Apache-2.0 text
@@ -528,10 +529,11 @@ in `docs/licensing.md`. When the sidecar is included, the same notices also carr
 the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
-The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2`, `v0.1.3` and
-`v1.0.0` each published all 17 assets (four tarballs, four `.deb` files, four RPM
-specs, four binary RPMs and `SHA256SUMS`). From D27 those assets are built and
-published by the `Release` workflow described above. Building a package locally
+The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2`, `v0.1.3`,
+`v1.0.0` and `v1.0.1` each published all 17 assets (four tarballs, four `.deb`
+files, four RPM specs, four binary RPMs and `SHA256SUMS`). From D27 those assets
+are built and published by the `Release` workflow described above; `v1.0.1` is
+the first release produced that way. Building a package locally
 still does not publish it: do not release, tag, push or upload new artifacts
 without a separate decision from the project owner. `PACKAGE-NOTES` in a local
 tarball/deb says it is a local build for that reason; a package built by the
