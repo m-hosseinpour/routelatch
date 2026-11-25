@@ -38,7 +38,7 @@ func TestStatusWarningsUseDerivedView(t *testing.T) {
 	if counts := p.Counts(); counts.Unsupported != 2 || counts.Unknown != 1 {
 		t.Fatalf("counts=%+v", counts)
 	}
-	warnings := statusWarnings(contract.Snapshot{State: state}, now, true, false, 0)
+	warnings := statusWarnings(contract.Snapshot{State: state}, now, true, false, false, 0)
 	want := "2 record(s) are unsupported or quarantined"
 	found := false
 	for _, w := range warnings {

@@ -58,11 +58,18 @@ type StatusData struct {
 	// automatic ranking. It is reported because a pin silently disables the
 	// D16 ranking and is never replaced on failure (docs/contracts.md §2.5).
 	SelectedExit contract.ExitID `json:"selected_exit"`
-	Listeners    listenersData   `json:"listeners"`
-	Pool         poolStatusData  `json:"pool"`
-	Connections  connectionsData `json:"connections"`
-	Diagnostics  diagnosticsData `json:"diagnostics"`
-	Warnings     []string        `json:"warnings"`
+	// ResumeRequiresRestart is true only when this process entered stopped
+	// mode, so a restart is the only way back (§2.7). It is false for a fresh
+	// process that started in the stored stopped state and in every other mode.
+	// The pointer keeps "unknown" distinct from false: status always emits an
+	// explicit true/false, but a consumer decoding an older payload without the
+	// key sees nil and must treat the answer as unknown (docs/contracts.md §7.1).
+	ResumeRequiresRestart *bool           `json:"resume_requires_restart"`
+	Listeners             listenersData   `json:"listeners"`
+	Pool                  poolStatusData  `json:"pool"`
+	Connections           connectionsData `json:"connections"`
+	Diagnostics           diagnosticsData `json:"diagnostics"`
+	Warnings              []string        `json:"warnings"`
 }
 
 func (s *Service) status(ctx context.Context) (StatusData, error) {
@@ -72,14 +79,16 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	now := s.now().UTC()
 	p := pool.Build(snap.State, now)
 	counts := p.Counts()
+	resumeRequiresRestart := s.stopped && s.stoppedByThisProcess
 	out := StatusData{
 		Ready:         s.stopped || s.listenersOpen,
 		ListenersOpen: s.listenersOpen,
 		Mode:          snap.State.Mode, PolicyVersion: snap.State.PolicyVersion,
-		SelectedExit: snap.State.SelectedExit,
-		Listeners:    listenersData{HTTP: s.httpAddr, SOCKS: s.socksAddr},
-		Pool:         poolStatusData{Total: counts.Total, Usable: counts.Usable, Healthy: counts.Healthy, Cooling: counts.Cooling},
-		Diagnostics:  diagnosticsData{Enabled: snap.Config.Diagnostics.Enabled},
+		SelectedExit:          snap.State.SelectedExit,
+		ResumeRequiresRestart: &resumeRequiresRestart,
+		Listeners:             listenersData{HTTP: s.httpAddr, SOCKS: s.socksAddr},
+		Pool:                  poolStatusData{Total: counts.Total, Usable: counts.Usable, Healthy: counts.Healthy, Cooling: counts.Cooling},
+		Diagnostics:           diagnosticsData{Enabled: snap.Config.Diagnostics.Enabled},
 	}
 	if s.diag != nil {
 		st := s.diag.Stats()
@@ -110,11 +119,11 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	if !s.listenersOpen {
 		out.Listeners = listenersData{HTTP: s.httpListen, SOCKS: s.socksListen}
 	}
-	out.Warnings = statusWarnings(snap, now, s.listenersOpen, s.stopped, warmTransports)
+	out.Warnings = statusWarnings(snap, now, s.listenersOpen, s.stopped, resumeRequiresRestart, warmTransports)
 	return out, nil
 }
 
-func statusWarnings(snap contract.Snapshot, now time.Time, listenersOpen, stopped bool, engineTransports int) []string {
+func statusWarnings(snap contract.Snapshot, now time.Time, listenersOpen, stopped, resumeRequiresRestart bool, engineTransports int) []string {
 	var warnings []string
 	p := pool.Build(snap.State, now)
 	counts := p.Counts()
@@ -140,7 +149,14 @@ func statusWarnings(snap contract.Snapshot, now time.Time, listenersOpen, stoppe
 		warnings = append(warnings, "the manually selected exit no longer exists; run 'pool select auto'")
 	}
 	if stopped {
-		warnings = append(warnings, "service is stopped; traffic listeners are closed and leaving this mode needs a process restart")
+		if resumeRequiresRestart {
+			warnings = append(warnings, "service is stopped; traffic listeners are closed and leaving this mode needs a process restart")
+		} else {
+			// A fresh process that started in the stored stopped mode has not
+			// opened the engine yet, so a mode change is the resume; do not send
+			// the user looking for a restart that is not needed.
+			warnings = append(warnings, "service is stopped; traffic listeners are closed; choose a mode to resume, no process restart is needed")
+		}
 	} else if !listenersOpen {
 		warnings = append(warnings, "traffic listeners are not running; management is available but no traffic can be routed")
 	}

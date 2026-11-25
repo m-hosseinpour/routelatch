@@ -1158,13 +1158,18 @@ management در حال سرویس‌دهی و — اگر mode ذخیره‌شد�
 وجود listener address) ملاک بگیرند. این دو فیلد additive هستند و schema_version
 را تغییر نمی‌دهند.
 
-**`resume_requires_restart` (R15؛ تعریف‌شده و پیاده‌نشده).** این فیلد additive
+**`resume_requires_restart` (R15؛ پیاده‌شده).** این فیلد additive
 فقط وقتی `true` است که همین process وارد `stopped` شده باشد؛ در process تازه‌ای
 که با state ذخیره‌شدهٔ `stopped` بالا آمده `false` است و تغییر mode مستقیماً
 listenerها را باز می‌کند. tray با همین فیلد، actionهای mode را در حالت
 stopped-by-process غیرفعال و پس از restart فعال می‌کند؛ این وضعیت با restart
 خود tray از بین نمی‌رود. هشدار `status` هم باید همین تفاوت را منعکس کند، نه
-پیام ثابت «restart لازم است». schema_version تغییر نمی‌کند؛ در app mode
+پیام ثابت «restart لازم است»: در stopped-by-process می‌گوید ترک این mode
+restart لازم دارد و در process تازه می‌گوید با تغییر mode ادامه دهد و restart
+لازم نیست. شکل encode صریح است و `status` همیشه این کلید را با `true`/`false`
+می‌فرستد (در modeهای غیر stopped مقدار `false` دارد)؛ decode سه‌حالته است و
+نبود کلید در payload قدیمی «نامعلوم» می‌ماند (در Go با `*bool` و nil)، نه
+`false`. schema_version تغییر نمی‌کند؛ در app mode
 engine/tray هم‌باینری‌اند، و اگر tray با سرویس قدیمی‌تری که فیلد را ندارد حرف
 بزند آن را «نامعلوم» می‌گیرد و در stopped فقط پس از یک restart موفق mode را
 فعال می‌کند.
