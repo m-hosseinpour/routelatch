@@ -1,0 +1,107 @@
+item=org.freedesktop.StatusNotifierItem-234509-1/StatusNotifierItem
+control_bus=:1.2
+spike_binary=/tmp/opencode/menu-build-final/menu-spike-amd64
+spike_log=/tmp/opencode/menu-evidence-final/menu-offline.txt.spike.log
+dbus_monitor=/tmp/opencode/menu-evidence-final/menu-offline.txt.monitor.log
+
+== initial full layout (depth 3: root, submenus, their children)
+bytes=10828 lines=1
+total_items_parsed=163
+separators=8
+radio_items=5
+checkmark_items=1
+visible_false_items=1
+healthy_page1_rows=19
+long_unicode_label_present=1
+has_label=Mode yes
+has_label=Pool yes
+has_label=Healthy (120) yes
+has_label=Page 1/6 · 120 nodes yes
+has_label=Stop listening… yes
+has_label=Restart engine to resume… yes
+ids mode=2 pool=45 healthy=50 advanced=153 experiment=157
+
+== AboutToShow dirty-flag protocol
+AboutToShow(0) after initial GetLayout: (false,)
+GetLayout(0,1) refresh
+AboutToShow(0) after refresh: (false,)
+timed_ctl stage=relabel result=('relabelled status and Last action',) elapsed_ms=14
+AboutToShow(0) after relabel: (true,)
+relabelled_status_present=1
+AboutToShow(0) after GetLayout: (false,)
+
+== runtime add -> LayoutUpdated; remove
+timed_ctl stage=add result=('added Job item before status',) elapsed_ms=23
+AboutToShow(0) after add: (true,)
+job_item_present=1
+timed_ctl stage=remove result=('removed Job item',) elapsed_ms=28
+job_item_after_remove=0
+
+== visible/enabled toggles on existing items
+timed_ctl stage=visibility result=('restart-more visible=true; stop enabled=false',) elapsed_ms=26
+advanced_children:
+(uint32 237, (153, {'label': <'Advanced'>, 'children-display': <'submenu'>}, [<(154, {'label': <'Restart engine…'>}, @av [])>, <(155, {'label': <'Terminal menu…'>}, @av [])>, <(156, {'visible': <true>, 'label': <'Restart engine to resume…'>}, @av [])>]))
+timed_ctl stage=visibility-restore result=('restart-more visible=false; stop enabled=true',) elapsed_ms=24
+advanced_children_restored:
+(uint32 237, (153, {'label': <'Advanced'>, 'children-display': <'submenu'>}, [<(154, {'label': <'Restart engine…'>}, @av [])>, <(155, {'label': <'Terminal menu…'>}, @av [])>, <(156, {'visible': <false>, 'label': <'Restart engine to resume…'>}, @av [])>]))
+
+== radio/checkmark state, programmatic and click-driven
+timed_ctl stage=radio result=('mode radio -> all-proxy; autostart checkmark -> On',) elapsed_ms=17
+mode:
+(uint32 237, (2, {'label': <'Mode'>, 'children-display': <'submenu'>}, [<(3, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'Targeted'>}, @av [])>, <(4, {'toggle-type': <'radio'>, 'toggle-state': <1>, 'label': <'All proxy'>}, @av [])>, <(5, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'All direct'>}, @av [])>, <(6, {'type': <'separator'>}, @av [])>, <(7, {'label': <'Stop listening…'>, 'enabled': <true>}, @av [])>]))
+click All direct id=5: rc=0 output=
+mode_after_click:
+(uint32 237, (2, {'label': <'Mode'>, 'children-display': <'submenu'>}, [<(3, {'label': <'Targeted'>, 'toggle-type': <'radio'>, 'toggle-state': <0>}, @av [])>, <(4, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'All proxy'>}, @av [])>, <(5, {'toggle-type': <'radio'>, 'toggle-state': <1>, 'label': <'All direct'>}, @av [])>, <(6, {'type': <'separator'>}, @av [])>, <(7, {'label': <'Stop listening…'>, 'enabled': <true>}, @av [])>]))
+timed_ctl stage=radio-restore result=('mode radio -> targeted; autostart checkmark -> Off',) elapsed_ms=21
+
+== pool page 1 -> 2 -> clamp 99 (176 fixture, 20 per page)
+page1_items=25 page1_prefixed_rows=19 page1_long_row=1 page1_label=Page 1/6 · 120 nodes
+timed_ctl stage=pool-page:2 result=('Healthy page requested=2 effective=2',) elapsed_ms=23
+page2_items=25 page2_prefixed_rows=20 page2_label=Page 2/6 · 120 nodes
+click pool Next page id=54: rc=0 output=
+click_next_rows=20 click_next_label=Page 3/6 · 120 nodes
+timed_ctl stage=pool-page:99 result=('Healthy page requested=99 effective=6',) elapsed_ms=11
+page99_rows=20 page99_label=Page 6/6 · 120 nodes
+pool_page_long_label_pages=1
+
+== two-step confirmation items inserted before the status line
+timed_ctl stage=confirm result=('added Confirm and Cancel before status',) elapsed_ms=15
+first_children_prefix:
+(uint32 421, (0, {'children-display': <'submenu'>}, [<(224, {'label': <'Confirm: Stop listening…'>}, @av [])>, <(225, {'label': <'Cancel'>}, @av [])>, <(1, {'enabled': <false>, 'label': <'Targeted · 156 usable · 3 open'>}, @av [])>, <(2, {'label': <'Mode'>, 'children-display': <'submenu'>}, @av [])>, <(8, {'children-display': <'submenu'>, 'label': <'Proposals (3)'>}, @av [])>, <(17, {'children-dis
+confirm_present=1 cancel_present=1
+click Cancel id=225: rc=0 output=
+timed_ctl stage=unconfirm result=('removed confirmation items',) elapsed_ms=18
+
+== empty submenu conversion (existing item removed, then refilled)
+empty-submenu: ('removed the only Experiment child (parent should stop being a submenu)',)
+experiment_empty:
+(uint32 424, (157, {'label': <'Experiment'>, 'children-display': <''>}, @av []))
+refill-submenu: ('re-added an Experiment child',)
+experiment_refilled:
+(uint32 425, (157, {'children-display': <'submenu'>, 'label': <'Experiment'>}, [<(226, {'label': <'Experiment child again'>}, @av [])>]))
+
+== host-like events: opened / closed / clicked
+Event opened: rc=0 output=
+Event closed: rc=0 output=
+click Refresh status id=147: rc=0 output=
+handler_lines:
+2026-11-25T18:20:45.073Z event=menu_click key=mode-all-direct timestamp=0
+2026-11-25T18:20:45.883Z event=menu_click key=cancel-confirm timestamp=0
+2026-11-25T18:20:46.219Z event=menu_click key=desktop-refresh timestamp=0 handler_start=2026-11-25T18:20:46.219Z
+2026-11-25T18:20:46.219Z event=menu_click_done key=desktop-refresh handler_us=85
+
+== multilingual ESC-free label
+timed_ctl stage=raw-label result=('status label replaced with control-free multilingual text',) elapsed_ms=23
+raw_label_present=1
+esc_byte_in_label=0
+
+== dbusmonitor summary (isolated bus, so the only calls are this script's)
+signals LayoutUpdated=425
+signals ItemsPropertiesUpdated=277
+method GetLayout=18
+method AboutToShow=5
+method Event=6
+first_signal_time=1795630844.314026 last_signal_time=1795630846.452845
+
+== cleanup
+spike_exited

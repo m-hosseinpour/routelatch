@@ -209,3 +209,52 @@ SSH واقعی (فقط bus ایزوله با fake watcher)؛ DEهای دیگر؛
 بررسی نشد؛ فقط لیست‌های `Contents-amd64` دبیان/اوبونتو و نام بسته‌های Arch/Fedora
 دیده شدند. این بررسی مخازن شخصی، PPA، COPR، Homebrew و همهٔ توزیع‌ها را پوشش نمی‌دهد.
 `rlch` در GitHub یک نام کاربری است، نه یک دستور نصب‌شده.
+
+## نتیجهٔ spike منوی tray (۲۰۲۶-۱۱-۲۵، R15-A)
+
+این snapshot شاهد R15-A است و وضعیت نسخه‌های پیشین یا R13-A را بازنویسی نمی‌کند.
+محدوده: `deedles.dev/tray v0.2.0` در محیط واقعی **KDE Plasma 6.6.7 / kwin_x11 6.6.4 /
+X11**، session bus `unix:path=/run/user/1000/bus`، Go 1.27.4 با `CGO_ENABLED=0`.
+پروتوتایپ `spike/tray/cmd/menu-spike` و اسکریپت‌های `menu-offline.sh` و
+`kde-menu-evidence.sh` فقط شاهد هستند؛ هیچ کد محصول، سرویس، autostart یا تنظیم
+دسکتاپ تغییر نکرد. جزئیات و locatorهای خام در
+[`spike/tray/MENU-FINDINGS.md`](../spike/tray/MENU-FINDINGS.md) و فایل‌های
+`spike/tray/evidence/menu-*-2026-11-25.*` ثبت شده‌اند.
+
+**نتیجه‌ها (با شاهد D-Bus؛ تصویرهای menu برای تغییرهای زنده):**
+
+- زیرمنوی تودرتو (root → Pool → Healthy (120) → ۲۰ ردیف) و separatorها: کار می‌کند.
+  layout عمق ۳ و `GetLayout(45/50,1)` توسط خود plasmashell ثبت شد؛ زیرمنوی Pool در
+  اسکرین‌شات دیده می‌شود.
+- radio/checkmark و تغییر برنامه‌ای: radio در submenu رندر می‌شود و تغییر state در
+  منوی باز با `ItemsPropertiesUpdated` اعمال شد؛ checkmark در layout و host تأیید شد
+  ولی اسکرین‌شات آن گرفته نشد.
+- visible/enabled: `SetProps` با `ItemsPropertiesUpdated` به host می‌رسد و layout
+  مقادیر `visible=false`/`enabled=false` را نشان می‌دهد؛ رندر پنهان/خاکستری به‌صورت
+  تصویری جدا ثبت نشد.
+- add/remove/relabel در زمان اجرا: **در منوی باز** اعمال می‌شوند. اسکرین‌شات‌ها
+  `Live relabel #1` و ردیف `Job: pool refresh running` را در همان منوی باز نشان
+  می‌دهند؛ برای add، host حدود ۱۳٫۳ms بعد از درخواست apply (و ≈۰٫۳ms بعد از
+  `LayoutUpdated`؛ timestamps خام در `menu-kde-2026-11-25.txt`) یک `GetLayout(0,1)`
+  می‌فرستد و منو بسته نمی‌شود. بنابراین R15-D1 به fallback «فقط روی بازشدن بعدی» نیاز ندارد.
+- صفحهٔ ۲۰آیتمی از fixture ۱۷۶ (۱۲۰/۲۴/۱۲/۲۰)، صفحه ۲/۶ و clamp ۹۹→۶: کار می‌کند.
+  label بلند ۱۳۱ rune با فارسی/یونانی/لاتین و label چندزبانهٔ بدون ESC در D-Bus
+  دست‌نخورده می‌مانند. هر `LayoutUpdated` یک `GetLayout` جدا از host می‌گیرد: یک
+  صفحه‌گردانی ۲۰ردیفی ۵۱ فراخوانی (≈۶ms) ساخت؛ D1 باید rebuild را دسته‌بندی کند یا
+  این هزینهٔ محلی را بپذیرد.
+- eventها: `AboutToShow(0)` سپس `Event(0,"opened")` و `GetLayout(0,1)` در باز شدن؛
+  برای زیرمنو `AboutToShow(id)`/`Event(id,"opened")`/`GetLayout(id,1)` (idهای ۴۵ و
+  ۵۰ دیده شد)؛ `Event(id,"closed")` در بستن. host در این اجراها `Event clicked` نساخت چون هیچ
+  action منو کلیک نشد؛ مسیر clicked به‌صورت مصنوعی آزموده شد و handler آن ۸۵µs بود
+  (اثر `SetProps` همان `ItemsPropertiesUpdated` است). rate limit برای dbusmenu دیده نشد (محدودیت notification در R13-A همچنان مربوط است).
+- واقعیت کتابخانه: `MenuItem` شناسهٔ عمومی ندارد؛ radio group خودکار نیست؛ حذف آخرین
+  فرزند `children-display: ''` باقی می‌گذارد. D1 باید key پایدار خودش را نگه دارد،
+  state همهٔ radioها را خودش set کند و برای submenu خالی placeholder بگذارد.
+
+**محدودیت‌ها/آزمون‌نشده:** تأیید بصری انسانی و اسکرین‌شات checkmark و صفحهٔ سطح سوم
+گرفته نشد (host زیرمنو را پیش از capture بست، هرچند `GetLayout` آن ثبت شد)؛ یک اجرای
+بعدی هنگام fullscreen بودن Jitsi پنل در اسکرین‌شات دیده نشد و آیکن پیدا نشد؛ آن اجرا
+برای هیچ verdict استفاده نشد؛ Wayland/GNOME و سایر DEها آزمون نشدند؛ `riscv64`/`ppc64le` فقط
+cross-build هستند؛ رندر label بلند و truncation بصری اندازه‌گیری نشد؛ actionهای
+واقعی/restart/notification در دامنهٔ R15-B..G هستند. verdict R15-A برای شروع
+R15-B **Ready** است، با همین شکاف‌های ثبت‌شده.

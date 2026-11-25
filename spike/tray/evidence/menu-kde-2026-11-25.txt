@@ -1,0 +1,243 @@
+date_utc=20261125T171432Z
+menu_spike=/tmp/opencode/menu-build/menu-spike-amd64
+item=org.freedesktop.StatusNotifierItem-190360-1/StatusNotifierItem
+item_owner=:1.2202
+control_bus=:1.2201
+plasma_host_name=org.kde.StatusNotifierHost-4374
+plasma_host_owner=:1.24
+session=unset desktop=unset display=:0
+plasmashell=plasmashell 6.6.7
+kwin=kwin 6.6.4
+watcher_lists_item=1
+
+== host queries after registration (plasmashell only)
+host_call time=1795626872.241457 member=GetLayout
+startup_GetLayout_latency_ms=17.704
+
+== initial layout (depth 3)
+bytes=10828 total_items=163
+separators=8
+radio=5 checkmark=1
+long_unicode_label=1 multilingual_control_free_label=0
+ids mode=2 pool=45 healthy=50 advanced=153 experiment=157
+
+== react: relabel an existing item (property-only change)
+timed_ctl stage=relabel result=('relabelled status and Last action',) elapsed_ms=19
+host_calls:
+item_signals:
+item_signal time=1795626874.622931 member=ItemsPropertiesUpdated
+item_signal time=1795626874.622997 member=ItemsPropertiesUpdated
+host_GetLayout_latency_ms=none
+relabelled=1
+
+== react: add a new root item (structural change)
+timed_ctl stage=add result=('added Job item before status',) elapsed_ms=17
+host_calls:
+host_call time=1795626875.731219 member=GetLayout
+host_call time=1795626875.731997 member=GetLayout
+item_signals:
+item_signal time=1795626875.730906 member=LayoutUpdated
+item_signal time=1795626875.731420 member=ItemsPropertiesUpdated
+item_signal time=1795626875.731476 member=LayoutUpdated
+host_GetLayout_latency_ms=13.342
+job_item=1
+
+== react: remove that item, toggle visible/enabled, change radio/checkmark
+timed_ctl stage=remove result=('removed Job item',) elapsed_ms=15
+remove_host_calls:
+host_call time=1795626876.856929 member=GetLayout
+timed_ctl stage=visibility result=('restart-more visible=true; stop enabled=false',) elapsed_ms=14
+visibility_host_calls:
+visibility_item_signals:
+item_signal time=1795626877.420200 member=ItemsPropertiesUpdated
+item_signal time=1795626877.420267 member=ItemsPropertiesUpdated
+advanced_children:
+(uint32 237, (153, {'label': <'Advanced'>, 'children-display': <'submenu'>}, [<(154, {'label': <'Restart engine…'>}, @av [])>, <(155, {'label': <'Terminal menu…'>}, @av [])>, <(156, {'visible': <true>, 'label': <'Restart engine to resume…'>}, @av [])>]))
+timed_ctl stage=radio result=('mode radio -> all-proxy; autostart checkmark -> On',) elapsed_ms=14
+radio_host_calls:
+radio_item_signals:
+item_signal time=1795626878.024358 member=ItemsPropertiesUpdated
+item_signal time=1795626878.024421 member=ItemsPropertiesUpdated
+item_signal time=1795626878.024468 member=ItemsPropertiesUpdated
+item_signal time=1795626878.024509 member=ItemsPropertiesUpdated
+item_signal time=1795626878.024550 member=ItemsPropertiesUpdated
+mode_after_radio:
+(uint32 237, (2, {'label': <'Mode'>, 'children-display': <'submenu'>}, [<(3, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'Targeted'>}, @av [])>, <(4, {'toggle-type': <'radio'>, 'toggle-state': <1>, 'label': <'All proxy'>}, @av [])>, <(5, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'All direct'>}, @av [])>, <(6, {'type': <'separator'>}, @av [])>, <(7, {'enabled': <false>, 'label': <'Stop listening…'>}, @av [])>]))
+autostart_line='label': <'Start at login: On'>
+click All direct id=5: rc=0 output=
+click_host_calls:
+mode_after_click:
+(uint32 237, (2, {'children-display': <'submenu'>, 'label': <'Mode'>}, [<(3, {'toggle-type': <'radio'>, 'toggle-state': <0>, 'label': <'Targeted'>}, @av [])>, <(4, {'label': <'All proxy'>, 'toggle-type': <'radio'>, 'toggle-state': <0>}, @av [])>, <(5, {'toggle-type': <'radio'>, 'toggle-state': <1>, 'label': <'All direct'>}, @av [])>, <(6, {'type': <'separator'>}, @av [])>, <(7, {'label': <'Stop listening…'>, 'enabled': <false>}, @av [])>]))
+
+== pool pagination: 176-node fixture, 20 per page, clamp
+timed_ctl stage=pool-page:2 result=('Healthy page requested=2 effective=2',) elapsed_ms=24
+page2_host_calls:
+host_call time=1795626879.317633 member=GetLayout
+host_call time=1795626879.317692 member=GetLayout
+host_call time=1795626879.317764 member=GetLayout
+host_call time=1795626879.317842 member=GetLayout
+host_call time=1795626879.317942 member=GetLayout
+host_call time=1795626879.318007 member=GetLayout
+host_call time=1795626879.318083 member=GetLayout
+host_call time=1795626879.318171 member=GetLayout
+host_call time=1795626879.318246 member=GetLayout
+host_call time=1795626879.318353 member=GetLayout
+host_call time=1795626879.320864 member=GetLayout
+host_call time=1795626879.320910 member=GetLayout
+host_call time=1795626879.320951 member=GetLayout
+host_call time=1795626879.321085 member=GetLayout
+host_call time=1795626879.321107 member=GetLayout
+host_call time=1795626879.321116 member=GetLayout
+host_call time=1795626879.321137 member=GetLayout
+host_call time=1795626879.321188 member=GetLayout
+host_call time=1795626879.321230 member=GetLayout
+host_call time=1795626879.321272 member=GetLayout
+host_call time=1795626879.321314 member=GetLayout
+host_call time=1795626879.321359 member=GetLayout
+host_call time=1795626879.321409 member=GetLayout
+host_call time=1795626879.321453 member=GetLayout
+host_call time=1795626879.321496 member=GetLayout
+host_call time=1795626879.321541 member=GetLayout
+host_call time=1795626879.321585 member=GetLayout
+host_call time=1795626879.321631 member=GetLayout
+host_call time=1795626879.321674 member=GetLayout
+host_call time=1795626879.321769 member=GetLayout
+host_call time=1795626879.321776 member=GetLayout
+host_call time=1795626879.322926 member=GetLayout
+host_call time=1795626879.322935 member=GetLayout
+host_call time=1795626879.322962 member=GetLayout
+host_call time=1795626879.322970 member=GetLayout
+host_call time=1795626879.322989 member=GetLayout
+host_call time=1795626879.323053 member=GetLayout
+host_call time=1795626879.323138 member=GetLayout
+host_call time=1795626879.323171 member=GetLayout
+host_call time=1795626879.323192 member=GetLayout
+host_call time=1795626879.323218 member=GetLayout
+host_call time=1795626879.323255 member=GetLayout
+host_call time=1795626879.323300 member=GetLayout
+host_call time=1795626879.323343 member=GetLayout
+host_call time=1795626879.323388 member=GetLayout
+host_call time=1795626879.323431 member=GetLayout
+host_call time=1795626879.323477 member=GetLayout
+host_call time=1795626879.323711 member=GetLayout
+host_call time=1795626879.323776 member=GetLayout
+host_call time=1795626879.323811 member=GetLayout
+host_call time=1795626879.323839 member=GetLayout
+page2_items=25 page2_label=Page 2/6 · 120 nodes
+timed_ctl stage=pool-page:99 result=('Healthy page requested=99 effective=6',) elapsed_ms=16
+clamp_host_calls:
+host_call time=1795626880.131582 member=GetLayout
+host_call time=1795626880.131604 member=GetLayout
+host_call time=1795626880.131654 member=GetLayout
+host_call time=1795626880.131679 member=GetLayout
+host_call time=1795626880.131693 member=GetLayout
+host_call time=1795626880.131724 member=GetLayout
+host_call time=1795626880.131753 member=GetLayout
+host_call time=1795626880.131830 member=GetLayout
+host_call time=1795626880.131852 member=GetLayout
+host_call time=1795626880.131892 member=GetLayout
+host_call time=1795626880.131903 member=GetLayout
+host_call time=1795626880.131929 member=GetLayout
+host_call time=1795626880.133198 member=GetLayout
+host_call time=1795626880.133229 member=GetLayout
+host_call time=1795626880.133285 member=GetLayout
+host_call time=1795626880.133342 member=GetLayout
+host_call time=1795626880.133404 member=GetLayout
+host_call time=1795626880.133464 member=GetLayout
+host_call time=1795626880.133526 member=GetLayout
+host_call time=1795626880.133591 member=GetLayout
+host_call time=1795626880.133669 member=GetLayout
+host_call time=1795626880.133715 member=GetLayout
+host_call time=1795626880.133778 member=GetLayout
+host_call time=1795626880.133842 member=GetLayout
+host_call time=1795626880.133902 member=GetLayout
+host_call time=1795626880.133961 member=GetLayout
+host_call time=1795626880.134018 member=GetLayout
+host_call time=1795626880.134079 member=GetLayout
+host_call time=1795626880.134137 member=GetLayout
+host_call time=1795626880.134216 member=GetLayout
+host_call time=1795626880.134273 member=GetLayout
+host_call time=1795626880.135362 member=GetLayout
+host_call time=1795626880.135368 member=GetLayout
+host_call time=1795626880.135373 member=GetLayout
+host_call time=1795626880.135400 member=GetLayout
+host_call time=1795626880.135405 member=GetLayout
+host_call time=1795626880.135410 member=GetLayout
+host_call time=1795626880.135433 member=GetLayout
+host_call time=1795626880.135697 member=GetLayout
+host_call time=1795626880.135780 member=GetLayout
+host_call time=1795626880.135892 member=GetLayout
+host_call time=1795626880.136133 member=GetLayout
+host_call time=1795626880.136192 member=GetLayout
+host_call time=1795626880.136205 member=GetLayout
+host_call time=1795626880.136230 member=GetLayout
+host_call time=1795626880.136256 member=GetLayout
+page99_items=25 page99_label=Page 6/6 · 120 nodes
+page99_has_long_label=0
+
+== multilingual label (live)
+timed_ctl stage=raw-label result=('status label replaced with control-free multilingual text',) elapsed_ms=13
+raw_label_host_calls:
+raw_label_item_signals:
+item_signal time=1795626880.939862 member=ItemsPropertiesUpdated
+raw_label_present=1
+
+== AboutToShow protocol and GetLayout latency (menu closed)
+AboutToShow(0)_after_fresh_layout=(false,)
+timed_ctl stage=relabel result=('relabelled status and Last action',) elapsed_ms=16
+AboutToShow(0)_after_relabel=(true,)
+closed_GetLayout_roundtrip_ms=17.4
+
+== real open test
+open_attempt=1 icon_find=1641 1183 rc=0
+open_attempt=1 click x=1641 y=1183 host_calls:
+host_call time=1795626882.642115 member=AboutToShow
+host_call time=1795626882.642171 member=Event
+open_verified_by_host=AboutToShow_on_our_bus attempt=1
+screen=1920x1200 menu_region x=1041 y=423 w=879 h=777
+open_menu_events:
+menu_event time=1795626882.642171 id=0 event=opened
+open_item_signals:
+timed_ctl stage=relabel-live result=('status label -> Live relabel #1 · 155 usable · 4 open',) elapsed_ms=8
+relabel_menu_events:
+relabel_host_calls:
+relabel_item_signals:
+item_signal time=1795626884.267495 member=ItemsPropertiesUpdated
+diff_open_relabel=changed_pixels 24621 bbox (539, 320, 879, 767)
+timed_ctl stage=radio result=('mode radio -> all-proxy; autostart checkmark -> On',) elapsed_ms=9
+radio_menu_events:
+radio_item_signals:
+item_signal time=1795626885.451981 member=ItemsPropertiesUpdated
+item_signal time=1795626885.452008 member=ItemsPropertiesUpdated
+item_signal time=1795626885.452023 member=ItemsPropertiesUpdated
+item_signal time=1795626885.452037 member=ItemsPropertiesUpdated
+diff_open_radio=changed_pixels 32594 bbox (277, 324, 854, 769)
+timed_ctl stage=add result=('added Job item before status',) elapsed_ms=9
+add_menu_events:
+add_host_calls:
+host_call time=1795626886.620743 member=GetLayout
+add_host_GetLayout_count=1
+diff_open_add=changed_pixels 32855 bbox (489, 352, 839, 777)
+closed_after_structural_add=0
+ocr_mode=1603 854 word=Mode rc=0
+ocr_settings=1612 1038 word=Settings rc=0
+close_menu_events:
+menu_event time=1795626888.658188 id=2 event=opened
+menu_event time=1795626890.549966 id=150 event=opened
+menu_event time=1795626891.959107 id=0 event=closed
+timed_ctl stage=remove result=('removed Job item',) elapsed_ms=9
+open_attempt=submenu icon_find=1641 1183 rc=0
+open_attempt=submenu click x=1641 y=1183 host_calls:
+host_call time=1795626894.004485 member=AboutToShow
+host_call time=1795626894.004538 member=Event
+submenu_open_verified=yes
+ocr_pool=1665 927 word=Pool rc=0
+ocr_healthy=not-found rc=1
+open_test=yes
+
+== cleanup
+spike_alive_after_kill=0
+watcher_still_lists_item=0
+spike_log=/tmp/opencode/kde-evidence4/menu-kde-20261125T171432Z.spike.log
+monitor_log=/tmp/opencode/kde-evidence4/menu-kde-20261125T171432Z.monitor.log
+initial_layout=/tmp/opencode/kde-evidence4/menu-kde-20261125T171432Z.layout-initial.txt

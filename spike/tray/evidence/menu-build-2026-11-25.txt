@@ -1,0 +1,59 @@
+# R15-A menu spike — static build, four architectures (2026-11-25)
+
+## toolchain
+go version go1.27.4 linux/amd64
+
+## build commands
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/opencode/menu-build-final/menu-spike-amd64 ./cmd/menu-spike
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/opencode/menu-build-final/fake-watcher-amd64 ./cmd/fake-watcher
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/opencode/menu-build-final/menu-spike-arm64 ./cmd/menu-spike
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/opencode/menu-build-final/fake-watcher-arm64 ./cmd/fake-watcher
+CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -trimpath -o /tmp/opencode/menu-build-final/menu-spike-riscv64 ./cmd/menu-spike
+CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -trimpath -o /tmp/opencode/menu-build-final/fake-watcher-riscv64 ./cmd/fake-watcher
+CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build -trimpath -o /tmp/opencode/menu-build-final/menu-spike-ppc64le ./cmd/menu-spike
+CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build -trimpath -o /tmp/opencode/menu-build-final/fake-watcher-ppc64le ./cmd/fake-watcher
+
+## file
+/tmp/opencode/menu-build-final/fake-watcher-amd64:   ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=_0_X1jeVagDiLRZISH-L/8JI5tBSSch42Ap1tPuBk/Bvq8UmTesKJXdVUv6ogZ/K90r4RxxxvAKGrJ-BTpV, BuildID[sha1]=10c0e3ade89ce53d01e7c8360d9ffeef1bbe7419, with debug_info, not stripped
+/tmp/opencode/menu-build-final/fake-watcher-arm64:   ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=OI7iZyWTCBizoSJBlYDf/vRUh00Nd-YoEI85zd1nc/jIvQBIE_B013QglPgT6C/utjhZHX0R6Rnfc_yJ-7l, BuildID[sha1]=b3ebfd3ef429a06f72d7f35e5e53bddb324aa2d9, with debug_info, not stripped
+/tmp/opencode/menu-build-final/fake-watcher-ppc64le: ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked, Go BuildID=18P-_dJmwxGzEILB_xvp/LoQ7g4XJQOyiJuHwP0Xq/fRumPHY0dkt6bftqPPve/IfQbU8wEj3eVqborKP-B, BuildID[sha1]=cd3488a9d0b1876877f92a00a6060034a508f19d, with debug_info, not stripped
+/tmp/opencode/menu-build-final/fake-watcher-riscv64: ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked, Go BuildID=EMYF2-btSA_jStlFdqs_/UALfEbpzFAQqQuP3Y5D9/LJcK7Zs0B6_aaTMLjnx4/Il5Fmy9UOWDA4nCb7_j3, BuildID[sha1]=b329b78d8c8c649790c4965a815a44e598005a61, with debug_info, not stripped
+/tmp/opencode/menu-build-final/menu-spike-amd64:     ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=vpY8zF8ZwqzFbVU-Hv-x/MJIV_SE2Bi6aAAYtT--M/7FpzjimgxYQlQknMBbRi/uetH8wswkGu3mPFbae01, BuildID[sha1]=9e2a3433c502737006a6435ad646c900b9a43e70, with debug_info, not stripped
+/tmp/opencode/menu-build-final/menu-spike-arm64:     ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, Go BuildID=40UAagxjaC91PUWCcIaV/ZiLO4bx3jPJCvLgPLcPr/kq-4RpOw4eOPryM-F2mi/WxhG33Za9jKtbT_IGMJH, BuildID[sha1]=5d5cf10ce2f2c6c528770742fffa791726ec3d57, with debug_info, not stripped
+/tmp/opencode/menu-build-final/menu-spike-ppc64le:   ELF 64-bit LSB executable, 64-bit PowerPC or cisco 7500, OpenPOWER ELF V2 ABI, version 1 (SYSV), statically linked, Go BuildID=TsP1DxnYj1E4Jdf-a6oY/pIWfkICqtiu4QDIZjbqK/s9SPsvLiCkaCd27VEIui/bWT8uRPFaAfDc9QuUVRz, BuildID[sha1]=412e9c0906de83b5fe331b12b8e51e143f78edf7, with debug_info, not stripped
+/tmp/opencode/menu-build-final/menu-spike-riscv64:   ELF 64-bit LSB executable, UCB RISC-V, double-float ABI, version 1 (SYSV), statically linked, Go BuildID=3A47oFr-cX2sxhhswRUu/1f8LZEPcDrz-QYY7Y_D6/hmLgeMPPpENDA5CLEnyu/RTYba-YCZSJTFlJ7ZbBp, BuildID[sha1]=27f9bfadda856b6da546613e023225e54f52541d, with debug_info, not stripped
+
+## ldd (amd64)
+	not a dynamic executable
+	not a dynamic executable
+
+## go version -m (amd64 menu-spike)
+/tmp/opencode/menu-build-final/menu-spike-amd64: go1.27.4
+	path	routelatch/spike/tray/cmd/menu-spike
+	mod	routelatch/spike/tray	v0.0.0-20261125143426-f243ce4b9d47+dirty	
+	dep	deedles.dev/tray	v0.2.0	h1:idycIgJvxeKgCUGqNh6UbokUYEjBDTa55KK3pNSOYes=
+	dep	github.com/godbus/dbus/v5	v5.2.4	h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
+	dep	golang.org/x/sys	v0.49.0	h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=f243ce4b9d47e37342ce6b77b6af36488e0f5d56
+	build	vcs.time=2026-11-25T14:34:26Z
+	build	vcs.modified=true
+
+## cgo files in build deps (CGO_ENABLED=0)
+(no output above: 0 cgo sources)
+
+## gofmt
+(empty above means formatted)
+
+## go vet
+vet OK
+
+## go build ./...
+all commands build OK

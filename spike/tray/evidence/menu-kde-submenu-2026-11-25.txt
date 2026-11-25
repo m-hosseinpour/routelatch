@@ -1,0 +1,69 @@
+# R15-A KDE submenu interaction excerpt (2026-11-25, run 170505Z)
+# Source: full dbus-monitor capture of the live Plasma 6.6.7 session, sender :1.24 (plasmashell),
+# destination org.freedesktop.StatusNotifierItem-184454-1 (the menu spike).
+# Root opened -> Pool (id 45) -> Healthy (120) (id 50), each with AboutToShow + Event opened + GetLayout;
+# the third-level screenshot was missed because the host closed the submenus before the capture.
+
+   int32 1
+   array [
+   ]
+method call time=1795626323.025601 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22835 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=AboutToShow
+   int32 0
+method call time=1795626323.025704 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22836 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 0
+   string "opened"
+   variant       string ""
+   uint32 0
+method call time=1795626325.148998 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22837 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=AboutToShow
+   int32 45
+method call time=1795626325.149042 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22838 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 45
+   string "opened"
+   variant       string ""
+   uint32 0
+method call time=1795626325.150447 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22839 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 45
+   int32 1
+   array [
+   ]
+method call time=1795626325.361818 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22840 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=AboutToShow
+   int32 45
+method call time=1795626325.361875 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22841 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 45
+   string "opened"
+   variant       string ""
+   uint32 0
+method call time=1795626327.147990 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22842 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=AboutToShow
+   int32 50
+method call time=1795626327.148066 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22843 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 50
+   string "opened"
+   variant       string ""
+   uint32 0
+method call time=1795626327.149882 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22844 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 50
+   int32 1
+   array [
+   ]
+method call time=1795626327.360930 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22845 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=AboutToShow
+   int32 50
+method call time=1795626327.360960 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22846 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 50
+   string "opened"
+   variant       string ""
+   uint32 0
+method call time=1795626327.675263 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22847 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 45
+   string "closed"
+   variant       string ""
+   uint32 0
+method call time=1795626327.676019 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22848 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 50
+   string "closed"
+   variant       string ""
+   uint32 0
+method call time=1795626329.409842 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-184454-1 serial=22849 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 0
+   string "closed"
+   variant       string ""
+   uint32 0
