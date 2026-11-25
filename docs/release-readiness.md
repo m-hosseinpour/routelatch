@@ -20,14 +20,22 @@ tag push; nothing is built or uploaded from a local machine. The workflow is
 implemented in `.github/workflows/release.yml`, was exercised by complete
 pre-merge dry-runs (see "CI release pipeline (R14 unit a)" below) and is merged
 into `main` (head `0183e3f`, 2026-11-24). On 2026-11-25 the project owner
-authorized the first CI-built release, **v1.0.1** (patch). Two attempts were made;
-both Release runs failed in the plan gate with `tag v1.0.1 is not annotated` and
-published nothing. The cause was `actions/checkout` rewriting the local tag ref as
-a lightweight ref, not a wrong `github.sha`; see "First v1.0.1 attempts
-(2026-11-25)". The gate now force-fetches the real tag object before checking it.
-Tag `v1.0.1` (object `3b9a8620`) still points at `5ebbf57` and must be recreated
-on the fixed, CI-green commit after this fix is reviewed and merged; no release is
-claimed. The historical release sections below remain evidence of the local
+authorized the first CI-built release, **v1.0.1** (patch). Three attempts were
+made. Attempts 1 and 2 failed in the plan gate with `tag v1.0.1 is not
+annotated`; the cause was `actions/checkout` rewriting the local tag ref as a
+lightweight ref, not a wrong `github.sha`, and the gate now force-fetches the
+real tag object (see "v1.0.1 attempts"). Attempt 3 passed the gates,
+created a draft, uploaded all 17 assets, then failed in the upload verification:
+GitHub's `GET /releases/tags/{tag}` answers 404 for a **draft**, so the
+verification never saw the release it had just built. The cleanup had the same
+blind spot and deleted nothing, so a draft with 17 assets was left behind
+(invisible to unauthenticated checks); it was later identified as id
+`457460945` and is being removed with the owner's authorization. The publish
+path now addresses the draft by its numeric release id and the guard/cleanup list
+releases instead of looking up by tag (see "Third v1.0.1 attempt"). Tag `v1.0.1`
+(object `cce34dcb`) still points at `4121481` and must be recreated on the fixed,
+CI-green commit after this fix is reviewed and merged; no release is claimed.
+The historical release sections below remain evidence of the local
 build/upload process used for `v0.1.0`–`v1.0.0`.
 
 The sections below were originally a dated readiness snapshot (branch
@@ -160,16 +168,25 @@ amd64/arm64), the `rlch` symlink and the absence of scriptlets or units.
 `SHA256SUMS` to all 16 files and verifies the exact 17-file set.
 
 The publish job is the only job with `contents: write`; it runs only for a tag
-ref whose plan says `publish=true`. It re-verifies the assets, then refuses if
-the tag already carries a public release **or** any draft, naming the existing
-release id and telling the operator to resolve a leftover draft by hand; it never
-adopts or deletes a release it did not create. Only after that guard passes does
-it create a **draft**, upload all 17 assets, poll the release API (bounded) until
-every asset reports a size and `sha256:` digest, compare every uploaded name,
-size and digest with the built files, and publish the draft. A failure after its
-own draft exists deletes that draft only: a `draft-created` step output gates the
-cleanup, and the cleanup re-reads `.draft == true` immediately before deleting.
-A guard error or an unreadable API state therefore cannot reach a delete.
+ref whose plan says `publish=true`. It re-verifies the assets, force-fetches the
+real annotated tag object, and reads the release notes from that object rather
+than from the checkout's lightweight tag ref. It then refuses if the tag already
+carries a public release **or** any draft (the release listing, which includes
+drafts), naming the existing release id and telling the operator to resolve a
+leftover draft by hand; it never adopts or deletes a release it did not create.
+Only after that guard passes does it create a **draft** and resolve its numeric
+release id from the authenticated listing, because GitHub's
+`GET /releases/tags/{tag}` answers 404 for a draft. It uploads all 17 assets,
+polls `GET /releases/{id}` (bounded) until the release is this tag's draft and
+every asset reports a size and `sha256:` digest, compares every uploaded name,
+size and digest with the built files, and publishes the draft. A failure after
+the draft id is resolved deletes that draft id only: a `draft-created` step
+output gates the cleanup, and the cleanup re-reads the id and requires
+`.draft == true` and the expected `.tag_name` immediately before deleting by id.
+A guard error or an unreadable API state therefore cannot reach a delete. A
+failure between `gh release create` and id resolution has no id to delete, so
+that narrow window still leaves the draft for a manual by-id cleanup (the guard
+then refuses a retry until it is gone).
 
 Evidence:
 
@@ -221,17 +238,19 @@ their conclusions) plus the public releases API for the absence of a release.
 package/RPM set; its extra-file and corrupted-checksum negative cases failed as
 intended.
 
-Limits: the publish job (draft creation, 17 uploads, API digest comparison and
-the final publish) has never executed; both real `v1.0.1` attempts (2026-11-25)
-stopped earlier, in the plan gate (see "First v1.0.1 attempts" below), and no
-release or draft exists. The gate is fixed locally but no tag push has exercised
-the fix yet, so the publish job remains unexecuted and the next attempt needs the
-fix merged, independent review, and a recreated tag. Its guard, cleanup and digest polling
-were exercised with a stubbed `curl`/`gh` in a disposable directory (existing
-public release, pre-existing draft, guard API/transport error, own-draft
-deletion, null digest appearing on a later poll and a digest mismatch), not
-against the real GitHub API: the API's transient null `.digest` behaviour and the
-draft delete remain untested live. `workflow_dispatch` has not been invoked:
+Limits: the publish job has now executed through draft creation and all 17
+uploads (third `v1.0.1` attempt, run `45510002182`); its upload verification and
+the final publish have not succeeded yet. The verification failed because it
+looked the draft up by tag, which GitHub answers with 404 for a draft — not
+because an asset was missing — and the cleanup then looked it up the same way
+and left the draft in place. That defect and the release-notes defect below are
+fixed locally but no tag push has exercised the fix yet, so the next attempt
+needs an authenticated check/cleanup of the leftover draft, this fix merged,
+independent review, and a recreated tag. The new guard, cleanup, id-addressed
+verification, pagination and notes source were exercised with stubbed
+`curl`/`gh` and a disposable local git remote (see "Third v1.0.1 attempt"), not
+against the real GitHub API: the API's transient null `.digest` behaviour and a
+live draft delete remain untested. `workflow_dispatch` has not been invoked:
 before merge it required the workflow file on the default branch, and after merge
 it still requires an authenticated dispatch that this session did not perform. A dry run does not exercise the CI-green or on-main gates, which
 apply only to tags. The binary RPMs are built with the runner's unpinned `rpm`
@@ -244,10 +263,10 @@ skipped: the documentation commit `e85b9b7` produced no workflow run, while the
 earlier documentation commit `f99aa71` without the marker triggered Release
 `45425595274` and CI `45425595160`.
 
-## First v1.0.1 attempts (2026-11-25): blocked, gate fixed
+## v1.0.1 attempts (2026-11-25): gate, draft and notes fixes
 
-Two attempts were made; both stopped in the plan gate before any build and
-published nothing.
+The first two attempts stopped in the plan gate before any build and published
+nothing.
 
 **Attempt 1.** The start commit `fb969fb` ("docs(plan): start first CI release
 v1.0.1", no `[skip ci]`) was pushed to both remotes. GitHub Actions CI run
@@ -293,9 +312,9 @@ as a defensive guard, but it did not address the cause: `$SHA` is already the
 commit on a tag push. The earlier local harness that "reproduced" the failure by
 setting `$SHA` to the tag object tested a shape GitHub does not produce.
 
-The failed attempts left the tag in place as evidence; its message claims a
-publication that did not happen, so the tag must be recreated before a later
-attempt (this fix does not create, delete or move any tag). No release was
+The failed first two attempts left the tag in place as evidence; its message
+claims a publication that did not happen, so the tag must be recreated before a
+later attempt (this fix does not create, delete or move any tag). No release was
 edited or deleted, and nothing was built or uploaded outside CI.
 
 ### Gate fix (2026-11-25)
@@ -347,8 +366,8 @@ shape; `curl` is stubbed and its URL recorded. 14/14 cases behaved as required:
   tag gates ran and publish stayed `false`.
 
 `bash -n` on the extracted block and `yaml.safe_load` on the workflow passed.
-This is local evidence only: no tag push has run the new gate, the publish job is
-still unexecuted, and `v1.0.1` remains unpublished.
+This is local evidence only: no tag push has run the new gate at the time of that
+test, and `v1.0.1` remained unpublished.
 
 ### CI Test retries and next step
 
@@ -365,17 +384,112 @@ retry was recorded at `5ebbf57`; attempt 2's failure happened earlier, in the
 annotated gate, so the CI-green gate was not evaluated. That gate still requires a
 green push run on the eventual tag commit.
 
-Current state: tag `v1.0.1` (object `3b9a8620`) still points at `5ebbf57` and must
-be recreated on the fixed, CI-green commit after this workflow fix is reviewed and
-merged. No release or draft exists, the public releases still end at `v1.0.0`,
-the publish job has still never executed, and `workflow_dispatch` has not been
+Current state: tag `v1.0.1` (object `cce34dcb`) points at `4121481` and must be
+recreated on the fixed, CI-green commit after this workflow fix is reviewed and
+merged. No public release exists, and the public releases still end at `v1.0.0`.
+Attempt 3 did create a draft, which the old cleanup could not see and delete; see
+"Third v1.0.1 attempt" for its id and resolution. `workflow_dispatch` has not been
 invoked (it still needs an authenticated dispatch that this session did not
 perform; the branch-triggered dry run is the path actually exercised). Residual
-risk: the gate trusts the remote tag at run time, so someone with write access who
+risk: the gates trust the remote tag at run time, so someone with write access who
 moves the tag to another on-main, CI-green commit between the tag push and the
 fetch would release that re-pointed tag; the tag↔commit check still binds the
 release to the commit the tag names. A dry run exercises neither the tag gates nor
 the publish job.
+
+### Third v1.0.1 attempt (2026-11-25): draft created, then two blind spots
+
+Commit `4121481` (the gate fix) was pushed and its CI push run was green — the
+plan gate requires that — so tag `v1.0.1` was recreated (tag object
+`cce34dcb02cf354f2574d42a02c10bb2d9020b85`) on `4121481` and pushed. Release run
+`45510002182` passed the plan, package, RPM and assemble jobs; its publish job
+`138857993885` created the draft, uploaded all 17 assets, then failed in the step
+"Verify name, size and digest of every uploaded asset". Nothing was published.
+
+**Cause 1 — drafts have no tag endpoint.** `scripts/release-verify-upload.sh`
+polled `GET /repos/{repo}/releases/tags/v1.0.1`. GitHub documents that this
+endpoint returns a release by tag name; for a **draft** it answers 404 (the draft
+is not addressable by tag). The verification therefore failed on its first
+request, far below its 12×5 s poll budget, even though the release and all 17
+assets existed. The cleanup step (`delete-draft`) then made the same lookup, saw
+404 and reported "nothing to delete", so the draft was left behind. This
+corrects the earlier statement that no draft existed: attempt 3 left one, but
+unauthenticated checks cannot see it. The leftover draft was
+later identified by the project owner as id `457460945` and is being deleted with
+explicit authorization outside this change; this change neither inspects nor
+deletes it.
+
+**Cause 2 — notes came from the commit.** The publish job read the release notes
+from its own checkout with `git tag -l --format='%(contents)' "$TAG"`. As in the
+plan gate (see above), `actions/checkout` stores a tag-push ref as a lightweight
+ref pointing at the commit, so `%(contents)` returned the **commit** message. The
+draft's body was therefore the commit message, not the annotated tag message
+(observed on the leftover draft). The plan gate had validated the annotated
+message, but the publish job re-read the wrong ref.
+
+**Fix.** The publish path now addresses drafts by numeric release id:
+
+- the create step lists releases with `gh api --paginate --slurp` (the
+  authenticated listing includes drafts), retries a transient listing failure a
+  bounded five times, requires exactly one draft with this `tag_name`, emits its
+  `id`, and only then emits `created=true`; failure to resolve the id fails
+  closed, and a draft left in that narrow window needs a manual by-id cleanup;
+- `release-verify-upload.sh` takes `RELEASE_ID`, polls
+  `GET /releases/{id}`, and requires `.tag_name == $TAG`, `.draft == true`, the
+  exact 17-asset set, a size and a `sha256:` digest for every asset; 404/5xx and
+  transport failures are retried inside the bounded budget and anything else
+  fails closed. No tag-endpoint lookup remains;
+- `release-guard.sh check` reads every page of `GET /releases` (drafts included)
+  and refuses when any release carries the tag, naming its id and draft/public
+  state; a listing error, non-array page or unreadable JSON fails closed. A
+  leftover draft from an earlier run is now refused instead of missed;
+- `release-guard.sh delete-draft` takes `RELEASE_ID`, re-reads
+  `GET /releases/{id}`, requires `.draft == true` and `.tag_name == $TAG`, and
+  only then issues `DELETE /releases/{id}` (204 expected). A public release,
+  another tag, a 404 or any API error leaves it untouched; deletion by tag name
+  is gone;
+- the publish job's notes step force-fetches
+  `+refs/tags/$TAG:refs/tags/$TAG`, requires `git cat-file -t` to be `tag`, reads
+  `%(contents)` from that object, keeps the non-empty check, and logs the tag
+  object the notes came from. The release is created from the same tag name and
+  the plan job validated the same annotated message; a tag moved between plan and
+  publish remains the pre-existing residual risk noted above.
+
+No trigger, permission, plan gate or publish gate changed.
+
+**Tests (2026-11-25, disposable `/tmp/opencode/rl-draft-id`).** A stubbed
+`curl`/`gh` mimics the API: the tag endpoint 404s for a draft, the listing returns
+it (including a second page after 100 releases), and deletes are allowed only by
+id. 31/31 checks passed:
+
+- verification by id passes with 17 matching assets and fails on a missing asset,
+  an extra asset, a digest mismatch, a null digest after polling, a wrong tag, a
+  public release, persistent 5xx, and retries a one-off 404 before passing;
+- `check` refuses a draft found via the listing, refuses a public release, passes
+  when the tag has no release, finds a draft on page 2, and fails closed on a 500;
+- `delete-draft` requires an id and deletes only that draft; a public release, an
+  unknown id, a 500 and a different tag are left untouched;
+- the old scripts reproduce the incident: with a draft plus a 404 tag endpoint,
+  old verification fails with "cannot read the draft release", old `check` wrongly
+  says "no release exists", and old cleanup finds "nothing to delete";
+- the create step emits `id=4242` and `created=true`, retries a transient
+  listing failure, and fails closed without them when the listing cannot confirm
+  the draft;
+- against a local bare remote and a clone whose tag ref is lightweight (the
+  checkout shape), the old notes step writes the commit message, the new one
+  writes the annotated tag message from the tag object, an empty tag message and a
+  lightweight remote tag are rejected.
+
+`sh -n` on both scripts, `bash -n` on every extracted step, and
+`yaml.safe_load` on the workflow passed. These are local, stubbed checks: the
+real API's transient digest behaviour, a live listing page and a live draft
+delete remain untested.
+
+**Next step.** Confirm through an authenticated listing/UI that no draft for
+`v1.0.1` remains (the identified draft is being removed under explicit owner
+authorization), then merge this fix, wait for green CI on the new tip, recreate
+the annotated tag on that commit, and run the release. The tag is not moved by
+this change and no release is claimed.
 
 ## v0.1.3 release (historical)
 

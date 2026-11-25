@@ -473,13 +473,26 @@ jobs:
           name: release-assets
           path: release/assets
 
-      - name: Re-verify the 17 assets and read the tag message
+      # actions/checkout stores a tag-push ref as a lightweight ref pointing at
+      # the commit, so `git tag -l --format='%(contents)'` would read the commit
+      # message. Restore the real tag object and require it, as the plan gate
+      # does, before writing the release notes.
+      - name: Re-verify the 17 assets and read the annotated tag message
         run: |
           set -eu
           scripts/release-assets.sh verify release/assets
-          git tag -l --format='%(contents)' "$TAG" >"$RUNNER_TEMP/release-notes.md"
+          git fetch --force --quiet origin "+refs/tags/$TAG:refs/tags/$TAG" ||
+            { echo "could not fetch tag $TAG from origin" >&2; exit 1; }
+          tag_type=$(git cat-file -t "refs/tags/$TAG") ||
+            { echo "tag $TAG is missing after fetching refs/tags/$TAG" >&2; exit 1; }
+          [ "$tag_type" = tag ] ||
+            { echo "tag $TAG is not annotated (refs/tags/$TAG is a $tag_type)" >&2; exit 1; }
+          tag_object=$(git rev-parse "refs/tags/$TAG")
+          git for-each-ref --format='%(contents)' "refs/tags/$TAG" \
+            >"$RUNNER_TEMP/release-notes.md"
           grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md" ||
-            { echo "tag $TAG has an empty message"; exit 1; }
+            { echo "tag $TAG has an empty message" >&2; exit 1; }
+          echo "release notes read from annotated tag object $tag_object"
 
       # A tag that already carries a public release must stay untouched; a
       # leftover draft needs a human decision and is neither adopted nor
@@ -496,14 +509,49 @@ jobs:
             --verify-tag \
             --title "$TAG" \
             --notes-file "$RUNNER_TEMP/release-notes.md"
-          # Emit the marker only after a successful create: the cleanup step is
-          # gated on it, so no failure before this point can delete anything.
+          # GitHub's releases/tags/{tag} endpoint answers 404 for a draft, so
+          # resolve the numeric id from the authenticated listing (which does
+          # include drafts) and require exactly one draft for this tag. The
+          # short bounded retry covers a transient listing failure; a draft that
+          # still cannot be resolved needs a manual by-id cleanup.
+          id=""
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+            if gh api --paginate --slurp "repos/$REPO/releases?per_page=100" \
+              >"$RUNNER_TEMP/releases.json"; then
+              id=$(jq -r --arg tag "$TAG" '
+                [.[][] | select(.tag_name == $tag and .draft == true) | .id]
+                | if length == 1 then .[0] else empty end
+              ' "$RUNNER_TEMP/releases.json" 2>/dev/null) || id=""
+              case $id in
+                '' | *[!0-9]*) ;;
+                *) break ;;
+              esac
+            fi
+            if [ "$attempt" -ge 5 ]; then
+              break
+            fi
+            sleep 3
+          done
+          case $id in
+            '' | *[!0-9]*)
+              echo "cannot determine the numeric id of the draft release for $TAG" >&2
+              exit 1
+              ;;
+          esac
+          echo "id=$id" >>"$GITHUB_OUTPUT"
+          # Emit the marker only after a successful create and id resolution:
+          # the cleanup step is gated on it, so no failure before this point can
+          # delete anything.
           echo "created=true" >>"$GITHUB_OUTPUT"
 
       - name: Upload all 17 assets to the draft
         run: gh release upload "$TAG" release/assets/*
 
       - name: Verify name, size and digest of every uploaded asset
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
         run: scripts/release-verify-upload.sh release/assets
 
       - name: Publish the release
@@ -514,7 +562,11 @@ jobs:
 
       # The only delete path: this run's own draft, confirmed still a draft by
       # scripts/release-guard.sh immediately before the delete. A failure in the
-      # guard, in create, or before this step cannot reach it.
+      # guard, in create, or before this step cannot reach it. The draft is
+      # addressed by the id the create step resolved, because GitHub has no
+      # draft-by-tag endpoint.
       - name: Delete only a draft this run created
         if: failure() && steps.draft.outputs.created == 'true'
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
         run: scripts/release-guard.sh delete-draft

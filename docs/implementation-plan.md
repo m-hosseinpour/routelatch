@@ -253,13 +253,39 @@ fast-forward به `main` (`0183e3f`) رسید و به هر دو remote push شد
 `scripts/release-verify-upload.sh` به‌جای یک خواندن، digest/size را با polling
 محدود می‌سنجد و publish تا کامل‌شدن آن اجرا نمی‌شود. RPMهای باینری با rpm
 بدون‌pin رانر ساخته می‌شوند؛ متن `PACKAGE-NOTES`/README همین را می‌گوید و
-`RELEASE_BUILD=1` فقط همراه `GITHUB_ACTIONS=true` پذیرفته می‌شود. **آزمون‌نشده:** job انتشار (draft، ۱۷
-آپلود، مقایسهٔ digest و publish) هرگز اجرا نشده و اولین run آن همان اولین تگ
-واقعی با مجوز جداست؛ gateهای tag/on-main/CI-green در dry-run اجرا نمی‌شوند.
+`RELEASE_BUILD=1` فقط همراه `GITHUB_ACTIONS=true` پذیرفته می‌شود. **در آن زمان
+آزمون‌نشده بود:** job انتشار (draft، ۱۷ آپلود، مقایسهٔ digest و publish) هرگز
+اجرا نشده بود و اولین run آن همان اولین تگ واقعی با مجوز جداست؛ gateهای
+tag/on-main/CI-green در dry-run اجرا نمی‌شوند.
 guard/cleanup و polling digest فقط با `curl`/`gh` stubشده در یک dir موقت آزموده
 شدند (۳۱ check، شامل Release عمومی موجود، draft از پیش موجود، خطای API، حذف
 فقط draft همان run و digest ناقص)؛ رفتار واقعی API گیت‌هاب آزموده نشده است.
-جزئیات و شواهد در `docs/release-readiness.md` («CI release pipeline»).
+تلاش سوم (پایین) تا ساخت draft و آپلود ۱۷ دارایی رسید، ولی verify/publish هنوز
+pass نشده‌اند. جزئیات و شواهد در `docs/release-readiness.md` («CI release pipeline»).
+
+**تلاش سوم و رفع دو نقص (۲۰۲۶-۱۱-۲۵):** commit `4121481` push شد و CI آن سبز
+بود؛ تگ `v1.0.1` (شیء `cce34dcb`) روی آن بازسازی شد. اجرای `Release`
+`45510002182` تا job انتشار `138857993885` رسید: draft ساخته و ۱۷ دارایی آپلود
+شد، ولی step تأیید آپلود شکست خورد؛ چیزی منتشر نشد. علت اول: GitHub برای draft
+در `GET /releases/tags/{tag}` مقدار 404 می‌دهد، بنابراین بررسی از اولین درخواست
+شکست خورد (نه به‌خاطر دارایی گم‌شده) و cleanup هم با همان lookup 404 دید و draft
+(id `457460945`) را باقی گذاشت. علت دوم: step یادداشت‌ها
+`git tag -l --format='%(contents)'` را روی ref lightweight همان checkout اجرا
+می‌کرد و پیام commit را می‌خواند؛ body همان draft پیام commit بود، نه پیام تگ
+annotated. **رفع:** create، id عددی draft را از listing احرازشده (شامل draftها،
+صفحه‌بندی‌شده) با retry کوتاهِ محدود می‌گیرد و فقط بعد از آن `created=true`
+می‌دهد؛ verify با
+`GET /releases/{id}` و الزام tag/draft/۱۷ دارایی/digest و retry محدود 404/5xx
+کار می‌کند؛ `check` همهٔ صفحه‌های listing را می‌خواند و هر Release با همان tag
+(draft یا عمومی) را با id و وضعیت رد می‌کند و خطای API را fail-closed می‌بندد؛
+`delete-draft` فقط با id و پس از تأیید دوبارهٔ draft و tag حذف می‌کند؛ step
+یادداشت‌ها تگ واقعی را force-fetch می‌کند، نوع `tag` را الزام می‌کند و
+`%(contents)` را از همان شیء می‌خواند. trigger/permission/gate تغییر نکرد.
+**آزمون:** ۳۱/۳۱ در `/tmp/opencode/rl-draft-id` با `curl`/`gh` stub و یک remote
+محلی (شامل بازتولید شکست قدیمی و نقص پیام commit)؛ `sh -n`/`bash -n` و YAML pass.
+**باقی:** حذف draft `457460945` با مجوز کاربر بیرون از این تغییر انجام می‌شود؛
+پیش از retry باید با listing احرازشده نبود draft تأیید شود، سپس tag روی commit
+جدید CI-سبز بازسازی شود.
 
 تصمیم D27: از این پس ریلیز در CI ساخته و منتشر می‌شود و هیچ دارایی‌ای از ماشین
 محلی آپلود نمی‌شود. trigger انتخاب‌شده **push تگ annotated `v*`** است و همان
@@ -540,7 +566,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   **آزمون‌نشده:** job انتشار و اولین تگ واقعی؛ gateهای tag/on-main/CI-green در
   dry-run اجرا نمی‌شوند. جزئیات در `docs/release-readiness.md`.
   **شروع واحد (c) (۲۰۲۶-۱۱-۲۵):** انتشار `v1.0.1` (patch) با مجوز کاربر آغاز شد؛
-  دو تلاش انجام شد. تلاش اول: `CI` `45490941645` روی `fb969fb` سبز شد و تگ
+  سه تلاش انجام شد. تلاش اول: `CI` `45490941645` روی `fb969fb` سبز شد و تگ
   `v1.0.1` (شیء `da6307e`) push شد، ولی `Release` `45492100825` در gate
   annotated شکست خورد. تلاش دوم: تگ روی `5ebbf57` بازسازی شد (شیء `3b9a8620`) و
   `Release` `45502745805` (job `138829983146`) با پیام
@@ -548,8 +574,13 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   علت واقعی: `actions/checkout` با `fetch-depth: 0` با refspec
   `+<commit>:refs/tags/<tag>` تگ محلی را lightweight می‌کند، نه اینکه
   `github.sha` شیء تگ باشد. gate اصلاح شد: تگ واقعی از `origin` force-fetch
-  می‌شود و نوع آن باید `tag` باشد؛ ۱۴/۱۴ سناریوی محلی pass. تگ باید روی commit
-  اصلاح‌شدهٔ CI-سبز بازسازی شود.
+  می‌شود و نوع آن باید `tag` باشد؛ ۱۴/۱۴ سناریوی محلی pass. تلاش سوم روی
+  `4121481` (تگ `cce34dcb`) از gate گذشت و `Release` `45510002182` (job انتشار
+  `138857993885`) draft ساخت و ۱۷ دارایی را آپلود کرد، ولی verify با endpoint تگ
+  برای draft (404) شکست خورد و cleanup هم draft را ندید (id `457460945`؛ حذف با
+  مجوز کاربر بیرون از این تغییر)؛ یادداشت‌ها هم به‌جای پیام تگ، پیام commit را
+  خواندند. رفع idمحور و رفع منبع یادداشت‌ها در همین commit است (۳۱/۳۱ آزمون
+  stub/محلی). تگ باید روی commit اصلاح‌شدهٔ CI-سبز بازسازی شود.
 
 - **R13 — R13-A..F بسته شدند (۲۰۲۶-۱۱-۲۳/۲۴، ارکستریتور):** D26 ثبت و
   A13/A15/§۷.۵ به‌روز شد؛ بازبینی متمرکز دوازدهم **Ready** بود. R13-A
@@ -772,7 +803,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | R12 | **انجام شد (فاز ۱: `1743044` + `d206130`؛ فاز ۲: `3839d6a` + اصلاح `505a650`):** `.deb` بدون امضا و اسپک RPM (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64`، `ppc64le`→Debian `ppc64el`) در چهار معماری، هرکدام با سطر `SHA256SUMS`؛ نسخهٔ واحد (`0.1.0.r12.x`) دقیقاً در فیلد Version هر دو قالب. باینری RPM از همین اسپک‌ها با rpm 6.0.1 ساخته/بازرسی و در `v0.1.1`/`v0.1.2` منتشر شد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد (ردیف اجرای payload RPM)؛ jobCI `rpm-packages` هم همهٔ چهار RPM را می‌سازد/بازرسی می‌کند. متادیتا/payload/اسپک/checksum توسط `check-package.sh` آزموده و تست منفی gate RPM اجرا شد | A01/A14 (توزیع) | فاز ۱ و ۲ با مجوز کاربر؛ Windows `exe` خارج ازScope |
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
-| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (متوقف، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ دو تلاش در gate annotated شکست خورد (`45492100825` روی `fb969fb` و `45502745805` روی `5ebbf57`؛ log احرازشده: `tag v1.0.1 is not annotated`, `SHA: 5ebbf57...`). علت: `actions/checkout` ref تگ را lightweight می‌کند، نه `github.sha`؛ تغییر `4f282a4` (peel `$SHA`) بی‌ضرر ولی رفع‌کننده نبود. رفع: force-fetch تگ واقعی از `origin` و الزام `cat-file -t = tag` پیش از خواندن پیام و peel؛ ۱۴/۱۴ سناریوی محلی pass و gate قدیمی همان خطا را بازتولید کرد. publish هنوز اجرا نشده و تگ `v1.0.1` باید روی commit اصلاح‌شدهٔ CI-سبز بازسازی شود. جزئیات در `docs/release-readiness.md`. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
+| R14 | **واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴؛ دور اصلاح پس از بازبینی):** `.github/workflows/release.yml` روی تگ annotated `v*` (یا branch دائمی `release-dryrun` برای dry-run بدون انتشار)، ساخت ۱۷ دارایی در CI، تأیید دوگانهٔ digests، RPMهای باینری، `SHA256SUMS` ۱۶ فایلی و publish اتمیک draft→verify→public؛ guard وجود Release عمومی/draft را رد می‌کند و پاکسازی فقط draft همان run را حذف می‌کند؛ شواهد: dry-runهای `45397329232`، `45400769014`، `45422318159` (اصلاح guard/cleanup) و `45463989732` (نهایی روی `02e3226`، شامل اصلاح mode اجرایی و پیام شکست) سبز، شکست کنترل‌شدهٔ `45399453678` بدون Release عمومی. **بازبینی/merge:** دور اول Not ready (خطر حذف Release عمومی در پاک‌سازی)، رفع `952276e`، دور دوم Ready with findings، رفع نهایی و تأیید؛ merge در `0183e3f` و سپس یک commit مستندات. **باقی (متوقف، ۲۰۲۶-۱۱-۲۵):** واحد (c) با انتشار `v1.0.1` (patch) و مجوز صریح کاربر آغاز شد؛ دو تلاش در gate annotated شکست خورد (`45492100825` روی `fb969fb` و `45502745805` روی `5ebbf57`؛ log احرازشده: `tag v1.0.1 is not annotated`, `SHA: 5ebbf57...`). علت: `actions/checkout` ref تگ را lightweight می‌کند، نه `github.sha`؛ تغییر `4f282a4` (peel `$SHA`) بی‌ضرر ولی رفع‌کننده نبود. رفع: force-fetch تگ واقعی از `origin` و الزام `cat-file -t = tag` پیش از خواندن پیام و peel؛ ۱۴/۱۴ سناریوی محلی pass و gate قدیمی همان خطا را بازتولید کرد. **تلاش سوم (۲۰۲۶-۱۱-۲۵):** روی `4121481` (تگ `cce34dcb`) gate pass شد، job انتشار `138857993885` از `45510002182` draft را ساخت و ۱۷ دارایی را آپلود کرد، ولی verify با endpoint تگ برای draft (404) شکست خورد و cleanup کور ماند (draft `457460945`؛ حذف با مجوز کاربر بیرون از این تغییر)؛ step یادداشت‌ها هم به‌جای پیام تگ، پیام commit را خواند. رفع: idمحورکردن create/verify/cleanup از listing احرازشده، صفحه‌بندی `check`، و force-fetch تگ در publish برای خواندن `%(contents)`؛ ۳۱/۳۱ آزمون stub/محلی pass. publish کامل هنوز اجرا نشده و تگ `v1.0.1` باید روی commit اصلاح‌شدهٔ CI-سبز بازسازی شود. جزئیات در `docs/release-readiness.md`. | A14 (انتشار) | واحد (a) با درخواست کاربر؛ واحد (c) با مجوز صریح ۲۰۲۶-۱۱-۲۵ |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
@@ -859,8 +890,10 @@ ref محلی با fetch صریح بازسازی و pass شد؛ `$SHA` برابر
 شد؛ تگ غیر-`v*` رد شد؛ dry-run با `v0.0.0-dryrun`/`publish=false` و بدون
 پرس‌وجوی CI ماند؛ `workflow_dispatch` روی branch با `publish=true` رد شد و روی تگ
 با `publish=false` فقط gateها را اجرا کرد. `bash -n` بلوک و `yaml.safe_load`
-workflow pass. این شاهد محلی است؛ هیچ push تگی gate جدید را اجرا نکرده، job انتشار
-هنوز اجرا نشده و `v1.0.1` منتشر نشده است (آخرین Release عمومی همان `v1.0.0` است).
+workflow pass. این شاهد محلیِ همان دور است؛ در آن زمان هیچ push تگی gate جدید را
+اجرا نکرده بود، job انتشار هنوز اجرا نشده بود و `v1.0.1` منتشر نشده بود (آخرین
+Release عمومی همان `v1.0.0` بود). تلاش سوم (پایین) بعداً gate را pass کرد و تا
+draft/آپلود رسید.
 
 **CI و retry (۲۰۲۶-۱۱-۲۵):** اجرای `45494443321` روی `4f282a4` پنج job از شش را
 سبز کرد ولی step «Test» شکست خورد؛ لاگ step بدون احراز هویت در دسترس نیست. diff از
@@ -872,9 +905,69 @@ workflow pass. این شاهد محلی است؛ هیچ push تگی gate جدی�
 پس آن gate ارزیابی نشد. دروازهٔ انتشار همچنان به اجرای سبز روی commit نهایی تگ
 نیاز دارد.
 
-**قدم بعد:** بازبینی مستقل این رفع، سپس بازسازی تگ `v1.0.1` روی commit
-اصلاح‌شدهٔ CI-سبز و اجرای `Release`. تگ فعلی (شیء `3b9a8620` روی `5ebbf57`) تا آن
-مرحله دست‌نخورده می‌ماند.
+**تلاش سوم و دور رفع (۲۰۲۶-۱۱-۲۵):** commit `4121481` push شد و CI آن سبز بود؛
+تگ `v1.0.1` (شیء `cce34dcb02cf354f2574d42a02c10bb2d9020b85`) روی همان commit
+بازسازی و push شد. اجرای `Release` `45510002182`: jobهای plan/package/RPM/assemble
+سبز شدند و job انتشار `138857993885` draft را ساخت و ۱۷ دارایی را آپلود کرد، ولی
+در step «Verify name, size and digest of every uploaded asset» شکست خورد؛ هیچ
+Release عمومی ساخته نشد.
+
+**علت اول (draft در endpoint تگ دیده نمی‌شود):** `GET
+/repos/{repo}/releases/tags/{tag}` برای draft مقدار 404 می‌دهد. verify از همین
+endpoint استفاده می‌کرد و در اولین درخواست شکست خورد — بسیار پیش از بودجهٔ
+۱۲×۵ ثانیه — هرچند draft و ۱۷ دارایی وجود داشتند. cleanup هم همان lookup را
+تکرار کرد، 404 دید و چیزی حذف نکرد؛ بنابراین draft (id `457460945`) باقی ماند و
+با بررسی بدون احراز هویت دیده نمی‌شد. این ادعای قبلی که «هیچ draft وجود ندارد»
+نادرست بود. draft شناسایی‌شده با مجوز صریح کاربر بیرون از این تغییر در حال حذف
+است؛ این تغییر آن را نمی‌بیند و حذف نمی‌کند.
+
+**علت دوم (یادداشت‌ها از commit):** step انتشار یادداشت‌ها را با
+`git tag -l --format='%(contents)' "$TAG"` از همان checkout می‌خواند؛
+`actions/checkout` ref تگ را lightweight روی commit می‌گذارد، پس `%(contents)`
+پیام commit را برگرداند و body draft پیام commit شد، نه پیام تگ annotated
+(روی draft باقی‌مانده مشاهده شد). gate پلن پیام درست را اعتبارسنجی کرده بود، ولی
+publish دوباره از ref اشتباه خواند.
+
+**رفع:** (۱) create پس از ساخت draft، با
+`gh api --paginate --slurp "repos/$REPO/releases?per_page=100"` (listing
+احرازشده که draftها را شامل می‌شود) دقیقاً یک draft با همان `tag_name` را پیدا
+می‌کند، `id` را output می‌دهد و فقط بعد از آن `created=true` می‌نویسد؛ نبود id
+fail-closed است. (۲) `scripts/release-verify-upload.sh` مقدار `RELEASE_ID` را
+می‌گیرد، `GET /releases/{id}` را polling می‌کند و علاوه بر ۱۷ دارایی/نام/اندازه/
+digest، `.tag_name == TAG` و `.draft == true` را الزام می‌کند؛ 404/5xx و خطای
+transport داخل بودجه retry می‌شوند و هر پاسخ دیگر fail-closed است؛ هیچ lookup
+تگی باقی نمانده. (۳) `release-guard.sh check` همهٔ صفحه‌های listing را می‌خواند و
+وجود هر Release با همان tag (draft یا عمومی) را با id و وضعیت رد می‌کند؛ خطای
+API، صفحهٔ غیر-array یا JSON ناخوانا fail-closed است. (۴) `delete-draft` فقط
+`RELEASE_ID` را می‌پذیرد، دوباره با id می‌خواند، `.draft == true` و
+`.tag_name == TAG` را الزام می‌کند و سپس با `DELETE /releases/{id}` حذف می‌کند؛
+Release عمومی، tag دیگر، 404 یا خطای API دست‌نخورده می‌ماند؛ حذف با نام tag حذف
+شد. (۵) step یادداشت‌ها `+refs/tags/$TAG:refs/tags/$TAG` را force-fetch می‌کند،
+نوع `tag` را الزام می‌کند، `%(contents)` را از همان شیء می‌خواند، بررسی غیرخالی
+بودن را نگه می‌دارد و شیء تگ را log می‌کند. trigger، permission، gate پلن و
+gate انتشار تغییر نکردند.
+
+**آزمون محلی (۲۰۲۶-۱۱-۲۵، `/tmp/opencode/rl-draft-id`):** `curl`/`gh` stub
+رفتار واقعی را شبیه‌سازی می‌کند (tag endpoint برای draft = 404؛ listing شامل
+draft و صفحه‌بندی؛ حذف فقط با id). ۳۱/۳۱ بررسی pass شد: verify با ۱۷ دارایی
+منطبق pass و با دارایی گم‌شده/اضافی/digest نادرست/digest تهی پس از polling/tag
+نادرست/Release عمومی/5xx پایدار fail؛ یک 404 گذرا retry و سپس pass؛ `check`
+draft یافت‌شده از listing و Release عمومی را رد می‌کند، نبود Release را pass
+می‌کند، draft را در صفحهٔ دوم پیدا می‌کند و روی 500 fail-closed است؛
+`delete-draft` فقط id داده‌شده را حذف می‌کند و Release عمومی، id ناشناس، 500 و
+tag دیگر را دست‌نخورده می‌گذارد؛ کد قدیمی همان حادثه را بازتولید می‌کند (verify
+قدیمی «cannot read the draft release»، check قدیمی «no release exists» و cleanup
+قدیمی «nothing to delete»)؛ create step مقدار `id=4242`/`created=true` می‌دهد و
+بدون id fail-closed است؛ روی یک remote محلی و clone با ref lightweight (شکل
+checkout) step قدیمی پیام commit و step جدید پیام تگ annotated را می‌نویسد، و
+پیام تگ خالی و تگ lightweight رد می‌شوند. `sh -n` روی هر دو script، `bash -n` روی
+stepهای استخراج‌شده و `yaml.safe_load` روی workflow pass شدند. این شواهد محلی و
+stubشده‌اند؛ رفتار گذرای digest، صفحه‌بندی واقعی و حذف واقعی draft آزموده نشده‌اند.
+
+**قدم بعد:** با listing احرازشده (یا UI) تأیید شود هیچ draftی برای `v1.0.1`
+نمانده است (draft `457460945` با مجوز کاربر در حال حذف است)، سپس این رفع merge،
+CI روی commit جدید سبز، تگ annotated روی همان commit بازسازی و `Release` اجرا
+شود. این تغییر تگ را جابه‌جا نمی‌کند و هیچ Releaseای را ادعا نمی‌کند.
 
 ### آنچه پذیرفته/اثبات نشده است
 
@@ -954,15 +1047,20 @@ workflow pass. این شاهد محلی است؛ هیچ push تگی gate جدی�
    **R14 واحد (a) انجام، بازبینی مستقل شده و merge شده است** (merge در `0183e3f`
    و سپس یک commit مستندات)؛ branch `release-dryrun` همان درخت را دارد. dry-run
    سبز نهایی `45463989732` (workflow blob `e723d83`) شاهد مسیر ساخت/تأیید است.
-   **واحد (c) دو بار تلاش شد و متوقف است:** تلاش اول روی `fb969fb` (CI سبز
+   **واحد (c) سه بار تلاش شد و متوقف است:** تلاش اول روی `fb969fb` (CI سبز
    `45490941645`، تگ `da6307e`) و تلاش دوم روی `5ebbf57` (تگ بازسازی‌شده
    `3b9a8620`؛ `Release` `45502745805`، job `138829983146`) هر دو در gate
    annotated شکست خوردند؛ log احرازشده: `tag v1.0.1 is not annotated`, `SHA:
    5ebbf57...`. علت `actions/checkout` است که ref محلی تگ را lightweight می‌کند،
    نه `github.sha`؛ `4f282a4` بی‌ضرر ولی رفع‌کننده نبود. gate حالا تگ واقعی را از
    `origin` force-fetch می‌کند و نوع `tag` را الزام می‌کند؛ ۱۴/۱۴ آزمون محلی pass
-   شدند. تنها کار باز R14: بازبینی مستقل این اصلاح، سپس انتشار با تگ
-   بازسازی‌شده روی commit اصلاح‌شدهٔ CI-سبز.
+   شدند. تلاش سوم روی `4121481` (تگ `cce34dcb`؛ `Release` `45510002182`، job
+   انتشار `138857993885`) از gate گذشت، draft ساخت و ۱۷ دارایی را آپلود کرد، ولی
+   verify با endpoint تگ برای draft (404) شکست خورد و cleanup هم همان draft را
+   ندید (id `457460945`؛ با مجوز کاربر بیرون از این تغییر در حال حذف). prompt:
+   همین commit مسیر publish را idمحور کرد و نقص پیام commit در یادداشت‌ها را رفع
+   کرد (۳۱/۳۱ آزمون stub). تنها کار باز R14: بازبینی مستقل، merge، CI سبز روی
+   commit جدید، بازسازی تگ روی همان commit و انتشار.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -971,12 +1069,14 @@ workflow pass. این شاهد محلی است؛ هیچ push تگی gate جدی�
    `45397329232`، `45399453678`، `45400769014`، `45422318159` و dry-run نهایی
    `45463989732` روی `02e3226`؛ رفع یافته‌ها `952276e`/`02e3226`)
    → (b) بازبینی مستقل انجام شد (دور اول Not ready، دور دوم Ready with findings،
-   تأیید نهایی بسته) و merge شد → (c) در ۲۰۲۶-۱۱-۲۵ آغاز شد؛ دو تلاش تگ/Release
-   در gate annotated شکست خوردند (علت checkout؛ بالا) و بدون Release متوقف شد.
-   **بعدی:** بازبینی مستقل رفع gate، CI سبز روی commit اصلاح، سپس تگ
-   بازسازی‌شده (یا `workflow_dispatch` با `publish=true` روی ref تگ). dry-run
-   قبل از merge با push به branch دائمی `release-dryrun` بود؛
-   `workflow_dispatch` هنوز اجرا نشده.
+   تأیید نهایی بسته) و merge شد → (c) در ۲۰۲۶-۱۱-۲۵ آغاز شد؛ سه تلاش تگ/Release
+   انجام شد: دو تلاش در gate annotated شکست خوردند (علت checkout؛ بالا) و تلاش
+   سوم از gate گذشت، draft ساخت و ۱۷ دارایی را آپلود کرد، ولی verify با
+   endpoint تگ برای draft (404) شکست خورد و cleanup کور ماند؛ رفع idمحور و رفع
+   یادداشت‌های commit‌محور در همین commit است. **بعدی:** بازبینی مستقل رفع، CI سبز
+   روی commit اصلاح، سپس تگ بازسازی‌شده (یا `workflow_dispatch` با `publish=true`
+   روی ref تگ) پس از تأیید احرازشدهٔ نبود draft. dry-run قبل از merge با push به
+   branch دائمی `release-dryrun` بود؛ `workflow_dispatch` هنوز اجرا نشده.
 5. برای هر تغییر: YAML/shell parse، dry-run کامل، دو اجرای packaging با
    `SHA256SUMS` یکسان، `check-artifact.sh`/`check-package.sh`، و بازبینی مستقل.
    ایجاد تگ/انتشار عمومی و هر تغییر میزبان مجوز جدا می‌خواهد.
