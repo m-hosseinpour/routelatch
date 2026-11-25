@@ -1106,7 +1106,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 ```json
 { "mode": "targeted", "ready": true, "listeners_open": true,
-  "policy_version": 7, "selected_exit": "",
+  "resume_requires_restart": false, "policy_version": 7, "selected_exit": "",
   "listeners": { "http": "127.0.0.1:8317", "socks": "127.0.0.1:8318" },
   "pool": { "total": 12, "usable": 9, "healthy": 6, "cooling": 2 },
   "connections": { "open": 3, "dialing": 1, "proofs": { "confirmed": 0, "accepted": 2 } },
@@ -1123,7 +1123,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `autostart enable\|disable\|status` | `path, enabled, managed, tray_available, pidfd_available, conflict?` | 0، 1، 2، 6، 7 | — |
 | `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10، 12 | — |
 | `version` | `version, commit, build_date` | 0 | — |
-| `status` | `mode, ready, listeners_open, policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
+| `status` | `mode, ready, listeners_open, resume_requires_restart (R15), policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
@@ -1158,6 +1158,17 @@ management در حال سرویس‌دهی و — اگر mode ذخیره‌شد�
 وجود listener address) ملاک بگیرند. این دو فیلد additive هستند و schema_version
 را تغییر نمی‌دهند.
 
+**`resume_requires_restart` (R15؛ تعریف‌شده و پیاده‌نشده).** این فیلد additive
+فقط وقتی `true` است که همین process وارد `stopped` شده باشد؛ در process تازه‌ای
+که با state ذخیره‌شدهٔ `stopped` بالا آمده `false` است و تغییر mode مستقیماً
+listenerها را باز می‌کند. tray با همین فیلد، actionهای mode را در حالت
+stopped-by-process غیرفعال و پس از restart فعال می‌کند؛ این وضعیت با restart
+خود tray از بین نمی‌رود. هشدار `status` هم باید همین تفاوت را منعکس کند، نه
+پیام ثابت «restart لازم است». schema_version تغییر نمی‌کند؛ در app mode
+engine/tray هم‌باینری‌اند، و اگر tray با سرویس قدیمی‌تری که فیلد را ندارد حرف
+بزند آن را «نامعلوم» می‌گیرد و در stopped فقط پس از یک restart موفق mode را
+فعال می‌کند.
+
 شمارندهٔ unsupported در هشدارهای `status` و در checkهای `doctor` از همان نمای مشتق‌شدهٔ
 `pool list` می‌آید: رکورد قدیمی با پروتکل غیرقابل‌dial در هر status ذخیره‌شده به‌جز
 `invalid` در هر سه سطح `unsupported` شمرده می‌شود و در شمار `unknown`/`cooling`
@@ -1185,13 +1196,248 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 ولی engine `--headless` دوم و unit هم‌زمان همچنان exit `4` می‌گیرند. refuse کردن
 `service install` برای کاربر دیگر با `policy_denied`/`9` است.
 
-### ۷.۳ منو
+### ۷.۳ منو و tray control surface
 
-منو فقط پوستهٔ همین فرمان‌هاست: هر عمل یک فرمان با همان JSON و همان exit code را
+منوی huh فقط پوستهٔ همین فرمان‌هاست: هر عمل یک فرمان با همان JSON و همان exit code را
 صدا می‌زند. عمل مخرب (حذف قانون/pool، restore، توقف) تأیید صریح می‌خواهد و
 پیش‌فرض «نه» است. منو هیچ منطق مسیری جدا ندارد. پس از R13 منو باید دو ورودی
 جدا داشته باشد: «Start app (tray)» → `run` و «Start headless (foreground)» →
 `run --headless`؛ نگاشت قدیمی «Start the service» → `run` کافی نیست (A10/A15).
+
+**سطح کنترل tray (D28، ۲۰۲۶-۱۱-۲۵؛ تعریف‌شده و پیاده‌نشده).** tray child یک
+کلاینت نازک روی همان management socket است و هیچ منطق مسیریابی، pool، rule،
+policy یا state ندارد:
+
+- socket از `TrayOptions.Socket` و data-dir از `TrayOptions.DataDir` می‌آید که
+  `cmd/routelatch` آن‌ها را از `store.Paths` پر می‌کند؛ اتصال همان peer check
+  same-uid و محدودیت ۶۰ KiB/۴ MiB را دارد. tray هیچ فایل state/config را
+  مستقیم نمی‌خواند یا نمی‌نویسد و listener جدید باز نمی‌کند.
+- `quit`، `restart-engine`، `lost` و `error <reason>` تنها پیام‌های
+  tray→supervisor هستند؛ عملیات مدیریتی از socket می‌روند. supervisor فقط
+  رویدادهای lifecycle (`restarting`، `ready`) را برمی‌گرداند (§۷.۵). هیچ op
+  جدیدی برای stop/restart supervisor اضافه نمی‌شود.
+- handler هر آیتم D-Bus فقط action را ثبت می‌کند و برمی‌گردد؛ opهای طولانی
+  asynchronous اجرا می‌شوند (بند jobها). handler هرگز منتظر dial/probe/refresh
+  نمی‌ماند. ثبت tray و پیام `ready` به supervisor به load دادهٔ منو گره
+  نمی‌خورد؛ تا snapshot اول یک منوی حداقلی «Loading…» با actionهای غیرفعال
+  نمایش داده می‌شود و app-readiness همچنان فقط به `status.ready` engine و
+  ثبت tray وابسته است.
+- زبان UI در این milestone **English** است (D28)؛ i18n و ترجمه خارج از دامنه‌اند.
+- GUI کامل خارج از دامنه است؛ یک GUI آینده باید از همان management contract
+  استفاده کند، نه از `internal/trayui`.
+
+**درخت منو (قرارداد).** ترتیب آیتم‌های اصلی در هر حالت ثابت است؛ آیتم‌های
+وابسته به state (mode/stopped، desktop، Quit) با `enabled=false` یا
+`visible=false` کنترل می‌شوند و حذف بی‌صدا نمی‌شوند. متن داخل `<>` پویا و
+sanitize شده است. اگر host رادیو/checkmark را رندر نکند (نتیجهٔ R15-A)، وضعیت
+انتخاب با `✓` یا `(current)` در label نشان داده می‌شود؛ action و داده یکی
+می‌مانند.
+
+```text
+RouteLatch
+  <status line>                                  disabled
+  Mode ▸
+    Targeted | All proxy | All direct            radio
+    Stop listening…                              pending confirmation
+  Proposals (N) ▸
+    <pending proposal> ▸
+      Accept | Reject | Recheck
+    Show decided (N) ▸
+    Clear decided/expired…                       pending confirmation
+  Approved rules (N) ▸
+    <rule> ▸
+      Remove…                                    pending confirmation
+      Details                                    disabled
+    Page x/y · Previous page · Next page
+    Add rule… (Terminal menu)
+  Pool ▸
+    <summary>                                    disabled
+    Auto select (radio) | <pinned exit>
+    Healthy (N) ▸ pages
+    Untested (N) ▸ pages
+    Cooling (N) ▸ pages
+    Unsupported/Invalid (N) ▸ pages
+    Refresh all sources                          job
+    Re-rank now
+    Test selected exit | Test first 20 usable    job
+    Add/import… (Terminal menu)
+  Desktop proxy ▸
+    <status>                                     disabled
+    Refresh status
+    Set/Re-apply desktop proxy…                  pending confirmation
+    Restore previous desktop proxy…              pending confirmation
+  Diagnostics ▸
+    Run doctor                                   job
+    Doctor results ▸
+    Warnings (N) ▸
+    Show log path
+    Environment ▸
+  Data ▸
+    Back up state now                            job
+    Restore backup… (CLI)                        disabled hint
+  Settings ▸
+    Start at login: On/Off                       checkmark
+    <config summary>                             disabled
+    <data paths>                                 disabled
+  Advanced ▸
+    Restart engine…                              pending confirmation
+    Terminal menu…
+  Last action: <short result>                    disabled
+  Quit ▸
+    Quit RouteLatch
+    Restore desktop proxy and quit…              pending confirmation
+    Quit and keep desktop proxy…                 pending confirmation
+```
+
+هدر وضعیت کوتاه است: `Targeted · 156 usable · 3 open`،
+`All direct · 3 open`، `Stopped · listeners closed` یا
+`Engine unavailable; retrying…`. در all-direct شمار pool در هدر نمایش داده
+نمی‌شود چون انتخاب خروجی موضوعیت ندارد؛ در stopped/unavailable actionهای
+نامعتبر غیرفعال می‌شوند. `Restart engine…` در حالت stopped به‌صورت یک آیتم اضافی در ریشه با
+متن «Restart engine to resume…» هم دیده می‌شود؛ action یکی است. صفحه‌بندی pool و
+rules ۲۰–۲۵ آیتم دارد (تعداد دقیق در پیاده‌سازی ثابت و تست می‌شود) و گروه‌های
+pool از `Counts` و `status` همان `pool list` می‌آیند. «Test first 20 usable»
+همان سقف `MaxPoolTestExits` قرارداد است؛ tray نباید ادعای تست کل pool بدهد.
+`N` در «Proposals (N)» تعداد pending است؛ decided/expired زیر
+«Show decided» و در صورت زیادبودن با همان صفحه‌بندی ۲۰–۲۵تایی می‌آیند. اگر
+`status.diagnostics.enabled=false` باشد، Accept/Reject/Recheck غیرفعال‌اند
+(engine پیشنهاد جدیدی نمی‌سازد و این opها به diag نیاز دارند)؛ نمایش و
+Clear decided/expired باز می‌مانند. `Details` یک rule شامل ID کوتاه، kind، operand، note
+sanitize‌شده و added_at است. زیرمنوهای خالی یک آیتم disabled با متن
+`No …` و در صورت لزوم اشاره به `Terminal menu` دارند، نه یک منوی خالی. `Doctor results` هر check را به‌صورت `[ok|warn|error] name: detail` کوتاه
+نشان می‌دهد؛ `Warnings` از `status` می‌آید؛ `Environment` چهار مقدار
+`OpEnv` (`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY`) را نمایش می‌دهد؛
+`config summary` از `config get` فقط `http_listen`/`socks_listen`/`log_level`
+را می‌آورد و `data paths` از `config path` می‌آید. `Show log path` فقط مسیر
+sanitize‌شده را notification می‌کند. `Start at login` با data-dir سفارشی یا
+`conflict=service` غیرفعال و با دلیل نمایش داده می‌شود؛ تغییر آن فقط از طریق
+همان `autostart.Manager` و با اقدام صریح کاربر است. `Desktop proxy` فقط وقتی
+`supported=true` است actionهای Set/Restore/Refresh را فعال می‌کند؛ در محیط
+پشتیبانی‌نشده فقط status و دلیل نمایش داده می‌شود.
+
+**نگاشت actionها.**
+
+| آیتم | request/مسیر | تأیید | job |
+| --- | --- | --- | --- |
+| Mode: targeted/all-proxy/all-direct | `mode` با همان مقدار | نه | نه |
+| Stop listening | `mode=stopped` | بله | نه |
+| Restart engine | pipe `restart-engine` به supervisor | بله | بله (انتظار readiness) |
+| Proposal Accept (route) | `proposals.accept` | نه (کلیک همان تأیید است) | نه |
+| Proposal Accept (unroute) | `proposals.accept` | بله (حذف rule) | نه |
+| Proposal Reject | `proposals.reject` | نه | نه |
+| Proposal Recheck | `proposals.recheck` | نه | بله |
+| Clear decided/expired | `proposals.clear` | بله | نه |
+| Rule Remove | `rules.remove` | بله | نه |
+| Pool Auto/Pin | `pool.select` با `auto` یا id | نه | نه |
+| Pool Remove | `pool.remove` | بله | نه |
+| Pool Refresh all | `pool.refresh` با `all=true` | نه | بله |
+| Pool Test selected / first 20 | `pool.test` با id یا بدون id | نه | بله |
+| Pool Re-rank | `pool.rerank` | نه | نه |
+| Desktop Refresh status | `desktop.status` | نه | نه |
+| Desktop Set/Re-apply | `desktop.set` | بله | بله |
+| Desktop Restore | `desktop.restore` | بله | بله |
+| Back up now | `backup` | نه | بله |
+| Run doctor | `doctor` | نه | بله |
+| Start at login | `autostart.Manager.Status/Enable/Disable` محلی | نه | بله (محلی) |
+| Terminal menu | اجرای همان باینری با `menu` | نه | نه |
+| Quit RouteLatch | pipe `quit` | فقط اگر desktop applied یا job در حال اجرا باشد | نه |
+| Restore desktop proxy and quit | `desktop.restore` سپس pipe `quit` | بله | بله |
+| Quit and keep desktop proxy | pipe `quit` | بله اگر desktop applied باشد | نه |
+
+`add/import` pool، `rules add`، `diagnose`، `config set`، `restore <path>` و
+`exec` در tray نیستند و از `Terminal menu…` یا CLI انجام می‌شوند؛
+`Rules → Add rule…` و `Pool → Add/import…` فقط همان action ترمینال را باز
+می‌کنند (متن در ترمینال وارد می‌شود، نه در tray). مدیریت
+`service install/uninstall/status` هم در tray نیست؛ این یک اقدام نصب/میزبان است
+و با app/tray هم‌زمان تعارض دارد. برای unroute proposal، `Recheck` غیرفعال است
+چون شواهد probe ندارد؛ Accept آن چون rule را حذف می‌کند pending می‌خواهد.
+
+**تأیید دو مرحله‌ای.** action مخرب با کلیک اول اجرا نمی‌شود: یک pending در
+حافظهٔ tray ساخته می‌شود و در ریشهٔ منو دو آیتم «Confirm: <label>» و «Cancel»
+ظاهر می‌شوند. pending پس از ۶۰ ثانیه منقضی می‌شود، فقط یکی هم‌زمان وجود دارد،
+با action جدید جایگزین یا لغو می‌شود، و هرگز در state/config/log نوشته نمی‌شود.
+Confirm دقیقاً همان action ذخیره‌شده را اجرا می‌کند؛ label هرگز برای استخراج
+id/action پارس نمی‌شود. فهرست حداقلی actionهای pending در جدول بالا آمده است.
+عمل «Accept» برای proposal route با کلیک خود کاربر تأیید می‌شود؛ چون این کلیک
+یک افزودن صریح به فهرست approved است و نیازی به pending دوم ندارد.
+
+**jobها و refresh.** حداکثر یک job طولانی هم‌زمان اجرا می‌شود؛ تا پایان آن،
+actionهای تغییردهنده disabled‌اند و ریشه یک آیتم «Job: … running» نشان می‌دهد.
+jobهای تعریف‌شده: pool refresh/test، proposal recheck، desktop set/restore،
+backup، doctor، restart و autostart toggle. status هر ۲ ثانیه و لیست‌ها هر ۱۵
+ثانیه (و بلافاصله پس از action) refresh می‌شوند؛ فراخوانی status/list یک
+deadline کوتاه (۱–۲ ثانیه) دارد، در goroutine جدا اجرا می‌شود و tick بعدی را
+بلوکه نمی‌کند؛ تغییرها با fingerprint مقایسه می‌شوند تا rebuild بی‌مورد رخ
+ندهد. desktop/autostart به‌صورت دوره‌ای گران
+هستند و فقط در شروع، پس از action و هنگام Quit تازه می‌شوند. handler هرگز
+منتظر این فراخوانی‌ها نمی‌ماند. اگر socket در دسترس نباشد یا status/list با
+deadline پاسخ ندهد، منو «Engine unavailable; retrying…» نشان می‌دهد،
+لیست‌های پویا را پاک می‌کند و actionهای مدیریتی را غیرفعال نگه می‌دارد تا
+بازیابی؛ دادهٔ کهنه به‌عنوان وضعیت جاری نمایش داده نمی‌شود. در restart، آیتم
+«Restarting engine…» و poll سریع‌تر (۵۰۰ms) تا بازگشت readiness استفاده می‌شود.
+اگر job به‌خاطر از دست رفتن engine قطع شود، پیام روشن «interrupted» نمایش داده
+می‌شود؛ tray ادعا نمی‌کند عملیات در سمت سرویس متوقف شده است. notification فقط
+برای نتیجهٔ action/job (نه polling) و با coalescing محدود ارسال می‌شود تا
+rate limit مشاهده‌شده در Plasma تکرار نشود.
+
+**حالت stopped.** `status` در stopped معتبر است (`ready=true`،
+`listeners_open=false`). tray هدر «Stopped · listeners closed» نشان می‌دهد و
+actionهای pool/probe/rules mutation و proposalها را غیرفعال می‌کند (diagnostics
+و probe در stopped اجرا نمی‌شوند)؛ read-onlyها مثل status/rules list باز می‌مانند.
+`Set/Re-apply desktop proxy` در stopped غیرفعال است (listenerی نیست که آدرسش
+اعمال شود)؛ `Restore` مجاز و برای پاک‌کردن یک setting قدیمی مفید است. اگر
+`resume_requires_restart=true` باشد، mode تغییر تا **Restart engine** غیرفعال
+است و پس از restart و readiness، tray دوباره mode را فعال می‌کند و
+«Stopped · choose a mode to resume» نشان می‌دهد. اگر `false` باشد (process تازه
+با state ذخیره‌شدهٔ stopped)، mode مستقیماً فعال است. این flag از `status`
+می‌آید و با restart خود tray از بین نمی‌رود؛ نبود فیلد در سرویس قدیمی
+«نامعلوم» است و محافظه‌کارانه restart پیشنهاد می‌شود. restart دستی از budget
+restart خودکار supervisor مصرف نمی‌کند. پیش از pending برای `Stop listening` و
+`Restart engine` (و Quit)، وضعیت desktop با یک `desktop.status` تازه و deadline
+کوتاه خوانده می‌شود؛ اگر `applied=true` باشد، label تأیید هشدار می‌دهد که
+پروکسی دسکتاپ تا بازگشت listener قطع می‌شود و restore/keep همچنان تصمیم
+جداگانهٔ Quit است. اگر خواندن وضعیت ناموفق بود، هشدار «نامعلوم» نمایش داده
+می‌شود و action مخفی نمی‌شود.
+
+**Quit و پروکسی دسکتاپ.** پیش از Quit، tray یک `desktop.status` تازه با
+deadline کوتاه می‌گیرد. اگر `applied=true` باشد، Quit به دو گزینه تبدیل می‌شود:
+«Restore desktop proxy and quit…» (اول `desktop.restore`؛ اگر شکست خورد Quit
+انجام نمی‌شود و خطا نمایش داده می‌شود) و «Quit and keep desktop proxy…» (با
+هشدار که اینترنت ممکن است تا restore قطع بماند). اگر وضعیت نامعلوم باشد، همان
+هشدار با گزینهٔ صریح نمایش داده می‌شود. Quit هرگز به‌طور خودکار تنظیمات دسکتاپ
+را restore نمی‌کند. اگر job در حال اجرا باشد، Quit تأیید اضافی می‌خواهد.
+`desktopProxyRestoreHint` قبلی جای خود را به همین رفتار واقعی می‌دهد؛ متن hint
+فقط در مسیر خطای restore باقی می‌ماند.
+
+**Terminal menu.** آیتم «Terminal menu…» همان executable جاری را با
+`[--data-dir <abs>] menu` در یک ترمینال باز می‌کند. فقط یک allowlist ثابت از
+ترمینال‌ها با argv صریح پشتیبانی می‌شود: `konsole -e <exe> … menu`،
+`gnome-terminal -- <exe> … menu` و `xterm -e <exe> … menu`. هیچ shell،
+`$TERMINAL` تعبیرشده یا ورودی کاربر در argv قرار نمی‌گیرد. فرآیند ترمینال با
+`Setsid` detached و مستقل از tray است. اگر ترمینالی پیدا نشد، notification
+دستور دقیق برای اجرای دستی می‌دهد. این مسیر برای عملیات متنی و restore بکاپ است
+و هیچ secret/URLی به tray داده نمی‌شود.
+
+**امنیت خروجی و D21.** هر label پویا (نام node، rule note، نام source، دلیل
+خطا و…) پیش از نمایش از `SanitizeTerminal` و یک truncation ثابت عبور می‌کند؛
+سقف label آیتم **۸۰ rune** و سقف هدر/notification **۱۲۰ rune** است و متن
+بریده‌شده با `…` تمام می‌شود. CR/LF/TAB، ESC/C0/C1 و کنترل‌های bidi حذف
+می‌شوند. actionها یک enum بسته‌اند و
+label هرگز منبع id فرمان نیست. notificationها فقط شمارنده، mode، id کوتاه،
+مسیر log یا پیام خطای sanitize‌شده دارند و هیچ مقصد، host مقصد/exit، share URL
+یا credentialی در آن‌ها نیست. logهای tray فقط نام action و outcome را دارند، نه
+label/input. منوی rules/proposals مقصدها را به‌عنوان نمای زندهٔ حافظه نشان
+می‌دهد (D21) و هیچ‌جا persist نمی‌کند؛ backup/state/launch log مسیر متفاوتی
+دارند. منو روی session bus قابل خواندن برای همان کاربر است و مرز ذخیره‌سازی
+نیست؛ رویدادهای dbusmenu هم از هر فرآیند همان کاربر روی همان bus قابل ارسال‌اند،
+پس این سطح فراتر از trust مرز same-uid موجود نیست و ادعای احراز هویت اضافه
+نمی‌کند؛ هیچ secret جدیدی فراتر از داده‌ای که state/CLI همان کاربر نشان می‌دهد
+از این مسیر افشا نمی‌شود.
+
+**خارج از دامنه.** GUI، i18n، مدیریت service/systemd، restore بکاپ دلخواه،
+افزودن/import pool و rule از داخل tray، diagnose با ورودی متن، `exec`،
+تغییر DNS/TUN/UDP و هر actionی که نیازمند credential یا URL است. GNOME بدون
+extension/SSH همچنان tray ندارد و رفتار D26 تغییر نمی‌کند.
 
 ### ۷.۴ امنیت خروجی
 
@@ -1214,7 +1460,10 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 
 این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. R13 در درخت کامل شده است
 (R13-F verdict **Ready**) و `v1.0.0` همین مدل را منتشر کرده است؛ بسته‌های
-`v0.1.3` و پیش از آن همان `run` foreground و unit قدیمی را دارند.
+`v0.1.3` و پیش از آن همان `run` foreground و unit قدیمی را دارند. **R15 (D28)**
+یک افزونهٔ تعریف‌شده و پیاده‌نشده برای کنترل tray و restart سطح process است که
+پاراگراف‌های `restart` و کانال کنترل دوطرفه را در همین بخش اضافه می‌کند؛ تا
+پایان R15 رفتار فعلی (hint/سه آیتم) معتبر است.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق
@@ -1293,6 +1542,33 @@ lock-success به `0` نرسد؛ **`app.lock` را تا پایان توقف chil
 singleton است و `run` جدید ابتدا همان را می‌بیند، پس شروع نمی‌کند و با
 `app.owner` آزاد هم فقط `6` می‌گیرد. بنابراین حتی اگر نوشتن `stopping` شکست
 بخورد، stale `ready` بدون owner lock باقی می‌ماند و `run` بعدی `6` می‌گیرد.
+
+**restart سطح process از tray (تعریف‌شده، پیاده‌نشده).** tray برای
+`Restart engine` فقط پیام `restart-engine` را در pipe supervisor می‌نویسد؛ این یک lifecycle request است،
+نه management op. supervisor در پردازش آن همان ترتیب transition را نگه می‌دارد:
+`starting` نوشته می‌شود، engine child فعلی با bounded teardown متوقف می‌شود،
+child تازه با همان مسیر `run --headless` و همان data-dir اجرا می‌شود، سپس
+`status.ready` کودک جدید **و** ثبت tray دوباره بررسی و `ready` نوشته می‌شود.
+اگر نوشتن/آمادگی شکست بخورد، مسیر fail-closed یا exit مستند موجود اجرا می‌شود؛
+حلقهٔ restart پنهانی اضافه نمی‌شود. اگر engine در حال آماده‌شدن یا restart
+خودکار باشد، درخواست restart دستی نادیده گرفته می‌شود (tray هم action را در
+این حالت غیرفعال می‌کند). restart دستی از سقف restart خودکار خرابی مصرف نمی‌کند
+و tray درخواست‌ها را سریال می‌کند. اگر `quit` حین restart برسد،
+پس از پایان/شکست restart پردازش می‌شود. restart درون‌process همچنان ممنوع است.
+**کانال کنترل دوطرفه.** برای اینکه tray پایان restart را با `ready` کهنهٔ
+engine قبلی اشتباه نگیرد، کانال tray/supervisor باید علاوه بر پیام‌های
+tray→supervisor رویدادهای supervisor→tray را هم حمل کند (socketpair یا pipe
+دوم؛ انتخاب مکانیکی فنی است): `restarting` هنگام شروع و `ready` فقط پس از
+`status.ready` کودک جدید و ثبت tray. همین رویدادها برای restart خودکار
+(مرگ/خطای engine) هم ارسال می‌شوند تا tray وضعیت را حدس نزند. job restart در
+tray فقط پس از دیدن `restarting` و سپس `ready` موفق اعلام می‌شود؛ اگر رویداد
+نرسد، timeout و «unconfirmed» گزارش می‌شود، نه موفقیت. polling همان status
+فقط fallback تشخیصی است، نه جایگزین event. نوشتن رویدادها bounded/non-blocking
+است؛ tray کند یا مرده نباید supervisor را بلوکه کند و در صورت گم‌شدن رویداد،
+polling status و timeout همان مسیر تشخیصی‌اند. tray child مسیر socket را از
+`TrayOptions.Socket` (مشتق از `store.Paths.Socket`) می‌گیرد و برای عمل‌های
+مدیریتی همان `control.Client` را صدا می‌زند؛ هیچ فایل state/config را مستقیم
+نمی‌خواند یا نمی‌نویسد.
 
 **liveness و `already_running`.** singleton را `app.lock` تعیین می‌کند و
 readiness/owner را `app.owner`؛ هیچ‌کدام به `pid` تکیه نمی‌کنند. گرفتن موفق
@@ -1562,16 +1838,21 @@ supervisor نگه داشته می‌شود و در مسیر fail-closed پس ا�
 `service install` فقط lock همان data-dir را preflight می‌کند. `autostart` و
 `service` برای یک کاربر هم‌زمان فعال نمی‌شوند؛ اگر هر دو به‌صورت دستی وجود داشته
 باشند، `status` باید تعارض را گزارش کند و کاربر باید یکی را انتخاب/حذف کند.
-restart همیشه در سطح process است (tray child یا systemd)؛ restart درون‌process ممنوع
-می‌ماند. tray supervisor خروج غیرمنتظره child را با backoff و سقف (پیشنهاد: ۵ بار
+restart همیشه در سطح process است (tray child، supervisor به‌درخواست tray، یا
+systemd)؛ restart درون‌process ممنوع می‌ماند. tray supervisor خروج غیرمنتظره
+child را با backoff و سقف (پیشنهاد: ۵ بار
 در ۶۰ ثانیه) restart می‌کند؛ exitهای مستند 1/4/6/7/9/10 بدون restart گزارش
 می‌شوند و child متوقف می‌ماند. exit `1` خطای داخلی terminal است (نه retry) تا
 rollback نصب و سیاست restart با هم ناسازگار نشوند؛ systemd هم آن را در
-`RestartPreventExitStatus` دارد. پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن را خودکار
-restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان `run` پیش‌فرض
-را GUI+tray می‌کند و فرمان `gui` جدا ندارد. ورودی hint منوی tray فقط
-`routelatch desktop proxy restore` را پیشنهاد می‌دهد (notification) و هیچ تنظیم
-دسکتاپ یا state را تغییر نمی‌دهد؛ restore خودکار یا مخفی وجود ندارد.
+`RestartPreventExitStatus` دارد. پروکسی دسکتاپ همچنان opt-in است و توقف/Quit اپ آن
+را خودکار restore نمی‌کند؛ tray باید هشدار/پیشنهاد restore بدهد. GUI آینده همان
+`run` پیش‌فرض را GUI+tray می‌کند و فرمان `gui` جدا ندارد. **در وضعیت فعلی (تا
+R15-H)** ورودی hint منوی tray فقط `routelatch desktop proxy restore` را پیشنهاد
+می‌دهد (notification) و هیچ تنظیم دسکتاپ یا state را تغییر نمی‌دهد؛ restore خودکار
+یا مخفی وجود ندارد. **R15 (D28، تعریف‌شده و پیاده‌نشده)** این hint را با
+actionهای واقعی `Set/Re-apply` و `Restore` (هر دو با تأیید دو مرحله‌ای) و
+Quit با گزینه‌های `Restore and quit`/`Keep` جایگزین می‌کند؛ Quit همچنان
+خودکار restore نمی‌کند.
 
 **Migration از unit فعلی.** قبل از upgrade، unit قدیمی
 `systemctl --user disable --now routelatch.service` می‌شود. برای نصب tarball،

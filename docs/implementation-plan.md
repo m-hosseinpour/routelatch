@@ -186,7 +186,11 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 3. **Android:** `VpnService`/foreground/per-app/protect/socket، VPN coexistence limits،
    یک Go runtime در artifact، policy مشترک و GUI بومی یا چندسکویی پس از تصمیم.
 4. **GUI:** مصرف management contract مشترک؛ انتخاب framework و سرمایه‌گذاری TUI
-   خارج از نسخهٔ اول و نیازمند تصمیم جدید است.
+   خارج از نسخهٔ اول و نیازمند تصمیم جدید است. **R15 سطح کنترل tray است، نه GUI؛**
+   آن milestone جدا باقی می‌ماند و تصمیم D28 دامنهٔ GUI را باز نمی‌کند.
+
+R15 (سطح کنترل tray) یک capability پس از v1 است که در بخش
+[کارهای باز](#open-work) تعریف شده و جزو این چهار milestone آینده نیست.
 
 ## پوشش پذیرش و recovery
 
@@ -199,6 +203,7 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 | A08/A12 | T1/T3، DNS/HTTP/stream/UDP boundaries در T7 |
 | A09 | T2–T6، private management، perms، terminal/log/secret checks در T7 |
 | A10/A11 | T5/T6، CLI/menu/launcher/desktop recovery در T7 |
+| A16 | R15، سطح کنترل tray: نگاشت actionها، confirmation، pagination، حالت unavailable/stopped، sanitize/D21، restart و Quit/restore؛ check نهایی در R15-H |
 | A14 | **مجوز/ممیزی/بسته (R3+R8):** Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابل‌انتشار است، و push مجاز است — ./release-readiness.md |
 
 دادهٔ dev ساخته‌شده برای بازبینی دستی حذف نشود. import قدیمی read-only؛ upgrade
@@ -214,6 +219,146 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 جداگانه تکرار نشود. هنگام شروع/پایان task، وضعیت، شاهد check و قدم بعدی اینجا
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ، خروجی عمومی و انتشار همیشه مجوز جدا می‌خواهند.
+
+### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0 انجام شد؛ R15-A..H شروع‌نشده)
+
+**وضعیت واحد (a): R15-0 انجام شد؛ R15-A..H شروع‌نشده.** تصمیم D28 و معیار A16
+ثبت شدند و طراحی در `docs/contracts.md §۷.۳`/`§۷.۵` و
+`docs/architecture.md §۷` آمده است. در این جلسه هیچ کد، تست، بسته، سرویس،
+autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد. HEAD هنگام تعریف `cff2884` و
+working tree پاک بود. commit تعریف این سند در پایان همین جلسه انجام می‌شود؛
+self-review پلن علیه چک‌لیست coverage/grounding/sequence/verification انجام شد و
+verdict برای کار رفع‌مانع **Ready for R15-A** است؛
+R15-B به نتیجهٔ دروازهٔ A وابسته است. R15 یک milestone **پس از v1** است و
+R1–R14/v1.0.1 را باز نمی‌کند؛ R14 بسته می‌ماند.
+
+**هدف و نتیجهٔ قابل مشاهده.** tray desktop از یک آیکن با چند آیتم ثابت به سطح
+کنترل runtime تبدیل می‌شود: status، mode (شامل stop/restart)، proposals،
+approved rules، pool، desktop proxy، diagnostics، backup، autostart toggle و
+quit. هر action به همان management op موجود یا پیام lifecycle supervisor نگاشت
+می‌شود؛ tray هیچ منطق مسیریابی/pool مستقل ندارد. عملیات نیازمند متن در CLI
+می‌مانند و یک آیتم `Terminal menu…` منوی کامل CLI را باز می‌کند.
+
+**تصمیم‌های کاربر (D28، ۲۰۲۶-۱۱-۲۵).**
+- عملیات متنی (add rule، add/import pool، diagnose، `config set`، restore بکاپ)
+  در CLI/`Terminal menu` می‌مانند؛ دیالوگ `kdialog`/`zenity` یا ورودی متن در tray
+  اضافه نمی‌شود.
+- زبان منو و notification **English** است؛ i18n خارج از این milestone است.
+- کنترل کامل runtime با تأیید دو مرحله‌ای، شامل حذف rule/exit، clear proposals،
+  restore پروکسی دسکتاپ، `Stop listening` و `Restart engine` سطح process.
+- pool/rules گروه‌بندی و صفحه‌بندی می‌شوند (۲۰–۲۵ آیتم در هر صفحه).
+- مدیریت service/systemd، restore بکاپ دلخواه، diagnose متنی و GUI کامل خارج از
+  دامنه‌اند. D21/D26 و invariantهای مسیر/pool تغییر نمی‌کنند.
+
+**مرز و واقعیت‌های پایه (بررسی ۲۰۲۶-۱۱-۲۵).**
+- tray فعلی در `internal/app/tray.go` فقط Quit، نمایش log path و راهنمای restore
+  پروکسی دسکتاپ را دارد؛ هیچ `control.Client` ندارد و فقط pipe
+  `quit`/`lost`/`error` به supervisor دارد. پیام `restart-engine` در R15-C
+  اضافه می‌شود، نه بخشی از وضعیت فعلی.
+- همهٔ عملیات لازم از قبل وجود دارند: `status`، `mode`، `rules.*`، `pool.*`،
+  `proposals.*`، `desktop.*`، `backup`، `doctor` و `autostart` محلی. **op جدید
+  management لازم نیست.** `pool test` سقف `MaxPoolTestExits=20` دارد و proposals
+  فقط در حافظهٔ process هستند (D21).
+- `deedles.dev/tray v0.2.0` زیرمنو، separator، radio/checkmark،
+  visible/enabled، تغییر label و add/remove آیتم را از source دارد؛ R13-A
+  registration/menu click/notification را روی Plasma 6.6.7 اثبات کرد، ولی
+  زیرمنوی تودرتو، toggle و به‌روزرسانی زندهٔ منو **آزمون‌نشده**اند.
+- مسیرهای canonical instance و socket همان §۷.۵ هستند؛ tray باید socket را از
+  `store.Paths.Socket` بگیرد و از همان peer check same-uid استفاده کند.
+- `status` در stopped معتبر است؛ ترک stopped در همان process ممنوع است و
+  restart سطح process لازم دارد (R-4). R15-B0 یک فیلد additive
+  `resume_requires_restart` اضافه می‌کند تا tray (و CLI) بین stopped-by-process
+  و process تازه‌ای که در stopped بالا آمده فرق بگذارند؛ بدون آن، وضعیت با
+  restart خود tray گم می‌شود. این حالت در UI باید صریح و قابل‌بازیابی باشد.
+- toolchain همان Go **1.27.4** pin‌شده در `go.mod` است. در این محیط `go` در
+  `PATH` نیست؛ روش R13-A (toolchain module zip تأییدشده زیر `/tmp/opencode`،
+  `GOTOOLCHAIN=local`) مرجع است. نصب system-wide Go بدون مجوز لازم نیست.
+
+**قرارداد.** درخت منو، جدول actionها، تأیید دو مرحله‌ای، job/refresh، حالت
+stopped، Quit/پروکسی دسکتاپ، Terminal menu و امنیت خروجی در
+[`contracts.md`](contracts.md) §۷.۳ آمده‌اند. پیام `restart-engine` و
+transitionهای supervisor در [`contracts.md`](contracts.md) §۷.۵ هستند. خلاصهٔ
+منو:
+
+```text
+Status · Mode · Proposals · Approved rules · Pool · Desktop proxy
+Diagnostics · Data · Settings · Advanced · Last action · Quit
+```
+
+**دامنهٔ پیشنهادی فایل‌ها.** R15-B0 در `internal/control/ops_status.go` و
+تست‌های status؛ R15-B/D1 در بستهٔ جدید `internal/trayui` (model/controller/
+runner، مسیر پیشنهادی)؛ R15-C در `internal/app/supervisor.go` و تست‌های موجود
+`internal/app/app_test.go`/`integration_test.go` (یا فایل جدید)؛ R15-D2 در
+`internal/app/tray.go`/`tray_menu.go` و
+`cmd/routelatch/run.go` برای `TrayOptions`؛ R15-E..G2 در فایل‌های domain همان
+`internal/trayui` و تست‌هایشان. مسیرهای جدید پیشنهادی‌اند و پس از R15-A/B
+تثبیت می‌شوند؛ تغییر هم‌زمان فایل‌های مشترک منو/supervisor بین workerها ممنوع
+است.
+
+**کارها.**
+
+| ID | task | نتیجه | وابستگی | check اصلی |
+| --- | --- | --- | --- | --- |
+| R15-0 | **ثبت و بازبینی پلن — انجام شد (۲۰۲۶-۱۱-۲۵)** | D28/A16/contracts/architecture/plan هم‌خوان و بدون ادعای پیاده‌سازی؛ مسیرها/opها/رفتارها با کد فعلی سنجیده شدند؛ self-review پلن شکاف مادی نداشت و verdict برای R15-A **Ready** است | — | `git diff --check`؛ لینک‌های سند؛ grep برای ادعای کهنه؛ بازبینی با پرسش‌های coverage/grounding/sequence/verification؛ commit مستندات |
+| R15-A | **spike قابلیت‌های منوی tray** | شاهد واقعی برای زیرمنوی تودرتو، separator، radio/checkmark، visible/enabled، add/remove/relabel زنده، صفحهٔ ۲۰–۲۵ آیتمی و label بلند/Unicode روی Plasma 6.6.7؛ رفتار `AboutToShow`/`Opened`/click، زمان `GetLayout`/`Event` و محدودیت host ثبت شود؛ اگر قابلیت لازم شکست خورد، fallback/تصمیم با کاربر باز شود | R15-0 | توسعهٔ `spike/tray` با یک prototype منو؛ build static چهار معماری؛ `dbus-run-session` + fake watcher برای offline؛ KDE gated با `scripts/kde-evidence.sh`؛ `GetLayout`/`Event`/`SetProps` در `evidence/`؛ ثبت در یک فایل تاریخ‌دار جدید مثل `spike/tray/MENU-FINDINGS.md` (بدون بازنویسی snapshot R13-A) و snapshot در `research.md`؛ هیچ کد محصول |
+| R15-B0 | **`status.resume_requires_restart`** | فیلد additive در `StatusData`: فقط وقتی true که همین process وارد stopped شده؛ process تازه false؛ هشدار `status` هم متفاوت؛ schema_version بدون تغییر؛ نبود فیلد در JSON قدیمی در مشتری «unknown» می‌ماند | R15-A | تست control برای stopped-by-process، process تازه در stopped و targeted؛ JSON additive؛ هشدار درست؛ decode JSON بدون فیلد؛ سازگاری مشتری قدیمی؛ `go test ./internal/control/...` |
+| R15-B | **controller/model در `internal/trayui` (مسیر پیشنهادی)** | snapshot تایپ‌شده از status/rules/pool/proposals/desktop/autostart؛ درخت منوی deterministic؛ enum بستهٔ actionها و نگاشت به `control.Request`؛ interfaceهای `Caller` (control.Client)، `Lifecycle` (quit/restart + رویداد `restarting`/`ready`) و `Notifier` برای جداکردن app؛ pending confirmation؛ یک job؛ refresh با fingerprint؛ حالت engine-unavailable/restarting/stopped با `resume_requires_restart`؛ sanitize/truncate؛ بدون DBus | R15-A/B0 | تست با fake caller و control server در-process؛ جدول کامل actionها؛ sequence رویداد restart؛ pending expiry/replacement/cancel؛ **error envelope با `OK=false` (نه فقط error transport)**؛ fixture ۱۷۶ pool و ۱۱۷ rule؛ page clamp؛ label مخرب ESC/CR/bidi؛ no duplicate request؛ `go test -race`؛ `go vet`؛ بدون dependency جدید |
+| R15-C | **restart engine در supervisor** | پیام `restart-engine` از tray؛ کانال کنترل دوطرفه برای رویدادهای `restarting`/`ready` (socketpair یا pipe دوم)؛ نوشتن `starting`، teardown/restart child، انتظار `status.ready`، بررسی ثبت tray و نوشتن `ready`؛ شکست fail-closed/exit مستند؛ restart دستی از budget خودکار مصرف نکند؛ quit حین restart سریال شود | R15-B | تست‌های supervisor با fake child/tray: success، quit در حین restart، شکست child، tray گم‌شده، marker transition، stopped؛ **نبود موفقیت کاذب با `ready` کهنهٔ engine قبلی**؛ timeout/رویداد گم‌شده → unconfirmed؛ هیچ restart درون‌process؛ full tests؛ بازبینی مستقل با محور lifecycle/teardown |
+| R15-D1 | **binder/runner با backend ساختگی** | diff/apply درخت منو با key پایدار، handlerها، add/remove/relabel، icon/tooltip، snapshot اولیه، polling، restarting/unavailable، shutdown تمیز؛ بدون DBus | R15-B/C | recording sink؛ apply دوباره idempotent؛ تغییر ترتیب/حذف؛ event/click؛ handler غیرمسدودکننده؛ fake clock؛ race؛ نبود fd/goroutine leak |
+| R15-D2 | **اتصال واقعی tray و actionهای هسته** | `TrayOptions.Socket`/`DataDir` از `store.Paths`؛ adapter واقعی deedles؛ کانال event واقعی supervisor؛ status header، mode (شامل stop/restart)، Advanced، Last action و Quit پایه؛ icon/tooltip وضعیت؛ readiness/registration؛ KDE gated | R15-D1 | KDE واقعی: `GetLayout` و `Event` برای mode/stop/restart/quit؛ هم‌گامی radio؛ restart فقط با event `ready`؛ tray restart generation؛ app readiness؛ بدون fd leak؛ build static؛ هیچ تنظیم میزبان تغییر نکند |
+| R15-E | **pool** | زیرمنوی pool با summary، auto/pin، گروه‌های healthy/untested/cooling/unsupported، صفحه‌بندی، remove با تأیید، refresh/test/rerank به‌صورت job، سقف ۲۰ تست و disabledهای درست | R15-D2 | fixture ۱۷۶ رکورد و صفحه‌ها؛ گروه/شمارنده؛ test فقط ۲۰؛ select/remove؛ job تکراری ممنوع؛ cooling/unsupported؛ رکورد legacy با status unknown ولی غیرقابل‌dial → خطای روشن سرویس، نه ادعای usable؛ notification sanitize؛ race |
+| R15-F | **rules + proposals** | rules صفحه‌بندی/remove با تأیید؛ proposals pending/decided/expired؛ accept/reject/recheck/clear؛ unroute accept با تأیید؛ نام مقصد فقط نمای زندهٔ حافظه | R15-D2 (پس از E در ترتیب پیش‌فرض) | fixture ۱۱۷ rule؛ accept route/unroute؛ reject/recheck/clear؛ label مخرب؛ D21 scan؛ race |
+| R15-G1 | **desktop/diagnostics/data/settings** | desktop status/set/restore با تأیید و conflict/user_modified؛ doctor/warnings/env/log path؛ backup؛ autostart toggle؛ config/data path | R15-D2/E/F | fake desktop/autostart؛ set/restore confirmation؛ custom data-dir؛ D21؛ race |
+| R15-G2 | **Terminal menu و Quit** | Terminal menu allowlist با argv صریح و entry pointهای `Advanced`/`Rules`/`Pool`؛ Quit با restore/keep، هشدار desktop applied و خطاهای restore؛ Last action نهایی | R15-G1 | fake terminal در PATH؛ quit بدون/با desktop؛ شکست restore؛ job در حال اجرا؛ D21؛ race؛ بازبینی مستقل کل سطح action |
+| R15-H | **acceptance/docs/review/release gate** | A16 روی data-dir ایزوله و KDE واقعی؛ README/contracts/architecture/plan به‌روز؛ full tests/race/build/package؛ verdict بازبین؛ push؛ تصمیم release جدا | R15-B0–G2 | `gofmt`/`go vet`/`go build`؛ `go test -count=1 ./...`؛ `-race` روی trayui/app/control؛ build چهار معماری؛ `check-artifact.sh`/`check-package.sh`؛ KDE gated؛ D21 scan شامل log/state/config/backup و notification body با `dbus-monitor`؛ no-secret scan؛ CI سبز پس از push؛ release فقط با مجوز |
+
+**ترتیب و دروازه‌ها.** R15-0 → R15-A (دروازهٔ فنی) → R15-B0 → R15-B → R15-C →
+R15-D1 → R15-D2 → R15-E → R15-F → R15-G1 → R15-G2 → R15-H. R15-A باید
+مشخص کند تغییرات زنده در همان منوی باز دیده می‌شوند یا فقط در `GetLayout`
+بعدی؛ اگر فقط دومی، refresh روی بازشدن دوباره fallback پذیرفته است و actionها
+عوض نمی‌شوند. اگر R15-A یک قابلیت لازم را رد کرد،
+قبل از B با کاربر تصمیم بگیر؛ fallback بی‌صدا یا حذف یک action بدون ثبت تصمیم
+ممنوع است. E و F فقط وقتی می‌توانند موازی شوند که D2 رابط‌های مشترک را freeze
+کرده و مالکیت فایل‌ها جدا باشد؛ پیش‌فرض، ترتیب است. بازبینی مستقل پس از C
+(controller + restart) و پس از G2 (کل سطح action) و verdict نهایی در H انجام
+می‌شود؛ هر دور بعدی فقط یافته‌های باز و اثر رفع‌ها را بررسی می‌کند.
+
+**اجرا با orchestrator.** هر session با `AGENTS.md`، همین بخش، D28/A16 و
+`contracts.md §۷.۳/§۷.۵` شروع می‌شود. orchestrator وضعیت `git status`/HEAD و
+آخرین checkها را با رکورد مقایسه می‌کند، یک task رفع‌مانع را انتخاب می‌کند و به
+worker یک brief خودکفا می‌دهد: هدف، مرز، تصمیم‌های بسته، فایل‌های مالکیت،
+checkهای مورد انتظار و ممنوعیت تغییرات نامرتبط. worker پس از هر تغییر تست‌های
+مربوط را اجرا می‌کند؛ orchestrator نتیجه را می‌سنجد، ردیف R15 را با شاهد واقعی
+به‌روز می‌کند و تغییر منسجم را commit می‌کند. push پس از batch تأییدشده طبق
+`AGENTS.md` است؛ tag/release جزو R15 نیست و مجوز جدا می‌خواهد. اگر worker به
+تصمیم کاربر رسید، سؤال را به کاربر می‌رساند و gate را ضعیف نمی‌کند. هیچ worker
+نباید هم‌زمان با دیگری روی فایل‌های مشترک منو/supervisor کار کند.
+
+**پذیرش (A16).** R15-B0..G2 باید هر ردیف A16 را پوشش دهند: نگاشت کامل actionها،
+تأیید دو مرحله‌ای، صفحه‌بندی، حالت‌های unavailable/stopped، sanitize، عدم
+مقصد/URL در log/notification، Quit/restore و restart. A10/A15 و رفتار v1
+باید رگرسیون‌نشده بمانند؛ D21 با یک مقصد یکتا در proposal و سپس grep
+log/state/config/backup بررسی می‌شود. ادعای «menu روی KDE کار می‌کند» فقط با
+شاهد D-Bus/بصری ثبت‌شده معتبر است. KDE gated برای منو و actionهای
+غیرمیزبانی است؛ `desktop proxy set/restore` واقعی فقط با مجوز جدا و در محیط
+ایزوله اجرا می‌شود و در آزمون پیش‌فرض نیست.
+
+**ریسک‌ها و مجوز.** (۱) رفتار host در update زنده/زیرمنو ممکن است با source
+فرق کند؛ R15-A آن را می‌بندد. (۲) restart supervisor مسیر lifecycle حساس است؛
+تست/بازبینی مستقل لازم دارد. (۳) حالت stopped و بازگشت آن نیازمند state machine
+صریح در tray است. (۴) notification rate limit در Plasma دیده شده؛ notification
+ها باید coalesce شوند. (۵) ترمینال ممکن است نصب نباشد؛ fallback دستور دستی
+لازم است. (۶) autostart محلی wiring از `cmd` می‌خواهد؛ نباید به سرویس/state
+دوم تبدیل شود. (۷) GNOME/سایر DEها همچنان آزمون‌نشده‌اند. (۸) `pool test`
+فقط ۲۰ exit و بدون progress است؛ UI نباید بیشتر ادعا کند. (۹) jobها با
+restart/unavailable قطع می‌شوند و پیام «interrupted» لازم دارند. (۱۰) i18n
+خارج از دامنه است. **مجاز:** کد/تست/build محلی و commit مستندات. **نیازمند
+مجوز جدا:** اجرای tray روی KDE واقعی با data-dir ایزوله (می‌تواند یک آیتم tray
+و listener موقت بسازد؛ هیچ تنظیم دسکتاپ تغییر نکند)، تغییر واقعی پروکسی دسکتاپ،
+نصب/فعال‌سازی autostart/service، و tag/release.
+
+**قدم بعد.** R15-0 بسته شد؛ R15-A اولین task است. تا زمانی که R15-A شاهد
+منو/زیرمنو/تغییر زنده را ثبت نکند، R15-B و بعد از آن «آماده» شمرده نمی‌شوند.
 
 ### R14 — ساخت و انتشار ریلیز در GitHub Actions (تعریف ۲۰۲۶-۱۱-۲۴؛ انجام و بسته ۲۰۲۶-۱۱-۲۵)
 
@@ -554,6 +699,16 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 
 ### وضعیت فعلی
 
+- **R15 — R15-0 انجام شد (۲۰۲۶-۱۱-۲۵، این جلسه):** سطح کنترل tray با D28/A16
+  و قرارداد `contracts.md §۷.۳/§۷.۵` تعریف شد: کلاینت نازک روی management
+  socket، منوی grouped/paginated، confirmation دو مرحله‌ای، jobهای async،
+  status/mode/proposals/rules/pool/desktop/diagnostics/backup/autostart/quit،
+  `Terminal menu` برای عملیات متنی و `restart-engine` سطح process. **هیچ کد،
+  تست، بسته، سرویس، autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد.**
+  HEAD هنگام تعریف `cff2884` بود و working tree پاک. self-review پلن انجام شد
+  و verdict برای R15-A **Ready** است. R15 پس از v1 است؛ R1–R14/v1.0.1 باز
+  نمی‌شوند. قدم بعد R15-A (spike منو) است.
+
 - **R14 — واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴، ارکستریتور):** مسیر انتشار D27 در
   `.github/workflows/release.yml` پیاده شد: تگ annotated `v*` (یا branch دائمی
   `release-dryrun` برای dry-run) چهار tarball، چهار `.deb`، چهار spec، چهار RPM
@@ -817,13 +972,14 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
 | R14 | **انجام شد (۲۰۲۶-۱۱-۲۵؛ اولین ریلیز ساخته‌شده در CI):** `.github/workflows/release.yml` روی تگ annotated `v*` هر ۱۷ دارایی را در CI می‌سازد/تأیید می‌کند و draft→verify→public منتشر می‌کند؛ dry-runهای سبز `45397329232`/`45400769014`/`45422318159`/`45463989732` و شکست کنترل‌شدهٔ `45399453678` در واحد (a) ثبت‌اند. تلاش‌های ۱ و ۲ در gate annotated شکست خوردند و تلاش سوم draft ساخت ولی verify با endpoint تگ برای draft (404) شکست خورد؛ رفع idمحور/یادداشت‌ها در `d14da10` بازبینی مستقل **Ready with findings** (بدون یافتهٔ مسدودکننده) شد. draft `457460945` با مجوز کاربر حذف و نبود Release/draft با listing احرازشده تأیید شد؛ تگ تازه `v1.0.1` (شیء `4462cc86`) روی `d14da10` با CI سبز `45517940277` و `Release` `45521099138` (job انتشار `138895476159`) منتشر شد: Release عمومی `v1.0.1` (id `457516096`) با ۱۷ دارایی، digests منطبق با `SHA256SUMS` و body برابر پیام تگ. **محدودیت‌های شناخته‌شده:** پنجرهٔ create→id می‌تواند draft یتیم بگذارد؛ `check` صفحه‌بندی را با `per_page=100` فرض می‌کند؛ مسیر fail/cleanup فقط stub شده؛ `workflow_dispatch` اجرا نشده؛ flakiness گاه‌به‌گاه step `Test` مشاهده شد. | A14 (انتشار) | مجوز صریح ۲۰۲۶-۱۱-۲۵ |
+| R15 | **R15-0 انجام شد؛ R15-A..H شروع‌نشده (۲۰۲۶-۱۱-۲۵):** سطح کنترل tray (D28/A16) با منوی کامل runtime، confirmation دو مرحله‌ای، job/refresh، `restart-engine` سطح process، `Terminal menu` و صفحه‌بندی pool/rules؛ طراحی در `contracts.md §۷.۳/§۷.۵` و تسک‌های R15-0..H در بخش R15. هیچ کد/تست/سرویس/تنظیم میزبان تغییر نکرد. | A16 | R15-A؛ KDE واقعی و release مجوز جدا |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v1.0.1` | **انجام شد — اولین ریلیز ساخته‌شده در CI (۲۰۲۶-۱۱-۲۵):** تگ annotated `4462cc86` روی `d14da10` (هر دو remote)؛ CI سبز `45517940277`؛ `Release` `45521099138` (job انتشار `138895476159`)؛ Release عمومی id `457516096` با ۱۷ دارایی نسخه‌درست، digests منطبق با `SHA256SUMS` (sha256 خود فایل `3f683f70…dab7d8`) و body برابر پیام تگ؛ بدون ساخت/آپلود محلی | A14 (انتشار) | مجوز صریح کاربر ۲۰۲۶-۱۱-۲۵ |
 
-**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0` و `v1.0.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.**
+**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0` و `v1.0.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0 انجام شده و R15-A..H شروع‌نشده‌اند. بازبودن آن «کار باز v1» نیست و release آن تصمیم جدا می‌خواهد.
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -1055,10 +1211,13 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 
 ### نقطهٔ شروع جلسهٔ بعد
 
-1. `AGENTS.md` و همین بخش (مخصوصاً R14) را بخوان؛ `git status` و
-   `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛ تغییر/دادهٔ کاربر را حفظ کن.
+1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای کار بعدی و R14 برای تاریخ انتشار) را
+   بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
+   تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۵): **`v1.0.1` آخرین ریلیز عمومی است و R1–R14 بسته‌اند؛
-   هیچ کار باز v1 نمانده است.** `v1.0.1` اولین ریلیز ساخته‌شده در CI است: تگ
+   هیچ کار باز v1 نمانده است.** R15 (سطح کنترل tray) در همین تاریخ تعریف شد؛
+   R15-0 (ثبت/بازبینی پلن) انجام شده و R15-A..H شروع‌نشده‌اند؛ قدم بعد R15-A
+   است. `v1.0.1` اولین ریلیز ساخته‌شده در CI است: تگ
    annotated `4462cc86` روی `d14da10` (هر دو remote)، CI سبز `45517940277`،
    `Release` `45521099138` (job انتشار `138895476159`) و Release عمومی با ۱۷
    دارایی‌ و digests منطبق. پیش از آن سه تلاش و یک دور رفع ثبت شد (gate
@@ -1084,7 +1243,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 6. شواهد را از `docs/contracts.md`، `packaging/README.md` و اجرای واقعی CI
    بردار، نه از حافظه؛ اگر رفتار GitHub Actions یا محدودیت runner با فرض‌ها فرق
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
-7. پایان هر task: ردیف R14، HEAD، checks واقعی و قدم بعدی را همین‌جا به‌روز کن.
+7. پایان هر task: ردیف R15 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
+   قدم بعدی را همین‌جا به‌روز کن. R15-A تا ثبت شاهد منو/زیرمنو/تغییر زنده،
+   R15-B را «آماده» نمی‌کند؛ release R15 هم مجوز جدا می‌خواهد.
 
 ### مسائل و حدود مجوز
 
@@ -1108,6 +1269,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
   batchی است که چیزی را که کاربر دریافت می‌کند تغییر می‌دهد (رفتار، قابلیت، بسته‌بندی،
   امنیت یا قرارداد کاربرمحور)؛ batch فقط‌مستند/شاهد push می‌شود و ریلیز نمی‌شود. هر
   انتشار همان دروازه‌های انتشار را دارد.
+- **R15 و میزبان (۲۰۲۶-۱۱-۲۵):** کد/تست/build/commit محلی مجاز است. اجرای tray
+  واقعی روی KDE با data-dir ایزوله (که یک آیتم tray و listener موقت می‌سازد) و
+  تغییر واقعی پروکسی دسکتاپ، نصب/فعال‌سازی autostart/service و release مجوز جدا
+  می‌خواهند. آزمون KDE نباید تنظیم میزبان را تغییر دهد؛ `desktop proxy set/restore`
+  واقعی فقط با مجوز صریح و ترجیحاً در محیط ایزوله. D21 در کل R15 برقرار است.
 - **تصمیم‌های کاربر برای گروه ج (۲۰۲۶-۱۱-۲۱، به‌روزشده ۲۰۲۶-۱۱-۲۲):** pool کاربر یک اشتراک
   **پرداختی و نیمه‌خصوصی** است و pool خصوصی وجود ندارد؛ استفادهٔ **فقط‌خواندنی** مجاز
   است. **بخش ۱:** حداکثر یک transport probe به‌ازای هر عضو pool، **هیچ ترافیک مقصدی**،

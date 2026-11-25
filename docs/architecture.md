@@ -8,8 +8,9 @@
 ## ۱. مرز مسئولیت‌ها
 
 ```text
-CLI / منوی huh / GUI آینده
+CLI / منوی huh / tray control surface / GUI آینده
             │ management Unix socket + JSON (0600، SO_PEERCRED)
+            │ (tray فقط برای quit/restart پیام lifecycle به supervisor می‌دهد)
             ▼
 سرویس Go ── policy/state ── pool و probe ── پیشنهادها و شواهد
     │            ▲
@@ -148,7 +149,8 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 > **وضعیت:** این بخش مدل اجرای تصمیم‌شده در D26 (۲۰۲۶-۱۱-۲۳) را توصیف می‌کند.
 > R13 در درخت کامل شده است (R13-F verdict **Ready**) و `v1.0.0` منتشر شده
 > است؛ بسته‌های `v0.1.3` و پیش از آن همان unit و `run` foreground را دارند.
-> README/INSTALL/SERVICE در R13-E به‌روز شدند.
+> README/INSTALL/SERVICE در R13-E به‌روز شدند. R15 (D28) در همین بخش طراحی
+> شده و **هنوز پیاده نشده است**؛ تا پایان آن، رفتار tray همان سه آیتم فعلی است.
 
 - Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child
@@ -195,13 +197,37 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   child/tray می‌ماند و پیش از خروج آزاد می‌شود. engine child lockها را با
   `CLOEXEC` به ارث نمی‌برد. Quit یا مرگ supervisor باید child را متوقف/reap کند (parent-death یا
   watchdog) تا listener/management یتیم نماند. restart فقط با جایگزینی process انجام
-  می‌شود (tray child یا systemd)؛ restart درون‌process ممنوع می‌ماند (R-4). بستن
+  می‌شود (tray child، supervisor به‌درخواست tray، یا systemd)؛ restart
+  درون‌process ممنوع می‌ماند (R-4). بستن
   ترمینال پس از readiness پروسهٔ detached را متوقف نمی‌کند.
 - tray با StatusNotifierItem/D-Bus و کتابخانهٔ pure Go هدف‌گذاری می‌شود تا
   `CGO_ENABLED=0` حفظ شود. GNOME بدون extension و SSH/بدون display tray ندارند؛
   `run` پیش‌فرض در این محیط‌ها با پیام روشن fail می‌شود و `--headless` پیشنهاد
   می‌دهد؛ fallback بی‌صدا وجود ندارد. KDE مسیر آزمون اولیه است؛ سایر DEها تا آزمون
   واقعی ادعا نمی‌شوند.
+- **سطح کنترل tray (D28؛ تعریف‌شده، پیاده‌نشده).** tray child یک کلاینت نازک
+  روی همان management socket است، نه یک لایهٔ منطق دوم:
+  status/mode/rules/pool/proposals/desktop/backup/doctor
+  را با همان `control.Request`های موجود می‌خواند و تغییر می‌دهد. فقط `quit` و
+  `restart-engine` از pipe به supervisor می‌روند، چون lifecycle اپ را engine
+  مدیریت نمی‌کند. tray هیچ فایل state را مستقیم نمی‌خواند/نمی‌نویسد، listener
+  جدید باز نمی‌کند و سرویس/systemd را مدیریت نمی‌کند. منطق منو در یک بستهٔ pure-Go
+  و testable (`internal/trayui`، مسیر پیشنهادی) از binding D-Bus جدا می‌شود؛
+  GUI آینده می‌تواند از همان management contract استفاده کند، نه از داخلی‌های tray.
+  actionهای طولانی asynchronous‌اند و handler D-Bus را بلوکه نمی‌کنند؛ عمل مخرب
+  با یک pending confirmation دو مرحله‌ای اجرا می‌شود. labelها از همان
+  `SanitizeTerminal` می‌گذرند و notification/log هیچ مقصد/URL/credentialی ندارد
+  (D21). عملیات نیازمند متن در CLI/`Terminal menu` می‌مانند. جزئیات درخت منو،
+  refresh و حالت‌ها در `contracts.md §۷.۳` است. این تصمیم GUI کامل نیست (D24).
+- **restart سطح process.** درخواست `Restart engine` از tray فقط یک پیام
+  `restart-engine` به supervisor است. supervisor پیش از توقف child `starting`
+  می‌نویسد، engine را با همان مسیر `run --headless` جایگزین می‌کند و `ready` را
+  فقط پس از `status.ready` کودک جدید و ثبت tray می‌نویسد؛ شکست مانند مسیرهای
+  fail-closed موجود متوقف می‌شود. restart درون‌process و تغییر mode در supervisor
+  ممنوع می‌ماند. restart دستی از سقف restart خودکار خرابی مصرف نمی‌کند و tray
+  درخواست‌ها را سریال می‌کند. حالت stopped پس از restart در process تازه با
+  انتخاب mode قابل ترک است؛ tray این انتقال را صریح نشان می‌دهد و actionهای
+  نامعتبر را غیرفعال می‌کند.
 - شروع در login با XDG autostart است، نه unit: `routelatch autostart enable` یک فایل
   `$XDG_CONFIG_HOME/autostart/routelatch.desktop` (fallback `~/.config/autostart`)
   با `Exec=<absolute> run` می‌سازد؛ پیش از نوشتن/اعلام idempotent، tray host و
