@@ -1209,7 +1209,7 @@ restore ناامن)، `7` پلتفرم/ویژگی خارج v1، `8` timeout، `9
 جدا داشته باشد: «Start app (tray)» → `run` و «Start headless (foreground)» →
 `run --headless`؛ نگاشت قدیمی «Start the service» → `run` کافی نیست (A10/A15).
 
-**سطح کنترل tray (D28، ۲۰۲۶-۱۱-۲۵؛ تعریف‌شده و پیاده‌نشده).** tray child یک
+**سطح کنترل tray (D28، ۲۰۲۶-۱۱-۲۵؛ controller/model در R15-B پیاده‌شده و اتصال واقعی tray در R15-D2).** tray child یک
 کلاینت نازک روی همان management socket است و هیچ منطق مسیریابی، pool، rule،
 policy یا state ندارد:
 
@@ -1466,9 +1466,10 @@ extension/SSH همچنان tray ندارد و رفتار D26 تغییر نمی�
 این بخش قرارداد مدل اجرای تصمیم‌شده در D26 است. R13 در درخت کامل شده است
 (R13-F verdict **Ready**) و `v1.0.0` همین مدل را منتشر کرده است؛ بسته‌های
 `v0.1.3` و پیش از آن همان `run` foreground و unit قدیمی را دارند. **R15 (D28)**
-یک افزونهٔ تعریف‌شده و پیاده‌نشده برای کنترل tray و restart سطح process است که
-پاراگراف‌های `restart` و کانال کنترل دوطرفه را در همین بخش اضافه می‌کند؛ تا
-پایان R15 رفتار فعلی (hint/سه آیتم) معتبر است.
+افزونهٔ کنترل tray و restart سطح process است؛ R15-A..C (اسپایک منو،
+controller/model و restart در supervisor) پیاده شده‌اند، ولی اتصال واقعی tray
+(R15-D2) و دامنه‌های بعدی باقی‌اند؛ تا آن زمان رفتار فعلی (hint/سه آیتم) برای
+کاربر معتبر است.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق
@@ -1548,7 +1549,7 @@ singleton است و `run` جدید ابتدا همان را می‌بیند، پ
 `app.owner` آزاد هم فقط `6` می‌گیرد. بنابراین حتی اگر نوشتن `stopping` شکست
 بخورد، stale `ready` بدون owner lock باقی می‌ماند و `run` بعدی `6` می‌گیرد.
 
-**restart سطح process از tray (تعریف‌شده، پیاده‌نشده).** tray برای
+**restart سطح process از tray (مسیر supervisor در R15-C پیاده‌شده؛ اتصال واقعی tray در R15-D2).** tray برای
 `Restart engine` فقط پیام `restart-engine` را در pipe supervisor می‌نویسد؛ این یک lifecycle request است،
 نه management op. supervisor در پردازش آن همان ترتیب transition را نگه می‌دارد:
 `starting` نوشته می‌شود، engine child فعلی با bounded teardown متوقف می‌شود،
@@ -1854,7 +1855,7 @@ rollback نصب و سیاست restart با هم ناسازگار نشوند؛ sy
 `run` پیش‌فرض را GUI+tray می‌کند و فرمان `gui` جدا ندارد. **در وضعیت فعلی (تا
 R15-H)** ورودی hint منوی tray فقط `routelatch desktop proxy restore` را پیشنهاد
 می‌دهد (notification) و هیچ تنظیم دسکتاپ یا state را تغییر نمی‌دهد؛ restore خودکار
-یا مخفی وجود ندارد. **R15 (D28، تعریف‌شده و پیاده‌نشده)** این hint را با
+یا مخفی وجود ندارد. **R15 (D28؛ controller در R15-B پیاده‌شده، اتصال واقعی tray در R15-D2)** این hint را با
 actionهای واقعی `Set/Re-apply` و `Restore` (هر دو با تأیید دو مرحله‌ای) و
 Quit با گزینه‌های `Restore and quit`/`Keep` جایگزین می‌کند؛ Quit همچنان
 خودکار restore نمی‌کند.

@@ -567,7 +567,7 @@ func (c *Controller) quitMenuLocked() Node {
 			c.actionItem("quit.restore", "Restore desktop proxy and quit…", ActionQuitRestoreDesktop, Target{}),
 			c.actionItem("quit.keep", "Quit and keep desktop proxy… (internet may stay broken)", ActionQuitKeepDesktop, Target{}),
 		)
-		if c.snap.Desktop.Err {
+		if c.snap.Desktop.Err || !c.snap.Desktop.Known {
 			children = append(children, disabledItem("quit.warning", "Desktop proxy status is unknown; keeping it may leave the connection broken"))
 		} else if c.snap.Desktop.Applied {
 			children = append(children, disabledItem("quit.warning", "Desktop proxy stays applied if you keep it"))

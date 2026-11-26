@@ -362,6 +362,127 @@ func TestQuitDuringJobNeedsExtraConfirmation(t *testing.T) {
 	waitFor(t, "job after quit", func() bool { return s.ctl.View().Job == nil })
 }
 
+func TestStopAndRestartWarnAboutAppliedDesktopProxy(t *testing.T) {
+	fx := newFixture()
+	fx.desktop.Applied = true
+	s := newSetup(t, fx, nil)
+	ctx := context.Background()
+
+	for _, action := range []Action{ActionStopListening, ActionRestartEngine} {
+		res, err := s.ctl.Trigger(ctx, action, Target{})
+		if err != nil || res.Status != ResultConfirmationRequired {
+			t.Fatalf("%s trigger = %+v, %v", action, res, err)
+		}
+		p := s.ctl.View().Pending
+		if p == nil || p.Action != action {
+			t.Fatalf("%s pending = %+v", action, p)
+		}
+		if !strings.Contains(p.Label, "desktop proxy applied") {
+			t.Fatalf("%s label = %q, want the applied warning", action, p.Label)
+		}
+		if containsControl(p.Label) || runeLen(p.Label) > LabelLimit {
+			t.Fatalf("%s label is unsafe: %q", action, p.Label)
+		}
+		for _, leak := range []string{"http", "example", "://"} {
+			if strings.Contains(strings.ToLower(p.Label), leak) {
+				t.Fatalf("%s label leaked %q: %q", action, leak, p.Label)
+			}
+		}
+	}
+}
+
+func TestStopAndRestartHaveNoDesktopWarningWhenNotApplied(t *testing.T) {
+	s := newSetup(t, newFixture(), nil)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		action Action
+		want   string
+	}{
+		{ActionStopListening, "Stop listening"},
+		{ActionRestartEngine, "Restart engine"},
+	} {
+		if _, err := s.ctl.Trigger(ctx, tc.action, Target{}); err != nil {
+			t.Fatalf("%s trigger: %v", tc.action, err)
+		}
+		if p := s.ctl.View().Pending; p == nil || p.Label != tc.want {
+			t.Fatalf("%s label = %+v, want %q", tc.action, p, tc.want)
+		}
+	}
+}
+
+func TestStopAndRestartStayAvailableWhenDesktopReadFails(t *testing.T) {
+	s := newSetup(t, newFixture(), nil)
+	s.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
+	ctx := context.Background()
+	for _, action := range []Action{ActionStopListening, ActionRestartEngine} {
+		if _, err := s.ctl.Trigger(ctx, action, Target{}); err != nil {
+			t.Fatalf("%s must stay available on an unknown desktop state: %v", action, err)
+		}
+		p := s.ctl.View().Pending
+		if p == nil || !strings.Contains(p.Label, "unknown") {
+			t.Fatalf("%s pending = %+v, want the unknown warning", action, p)
+		}
+	}
+}
+
+func TestQuitUsesAFreshDesktopRead(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("not applied", func(t *testing.T) {
+		s := newSetup(t, newFixture(), nil)
+		res, err := s.ctl.Trigger(ctx, ActionQuit, Target{})
+		if err != nil || res.Status != ResultCompleted {
+			t.Fatalf("quit = %+v, %v", res, err)
+		}
+		if quits, _ := s.life.counts(); quits != 1 {
+			t.Fatalf("quit requests = %d, want 1", quits)
+		}
+	})
+
+	t.Run("applied after the snapshot", func(t *testing.T) {
+		s := newSetup(t, newFixture(), nil)
+		s.caller.setDesktop(control.DesktopData{Environment: "GNOME", Supported: true, Applied: true})
+		if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
+			t.Fatalf("plain Quit = %v, want ErrBlocked", err)
+		}
+		if quits, _ := s.life.counts(); quits != 0 {
+			t.Fatalf("quit ran with an applied proxy: %d", quits)
+		}
+		view := s.ctl.View()
+		if n, _ := findNode(view.Root, "quit.now"); n.Visible {
+			t.Fatal("plain Quit stayed visible")
+		}
+		for _, key := range []string{"quit.restore", "quit.keep"} {
+			if n, ok := findNode(view.Root, key); !ok || !n.Visible {
+				t.Fatalf("%q = %+v", key, n)
+			}
+		}
+		if n, _ := findNode(view.Root, "quit.warning"); !strings.Contains(n.Label, "applied") {
+			t.Fatalf("quit warning = %q", n.Label)
+		}
+	})
+
+	t.Run("unknown", func(t *testing.T) {
+		s := newSetup(t, newFixture(), nil)
+		s.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
+		if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
+			t.Fatalf("plain Quit = %v, want ErrBlocked", err)
+		}
+		view := s.ctl.View()
+		if n, _ := findNode(view.Root, "quit.now"); n.Visible {
+			t.Fatal("plain Quit stayed visible")
+		}
+		for _, key := range []string{"quit.restore", "quit.keep"} {
+			if n, ok := findNode(view.Root, key); !ok || !n.Visible {
+				t.Fatalf("%q = %+v", key, n)
+			}
+		}
+		if n, _ := findNode(view.Root, "quit.warning"); !strings.Contains(n.Label, "unknown") {
+			t.Fatalf("quit warning = %q", n.Label)
+		}
+	})
+}
+
 func TestQuitRestoreFailureDoesNotQuit(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()

@@ -484,7 +484,8 @@ func (c *Controller) RefreshLists(ctx context.Context) error {
 }
 
 // RefreshDesktop re-reads the expensive desktop-proxy status. It is called at
-// start, after an action and before Quit, not by the polling loop.
+// start, after an action and before a Stop/Restart/Quit confirmation, not by
+// the polling loop.
 func (c *Controller) RefreshDesktop(ctx context.Context) error {
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()

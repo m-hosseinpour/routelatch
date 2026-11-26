@@ -380,6 +380,12 @@ func (f *fixtureCaller) setFail(op string, kind contract.ErrorKind, msg string) 
 	f.mu.Unlock()
 }
 
+func (f *fixtureCaller) setDesktop(d control.DesktopData) {
+	f.mu.Lock()
+	f.fx.desktop = d
+	f.mu.Unlock()
+}
+
 func (f *fixtureCaller) gateOn(op string) (entered chan struct{}, release func()) {
 	gate := make(chan struct{})
 	entered = make(chan struct{}, 1)

@@ -33,7 +33,8 @@
 // there), RefreshAll at start, RefreshStatus every two seconds, RefreshLists
 // every fifteen seconds, RefreshCore immediately after an action and after a
 // LifecycleReady event, and RefreshDesktop/RefreshAutostart only at start,
-// after an action and before Quit. TerminalMenu is an action for the binder;
+// after an action and before a Stop/Restart/Quit confirmation. TerminalMenu is
+// an action for the binder;
 // this package does not start processes. The binder must log only Action
 // strings, never node labels or targets (D21).
 package trayui

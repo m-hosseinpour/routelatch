@@ -244,8 +244,18 @@ func TestInitialMenuIsMinimalAndDisabled(t *testing.T) {
 	if n, _ := findNode(view.Root, "status"); n.Label != "Loading…" {
 		t.Fatalf("status = %q", n.Label)
 	}
-	if n, _ := findNode(view.Root, "quit.now"); !n.Enabled {
-		t.Fatal("Quit must be usable before the first snapshot")
+	// Desktop state has never been read, so it is unknown rather than "not
+	// applied": a plain Quit could leave an applied proxy behind.
+	if n, _ := findNode(view.Root, "quit.now"); n.Visible || n.Enabled {
+		t.Fatalf("plain Quit offered before desktop state is known: %+v", n)
+	}
+	for _, key := range []string{"quit.restore", "quit.keep"} {
+		if n, ok := findNode(view.Root, key); !ok || !n.Visible {
+			t.Fatalf("%q = %+v", key, n)
+		}
+	}
+	if n, _ := findNode(view.Root, "quit.warning"); !strings.Contains(n.Label, "unknown") {
+		t.Fatalf("quit warning = %q", n.Label)
 	}
 }
 

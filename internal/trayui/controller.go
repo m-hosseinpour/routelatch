@@ -224,10 +224,30 @@ func (c *Controller) engineLocked() EngineState {
 	return c.snap.Engine
 }
 
+// needsFreshDesktopStatus reports whether a click must re-read desktop.status
+// before it builds a pending confirmation. Stop, Restart and Quit can cut or
+// leave behind an applied desktop proxy (§7.3), so a stale snapshot must not
+// hide that warning.
+func needsFreshDesktopStatus(a Action) bool {
+	switch a {
+	case ActionStopListening, ActionRestartEngine, ActionQuit:
+		return true
+	default:
+		return false
+	}
+}
+
 // Trigger is the click entry point. A destructive action creates or replaces
 // the single pending confirmation; Confirm executes exactly the stored action
 // and target. No label is ever parsed.
 func (c *Controller) Trigger(ctx context.Context, action Action, target Target) (Result, error) {
+	if needsFreshDesktopStatus(action) {
+		// The read is best effort and outside c.mu: a bounded management call
+		// must not block the menu lock, and a failed read becomes the visible
+		// unknown state instead of hiding the action.
+		_ = c.RefreshDesktop(ctx)
+	}
+
 	c.mu.Lock()
 	notes := c.expireLocked(c.opts.Now())
 

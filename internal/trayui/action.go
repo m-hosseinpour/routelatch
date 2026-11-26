@@ -327,9 +327,9 @@ func (c *Controller) actionLabelLocked(a Action, t Target) string {
 	var label string
 	switch a {
 	case ActionStopListening:
-		label = "Stop listening"
+		label = "Stop listening" + c.desktopCutWarningLocked()
 	case ActionRestartEngine:
-		label = "Restart engine"
+		label = "Restart engine" + c.desktopCutWarningLocked()
 	case ActionProposalsClear:
 		label = "Clear decided/expired proposals"
 	case ActionRuleRemove:
@@ -369,7 +369,24 @@ func (c *Controller) proposalByIDLocked(id contract.ProposalID) (Proposal, bool)
 
 func (c *Controller) desktopAppliedOrUnknownLocked() bool {
 	d := c.snap.Desktop
-	return d.Err || (d.Known && d.Applied)
+	// Never-read is unknown, not "not applied": the initial menu must not offer
+	// a plain Quit that could leave an applied desktop proxy behind.
+	return d.Err || !d.Known || d.Applied
+}
+
+// desktopCutWarningLocked is appended to the confirmation label for actions
+// that close the listeners. Unknown is warned about explicitly instead of
+// being treated as "not applied".
+func (c *Controller) desktopCutWarningLocked() string {
+	d := c.snap.Desktop
+	switch {
+	case d.Err || !d.Known:
+		return " (desktop proxy state unknown; may be cut)"
+	case d.Applied:
+		return " (desktop proxy applied; cut until listeners return)"
+	default:
+		return ""
+	}
 }
 
 func (c *Controller) resumeBlockedLocked() bool {
