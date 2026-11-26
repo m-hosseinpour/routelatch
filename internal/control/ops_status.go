@@ -69,7 +69,10 @@ type StatusData struct {
 	Pool                  poolStatusData  `json:"pool"`
 	Connections           connectionsData `json:"connections"`
 	Diagnostics           diagnosticsData `json:"diagnostics"`
-	Warnings              []string        `json:"warnings"`
+	// Tun is additive. Older status payloads have no `tun` key, so a consumer
+	// decoding them sees nil/unknown; this process always emits the object.
+	Tun      *contract.TunStatus `json:"tun"`
+	Warnings []string            `json:"warnings"`
 }
 
 func (s *Service) status(ctx context.Context) (StatusData, error) {
@@ -119,7 +122,10 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	if !s.listenersOpen {
 		out.Listeners = listenersData{HTTP: s.httpListen, SOCKS: s.socksListen}
 	}
+	tun := s.tunStatus(ctx, snap)
+	out.Tun = &tun
 	out.Warnings = statusWarnings(snap, now, s.listenersOpen, s.stopped, resumeRequiresRestart, warmTransports)
+	out.Warnings = append(out.Warnings, tunWarnings(out.Tun, snap.State.Mode, snap.State.Desktop.Applied)...)
 	return out, nil
 }
 

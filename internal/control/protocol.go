@@ -67,6 +67,12 @@ const (
 	OpDesktopRestore   = "desktop.restore"
 	OpBackup           = "backup"
 	OpRestore          = "restore"
+	// TUN coverage is an overlay, not a Mode. The operations exist before the
+	// TUN service (R16-C/D); without a runtime they report honestly and never
+	// claim the layer is active (docs/contracts.md §10.3).
+	OpTunStatus  = "tun.status"
+	OpTunEnable  = "tun.enable"
+	OpTunDisable = "tun.disable"
 )
 
 // CommandName maps an operation to the command string shown in envelopes.
@@ -106,6 +112,12 @@ func CommandName(op string) string {
 		return "config " + op[len("config."):]
 	case OpDesktopStatus, OpDesktopSet, OpDesktopRestore:
 		return "desktop proxy " + op[len("desktop."):]
+	case OpTunStatus:
+		return "tun status"
+	case OpTunEnable:
+		return "tun on"
+	case OpTunDisable:
+		return "tun off"
 	default:
 		return op
 	}

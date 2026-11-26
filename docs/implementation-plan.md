@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ هیچ taskی شروع نشده است)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-B انجام شد، R16-A در حال اجرا)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -241,6 +241,13 @@ v1.1.0 و R1–R15 را باز نمی‌کند و **مجوز پیاده‌ساز
 شروع هر task به درخواست/مجوز همان جلسه نیاز دارد. تصمیم محصول D29، معیار A17،
 طراحی در `docs/architecture.md §۹` و قرارداد در `docs/contracts.md §۱۰` ثبت
 شدند. این سند فقط ترتیب و دروازه‌ها را نگه می‌دارد.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۶ (شروع R16-A/B):** R16-A با مجوز صریح کاربر در یک
+کانتینر Docker دورانداختنی با netns ایزوله شروع شد؛ TUN/route/unit موقت فقط
+داخل همان کانتینر مجاز است و هیچ تغییر DNS/firewall/route/سرویس هاست مجاز نیست.
+R16-B (مدل داده/قرارداد) طبق پلن به‌صورت موازی شروع شد. تا اعلام verdict هیچ
+نتیجه‌ای پذیرفته نیست و C/D/F/G مجاز نیستند؛ وضعیت نهایی هر دو task با شاهد
+checkها در همین بخش ثبت می‌شود.
 
 **دامنه و تصمیم‌های بسته‌شده (D29):**
 
@@ -339,6 +346,23 @@ fail-closed) مجاز نیست.
 **check:** `go test ./internal/contract/... ./internal/control/...` واحدهای
 جدید/مرتبط سبز؛ `go vet ./...`؛ decode payload قدیمی و جدید؛ هیچ فیلد مقصدی در
 status نیست.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-B — انجام شد):** مدل داده/قرارداد TUN اضافه شد:
+`internal/contract/tun.go` با `TunState`/`TunStatus`/دلیل‌ها/هشدارها،
+`Config.TunEnabled` (`tun_enabled`، additive، schema 1)، `StatusData.Tun`،
+`OpTunStatus/Enable/Disable` و `internal/control/ops_tun.go` با seam صادق
+«unavailable»، idempotency و اعتبارسنجی mode/helper/platform/state_locked؛
+`mode stopped` فقط با گزارش مثبت `off` از disable رد می‌شود و در `unavailable`
+fail-closed می‌بندد. `dns`/`udp` به `direct`/`blocked` pin و `detail` sanitize
+شدند؛ ErrorKind/exit تازه ساخته نشد. مستندات §۴.۲/§۷.۱/§۱۰ به‌روز شدند.
+**checkها:** `gofmt -l` خالی؛ `go vet ./...` و `go build ./...` سبز؛
+`go test -count=1 ./internal/contract/... ./internal/control/...` و full
+`go test -count=1 ./...` سبز (acceptance ۱۱۵s)؛ `-race` contract/control سبز.
+بازبینی مستقل **Ready with findings** بود؛ پنج یافتهٔ جزئی رفع و با تأیید
+متمرکز همان reviewer بسته شدند. **معوق تا C/D:** restore-to-stopped و
+cross-validation نوع/دلیل خطا؛ helper در حالت خطا به‌صورت محافظه‌کارانه
+`missing` (unverified) گزارش می‌شود. **next:** C/D/F/G تا verdict `Ready`
+شدن R16-A قفل‌اند؛ runtime واقعی TUN هنوز وجود ندارد.
 
 #### R16-C — سرویس TUN (`internal/tun`, hidden `__tun-service`)
 
@@ -1750,10 +1774,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16 (پوشش TUN) در همین تاریخ فقط
-   تعریف شد و هیچ taskی شروع نشده است؛ قدم بعد R16-A است و فقط با مجوز صریح
-   محیط/پیاده‌سازی. R16-I/J (DNS-through-pool و UDP) نیز فقط task تحقیقی
-   تعریف‌شده‌اند و بعد از H شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-B (مدل داده/قرارداد TUN) در
+   ۲۰۲۶-۱۱-۲۷ انجام و بازبینی شد؛ R16-A با مجوز صریح کاربر در یک کانتینر
+   دورانداختنی در حال اجراست و تا verdict آن C/D/F/G مجاز نیستند. R16-I/J
+   (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
+   می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1795,7 +1820,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16 فقط تعریف شده و اولین قدم آن R16-A است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-B انجام شد و R16-A در جریان است؛ قدم بعد پس از ثبت verdict A تعیین
+   می‌شود. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

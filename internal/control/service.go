@@ -63,6 +63,11 @@ type Options struct {
 	// operation.
 	TrayProbe  func(context.Context) error
 	PIDFDProbe func() error
+	// Tun is the optional TUN control seam. Production leaves it nil until
+	// R16-C/D: status then reports off (or unavailable when desired) and
+	// enable fails with unsupported. Tests and the future service inject a
+	// contract.TunRuntime here.
+	Tun contract.TunRuntime
 }
 
 // Service implements Handler and owns the in-process runtime.
@@ -85,6 +90,9 @@ type Service struct {
 	// sidecar is the runtime for hysteria2 exits. It is nil when no executable
 	// is configured, in which case the engine fails those exits closed.
 	sidecar contract.SidecarRuntime
+	// tun is nil until a TUN runtime is wired; the R16-B operations remain
+	// callable and report unavailable/off rather than claiming activation.
+	tun contract.TunRuntime
 
 	snap   atomic.Pointer[contract.Snapshot]
 	policy atomic.Pointer[routing.Policy]
@@ -167,6 +175,7 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		reg: reg, props: props,
 		refresher:  refresher,
 		direct:     opts.Direct,
+		tun:        opts.Tun,
 		httpListen: snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,
 		stopped:   snap.State.Mode == contract.ModeStopped,
 		trayProbe: opts.TrayProbe, pidfdProbe: opts.PIDFDProbe,
@@ -527,6 +536,12 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 		return s.backup(ctx)
 	case OpRestore:
 		return s.restore(ctx, req.Ref)
+	case OpTunStatus:
+		return s.tunStatusOp(ctx)
+	case OpTunEnable:
+		return s.tunEnable(ctx)
+	case OpTunDisable:
+		return s.tunDisable(ctx)
 	default:
 		return nil, &contract.Failure{Kind: contract.Unsupported, Path: contract.PathLocal, Op: "control.handle", Message: "unknown management operation"}
 	}

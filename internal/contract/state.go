@@ -22,6 +22,12 @@ type Config struct {
 	LogLevel      string            `json:"log_level"`
 	Diagnostics   DiagnosticsConfig `json:"diagnostics"`
 	Probes        ProbeConfig       `json:"probes"`
+	// TunEnabled is the persisted user preference for the TUN overlay (R16).
+	// It is additive in schema version 1: an older config without the key
+	// decodes to false. It is always emitted, like the other scalar config
+	// fields, but it is a wish, not proof that TUN is on
+	// (docs/contracts.md §10.2).
+	TunEnabled bool `json:"tun_enabled"`
 }
 
 // DiagnosticsConfig is user-controlled automatic diagnosis (D09). Enabled

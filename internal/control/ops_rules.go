@@ -85,6 +85,11 @@ func (s *Service) setMode(ctx context.Context, raw string) (ModeData, error) {
 	}
 
 	if mode == contract.ModeStopped {
+		// §10.1 ordering: close TUN before listeners/process. A failure aborts
+		// the stop so the host is not left redirected into a dead listener.
+		if err := s.stopTunForModeStopped(ctx); err != nil {
+			return ModeData{}, err
+		}
 		// Apply the new snapshot, then close every conflicting live and pending
 		// connection. Success is reported only after the sweep completes.
 		after, _, err := s.mutateAndCommit(ctx, func(st *contract.State) error {

@@ -619,10 +619,14 @@ probe استفاده شد.
   "http_listen": "127.0.0.1:8317",
   "socks_listen": "127.0.0.1:8318",
   "log_level": "info",
+  "tun_enabled": false,
   "diagnostics": { "enabled": true, "queue_limit": 32, "max_concurrent": 1, "retention_days": 30 },
   "probes": { "targets": [], "timeout_ms": 20000, "cooldown_base": 60, "cooldown_max": 900 }
 }
 ```
+
+`tun_enabled` یک فیلد additive با پیش‌فرض `false` است و فقط «خواست کاربر» برای
+پوشش TUN را نگه می‌دارد، نه اثبات فعال‌بودن آن؛ جزئیات در §۱۰.۲.
 
 هر دو آدرس باید loopback باشند (`127.0.0.1` یا `::1`)؛ هر چیز دیگر `unsupported` با
 exit `7` است (D14)، نه usage/exit `2` و نه `policy_denied`. تغییر آدرس listener فقط با
@@ -1111,6 +1115,8 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
   "pool": { "total": 12, "usable": 9, "healthy": 6, "cooling": 2 },
   "connections": { "open": 3, "dialing": 1, "proofs": { "confirmed": 0, "accepted": 2 } },
   "diagnostics": { "enabled": true, "queued": 0 },
+  "tun": { "desired": false, "state": "off", "interface": "", "dns": "direct",
+           "udp": "blocked", "ipv6": false, "helper": "missing" },
   "warnings": ["1 record is unsupported: insecure_tls_removed (replace the link or use pinnedPeerCertSha256)"] }
 
 { "mode": "all-proxy", "policy_version": 8,
@@ -1119,6 +1125,10 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 
 > فرمان‌های `tun ...` (D29/R16) در جدول فعلی نیستند؛ قرارداد آیندهٔ آن‌ها در §۱۰
 > است و تا پایان R16 در CLI وجود ندارند.
+>
+> شیء `tun` در `data` یک افزودهٔ schema 1 است: payload قدیمی آن را ندارد و
+> مصرف‌کننده آن را nil/unknown می‌بیند. `since`/`last_error`/`detail` وقتی مقدار
+> ندارند حذف می‌شوند؛ شکل کامل و معنای `helper=missing` در §۱۰.۲ است.
 
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
@@ -1126,7 +1136,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `autostart enable\|disable\|status` | `path, enabled, managed, tray_available, pidfd_available, conflict?` | 0، 1، 2، 6، 7 | — |
 | `service install\|uninstall\|status` | `unit, enabled, active, linger, managed, conflict?` | 0، 1، 2، 6، 7، 8، 9، 10، 12 | — |
 | `version` | `version, commit, build_date` | 0 | — |
-| `status` | `mode, ready, listeners_open, resume_requires_restart (R15), policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, warnings` | 0، 3، 10 | «وضعیت» |
+| `status` | `mode, ready, listeners_open, resume_requires_restart (R15), policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, tun{desired,state,interface,since?,dns,udp,ipv6,helper,last_error?,detail?}, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
@@ -1966,11 +1976,15 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — تعریف‌شده، پیاده‌سازی‌نشده)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B پیاده‌شده، سرویس واقعی نه)
 
-این بخش قرارداد milestone پس از v1 است. تا پایان R16 هیچ‌کدام از opها، فیلدها،
-فرمان‌ها یا unitهای این بخش در محصول وجود ندارند و نباید به‌عنوان قابلیت فعلی
-تبلیغ شوند. نام‌ها و مسیرهای زیر **پیشنهادی و الزام‌آور برای پیاده‌سازی R16** هستند.
+این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
+فیلدهای config/status، opهای management و seam تزریق‌شدنی) پیاده شده است؛ اما سرویس
+TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D/E/F وجود
+ندارند. تا آن زمان runtime غایب است: status مقدار `off`/`unavailable` را صادقانه
+گزارش می‌کند، `tun.enable` با `unsupported` رد می‌شود و هیچ ادعای پوشش فعال مجاز
+نیست. نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-C به بعد
+الزام‌آورند.
 
 ### ۱۰.۱ مدل و مرز
 
@@ -1998,20 +2012,43 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 
 - `Config` یک فیلد additive و پیش‌فرض `false` به نام `tun_enabled` می‌گیرد؛
   schema version فعلی (۱) تغییر نمی‌کند چون فایل قدیمی با مقدار صفر معتبر است.
-  این فیلد «خواست کاربر» است، نه اثبات فعال‌بودن TUN.
-- `state.json` هیچ مقصد، نام دامنه، آدرس TUN یا تاریخچهٔ flow نمی‌گیرد (D21).
+  این فیلد «خواست کاربر» است، نه اثبات فعال‌بودن TUN. در JSON کانفیگ همیشه
+  نوشته می‌شود (مثل بقیهٔ فیلدهای scalar، بدون `omitempty`)، و فایل قدیمی بدون
+  کلید با `false` decode می‌شود.
+- `state.json` هیچ مقصد، نام دامنه، آدرس TUN یا تاریخچهٔ flow نمی‌گیرد (D21)؛
+  `tun_enabled` و وضعیت runtime فقط در config و status می‌مانند.
 - `status` یک شیء additive به نام `tun` می‌دهد:
   `desired` (bool)، `state` (`off|starting|on|stopping|error|unavailable`)،
   `interface` (مثلاً `rl-tun0`)، `since`، `dns` (`direct`)، `udp` (`blocked`)،
   `ipv6` (bool)، `helper` (`installed|missing|incompatible`)،
   `last_error` (کد/دلیل امن، بدون متن آزاد حاوی مقصد) و `detail` کوتاه.
+- `dns`/`udp` مقادیر ثابت فاز اول‌اند، نه انتخاب runtime: `dns` همیشه `direct`
+  و `udp` همیشه `blocked` است (§۱۰.۵، D30). هر مقدار دیگر runtime به همین دو
+  مقدار pin می‌شود تا نشانی resolver یا متن آزاد از این فیلدها بیرون بماند.
+- `last_error` فقط از دلیل‌های خطای TUN (`tun_helper_unavailable`،
+  `tun_platform_unsupported`، `tun_conflict`، `tun_service_unavailable`) است؛
+  شناسه‌های warning واژگان جدا دارند. هر مقدار دیگر runtime حذف می‌شود.
+  `last_error`/`detail` وقتی خالی‌اند حذف می‌شوند و `detail` متن ثابت امن است؛
+  `interface`/`detail` از control-character پاک می‌شوند.
+- `since` زمان شروع runtime است. وقتی runtime زمان شروع را نمی‌داند یا هنوز
+  اجرا نشده، کلید حذف می‌شود؛ زمان صفر ساختگی سریالایز نمی‌شود.
+- `helper=missing` یعنی «helper نصب‌شده و تأییدشدهٔ قابل استفاده در دسترس نیست»،
+  نه اثبات نبودن فایل یا باینری. وقتی `tun.status` از runtime شکست بخورد، همین
+  مقدار محافظه‌کارانه با `last_error=tun_service_unavailable` گزارش می‌شود و
+  warning `tun_helper_missing` صادر نمی‌شود، چون آن وضعیت با
+  `tun_service_unavailable` بیان شده است.
+- status فعلی همیشه شیء `tun` را می‌فرستد؛ مصرف‌کنندهٔ payload قدیمی بدون کلید آن
+  را nil/unknown می‌بیند، نه `off`. مثال‌های §۴.۲/§۷.۱ همین شکل additive را
+  نشان می‌دهند.
 - `status.ready` همچنان فقط management/listener را می‌سنجد؛ `tun.desired=true`
   با `tun.state!=on` یک warning و نشانگر tray است، اما proxy عادی را از کار
   نمی‌اندازد. `run`/`service` فقط بعد از listener readiness برمی‌گردند.
-- `warnings` نسخهٔ TUN شامل این موارد است: `tun_dns_direct`،
+- `warnings` نسخهٔ TUN شامل این شناسه‌های ثابت است: `tun_dns_direct`،
   `tun_udp_blocked`، `tun_helper_missing`، `tun_service_unavailable`،
   `tun_domain_unavailable` (در صورت نیاز)، `tun_desktop_proxy_overlap`،
-  `tun_all_direct` و `tun_conflict`.
+  `tun_all_direct` و `tun_conflict`. هر warning فقط وقتی صادر می‌شود که برای
+  وضعیت گزارش‌شده صادق باشد (مثلاً `tun_dns_direct`/`tun_udp_blocked` فقط با
+  `state=on` و در mode متوقف هیچ‌کدام).
 
 ### ۱۰.۳ opها و فرمان‌ها
 
@@ -2038,6 +2075,23 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
   نبود helper/kernel/systemd → `unsupported`/`7` با دلیل پایدار
   `tun_helper_unavailable` یا `tun_platform_unsupported`؛ تعارض instance →
   `state_locked`/`6` با دلیل `tun_conflict`؛ mode stopped → `stopped`/`3`.
+- دلیل امن در `error.detail.reason` می‌آید و پیام خطا برای هر دلیل متن ثابت است،
+  نه متن آزاد runtime. دلیلی که در allowlist نیست حذف می‌شود و `unsupported`/
+  `state_locked` بدون دلیل پایدار به `internal` تبدیل می‌شود. `tun.disable`
+  همیشه مجاز است و خطاهای مجازش فقط `internal`اند؛ هر خروجی دیگری از runtime در
+  disable (از جمله تعارض یا unsupported) به `internal` نگاشت می‌شود تا جدول بالا
+  نشکند. شکست ذخیرهٔ `tun_enabled` (config store) هم برای هر دو op
+  `internal`/`1` است، نه kind ذخیره‌سازی.
+- در R16-B که runtime واقعی وجود ندارد: `tun.status` مقدار `off` (یا با
+  `tun_enabled=true` مقدار `unavailable`) می‌دهد، `tun.enable` با
+  `unsupported`/`tun_helper_unavailable` رد می‌شود و خواست کاربر را ذخیره
+  می‌کند، و `tun.disable` خواست را پاک می‌کند و `off` برمی‌گرداند.
+  `mode stopped` پیش از commit/listener بستن، disable را صدا می‌زند و شکست آن
+  توقف را متوقف می‌کند؛ فقط گزارش صریح `off` از status باعث صرف‌نظر از disable
+  می‌شود و `unavailable`/خطای status هم disable را می‌طلبند (fail-closed).
+  recovery TUN جامانده در startup و Quit بخش R16-D است.
+  `restore` بکاپی که mode آن stopped است هنوز مسیر disable را صدا نمی‌زند؛ این
+  مورد با lifecycle کامل R16-C/D بسته می‌شود و در R16-B تعمداً تغییر نکرده است.
 
 ### ۱۰.۴ قرارداد helper و unit (پیشنهادی)
 
@@ -2153,5 +2207,7 @@ DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و 
 verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
 جدید در همین سند است، نه تغییر خاموش A17.
 
-**قدم بعد:** R16-A فقط پس از مجوز صریح؛ این قرارداد تا آن زمان پیاده‌سازی‌شده
-نیست و ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.
+**قدم بعد:** R16-B (مدل داده، status/config و opهای management) پیاده و تست شده
+است، ولی این پوشش فعال نیست: سرویس/route/helper و اتصال engine تا R16-C/D و
+CLI/tray تا E/F وجود ندارند. R16-A فقط پس از مجوز صریح؛ ادعای پشتیبانی TUN در
+v1.1.0 وجود ندارد.
