@@ -81,11 +81,68 @@ benchmarks، مشکلات parser واقعی سایت و رفتار Windows/macOS
 | E12 | [RFC 9849، §1/§3](https://rfc-editor.org/rfc/rfc9849.html)، منتشرشده مارس ۲۰۲۶: ECH از SNI و سایر fields حفاظت می‌کند | sniffing نمی‌تواند همیشه دامنهٔ اصلی را اثبات کند |
 | E13 | [AOSP VpnService.java](https://android.googlesource.com/platform/frameworks/base/+/b6f2f924db65f74da85f0beb909bb26584af2768/core/java/android/net/VpnService.java): یک VPN فعال، foreground requirement، protect socket و per-app allow/disallow | snapshot سورس؛ Android پوستهٔ بومی و محدودیت VPN دارد |
 | E14 | [Mozilla MPL FAQ، Q8/Q11/Q13](https://mozilla.org/MPL/2.0/FAQ): larger work/static linking ممکن است با مجوز دیگر باشد، covered source همچنان تعهد دارد | مجوز محصول باز؛ وابستگی‌های build واقعی پیش از انتشار audit شوند |
+| E15 | TUN در Xray pin‌شدهٔ همین repo: `proxy/tun/*` (config، Linux route/DNS، fd خارجی، stack سبک، `autoOutboundsInterface`) و `infra/conf/tun.go`/`xray.go` در commit `676eaf66f8f0` (pseudo-version `v1.260327.1-0.20261109052709-676eaf66f8f0`) خوانده شد | زیرساخت TUN در نسخهٔ pin‌شده وجود دارد؛ runtime آن توسط ما آزموده نشده و R16-A باید آن را ثابت کند |
 
 Xray `v26.11.9` در [release metadata](https://api.github.com/repos/XTLS/Xray-core/releases/tags/v26.11.9)
 با تاریخ انتشار ۲۰۲۶-۱۱-۰۹ مشاهده شد. [go.mod آن](https://raw.githubusercontent.com/XTLS/Xray-core/v26.11.9/go.mod)
 `go 1.27` و مجموعهٔ وابستگی‌ها را نشان می‌دهد؛ ساخت واقعی انجام نشده است. این نسخه
 مرجع تحقیق است، نه نسخهٔ الزام‌آور release RouteLatch. انتخاب نسخه و toolchain در T1.
+
+## شواهد TUN و پیش‌نیازهای آن (۲۰۲۶-۱۱-۲۶، R16)
+
+این بخش snapshot بررسی طراحی D29 است؛ هیچ کد، سرویس، TUN یا route واقعی در این
+جلسه تغییر نکرد. مرجع اصلی، سورس **نسخهٔ pin‌شدهٔ همین repo** است، نه صفحهٔ زندهٔ
+docs: pseudo-version `v1.260327.1-0.20261109052709-676eaf66f8f0` (commit
+`676eaf66f8f0`) در module cache، مسیرهای `proxy/tun/`, `infra/conf/tun.go` و
+`infra/conf/xray.go`.
+
+**قابلیت‌های خوانده‌شده در سورس pin‌شده:**
+
+- `protocol: "tun"` inbound بدون port/listen پذیرفته می‌شود؛ فیلدهای settings
+  شامل `name`، `mtu`، `gateway` (multi-prefix IPv4/IPv6)، `dns`، `userLevel`،
+  `autoSystemRoutingTable`، `autoOutboundsInterface`، `desc`،
+  `autoSystemDnsToGateway` و `autoSystemWfpBlockLeak` است.
+- Linux مسیر عادی: ساخت TUN، assign آدرس‌های `gateway`، routeهای
+  `autoSystemRoutingTable` با priority 1، و `autoOutboundsInterface` که dialهای
+  خود core را با `SO_BINDTODEVICE` به interface فیزیکی bind می‌کند (loopback
+  مستثنا). با `xray.tun.fd`/`XRAY_TUN_FD` یک fd خارجی (IFF_TUN|IFF_NO_PI،
+  اختیاری vnet hdr) پذیرفته می‌شود و در آن حالت route/DNS setup انجام نمی‌شود.
+- `autoSystemDnsToGateway` روی Linux از `resolvectl` و systemd-resolved استفاده
+  می‌کند، به `gateway` نیاز دارد، پیش از تغییر DNS یک preflight مسیر DNS انجام
+  می‌دهد، در نبود پیش‌نیازها **شروع نمی‌کند** و در `SIGKILL` مقدار DNS را برنمی‌گرداند.
+  بنابراین D29 این گزینه را خاموش نگه می‌دارد.
+- TUN handler هر flow را با `session.Content{SniffingRequest}` به dispatcher
+  می‌دهد؛ `sniffing` استاندارد inbound روی TUN هم اعمال می‌شود و dispatcher
+  می‌تواند مقصد را به دامنهٔ sniff‌شده override کند تا outbound SOCKS دامنه را
+  ببیند. این مسیر source-inferred است و باید با ترافیک واقعی آزموده شود.
+- `internet.RegisterDialerController` یک controller را به slice سراسری process
+  اضافه می‌کند و API حذف ندارد؛ پس افزودن/حذف TUN در همان process engine
+  effect دائمی می‌گذارد. این دلیل اصلی جداکردن TUN به process سرویس است.
+- TUN handler در سطح info مقصد/مبدأ را log می‌کند؛ برای D21 باید error/access
+  sink خاموش و سطح log محدود بماند و تست منفی log وجود داشته باشد.
+- README خود TUN هشدار می‌دهد که این قابلیت برای مدیر شبکه است، بدون route
+  درست می‌تواند loop/router lock-up بسازد، TCP را پیش از اتصال مقصد SYN-ACK
+  می‌کند (پس خطای pool به‌صورت close دیده می‌شود، نه refuse)، ICMP فقط Echo را
+  محلی پاسخ می‌دهد، و DNS همیشه جدا از لایهٔ ۳ است.
+
+**پیش‌نیاز capability (بررسی محلی، نه تعمیم):** روی این host (kernel
+`7.0.0-44-generic`، uid 1000، `CapEff=0`) یک تست C کوچک نشان داد
+`setsockopt(SO_BINDTODEVICE, "lo")` موفق و `SO_MARK` با `EPERM` رد می‌شود.
+منبع عمومی (kernel commit `c427bfec18f2`، از Linux 5.7) همین را تأیید می‌کند:
+bind به interface دیگر برای کاربر غیرroot مجاز است، در حالی که ساخت TUN و تغییر
+route همچنان `CAP_NET_ADMIN` می‌خواهد. نتیجهٔ طراحی: engine غیرroot با
+`SO_BINDTODEVICE` از TUN خارج می‌شود و فقط سرویس TUN کوچک capability می‌گیرد.
+این مشاهده فقط یک host است؛ R16-A باید kernel/distro matrix را محدود و مستند کند.
+
+**sidecar:** docs فعلی sing-box `route.default_interface` (و
+`auto_detect_interface`) را برای جلوگیری از loop زیر TUN معرفی می‌کند؛ پشتیبانی
+دقیق نسخهٔ pin‌شدهٔ `v1.14.4` و شکل فیلد باید در R16-A از سورس/باینری همان نسخه
+تأیید شود. این یک شکاف باز است، نه فرض قطعی.
+
+**محدودیت‌ها:** هیچ TUN واقعی ساخته/آزموده نشد؛ sniffing، dual-stack، DNS
+مستقیم، UDP block، sidecar bypass و fail-closed فقط از سورس استنباط شده‌اند.
+صفحه‌های زندهٔ docs ممکن است به نسخهٔ دیگری تعلق داشته باشند. R16-A دروازهٔ
+اجرای کنترل‌شده است و تا آن زمان D29 یک طراحی است، نه قابلیت اثبات‌شده.
 
 ## مقایسهٔ گزینه‌های عمومی
 
@@ -170,7 +227,10 @@ SSH واقعی (فقط bus ایزوله با fake watcher)؛ DEهای دیگر؛
 ## فرض‌های اصلاح‌شده و پوشش باقی‌مانده
 
 - فرض «Xray برای TUN موتور دیگری لازم دارد» با شواهد جدید اصلاح شد؛ Android همچنان
-  اپ بومی می‌خواهد و رفتار session registry آن باز است.
+  اپ بومی می‌خواهد و رفتار session registry آن باز است. **[به‌روزرسانی ۲۰۲۶-۱۱-۲۶]**
+  TUN در D29/R16 به‌عنوان لایهٔ پوشش (نه mode پنجم) تعریف شد و مسیر پیشنهادی،
+  TUN inbound همان هستهٔ pin‌شده در یک سرویس جدا است؛ runtime آن همچنان آزموده
+  نشده و R16-A دروازه است.
 - فرض «subprocess + API همهٔ مدیریت اتصال را حل می‌کند» اصلاح شد؛ E03–E06 مسیر
   استفادهٔ کتابخانه‌ای/frontend را ضروری یا نیازمندی ساده‌تر را محتاج تأیید می‌کند.
 - گزینهٔ موقت «همهٔ IPهای نامشخص pool» با تصمیم D10 جایگزین شد.

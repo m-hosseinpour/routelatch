@@ -10,7 +10,9 @@
 
 نسخهٔ اول مطابق D01–D20 در [نیازمندی‌ها](requirements.md): بستهٔ خودکفای Linux،
 Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهادها، CLI/منوی ساده، استفادهٔ
-اختیاری پروکسی دسکتاپ. Windows، Android، TUN، UDP و GUI milestones بعدی‌اند.
+اختیاری پروکسی دسکتاپ. Windows، Android، UDP و GUI milestones بعدی‌اند. TUN در
+D29 (۲۰۲۶-۱۱-۲۶) به‌عنوان **پوشش** پس از v1 تعریف شده و R16 نام گرفته است؛
+هیچ بخشی از آن در v1.1.0 وجود ندارد و بدون مجوز R16-A شروع نمی‌شود.
 
 نقطهٔ شروع پلن، پروژه‌ای بدون کد، executable، dependency lock یا framework آزمون است. مسیرهای
 کد در این سند **پیشنهادی** هستند؛ structure نهایی بعد از T1/T2 انتخاب می‌شود.
@@ -176,14 +178,17 @@ Go/Xray، پروکسی TCP هدفمند، مدیریت pool و پیشنهاده�
 ## Milestoneهای بعدی — خارج از v1 (تصمیم کاربر ۲۰۲۶-۱۱-۲۰)
 
 این چهار مورد **کار باز v1 نیستند** و به تصمیم/مجوز تازه و یک milestone جدا نیاز دارند
-(D24؛ «آزمون‌نشده» به‌معنای «در صف v1» نیست):
+(D24؛ «آزمون‌نشده» به‌معنای «در صف v1» نیست). TUN در D29 تصمیم‌گیری و به R16 تبدیل
+شده است؛ بقیه همچنان تصمیم تازه می‌خواهند:
 
 1. **Windows:** build واقعی، named-pipe/ACL مدیریت، SCM و proxy settings/restore؛
    chmod لینوکس کافی نیست. scope دقیق با کاربر بسته شود.
-2. **UDP و TUN:** semantics جدید، DNS capture/split/FakeDNS در صورت نیاز، IPv6 و
-   loop/permissions، crash recovery، per-app coverage و mode-switch session control.
-   وجود TUN در Xray اثبات تکمیل این مرحله نیست. سیاست فعلی no-UDP/QUIC است
-   (`requirements.md:98`، `architecture.md:60`).
+2. **UDP و TUN:** TUN در D29 (۲۰۲۶-۱۱-۲۶) به R16 تبدیل شد: پوشش دو-stack روی
+   modeها، DNS مستقیم و UDP غیرDNS بلاک در فاز اول، helper یک‌باره و fail-closed.
+   UDP از pool، DNS capture/FakeDNS و per-app coverage همچنان تصمیم/مرحلهٔ جدا
+   می‌خواهند. وجود TUN در Xray اثبات تکمیل R16 نیست؛ R16-A دروازه است. سیاست
+   فعلی v1 همچنان no-UDP/QUIC است (`requirements.md` بخش «امنیت و موارد خارج از
+   نسخهٔ اول» و `architecture.md §۳`).
 3. **Android:** `VpnService`/foreground/per-app/protect/socket، VPN coexistence limits،
    یک Go runtime در artifact، policy مشترک و GUI بومی یا چندسکویی پس از تصمیم.
 4. **GUI:** مصرف management contract مشترک؛ انتخاب framework و سرمایه‌گذاری TUI
@@ -205,6 +210,7 @@ R15 (سطح کنترل tray) یک capability پس از v1 است که در بخ�
 | A09 | T2–T6، private management، perms، terminal/log/secret checks در T7 |
 | A10/A11 | T5/T6، CLI/menu/launcher/desktop recovery در T7 |
 | A16 | R15، سطح کنترل tray: نگاشت actionها، confirmation، pagination، حالت unavailable/stopped، sanitize/D21، restart و Quit/restore؛ check نهایی در R15-H |
+| A17 | R16، پوشش TUN: helper/setup، dual-stack، TCP→router/pool، sniffing، DNS مستقیم/UDP بلاک، fail-closed، persistence، tray/icon، D21؛ check نهایی در R16-A/H و `contracts.md §۱۰.۸` |
 | A14 | **مجوز/ممیزی/بسته (R3+R8):** Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابل‌انتشار است، و push مجاز است — ./release-readiness.md |
 
 دادهٔ dev ساخته‌شده برای بازبینی دستی حذف نشود. import قدیمی read-only؛ upgrade
@@ -220,6 +226,275 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 جداگانه تکرار نشود. هنگام شروع/پایان task، وضعیت، شاهد check و قدم بعدی اینجا
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
+
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ هیچ taskی شروع نشده است)
+
+**وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
+سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
+HEAD هنگام تعریف `e9a0cc9` و working tree پاک بود. این milestone پس از v1 است،
+v1.1.0 و R1–R15 را باز نمی‌کند و **مجوز پیاده‌سازی R16-A به بعد را نمی‌دهد**؛
+شروع هر task به درخواست/مجوز همان جلسه نیاز دارد. تصمیم محصول D29، معیار A17،
+طراحی در `docs/architecture.md §۹` و قرارداد در `docs/contracts.md §۱۰` ثبت
+شدند. این سند فقط ترتیب و دروازه‌ها را نگه می‌دارد.
+
+**دامنه و تصمیم‌های بسته‌شده (D29):**
+
+- TUN **لایهٔ پوشش** روی `targeted|all-proxy|all-direct` است، نه mode پنجم؛
+  سیاست/فهرست تأییدشده/registry/D11/D13/D21 همان مدل فعلی می‌مانند.
+- helper ممتاز **یک‌باره** با `sudo routelatch tun setup` نصب می‌شود؛ سپس
+  `routelatch tun status|on|off` و toggle در tray. engine/tray با root اجرا
+  نمی‌شوند و بسته هیچ unit ممتازی ندارد.
+- مسیر داده: TUN دو-stack → Xray TUN inbound با sniffing → SOCKS5 لوپ‌بک
+  engine → router/registry → direct/pool. سرویس TUN هیچ سیاست مستقلی ندارد.
+- DNS سیستم تغییر نمی‌کند؛ plain DNS (53) داخل TUN دریافت و **مستقیم** فرستاده
+  می‌شود. UDP/QUIC غیرDNS در فاز اول بلاک است. دامنه فقط برای TLS/HTTP قابل
+  sniff است؛ ECH/غیرTLS فقط IP/CIDR.
+- IPv6 هم capture می‌شود (dual-stack). fail-closed تا زنده‌بودن سرویس TUN؛
+  خرابی/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد.
+- انتخاب TUN ماندگار است و پس از restart/Login خودکار فعال می‌شود؛ نبود helper
+  با warning و آیکن روشن دیده می‌شود. `stopped` TUN را می‌بندد و اجازهٔ فعال‌شدن
+  نمی‌دهد.
+- آیکن tray رنگ/حالت TUN active/error/desired-off را جدا نشان می‌دهد.
+
+**مسیرهای پیشنهادی کد (پس از R16-A نهایی می‌شوند):**
+`internal/tun/` (client/service/config/lifecycle)، `internal/contract/tun.go`،
+`internal/control/ops_tun.go`، `cmd/routelatch/tun.go` و hidden
+`__tun-service`، `internal/app/tray*.go`، `internal/trayui/{action,types,menu}.go`،
+و لمس نقطه‌های egress در `internal/control/service.go`، `internal/probes/engine.go`،
+`internal/imports/fetch.go`، `internal/engine/config.go` و `internal/singbox/config.go`.
+
+#### R16-A — دروازهٔ امکان‌سنجی TUN جدا (اولین task؛ فقط با مجوز محیط)
+
+**نتیجه:** ثابت کند معماری D29 با نسخهٔ pin‌شدهٔ Xray و systemd روی Linux
+امکان‌پذیر است، بدون آنکه policy/registry به سرویس دوم منتقل شود. تا verdict
+`Ready` هیچ کد محصول/normal-run تغییر نمی‌کند.
+
+**دامنه:** یک نمونهٔ دورانداختنی (container/VM یا host مجاز) با data-dir و
+پورت‌های اختصاصی؛ هیچ تغییر DNS سیستم، firewall، سرویس زنده، پروکسی دسکتاپ یا
+شبکهٔ کاربر. مجوز ساخت TUN/route و نصب موقت unit در همان محیط صریح گرفته شود.
+اگر محیط اجازه نداد، verdict `Not verified` ثبت شود؛ R16-B فقط می‌تواند مدل
+داده را ادامه دهد، ولی C/D/F/G شروع نمی‌شوند.
+
+**کار و شاهد مورد انتظار:**
+
+1. یک systemd **system** unit موقت با `User=<uid>`،
+   `AmbientCapabilities=CAP_NET_ADMIN`، `CapabilityBoundingSet=CAP_NET_ADMIN` و
+   hardening اجرا شود؛ باینری از یک کپی root-owned اجرا شود و ثابت شود سرویس
+   غیرroot می‌تواند TUN بسازد/route اضافه کند و socket `0600` با peer uid کار
+   می‌کند. شکست capability/hardening → بازنگری مدل helper، نه root engine.
+2. Xray TUN با `gateway` دو-stack، `autoSystemRoutingTable` نیمه‌ها،
+   `autoOutboundsInterface=auto`، sniffing `http,tls` و SOCKS outbound به یک
+   fixture لوپ‌بک اجرا شود. شاهد: link/routeها، TCP از یک برنامهٔ محلی جدا از
+   engine، دامنهٔ sniff‌شده در SOCKS، IPv4/IPv6، و پاک‌شدن route/link در stop.
+3. DNS/53 به `freedom` bind‌شده به interface فیزیکی و UDP غیر53 به blackhole
+   route شود. شاهد: DNS پاسخ می‌دهد، QUIC/UDP مستقیم دیده نمی‌شود، DNS سیستم
+   تغییر نکرده و `autoSystemDnsToGateway` خاموش است.
+4. engine egress: direct/probe/fetch و embedded-Xray pool dial در حضور TUN به
+   interface فیزیکی bind شوند و شمارندهٔ loop صفر بماند. sidecar hysteria2 با
+   `route.default_interface` (یا فیلد معادل همان نسخه) آزموده شود؛ اگر نسخهٔ
+   pin‌شده پشتیبانی نکند، exitهای hysteria2 در حالت TUN با دلیل امن
+   `unsupported`/`sidecar_loop_risk` کنار گذاشته می‌شوند و هرگز loop نمی‌کنند.
+5. fail-closed: kill engine، TUN/route بماند و TCP refuse/blackhole شود؛ restart
+   engine بازیابی کند؛ restart سرویس با lease بازسازی کند؛ `tun off`/stop routeها
+   را پاک کند؛ SIGKILL سرویس هیچ route/DNS دائمی باقی نگذارد. پنجرهٔ fail-open
+   اندازه‌گیری و ثبت شود.
+6. تصادم ثابت‌ها: `rl-tun0`، gateways `198.18.0.1/15` و `fc00::1/64` با
+   interface/routeهای موجود، LAN معمول و یک VPN/TUN خارجی (در محیط مجاز)
+   تصادم نداشته باشند؛ نام/آدرس نهایی pin شود و conflict روشن گزارش شود.
+7. D21: logهای Xray/TUN هیچ مقصد/دامنه‌ای در هیچ سطحی چاپ نکنند؛ sniffing فقط
+   در حافظه باشد. این با تست منفی canary بررسی شود.
+
+**ثبت:** نسخه/commit، kernel/systemd/iproute2، commands، خروجی‌ها، محدودهٔ
+مشاهده، fail-open window و موارد آزمون‌نشده. verdict یکی از `Ready`، `Blocked`
+یا `Not verified` است؛ هیچ fallback بی‌صدا (root engine، TUN در engine، حذف
+fail-closed) مجاز نیست.
+
+#### R16-B — قرارداد، state/status و opها
+
+**وابستگی:** R16-A `Ready` برای تصمیم‌های فنی؛ ولی مدل داده می‌تواند موازی
+شروع شود. **نتیجه:** D29/A17/§۱۰ به تایپ‌ها، opها و تست‌های قراردادی تبدیل شوند،
+بدون تغییر رفتار فعلی.
+
+- `internal/contract/tun.go` (یا معادل): `TunState`، `TunStatus`، ثابت‌های
+  `off|starting|on|stopping|error|unavailable`، دلیل‌های امن، فیلد `TunEnabled`
+  در `Config` (additive، پیش‌فرض false).
+- `internal/control/protocol.go`: `OpTunStatus/OpTunEnable/OpTunDisable`؛
+  `StatusData.tun`؛ `warnings` جدید؛ بدون ErrorKind تازه.
+- `internal/control/ops_tun.go`: اعتبارسنجی mode غیر stopped، helper/platform،
+  state_locked/tun_conflict، idempotency؛ `tun disable` همیشه مجاز؛ `mode stopped`
+  اول disable.
+- تست‌های قراردادی: JSON قدیمی بدون `tun` → nil/false و سازگاری؛ schema version
+  ۱ بدون migration؛ خطاهای stopped/unsupported/state_locked؛ صفر مقصد در payload.
+- `docs/contracts.md §۱۰` و `requirements.md D29/A17` مرجع‌اند؛ تغییر نام/فیلد
+  نیازمند به‌روزرسانی همان‌ها است.
+
+**check:** `go test ./internal/contract/... ./internal/control/...` واحدهای
+جدید/مرتبط سبز؛ `go vet ./...`؛ decode payload قدیمی و جدید؛ هیچ فیلد مقصدی در
+status نیست.
+
+#### R16-C — سرویس TUN (`internal/tun`, hidden `__tun-service`)
+
+**وابستگی:** R16-A و R16-B. **نتیجه:** سرویس جدا که TUN/routes را می‌سازد،
+TCP را به SOCKS لوپ‌بک می‌دهد، DNS/53 را مستقیم و UDP غیرDNS را بلاک می‌کند،
+بدون هیچ سیاست مقصدی.
+
+- config ثابت §۱۰.۵: `rl-tun0`, MTU، gatewayهای تأییدشده، routeهای نیمه،
+  sniffing، routing به `rl-tun-socks`/`rl-tun-dns`/`rl-block`؛ log error/access
+  خاموش.
+- lifecycle: start core تازه در هر enable؛ stop کامل در disable؛ lease
+  `/run/routelatch-tun/lease.json` برای restart همان boot؛ `/run` در boot پاک
+  می‌شود و auto-enable قبل از login وجود ندارد؛ core در process restart نمی‌شود.
+- control socket `0600` + peer uid + فقط `enable|disable|status` + listener
+  لوپ‌بک؛ هیچ arg دلخواه.
+- stop ترتیب TUN→core→route/link؛ خطای پاک‌سازی گزارش شود؛ orphan route/link
+  تست منفی.
+- `internal/singbox/config.go`: در حالت TUN `route.default_interface` معادل
+  نسخهٔ pin‌شده اضافه شود (پس از تأیید R16-A) و از import پذیرفته نشود.
+- tests: fake core/control برای lifecycle و config؛ gated TUN integration با
+  fixture لوپ‌بک؛ بدون تغییر شبکهٔ پیش‌فرض در `go test ./...`.
+
+**check:** unit tests + gated `RL_TUN_TEST=1` روی محیط مجاز؛ route/link cleanup؛
+no destination log؛ dual-stack.
+
+#### R16-D — یکپارچگی engine: enable/disable، ماندگاری و bypass
+
+**وابستگی:** R16-B/C. **نتیجه:** engine config/status/ops و مدل اجرا TUN را
+به‌عنوان پوشش می‌شناسد و dialهای خودش loop نمی‌کنند.
+
+- `Config.TunEnabled` از CLI/tray؛ auto-enable پس از start/restart/Login اگر
+  helper سالم است؛ نبود helper → warning و TUN off، بدون fail کل proxy.
+- شروع: اگر desired و mode غیر stopped، engine اول interface فیزیکی/bypass
+  خودش را تنظیم می‌کند، سپس سرویس TUN را پیش از listenerها با آدرس SOCKS
+  پیکربندی‌شده بالا می‌آورد (پنجرهٔ blackhole کوتاه)؛ شکست TUN مانع listener
+  readiness نمی‌شود ولی status/tray error می‌دهد. `status.ready` فقط
+  listener-based می‌ماند. اگر mode stopped و TUN از crash فعال است، اول disable
+  و سپس مدیریت عادی؛ شکست disable خطای روشن است. اگر bind listener پس از
+  فعال‌شدن TUN شکست بخورد، engine باید TUN را disable کند؛ در غیر این صورت
+  supervisor/CLI مسیر recovery را نشان می‌دهد.
+- stop/Quit/uninstall: اول disable TUN؛ شکست → عملیات متوقف شود؛ `mode stopped`
+  TUN را می‌بندد و در stopped اجازهٔ enable نمی‌دهد؛ preference فقط با `tun off`
+  پاک می‌شود؛ mode switch TUN را restart نمی‌کند و sweep معمولی D13 را اجرا
+  می‌کند؛ تغییر آدرس SOCKS فقط با disable/re-enable.
+- egress bypass مشترک: direct/probe/fetch/resolver و embedded-Xray pool dial
+  به interface فیزیکی؛ loopback مستثنا؛ kernel <5.7 → `unsupported`. یک
+  controller یک‌بار در start ثبت شود و فقط در TUN active bind کند؛ بعد از
+  disable روی dial عادی اثر نداشته باشد.
+- restart engine: TUN سرویس/route می‌ماند، اتصال‌ها fail-closed؛ engine جدید
+  adopt/disable می‌کند؛ supervisor restart طبق R13 دست‌نخورده.
+- doctor/status: helper installed/missing/incompatible، service error، DNS
+  direct/UDP blocked، conflict، desktop-proxy overlap، all-direct warning؛
+  target SOCKS کهنه → disable/re-enable، نه تغییر بی‌صدا؛ بدون مقصد.
+
+**check:** unit/fake برای enable/stop/quit/restart/persistence؛ gated TUN
+end-to-end با loopback pool/direct/probe/refresh؛ شمارندهٔ loop=0؛ no orphan
+TUN پس از Quit/SIGTERM.
+
+#### R16-E — CLI و Terminal menu
+
+**وابستگی:** R16-B/D. **نتیجه:** `routelatch tun status|on|off` با JSON/exit
+مستند و `tun setup|uninstall` privileged/CLI-only.
+
+- `cmd/routelatch/tun.go` + `execute.go`/usage؛ `tun status|on|off` به opها؛
+  `tun setup|uninstall` با sudo، idempotent، ownership marker، refusal unit
+  غیرمالک؛ پیام‌های روشن برای helper/kernel/systemd.
+- `cmd/routelatch/menu.go`: آیتم TUN coverage با status/on/off/help؛ نصب helper
+  فقط نمایش دستور `sudo routelatch tun setup` (D28).
+- تست CLI: exit codeها، JSON additive، stopped/unsupported/state_locked،
+  idempotency setup با fake systemctl/paths، بدون لمس manager واقعی.
+- README/`deploy/README.md` در R16-G به‌روزرسانی می‌شوند؛ در این task فقط
+  command surface.
+
+**check:** `go test ./cmd/routelatch/...`؛ run واقعی `--json` روی محیط مجاز؛
+help/usage؛ no secret/destination.
+
+#### R16-F — tray: Coverage menu و آیکن رنگ‌دار
+
+**وابستگی:** R16-B/D. **نتیجه:** toggle/status TUN در tray و رنگ/حالت آیکن،
+بدون منطق دوم.
+
+- `internal/trayui/action.go`: `ActionTunEnable/ActionTunDisable` (یا toggle) و
+  mapping به op؛ `allActions` و تست mapping؛ labelها sanitize.
+- `internal/trayui/menu.go`: زیرمنوی Coverage با وضعیت on/off/starting/error،
+  helper missing، DNS direct/UDP blocked warning؛ actionهای نامعتبر disabled.
+- `internal/trayui/types.go`: `Status.Tun` از `StatusData`؛ snapshot/fingerprint.
+- `internal/app/tray.go`: `trayStatusIcon` حالت‌های TUN active/error/desired-off
+  با رنگ/علامت متمایز؛ تست تمایز رنگ‌ها و عدم تصادم؛ tooltip امن.
+- رفتار تأیید: enable (تغییر پوشش سیستم) و disable (کاهش پوشش) سیاست مشخص و
+  تست‌شده؛ بدون مقصد/URL در label/notification.
+- GNOME/Wayland و tray hostهای دیگر همچنان محدودیت R-16 را دارند.
+
+**check:** `go test ./internal/trayui/... ./internal/app/...`؛ gated واقعی KDE
+روی محیط مجاز؛ اسکرین‌شات/رفتار icon و toggle.
+
+#### R16-G — setup ممتاز، packaging و مستندات
+
+**وابستگی:** R16-C/D/E. **نتیجه:** `tun setup` یک‌باره امن و قابل حذف؛ بسته
+همچنان بدون unit/privileged payload؛ مستندات/بسته سازگار.
+
+- `internal/tun/setup` (یا معادل): نوشتن unit/socket/config/root ownership،
+  `systemctl daemon-reload/enable/start socket`، readiness، rollback؛
+  `uninstall` فقط مالک را پاک می‌کند و اول disable. setup باید یک کپی
+  root-owned از باینری در `/usr/libexec/routelatch/` بگذارد و unit همان را
+  اجرا کند؛ هرگز باینری قابل‌نوشتن کاربر را با `CAP_NET_ADMIN` اجرا نکند
+  (`BindReadOnlyPaths` روی فایل کاربر کافی نیست). `RuntimeDirectory` با
+  مالکیت uid برای lease/socket لازم است.
+- بررسی امنیتی: کپی root-owned باینری در `/usr/libexec/routelatch/`،
+  permissionها، socket `0600`/peer uid، عدم پذیرش arg دلخواه، hardening unit
+  (از جمله `/dev/net/tun`)، log بدون مقصد.
+- packaging: `scripts/check-package.sh` همچنان «هیچ unit/postinst در بسته» را
+  تأیید کند؛ `tun setup` تنها سازندهٔ unit است؛ README/packaging/README/
+  deploy/README/CONTRIBUTING و docs/README به‌روزرسانی شوند؛ release notes
+  فقط اگر batch منتشر شد.
+- مستندات کاربر: پیش‌نیاز Linux ≥5.7/systemd/CAP_NET_ADMIN، DNS مستقیم، UDP
+  بلاک، ECH، همهٔ کاربران host، fail-open window، و recovery روشن: `tun off`
+  نیازمند engine است، ولی `sudo routelatch tun uninstall`/`systemctl stop
+  routelatch-tun.service` مسیر مستقل است.
+- migration/upgrade: config additive، بکاپ/restore، نبود unit قبلی؛ uninstall
+  هیچ state/داده کاربر را حذف نکند.
+
+**check:** `check-package.sh`, `check-artifact.sh` (بدون تغییر payload)؛
+idempotent setup/uninstall با fake manager؛ gated نصب واقعی فقط روی محیط مجاز.
+
+#### R16-H — پذیرش A17 و بازبینی نهایی
+
+**وابستگی:** R16-A..G. **نتیجه:** A17 با شاهد اجرایی و review مستقل.
+
+- سناریوی کامل: `tun setup` → `tun on` در targeted → app بدون proxy (TLS/HTTP/IP)
+  → mode all-proxy/all-direct/stopped → DNS/53/UDP/QUIC → IPv6 → engine kill/restart
+  → tray icon/menu → `tun off`/Quit → `tun uninstall`.
+- fail-closed: kill engine، TUN/route باقی، TCP refuse؛ restart بازیابی؛
+  restart سرویس/lease؛ SIGKILL و route cleanup؛ پنجرهٔ fail-open ثبت.
+- leak/counter: pool empty/dead روی مقصد تأییدشده → خطا نه direct؛ localhost/LAN
+  direct؛ DNS سیستم بدون تغییر؛ zero UDP leak؛ zero loop؛ zero destination log.
+- persistence: restart app/service/Login؛ helper missing → warning نه silent.
+- network change: تغییر interface پیش‌فرض/route (در محیط مجاز) رفتار مستند
+  R-28 را نشان دهد؛ تا `tun off/on` هیچ loop/leak بی‌صدا نباشد.
+- platform: فقط amd64/arm64 ادعا؛ kernel/systemd matrix مستند؛ Windows/Android
+  خارج از دامنه.
+- review مستقل کل change (C/D/F/G) با guidance مربوط؛ یافته‌های مادی رفع و
+  effects دوباره بررسی؛ verdict/limits در همین بخش.
+
+**check نهایی:** `go build ./...`، `go vet ./...`، `go test -count=1 ./...`،
+acceptance پیش‌فرض offline، gated `RL_TUN_TEST=1` روی محیط مجاز، package
+checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS.md` و پس از
+گیت‌های release.
+
+#### ترتیب، موازی‌کاری و دروازه‌ها
+
+```text
+R16-A (gate) ──► R16-B ──► R16-C ──┐
+                    │              ├──► R16-D ──► R16-E ──► R16-F ──► R16-H
+                    └──────────────┘                     └──► R16-G ──┘
+```
+
+- R16-A تنها دروازهٔ فنی است؛ تا `Ready` نشدن، C/D/F/G شروع نشوند. B می‌تواند
+  روی مدل داده موازی شود.
+- C و D به‌ترتیب سرویس و engine را می‌سازند؛ E/F روی قرارداد B/D؛ G بعد از
+  C/D/E. H آخرین است.
+- هیچ taskی مجوز نصب واقعی systemd، تغییر شبکه، تست با خروجی عمومی یا انتشار
+  نیست؛ این‌ها در R16-A/G/H با مجوز همان جلسه/محیط انجام می‌شوند.
+- اگر R16-A `Blocked` شد، تصمیم D29 باز می‌شود؛ کاهش بی‌صدا (root engine، TUN
+  در engine، حذف fail-closed، direct کردن UDP) مجاز نیست.
 
 ### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0 تا R15-H انجام شدند؛ v1.1.0 در ۲۰۲۶-۱۱-۲۶ منتشر شد)
 
@@ -1355,11 +1630,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 
 **الف) خارج از v1 — پشتیبانی نمی‌شود (نه «آزمون‌نشده»):**
 - **REALITY/ECH:** importer امنیت reality را `unsupported`/`ReasonRealityUnverified` برمی‌گرداند (`internal/imports/record.go:178-179`) و engine با پیام «REALITY is outside v1» رد می‌کند (`internal/engine/config.go:284-289`)؛ peer محلی فقط بلوک TLS ساده می‌سازد (`internal/acceptance/exit_test.go:98-113`).
-- **mKCP:** در allowlist ترنسپورت نیست (`internal/imports/record.go:170-171`، `internal/engine/config.go:239-240`)؛ `kcp` نگاشت نمی‌شود (`record.go:283-288`) و peer generator برای آن panic می‌کند (`exit_test.go:73-97`)؛ UDP/QUIC هم سیاستاً ممنوع است (`docs/requirements.md:98`، `docs/architecture.md:60`).
+- **mKCP:** در allowlist ترنسپورت نیست (`internal/imports/record.go:170-171`، `internal/engine/config.go:239-240`)؛ `kcp` نگاشت نمی‌شود (`record.go:283-288`) و peer generator برای آن panic می‌کند (`exit_test.go:73-97`)؛ UDP/QUIC هم سیاستاً ممنوع است (`docs/requirements.md` بخش «امنیت و موارد خارج از نسخهٔ اول»، `docs/architecture.md §۳`).
 - **HTTPUpgrade:** همان حذف از allowlist (`record.go:170-171,283-288`)؛ سلول peer ندارد.
-- **XHTTP روی h3/QUIC:** محصول ALPN دلخواه را می‌پذیرد (`internal/engine/config.go:238-241,330-332,403-425`) و ALPN peer پارامتری است (`exit_test.go:88-94,108-112`)، پس فقط یک سلول fixture کم است؛ ولی UDP/QUIC سیاستاً خارج از v1 است (`docs/requirements.md:98`، `docs/architecture.md:60`) و اجراشده فقط h2 بوده (`internal/acceptance/transports_test.go:37`). بنابراین policy-excluded است، نه untested.
+- **XHTTP روی h3/QUIC:** محصول ALPN دلخواه را می‌پذیرد (`internal/engine/config.go:238-241,330-332,403-425`) و ALPN peer پارامتری است (`exit_test.go:88-94,108-112`)، پس فقط یک سلول fixture کم است؛ ولی UDP/QUIC سیاستاً خارج از v1 است (`docs/requirements.md` بخش «امنیت و موارد خارج از نسخهٔ اول»، `docs/architecture.md §۳`) و اجراشده فقط h2 بوده (`internal/acceptance/transports_test.go:37`). بنابراین policy-excluded است، نه untested.
 - **mux/XUDP:** عمداً حذف شده (`internal/imports/importer.go:80,91`، `internal/imports/sanitize.go:164-166`) و در قرارداد sidecar فیلدی ندارد (`internal/contract/sidecar.go:7-17`، `internal/singbox/config.go:62-70`).
-- **Windows، UDP/TUN، Android، GUI:** خارج از v1 با تصمیم کاربر (D24)؛ نیازمند milestone و تصمیم تازه‌اند.
+- **Windows، UDP از pool، Android، GUI:** خارج از v1 با تصمیم کاربر (D24)؛ نیازمند milestone و تصمیم تازه‌اند. TUN در D29 به R16 تبدیل شده است و بخش v1 نیست؛ UDP از pool همچنان تصمیم جدا می‌خواهد.
 
 **ب) پیاده‌سازی‌شده — وضعیت اجرا و کار باز v1 (به ترتیب):**
 1. **reuse طولانی‌مدت ترنسپورت — انجام شد (۲۰۲۶-۱۱-۲۱):** سلول گیت‌شدهٔ `RL_ACCEPT_LONG_REUSE_TEST=1` در `internal/acceptance/reuse_test.go` یک تانل CONNECT روی WS/TLS (همان سلول اثبات‌شدهٔ R6) را باز می‌کند و سه درخواست keep-alive با بدنهٔ یکتا روی همان تانل می‌فرستد؛ پاسخ هر سه بایت‌به‌بایت برابر echo مبدأ و هر تلاش دقیقاً **۱ درخواست مقصد** (بدون تکرار/replay). **تعریف «طولانی‌مدت» از این پس همین پارامترهای تست است: ۳ درخواست، گسترهٔ زمانی ≥۳۰s و شکاف بی‌کار ≥۱۰s بین دو درخواست.** مشاهده: گسترهٔ ۳۲٫۰s، شکاف بی‌کار ۳۰٫۰s، **۱ اتصال خروجیِ مشتری** که در تمام پنجره زنده ماند و هر سه درخواست از آن رفت (۱ اتصال مقصد، بدون تحویل direct چون نام fixture روی host resolve نمی‌شود، بدون 502/timeout، سرویس پس از شکاف پاسخ‌گو). اولین probe سلامتِ زمان‌بندی‌شده (بررسی tick ۳۰s؛ چرخهٔ بعدی ۱۰ دقیقه) یک اتصال کوتاه‌عمر اضافی به exit ساخت (۰ تماس مقصد) و بسته شد؛ زمانِ آن اندازه‌گیری و به همان tick نسبت داده شد، و شمارش «برای این مشتری» از آن جدا شد و در PASS گزارش می‌شود. **شواهد (درخت کاری این تغییر، والد `ccdb4df`):** `gofmt -l internal/acceptance/reuse_test.go` خالی؛ `go vet ./...` و `go build ./...` exit 0؛ `go test -count=1 ./internal/acceptance/` با گیت خاموش سبز (۱۱۷٫۷s)؛ اجرای گیت‌شده **PASS در ۳۲٫۶۳s** (`RL_ACCEPT_LONG_REUSE_TEST=1 go test -count=1 -v -run TestTransportLongReuse ./internal/acceptance/`). commit محلی این تغییر: `test(acceptance): add gated long-duration transport reuse cell`. **قدم بعدی:** corrupt-state آفلاین زیر systemd که بعداً انجام شد (مورد ۵) و سپس session طولانی hysteria2.
@@ -1409,7 +1684,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** `v1.1.0` سطح کنترل tray (R15)،
+   هیچ کار باز R15 یا v1 نمانده است.** **R16 (پوشش TUN) در همین تاریخ فقط
+   تعریف شد و هیچ taskی شروع نشده است؛ قدم بعد R16-A است و فقط با مجوز صریح
+   محیط/پیاده‌سازی.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1449,11 +1726,12 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 6. شواهد را از `docs/contracts.md`، `packaging/README.md` و اجرای واقعی CI
    بردار، نه از حافظه؛ اگر رفتار GitHub Actions یا محدودیت runner با فرض‌ها فرق
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
-7. پایان هر task: ردیف R15 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
+7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   موارد آزمون‌نشده (Wayland/GNOME، اسکرین‌شات، desktop set/restore، autostart،
-   proposal accept/recheck/clear، pool remove/test، runtime غیر-amd64 و service
-   install) فقط با مجوز/محیط جدا انجام می‌شوند و کار باز R15 نیستند.
+   R16 فقط تعریف شده و اولین قدم آن R16-A است. موارد آزمون‌نشده (Wayland/GNOME،
+   اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
+   pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
+   انجام می‌شوند و کار باز R15 نیستند.
 
 ### مسائل و حدود مجوز
 
@@ -1502,6 +1780,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
   بدون لینک/credential/دادهٔ اتصال خصوصی در repo، fixture، لاگ یا گزارش، بدون بار سنگین
   روی نودهای مشترک، و روی نمونهٔ ایزوله با data-dir و portهای اختصاصی بدون تغییر سرویس
   زنده/تنظیم پروکسی دسکتاپ. سقف بار و فهرست مقاصد در تصمیم گروه ج بالا تثبیت شد.
-  Windows، UDP/TUN، Android و GUI «خارج از v1»اند. A01 با شهادت کاربر بسته شد؛ runtime
+  Windows، UDP از pool، Android و GUI «خارج از v1»اند؛ TUN در D29 به R16 (پس از
+  v1) منتقل شد. A01 با شهادت کاربر بسته شد؛ runtime
   سه معماری و GNOME به‌تعویق افتادند. corrupt-state آفلاین زیر unit موقت در ۲۰۲۶-۱۱-۲۱
   انجام و مجوزش مصرف شد؛ سایر اقدام‌های میزبان مجوز جدا می‌خواهند.

@@ -2,8 +2,12 @@
 
 Thanks for considering a contribution. RouteLatch is a Linux v1 and its scope is
 deliberate: it is a loopback proxy client with an approved-destination list, not
-a TUN/VPN or a multi-platform product. Changes that widen that scope need a
-design decision first.
+a general VPN or a multi-platform product. An optional **TUN coverage layer** is
+defined for after v1 (decision D29 / plan R16): it is a coverage path over the
+existing modes, uses a separate privileged helper, and does not replace the
+approved-destination policy. It is not implemented or shipped in v1.1.0.
+Changes that widen the scope beyond that decision need a new design decision
+first.
 
 Read [AGENTS.md](AGENTS.md) for the repository rules and
 [docs/implementation-plan.md#open-work](docs/implementation-plan.md#open-work) for
@@ -35,6 +39,10 @@ loopback-only. Opt-in checks that touch real system state are:
 - `ROUTELATCH_DESKTOP_TEST=1` changes the real KDE/GNOME desktop proxy.
 - `ROUTELATCH_SYSTEMD_SERVICE_STATUS=1` reads the real user manager's
   `service status` without writing, starting, stopping or reloading anything.
+- TUN coverage tests (R16) are gated and may create a TUN interface, routes and a
+  temporary system unit; run them only in a disposable VM/container or an
+  explicitly authorized host. They must never be part of the default offline
+  suite and must not change the real host's DNS/firewall/network.
 
 The old gated "install a temporary systemd unit and run it" cells were retired
 with the packaged unit. Service/autostart behavior is covered by fake-manager

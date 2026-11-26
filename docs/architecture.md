@@ -87,7 +87,9 @@ restart نمی‌کند.
   با ECH) اثبات دامنه نیستند.
 - IPv4-mapped IPv6، IP literal و پورت‌ها یکسان‌سازی می‌شوند؛ نبود پشتیبانی یک مسیر
   هرگز bypass مستقیم نمی‌سازد.
-- DNS سیستم، firewall و TUN تغییر نمی‌کنند.
+- در مدل پیش‌فرض DNS سیستم، firewall و TUN تغییر نمی‌کنند. پوشش TUN (D29، §۹)
+  opt-in است و DNS سیستم و firewall را تغییر نمی‌دهد؛ فقط routeهای TUN و یک
+  سرویس کمکی جدا اضافه می‌شوند.
 
 ## ۴. pool و سلامت
 
@@ -157,7 +159,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 > اجرا و شاهدش در `spike/tray/evidence/r15h-acceptance-2026-11-26.md` ثبت شد؛
 > بازبینی مستقل، commit و تصمیم انتشار مراحل جدا هستند.
 
-- Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
+- Linux `amd64`+`arm64`؛ در مدل پیش‌فرض root/TUN لازم نیست. پوشش TUN اختیاری
+  (D29) یک helper ممتاز یک‌باره می‌خواهد، ولی engine همچنان بدون root و با
+  همان management/socket model اجرا می‌شود. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child
   `routelatch run --headless` اجرا و supervise می‌کند. `--headless` تنها حالت
   جایگزین است: engine foreground بدون tray/GUI برای ترمینال، SSH، container، تست و
@@ -254,7 +258,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   هم‌زمان فعال نمی‌شوند و install هر کدام دیگری را detect و refuse می‌کند. unit
   نصب‌شده بخشی از بسته نیست؛ بسته‌های منتشرشده تا `v0.1.3` unit قدیمی دارند و
   از R13-E به بعد هیچ unit/autostart/postinst در بسته نیست. جزئیات در
-  `docs/contracts.md §۷.۵` است.
+  `docs/contracts.md §۷.۵` است. **استثنای D29/R16:** `tun setup` یک system unit
+  جدا برای سرویس کوچک TUN می‌سازد (فقط با `CAP_NET_ADMIN`، بدون traffic listener)؛
+  این unit بخشی از بسته نیست و engine/tray را root نمی‌کند.
 - آرتیفکتهای `riscv64` و `ppc64le` فقط cross-build و runtime-untestedاند؛ پشتیبانی runtime نسخهٔ v1 همان amd64/arm64 است. بستهٔ `.deb` محلی محتوای tarball را به `/usr` نگاشت میکند (`bin`→`/usr/bin`، `share/doc`→`/usr/share/doc`، `share/routelatch`→`/usr/share/routelatch`)، بسته‌های منتشرشده تا `v0.1.3` unit دارند و از `v1.0.0` طبق D26 هیچ unit/postinst یا فعالسازی سرویسی ندارد؛ sidecar فقط برای amd64/arm64 قرار میگیرد و `.deb` پاورپیسی با نام Debian یعنی `ppc64el` ساخته میشود. اسپک RPM برای هر چهار معماری (`amd64`→`x86_64`، `arm64`→`aarch64`، `riscv64` و `ppc64le` بدون تغییر) از همان BUILD-INFO ساخته و در SHA256SUMS ثبت میشود؛ VERSION آن دقیقاً برابر `.deb` است. LICENSE/NOTICE زیر `/usr/share/licenses/routelatch` و بقیهٔ اسناد زیر `/usr/share/doc/routelatch` نصب میشوند، بدون scriptlet یا فعالسازی سرویس. rpmbuild روی host نصب نیست؛ باینری RPM در container یک‌بارمصرف ساخته، بازرسی و payload آن اجرا شده است، CI نیز باینری‌ها را می‌سازد/بازرسی می‌کند؛ انتشار `v1.0.0` با مجوز کاربر انجام شد. نصب واقعی تحت RPM و اجرای سرویس opt-in روی معماری‌های غیر amd64 هنوز آزمون‌نشده‌اند.
 - پروکسی دسکتاپ opt-in است و فقط GNOME (`gsettings`) و KDE (`kwriteconfig`) را
   پشتیبانی می‌کند؛ بقیهٔ محیط‌ها پیام صریح «پشتیبانی نمی‌شود» می‌گیرند، نه ادعای
@@ -270,9 +276,129 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 
 ## ۸. مراحل بعدی
 
-TUN و UDP semantics جدا دارند (capture، DNS، privilege، teardown) و registry اتصال
-v1 را به‌طور خودکار به دست نمی‌آورند؛ D13 روی TUN دروازهٔ فنی جدید است. Windows به
-named-pipe/ACL و SCM نیاز دارد. Android `VpnService` بومی و یک Go runtime در artifact
-می‌خواهد. GUI بعداً همان `run` پیش‌فرض را به GUI+tray تبدیل می‌کند و `--headless`
-دست‌نخورده می‌ماند؛ فرمان `gui` جدا وجود ندارد. انتخاب framework سرمایه‌گذاری جدید و
-خارج از v1 است (D24/D26).
+Windows به named-pipe/ACL و SCM نیاز دارد. Android `VpnService` بومی و یک Go runtime
+در artifact می‌خواهد. GUI بعداً همان `run` پیش‌فرض را به GUI+tray تبدیل می‌کند و
+`--headless` دست‌نخورده می‌ماند؛ فرمان `gui` جدا وجود ندارد. انتخاب framework
+سرمایه‌گذاری جدید و خارج از v1 است (D24/D26).
+
+TUN در D29 (۲۰۲۶-۱۱-۲۶) از «مرحلهٔ بعدی مبهم» به یک milestone پس از v1 (R16) تبدیل
+شد و طراحی آن در §۹ آمده است. UDP از pool همچنان تصمیم/پیاده‌سازی جدا می‌خواهد؛
+فاز اول TUN فقط UDP غیرDNS را بلاک می‌کند. TUN هنوز پیاده یا اجرا نشده است و
+ادعای پشتیبانی آن در v1.1.0 وجود ندارد.
+
+## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶، پیاده‌سازی‌نشده)
+
+**مرز.** TUN یک **حالت پنجم نیست**؛ یک لایهٔ پوشش روی `targeted`/`all-proxy`/
+`all-direct` است. جدول تصمیم §۳، فهرست تأییدشده، انتخاب exit، registry، D11 و
+D13 تغییر نمی‌کنند. TUN فقط ترافیک برنامه‌هایی را به همان listenerهای محلی
+می‌رساند که پروکسی سیستم را نادیده می‌گیرند. `stopped` همچنان «بدون listener» است
+و TUN در آن فعال نمی‌شود.
+
+```text
+برنامهٔ بدون پروکسی
+        │ packet (IPv4/IPv6)
+        ▼
+   TUN (rl-tun0) ── Xray TUN inbound + sniffing ──┐
+        │  TCP (domain اگر TLS/HTTP قابل sniff باشد)│
+        └──────────────► SOCKS5 loopback ──► router/registry ──► direct | pool
+                              │
+        DNS/53 ──► freedom (bind به interface فیزیکی) ──► resolver مستقیم
+        UDP غیر 53 ──► blackhole
+```
+
+**سرویس جدا، نه TUN در engine.** TUN در یک process جدا (`routelatch
+__tun-service`) و با همان هستهٔ pin‌شده اجرا می‌شود. این جداسازی عمدی است:
+
+- `core.Instance` بعد از `Stop` وضعیت process-global دارد و restart درون‌process
+  ممنوع است (R-4). TUN enabled/disabled باید بدون restart engine کار کند؛ سرویس
+  جدا یک core تازه در هر enable می‌سازد و با disable خارج می‌شود.
+- TUN به `CAP_NET_ADMIN` نیاز دارد. این capability فقط به سرویس کوچک TUN داده
+  می‌شود؛ engine، tray و management با root اجرا نمی‌شوند.
+- TUN می‌تواند مستقل از engine زنده بماند تا در قطع engine اتصال‌ها fail-closed
+  بمانند.
+
+**نصب یک‌باره.** `sudo routelatch tun setup` یک systemd **system** unit/socket
+می‌سازد (نه در بسته؛ D26 برای بسته دست‌نخورده می‌ماند). unit با
+`CapabilityBoundingSet=CAP_NET_ADMIN` و `AmbientCapabilities=CAP_NET_ADMIN`،
+`NoNewPrivileges=yes` و hardening اجرا می‌شود؛ کنترل socket فقط برای همان uid
+(peer credential) است و ورودی‌اش فقط listener لوپ‌بک و دستورهای ثابت است. هیچ
+route/interface/آدرس دلخواهی از کاربر پذیرفته نمی‌شود. `tun uninstall` unit و
+state موقت را پاک می‌کند. جزئیات قراردادی در `contracts.md §۱۰`.
+
+**حلقه و ترافیک خود RouteLatch.** TUN همهٔ ترافیک سیستم را می‌گیرد، پس dialهای
+خود engine (pool، direct، probe، refresh) و sidecar نیز باید از TUN بیرون بمانند:
+
+- engine همهٔ dialهای غیرلوپ‌بک را در حالت TUN به interface فیزیکی پیش‌فرض bind
+  می‌کند (`SO_BINDTODEVICE`؛ از Linux 5.7 برای کاربر غیرroot مجاز است). این شامل
+  مسیر direct، probe، fetch اشتراک و resolver سفارشی است.
+- dialهای pool از داخل core با یک controller ثبت‌شده در start (که فقط وقتی TUN
+  active است bind می‌کند) یا معادل منظم آن bypass می‌شوند؛ controller یک‌بار در
+  هر process ثبت می‌شود و هیچ state سراسری را دوباره‌نویسی نمی‌کند.
+- sidecar sing-box با `route.default_interface`/`auto_detect_interface` به همان
+  interface bind می‌شود؛ این فیلد از کانفیگ تولیدی ما می‌آید، نه از لینک import.
+- خود سرویس TUN فقط به loopback SOCKS و برای DNS به interface فیزیکی dial
+  می‌کند؛ بنابراین مسیرش وارد TUN نمی‌شود.
+
+**DNS و UDP.** DNS سیستم تغییر نمی‌کند (D15). کوئری plain DNS (TCP/UDP پورت 53)
+توسط Xray TUN دریافت و از طریق `freedom` bind‌شده به interface فیزیکی مستقیم
+فرستاده می‌شود؛ بنابراین نام‌ها در شبکهٔ محلی/resolver دیده می‌شوند و «proxied»
+نیستند. DoH/DoT روی TCP مسیر عادی SOCKS/pool را طی می‌کنند. UDP غیر از DNS به
+blackhole می‌رود: QUIC در فاز اول پشتیبانی نمی‌شود (سیاست no-UDP/QUIC) و برنامه‌ها
+باید به TCP سقوط کنند. ICMP Echo توسط stack محلی پاسخ داده می‌شود و اثبات
+دسترسی واقعی نیست.
+
+**IPv6.** TUN دو-stack است و routeهای `::/1` و `8000::/1` هم به TUN می‌روند تا
+نشت IPv6 نباشد. gatewayهای غیرقابل‌مسیریابی (IPv4 benchmarking و ULA) انتخاب
+می‌شوند تا با LAN معمول تصادم نکنند. مقصد IPv6-only از همان exit/pool یا direct
+پیروی می‌کند؛ اگر exit IPv6 نداشته باشد خطای روشن می‌دهد.
+
+**دامنه و sniffing.** Xray TUN فقط IP می‌بیند. برای TLS (SNI) و HTTP (Host)
+sniffing روشن است و دامنهٔ بازیابی‌شده به SOCKS تحویل می‌شود تا قانون
+domain/domain_suffix کار کند. **وقتی دامنه بازیابی شود، همان دامنه هویت مقصد
+است و قانون IP/CIDR برای آن flow اضافه اعمال نمی‌شود**؛ برای ECH، QUIC یا پروتکل
+بدون metadata دامنه در دسترس نیست و فقط قانون IP/CIDR اعمال می‌شود. این
+اولویت دامنه باید در status/docs باشد و پنهان نشود. sniffing فقط metadata همان flow را در حافظه می‌خواند و در
+log/state نوشته نمی‌شود (D21).
+
+**چرخهٔ عمر و fail-closed.** `tun on` فقط در mode غیر stopped مجاز است. توقف
+(`mode stopped`)، Quit و uninstall اول TUN را می‌بندند و بعد listenerها را؛ اگر
+بستن TUN شکست بخورد، توقف fail می‌شود تا سیستم در حالت blackhole رها نشود. با
+مرگ/ crash خود engine، سرویس TUN و routeها می‌مانند و SOCKS در دسترس نیست، پس
+اتصال‌ها refuse/blackhole می‌شوند (fail-closed). restart engine همان TUN را دوباره
+پیدا می‌کند. اگر خود سرویس TUN از کار بیفتد یا restart شود، تا بازسازی TUN یک
+پنجرهٔ محدود fail-open وجود دارد؛ status/آیکن باید آن را قرمز/هشدار نشان دهد و
+engine باید بازسازی را retry کند. یک kill-switch دائمی (firewall blackhole مستقل)
+خارج از فاز اول است و تصمیم جدا می‌خواهد.
+
+**ماندگاری و آمادگی.** انتخاب TUN در config ذخیره می‌شود و پس از restart/login
+خودکار فعال می‌شود، اگر helper نصب و مجاز باشد؛ در غیر این صورت TUN خاموش
+می‌ماند و status/آیکن warning روشن می‌دهد (بی‌صدا خاموش نمی‌شود). `status.ready`
+همچنان آمادگی management/listener را می‌سنجد؛ TUN یک فیلد/زیرحالت جدا دارد و
+readiness کل app را به آن گره نمی‌زند، چون نبود helper نباید proxy عادی را از کار
+بیندازد.
+
+**tray و CLI.** زیرمنوی Coverage در tray یک toggle «System-wide (TUN)» با وضعیت
+on/off/starting/error و دلیل امن دارد؛ رنگ آیکن برای TUN active/error/desired-off
+متفاوت است. عملیات متنی و نصب helper در CLI می‌مانند (`routelatch tun setup|
+uninstall|status|on|off`)؛ tray فقط پس از نصب helper toggle می‌کند. هیچ مقصد،
+URL، نام exit یا credentialی در label/notification/log نمی‌رود (D21/D28).
+
+**محدودیت سطح ۳.** stack پیش از اثبات اتصال مقصد به TCP پاسخ می‌دهد؛ بنابراین
+شکست pool در TUN به‌صورت بستن/reset همان flow دیده می‌شود، نه refuse فوری.
+هیچ fallback مستقیمی رخ نمی‌دهد، ولی تجربهٔ خطا با listenerهای HTTP/SOCKS یکی
+نیست و باید مستند شود (R-27). ICMP Echo هم محلی پاسخ داده می‌شود و reachability
+واقعی را ثابت نمی‌کند.
+
+**تغییر شبکه.** در فاز اول، تغییر interface فیزیکی پیش‌فرض (Wi-Fi↔Ethernet،
+VPN، suspend/resume) خودکار به bypass جدید منتقل نمی‌شود؛ ممکن است تا
+`tun off/on` خطا یا مسیر کهنه بماند. R16-A رفتار route monitor را می‌سنجد و
+در غیر این صورت watch/restart تصمیم بعدی است؛ status باید خطا را نشان دهد
+(R-28).
+
+**چرا این طراحی.** TUN در همان process engine یک controller سراسری و lifecycle
+route را وارد می‌کند که با ممنوعیت restart درون‌process و مدل process-level
+D26 ناسازگار است. جداکردن TUN به یک سرویس کوچک با capability محدود، این
+ریسک‌ها را از engine دور می‌کند و اجازه می‌دهد سیاست/registry/D13 در engine
+واحد بمانند. گزینه‌های ردشده: TUN داخل engine (state سراسری/restart)، اجرای
+engine با root (سطح حمله)، و sing-box به‌عنوان موتور TUN اصلی (وابستگی GPL و
+مدل سیاست دوم).

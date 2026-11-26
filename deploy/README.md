@@ -30,8 +30,10 @@ in those environments, and it is the only mode a service or unit may run. Plain
 `run` deliberately detaches and is not suitable inside a systemd unit: systemd
 would see its main process exit immediately.
 
-No mode needs root, TUN, a firewall change or a system-wide proxy setting.
-Listeners remain loopback-only under the documented policy.
+No current mode needs root, TUN, a firewall change or a system-wide proxy
+setting. Listeners remain loopback-only under the documented policy. The planned
+post-v1 TUN coverage layer (D29/R16) is opt-in, uses a separate privileged
+helper installed by `sudo routelatch tun setup`, and is not part of v1.1.0.
 
 ## Desktop app and foreground mode
 

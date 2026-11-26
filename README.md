@@ -3,7 +3,9 @@
 RouteLatch is a local proxy client for Linux that sends only the destinations
 you approve through a pool of proxy exits. It builds the official Xray core
 into one static Go binary, so there is no separate Xray install, no TUN device
-and no root requirement.
+and no root requirement. A future opt-in **TUN coverage layer** is defined for
+after v1 (decision D29 / plan R16) but is **not part of v1.1.0**; current
+releases remain loopback-only.
 
 You import share links (VLESS, Trojan or SOCKS5), approve destinations by
 domain, domain suffix, IP or CIDR, and pick a mode. In the default `targeted`
@@ -42,8 +44,10 @@ sweep finishes.
   so far.
 - Go 1.27.4 (the version pinned in `go.mod`) only if you build from source. Set
   `GOTOOLCHAIN=local`.
-- No root, TUN, firewall change or system-wide proxy setting. TLS verification
-  uses the host CA bundle; RouteLatch does not install a root CA.
+- No root, TUN, firewall change or system-wide proxy setting in v1.1.0. TLS
+  verification uses the host CA bundle; RouteLatch does not install a root CA.
+  The planned post-v1 TUN coverage layer (D29/R16) will be opt-in, requires a
+  one-time privileged helper, and is not shipped in v1.1.0.
 - Plain `routelatch run` (app/tray) needs a StatusNotifier tray host and
   permitted `pidfd_open`: Linux ≥5.3, not blocked by seccomp/EPERM. Otherwise
   use `routelatch run --headless` or the opt-in service.
@@ -420,9 +424,11 @@ other software.
 
 ## What it does not cover
 
-- **No TUN and no device-wide capture.** Only traffic sent to RouteLatch's
-  listeners is affected. Programs that ignore `HTTP_PROXY`/`HTTPS_PROXY`/
-  `ALL_PROXY`, or that were started outside `routelatch exec`, are not routed.
+- **No TUN and no device-wide capture in v1.1.0.** Only traffic sent to
+  RouteLatch's listeners is affected. Programs that ignore
+  `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`, or that were started outside
+  `routelatch exec`, are not routed. A planned post-v1 coverage layer (D29/R16)
+  will address this with a separate opt-in helper; it is not available yet.
 - **No UDP or QUIC.** SOCKS5 `UDP ASSOCIATE` and `BIND` are refused.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
@@ -430,8 +436,11 @@ other software.
 - **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No apt/dnf
   repository or package signing; the published `.deb` and RPM files are
   unsigned.
-- **No system-wide "covers everything" mode**; `all-proxy` keeps the documented
-  loopback/private exception.
+- **No system-wide "covers everything" mode in v1.1.0**; `all-proxy` keeps the
+  documented loopback/private exception. The planned post-v1 TUN coverage layer
+  (D29/R16) will sit on top of the existing modes rather than add a fifth mode;
+  plain DNS will remain direct and non-DNS UDP/QUIC will be blocked in its first
+  phase.
 
 ## Verified status
 
@@ -479,8 +488,9 @@ Three different kinds of gap are kept separate:
 
 - **Outside v1 by design, not untested:** REALITY/ECH, mKCP, HTTPUpgrade and
   mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
-  no-UDP/QUIC policy. Windows, UDP/TUN, Android and GUI are later milestones that
-  need a new decision.
+  no-UDP/QUIC policy. Windows, UDP and GUI are later milestones that need a new
+  decision. TUN coverage was moved from "undefined later milestone" to the
+  post-v1 R16 plan (D29) in 2026-11-26; it is still not implemented or shipped.
 - **Implemented but not yet exercised:** long hysteria2 sessions.
 - **Deferred by user decision (2026-11-21), or not yet proven by us:**
   arm64/riscv64/ppc64le runtime execution (deferred; only amd64 is exercised, the

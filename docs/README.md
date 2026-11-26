@@ -18,6 +18,11 @@ stopped/unavailable و sanitize در `contracts.md §۷.۳` قرارداد شد�
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ Wayland/GNOME،
 desktop-proxy واقعی و autostart/service واقعی در آن آزمون نشده‌اند.
 
+**پوشش TUN (D29، ۲۰۲۶-۱۱-۲۶):** TUN یک حالت پنجم نیست؛ یک لایهٔ پوشش روی همان
+حالت‌هاست که در R16 تعریف شده و **هنوز پیاده یا اجرا نشده است**. طراحی در
+`architecture.md §۹`، قرارداد در `contracts.md §۱۰` و taskها/دروازه‌ها در
+`implementation-plan.md` (R16) هستند. `v1.1.0` هیچ پشتیبانی TUN ندارد.
+
 **مدل اجرا (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
 `run --headless` engine foreground است؛ بسته هیچ unit/autostart/postinst ندارد و
 `autostart`/`service install` opt-in هستند (R13-B/C/D پیاده و R13-E

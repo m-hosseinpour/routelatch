@@ -1117,6 +1117,9 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
   "closed": { "count": 4, "pending": 1 }, "kept": 2, "duration_ms": 12 }
 ```
 
+> فرمان‌های `tun ...` (D29/R16) در جدول فعلی نیستند؛ قرارداد آیندهٔ آن‌ها در §۱۰
+> است و تا پایان R16 در CLI وجود ندارند.
+
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
 | `run [--headless]` | پیش‌فرض: `pid, listeners, log, already_running?` یا `state/reason`؛ `--headless`: `listeners` در shutdown | 0، 1، 2، 4، 6، 7، 8، 9، 10، 12 | «شروع اپ (tray)» / «شروع headless» |
@@ -1921,6 +1924,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | A13 | R13 | `run --headless` foreground، crash/port collision، config خراب، shutdown تمیز با دادهٔ سالم؛ restart فقط در سطح process |
 | A14 | T7 — **D20 بسته شد؛ انتشار باز** | D20 با Apache-2.0 بسته شد و ممیزی واقعی باینری (۶۸ ماژول لینک‌شده + ۶ کامپوننت embedشده، ۰ مجوز ناشناخته) در [`licensing.md`](licensing.md) ثبت است؛ باقی‌مانده: source offer برای MPL، بستهٔ انتشار/سورس، مجوز انتشار و بازبینی ادعای امنیت/نام |
 | A15 | R13 | `run` پیش‌فرض detached/tray فقط بعد از readiness واقعی (`status.ready` و listenerهای لازم بر اساس mode) برمی‌گردد؛ `--headless` foreground؛ `autostart`/`service install` idempotent؛ بسته بدون unit/postinst؛ نبود tray/pidfd fail صریح (`7`)؛ teardown فقط با هویت تأییدشده (survivor → `1`، clean → `8`)؛ migration از lock/unit قدیمی engine دوم نمی‌سازد |
+| A17 | R16 | پوشش TUN طبق §۱۰: helper یک‌باره/بدون root engine؛ `tun on` فقط non-stopped؛ dual-stack؛ TCP به همان router/pool با sniffing؛ DNS سیستم بدون تغییر و plain DNS مستقیم؛ UDP غیرDNS بلاک؛ fail-closed در قطع engine؛ ترتیب stop/Quit؛ ماندگاری و auto-enable با warning؛ آیکن/منوی tray؛ صفر مقصد در log/state |
 
 ## ۹. محدودیت‌های ثبت‌شده و کار باز
 
@@ -1943,12 +1947,206 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | R-15 | failover پیش از بایت اول CONNECT فقط ۳ exit و ۶۴KiB را پوشش می‌دهد و زمان‌دار نیست: مقصدی که عمداً ساکت می‌ماند نامتعهد می‌ماند و بایت‌های دیررس همچنان replay می‌شوند؛ مقصدی که روی همهٔ exitها پیش از بایت اول می‌بندد می‌تواند همه را cooling کند؛ replay از دید کلاینت حداکثر یک‌بار است، نه لزوماً از دید مقصد | سقف‌ها تصمیم مهندسی‌اند و با شواهد جدید بازبینی می‌شوند؛ درمان اصلی خرابی ۴۰–۵۰٪ exit، pool سالم‌تر است، نه retry نامحدود |
 | R-16 | tray پیش‌فرض به StatusNotifier host وابسته است؛ GNOME بدون extension و SSH/بدون display آن را ندارند و `run` پیش‌فرض در این محیط‌ها fail می‌شود | `--headless` یا سرویس opt-in؛ fallback بی‌صدا عمداً وجود ندارد (D26) |
 | R-17 | بدون سرویس نصب‌شده، crash recovery فقط best-effort و وابسته به زنده‌بودن tray است؛ قبل از login/بعد از logout هم اجرا نمی‌شود | سرویس systemd user opt-in + linger برای VPS؛ مدل دسکتاپ فقط autostart بعد از login |
-| R-18 | `service install` فقط systemd user unit می‌سازد؛ system unit، OpenRC و سرویس‌های OSهای دیگر پشتیبانی نمی‌شوند و linger نیاز به اقدام root/polkit دارد | تصمیم/پیاده‌سازی milestone بعد؛ مستند به‌عنوان مرز v1 |
+| R-18 | `service install` فقط systemd user unit می‌سازد؛ system unit برای **engine**، OpenRC و سرویس‌های OSهای دیگر پشتیبانی نمی‌شوند و linger نیاز به اقدام root/polkit دارد. استثنای D29/R16 فقط `routelatch-tun.service` است: سرویس کوچک TUN با `CAP_NET_ADMIN` محدود، بدون traffic listener و فقط با `sudo routelatch tun setup` نصب می‌شود | تصمیم/پیاده‌سازی milestone بعد؛ مستند به‌عنوان مرز v1؛ این استثنا engine/tray را root نمی‌کند و بستهٔ منتشرشده همچنان هیچ unit ندارد |
 | R-19 | lock فقط per data directory است؛ app/service با `--data-dir` متفاوت می‌توانند هم‌زمان اجرا شوند و بر سر port تصادم کنند. `autostart`/`service` فقط setupهای managed را از هم منع می‌کنند، نه فایل‌های دستی را | app و service پیش‌فرض همان data-dir را دارند؛ data-dir سفارشی یک instance جدا و پیشرفته است؛ تعارض port با exit 6 گزارش می‌شود |
 | R-20 | پنجرهٔ migration فقط مسیرهای legacy شناخته‌شدهٔ R12 را probe/نگه می‌دارد؛ engine قدیمی default با `XDG_RUNTIME_DIR` سفارشی/غیرقابل‌حدس ممکن است دیده نشود (instanceهای `--data-dir` فقط lock همان data-dir را می‌بینند) | migration صریحاً old unit را stop/disable می‌کند؛ پس از یک نسخه سازگاری حذف می‌شود؛ `doctor` مسیر lockهای resolve‌شده را نشان می‌دهد |
 | R-21 | حالت اپ برای teardown ایمن به `pidfd_open` **مجاز** نیاز دارد (Linux ≥5.3 و مسدودنشده با seccomp/EPERM)؛ در غیر این صورت `run` پیش‌فرض و `autostart enable` با `unsupported`/`7` و دلیل `pidfd_unavailable` refuse می‌کنند | `run --headless` مستقل از pidfd است؛ ارتقای kernel/رفع seccomp یا استفاده از سرویس opt-in |
+| R-22 | پوشش TUN به `CAP_NET_ADMIN` (سرویس جدا) و برای bypass غیرroot به `SO_BINDTODEVICE` بدون capability (Linux ≥5.7) و systemd system manager نیاز دارد؛ در محیط‌های بدون این‌ها `tun on` با `unsupported` و دلیل امن refuse می‌شود | helper/systemd به‌عنوان پیش‌نیاز مستند؛ TUN بخشی از v1 نیست و fallback بی‌صدا یا اجرای root engine ندارد |
+| R-23 | plain DNS در فاز اول مستقیم است (سیستم resolver تغییر نمی‌کند) و UDP/QUIC غیرDNS بلاک می‌شود؛ برنامه‌های UDP-only و برخی QUIC-only کار نمی‌کنند | DNS-through-pool و UDP از pool تصمیم/پیاده‌سازی جدا می‌خواهند؛ status/README این محدودیت را صریح نشان می‌دهند |
+| R-24 | TUN کل ترافیک host را می‌گیرد، از جمله ترافیک کاربران دیگر؛ نصب helper با sudo و هشدار صریح است و یک TUN در هر host بیشتر مجاز نیست | مدل چندکاربره/per-UID خارج از فاز اول؛ helper فقط uid مجاز را می‌پذیرد و conflict را رد می‌کند |
+| R-25 | fail-closed فقط تا زمانی معتبر است که سرویس TUN زنده باشد؛ crash/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد و یک kill-switch دائمی وجود ندارد | lease در `/run` و restart خودکار سرویس پنجره را کم می‌کند؛ kill-switch تصمیم جدا و نیازمند firewall/privileged watchdog است |
+| R-26 | دامنه برای ECH، QUIC و پروتکل‌های بدون SNI/Host قابل بازیابی نیست؛ در targeted فقط قانون IP/CIDR اعمال می‌شود. برعکس، وقتی دامنه sniff شود اولویت با domain است و IP/CIDR همان flow اعمال نمی‌شود | محدودیت sniffing در status/docs؛ راه‌حل کامل FakeIP/DNS capture برای حفظ هم‌زمان دامنه و IP تصمیم جدا می‌خواهد |
+| R-27 | TUN stack پیش از اثبات اتصال مقصد به TCP پاسخ می‌دهد؛ شکست pool در TUN به‌صورت بستن/reset flow دیده می‌شود، نه refuse فوری | محدودیت ذاتی proxy در لایهٔ ۳؛ بدون direct fallback؛ محدودیت در status/docs |
+| R-28 | تغییر interface فیزیکی پیش‌فرض (Wi-Fi→Ethernet، VPN، suspend/resume) در فاز اول به‌صورت خودکار به bypass/TUN منتقل نمی‌شود؛ ممکن است تا `tun off/on` خطا یا مسیر کهنه بماند | R16-A رفتار route monitor را می‌سنجد؛ در غیر این صورت watch/restart تصمیم بعدی است و status خطا را نشان می‌دهد |
+| R-29 | sidecar hysteria2 برای جلوگیری از loop زیر TUN به `route.default_interface` نسخهٔ pin‌شده وابسته است؛ پشتیبانی آن هنوز تأیید نشده | R16-A آن را تأیید می‌کند؛ در غیر این صورت exitهای hysteria2 در TUN با `unsupported`/`sidecar_loop_risk` کنار می‌روند، نه loop |
+| R-30 | هم‌زمانی TUN با VPN/TUN دیگر یا route/firewall خارجی آزمون‌نشده است و ممکن است تصادم route/blackhole بدهد | `tun setup` وضعیت را بررسی و conflict را روشن گزارش می‌کند؛ coexistence کامل تصمیم/آزمون جدا می‌خواهد |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
+
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — تعریف‌شده، پیاده‌سازی‌نشده)
+
+این بخش قرارداد milestone پس از v1 است. تا پایان R16 هیچ‌کدام از opها، فیلدها،
+فرمان‌ها یا unitهای این بخش در محصول وجود ندارند و نباید به‌عنوان قابلیت فعلی
+تبلیغ شوند. نام‌ها و مسیرهای زیر **پیشنهادی و الزام‌آور برای پیاده‌سازی R16** هستند.
+
+### ۱۰.۱ مدل و مرز
+
+- TUN یک لایهٔ پوشش روی modeهای موجود است، نه یک `Mode` تازه. `Mode` همچنان
+  `targeted|all-proxy|all-direct|stopped` است و هیچ مقدار TUN به آن اضافه نمی‌شود.
+- `tun enable` فقط وقتی مجاز است که mode غیر `stopped` باشد. `tun disable` همیشه
+  مجاز است. `mode stopped`، Quit و `tun uninstall` **اول** TUN را می‌بندند و بعد
+  listenerها/process را؛ شکست بستن TUN باید توقف را متوقف کند (fail-closed).
+- `mode stopped` مقدار `tun_enabled` را پاک نمی‌کند ولی TUN را می‌بندد و تا
+  انتخاب یک mode غیر stopped اجازهٔ فعال‌شدن نمی‌دهد؛ Quit هم همین preference
+  را نگه می‌دارد. فقط `tun off` (یا uninstall) مقدار را false می‌کند تا
+  «خاموش‌کردن صریح پوشش» از «توقف موقت» جدا باشد. اگر process جدید در mode
+  `stopped` بالا بیاید و TUN فعالی از crash باقی مانده باشد، قبل از اعلام
+  readiness آن را disable می‌کند؛ شکست disable خطای status/doctor است، نه
+  بازکردن listener روی mode stopped.
+- ترافیک TCP پذیرفته‌شده در TUN به SOCKS5 لوپ‌بک همان instance تحویل می‌شود و
+  از همان `Router`/registry/`PolicyVersion` عبور می‌کند. سرویس TUN هیچ rule،
+  pool، exit selection یا تصمیم مقصدی ندارد.
+- دامنه برای TLS/HTTP با sniffing بازیابی می‌شود؛ وقتی دامنه موجود باشد همان
+  هویت مقصد است و قانون IP/CIDR برای آن flow اضافه اعمال نمی‌شود. برای
+  ECH/QUIC/پروتکل بدون metadata فقط IP/CIDR معنا دارد. sniffing فقط metadata
+  flow را در حافظه دارد.
+
+### ۱۰.۲ config، state و status
+
+- `Config` یک فیلد additive و پیش‌فرض `false` به نام `tun_enabled` می‌گیرد؛
+  schema version فعلی (۱) تغییر نمی‌کند چون فایل قدیمی با مقدار صفر معتبر است.
+  این فیلد «خواست کاربر» است، نه اثبات فعال‌بودن TUN.
+- `state.json` هیچ مقصد، نام دامنه، آدرس TUN یا تاریخچهٔ flow نمی‌گیرد (D21).
+- `status` یک شیء additive به نام `tun` می‌دهد:
+  `desired` (bool)، `state` (`off|starting|on|stopping|error|unavailable`)،
+  `interface` (مثلاً `rl-tun0`)، `since`، `dns` (`direct`)، `udp` (`blocked`)،
+  `ipv6` (bool)، `helper` (`installed|missing|incompatible`)،
+  `last_error` (کد/دلیل امن، بدون متن آزاد حاوی مقصد) و `detail` کوتاه.
+- `status.ready` همچنان فقط management/listener را می‌سنجد؛ `tun.desired=true`
+  با `tun.state!=on` یک warning و نشانگر tray است، اما proxy عادی را از کار
+  نمی‌اندازد. `run`/`service` فقط بعد از listener readiness برمی‌گردند.
+- `warnings` نسخهٔ TUN شامل این موارد است: `tun_dns_direct`،
+  `tun_udp_blocked`، `tun_helper_missing`، `tun_service_unavailable`،
+  `tun_domain_unavailable` (در صورت نیاز)، `tun_desktop_proxy_overlap`،
+  `tun_all_direct` و `tun_conflict`.
+
+### ۱۰.۳ opها و فرمان‌ها
+
+| op | ورودی | نتیجه | خطاهای مجاز |
+| --- | --- | --- | --- |
+| `tun.status` | — | `StatusData.tun` | `internal` |
+| `tun.enable` | — | `tun.state=starting\|on` | `stopped`, `unsupported`, `state_locked`, `internal` |
+| `tun.disable` | — | `tun.state=off` | `internal` |
+
+- `tun.enable` ورودی دلخواه (interface/route/domain) ندارد؛ listener هدف از
+  config همان instance گرفته می‌شود و سرویس TUN فقط `127.0.0.1:port` یا
+  `[::1]:port` را می‌پذیرد.
+- `routelatch tun status|on|off` معادل همین opهاست. `routelatch tun setup` و
+  `routelatch tun uninstall` **privileged CLI-only** هستند، از management socket
+  عبور نمی‌کنند، در tray آیتم مستقیم ندارند و در `Terminal menu` فقط راهنما/دستور
+  نشان داده می‌شود (D28).
+- اگر آدرس SOCKS فعال با config جدید فرق کند (تغییر listener + restart)، engine
+  اول TUN را disable و با آدرس جدید enable می‌کند؛ سرویس target flowهای زنده را
+  بی‌صدا عوض نمی‌کند. active بودن سرویس با target کهنه `state_locked`/خطاست.
+- `tun setup` با sudo اجرا می‌شود؛ idempotent است؛ unit/config مالک خود را
+  می‌شناسد و فایل غیرمالک را بدون `--force` بازنویسی نمی‌کند. `tun uninstall`
+  فقط unit/config/lease مالک را حذف می‌کند و اگر TUN فعال است اول disable می‌کند.
+- codeهای خروج از همان جدول §۷.۲ می‌آیند؛ ErrorKind تازه ساخته نمی‌شود.
+  نبود helper/kernel/systemd → `unsupported`/`7` با دلیل پایدار
+  `tun_helper_unavailable` یا `tun_platform_unsupported`؛ تعارض instance →
+  `state_locked`/`6` با دلیل `tun_conflict`؛ mode stopped → `stopped`/`3`.
+
+### ۱۰.۴ قرارداد helper و unit (پیشنهادی)
+
+- `tun setup` باید uid کاربر فراخوان (`SUDO_UID`/real uid) را ثبت کند، نه uid
+  روت؛ اجرای مستقیم با root بدون کاربر هدف مجاز نیست. این فایل‌های root-owned
+  را می‌سازد (و در uninstall پاک می‌کند):
+  - `/etc/systemd/system/routelatch-tun.service`
+  - `/etc/systemd/system/routelatch-tun.socket`
+  - `/etc/routelatch/tun.json` (uid مجاز، مسیر absolute باینری، نام/mtu/gatewayهای
+    ثابت؛ بدون secret و بدون input کاربر)
+  - `/run/routelatch-tun/` (lease و socket؛ `/run` با boot پاک می‌شود)
+- unit با `CapabilityBoundingSet=CAP_NET_ADMIN`, `AmbientCapabilities=CAP_NET_ADMIN`,
+  `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`,
+  `PrivateTmp=yes` و `Restart=on-failure` اجرا می‌شود. `User` همان uid مجاز است؛
+  engine/tray هرگز root نمی‌شوند.
+- **باینری سرویس must root-owned باشد:** setup یک کپی از باینری را در مسیر
+  root-owned مثل `/usr/libexec/routelatch/tun-service` (0755) می‌گذارد و unit
+  همان را اجرا می‌کند؛ هرگز باینری قابل‌نوشتن کاربر (مثل `$HOME/.local/bin`) را
+  با `CAP_NET_ADMIN` اجرا نمی‌کند. کپی باید با version/commit همان binary باشد و
+  upgrade دوباره `tun setup` می‌خواهد. `RuntimeDirectory=routelatch-tun` برای
+  lease/socket با مالکیت uid ساخته می‌شود و `RuntimeDirectoryPreserve=yes`
+  lease را در restart سرویس نگه می‌دارد (در boot تازه `/run` پاک است).
+- `PrivateDevices=yes` نباید `/dev/net/tun` را پنهان کند؛ یا خاموش می‌ماند یا
+  `DeviceAllow=/dev/net/tun rw`/bind معادل دارد.
+- control socket `0600`، peer credential برابر uid مجاز، ورودی فقط listener
+  لوپ‌بک و `enable|disable|status`. هر درخواست دیگر/آدرس غیرلوپ‌بک رد می‌شود.
+  `.socket` unit با `SocketMode=0600`/`SocketUser=<uid>` ساخته می‌شود (مسیر
+  `/run/routelatch-tun/` را setup با مالکیت uid می‌سازد)؛ service در disable با
+  exit 0 خارج می‌شود و socket برای enable بعدی باقی می‌ماند.
+- lease `/run/routelatch-tun/lease.json` فقط برای بازسازی fail-closed پس از
+  restart سرویس در همان boot است و `boot_id` دارد؛ mismatch/discard. در boot
+  تازه TUN خودکار ساخته نمی‌شود؛ engine بر اساس `tun_enabled` آن را درخواست
+  می‌کند.
+- یک TUN در هر host: نام `rl-tun0` و lock سراسری؛ instance دوم/`--data-dir`
+  دوم با `state_locked`/`tun_conflict` رد می‌شود. unit نصب‌شده بخشی از بسته
+  نیست (D26).
+
+### ۱۰.۵ کانفیگ سرویس TUN (ثابت، تولیدشده)
+
+- interface `rl-tun0`، MTU 1500، IPv4 gateway غیرقابل‌مسیریابی
+  `198.18.0.1/15` و IPv6 ULA `fc00::1/64` (ثابت‌ها در R16-A با تست تصادم
+  تأیید می‌شوند).
+- routeها: `0.0.0.0/1`، `128.0.0.0/1`، `::/1`، `8000::/1` با metric 1؛
+  default route سیستم جایگزین نمی‌شود تا routeهای LAN/DNS محلی حفظ شوند.
+- Xray TUN inbound با sniffing `http,tls`، `routeOnly=false`، log error/access
+  خاموش؛ هیچ inbounds دیگر/API/routing کاربری در این core نیست.
+- routing داخل سرویس TUN:
+  1. TCP همه → outbound `rl-tun-socks` به SOCKS لوپ‌بک engine.
+  2. UDP/TCP پورت 53 → outbound `rl-tun-dns` از نوع freedom، bind به interface
+     فیزیکی (DNS مستقیم، بدون proxy).
+  3. UDP غیر 53 → `rl-block` (blackhole).
+  4. final → `rl-block`.
+- `autoOutboundsInterface=auto` (یا معادل تست‌شده) تا dialهای خود سرویس TUN
+  وارد TUN نشوند؛ DNS مستقیم و loopback SOCKS مستثنا هستند. `autoSystemDnsToGateway`
+  هرگز روشن نمی‌شود. firewall/NAT/ip_forward/DNS سیستم تغییر نمی‌کند.
+- سرویس با `core` تازه در هر enable شروع می‌شود و با disable خارج می‌شود؛
+  restart درون‌process ممنوع است (R-4). Stop باید route/address/link را پاک کند
+  و خطای پاک‌سازی را گزارش دهد.
+
+### ۱۰.۶ bypass ترافیک خود RouteLatch
+
+- در حالت TUN، همهٔ dialهای غیرلوپ‌بک engine (direct، probe، fetch اشتراک،
+  resolver سفارشی) به interface فیزیکی پیش‌فرض bind می‌شوند؛
+  `SO_BINDTODEVICE` از Linux 5.7 برای کاربر غیرroot مجاز است. loopback مستثناست.
+- dialهای pool داخل core با یک controller ثبت‌شده در start که فقط در حالت TUN
+  bind می‌کند bypass می‌شوند؛ این registration یک‌بار در هر process است و نباید
+  بعد از disable روی dialهای عادی اثر بگذارد.
+- sidecar sing-box در حالت TUN `route.default_interface` (یا
+  `auto_detect_interface`) به interface فیزیکی می‌گیرد؛ این مقدار از کانفیگ
+  تولیدی ما می‌آید و از import پذیرفته نمی‌شود. اگر نسخهٔ pin‌شده این فیلد را
+  پشتیبانی نکند، exitهای hysteria2 در حالت TUN با `unsupported`/دلیل
+  `sidecar_loop_risk` کنار گذاشته می‌شوند، نه اینکه loop کنند.
+- اگر kernel < 5.7 یا bind شکست بخورد، TUN باید fail کند (`unsupported`)، نه
+  اینکه loop/blackhole یا direct نشت کند.
+
+### ۱۰.۷ حریم خصوصی، امنیت و محدودیت‌ها
+
+- D21: هیچ مقصد/دامنه/flow در log، state، backup، notification، label tray یا
+  helper log نوشته نمی‌شود. sniffing metadata فقط در حافظهٔ همان flow است.
+- TUN تمام ترافیک host را می‌گیرد، از جمله کاربران دیگر؛ setup با sudo و هشدار
+  صریح است. یک TUN در هر host؛ مدل per-UID/per-app خارج از فاز اول (R-24).
+- plain DNS مستقیم است و «proxied» ادعا نمی‌شود؛ UDP/QUIC غیرDNS بلاک است
+  (R-23). دامنه برای ECH/QUIC/غیرTLS در دسترس نیست (R-26).
+- fail-closed تا زنده‌بودن سرویس TUN معتبر است؛ crash/restart سرویس یک پنجرهٔ
+  fail-open کوتاه دارد و kill-switch دائمی خارج از فاز اول است (R-25).
+- TUN stack ممکن است TCP را پیش از اثبات handshake مقصد accept کند؛ در این حالت
+  خطای pool به‌صورت بستن/reset همان flow دیده می‌شود، نه refuse فوری، ولی هیچ
+  fallback مستقیمی رخ نمی‌دهد. این تفاوت باید در status/docs باشد (R-27).
+- TUN می‌تواند با پروکسی دسکتاپ هم‌زمان باشد؛ برنامه‌هایی که از system proxy
+  استفاده می‌کنند به listener می‌روند، نه TUN. RouteLatch تنظیم دسکتاپ را خودکار
+  عوض نمی‌کند؛ warning `tun_desktop_proxy_overlap`. در `all-direct` هم TUN مجاز
+  است ولی سودی برای pool ندارد و UDP غیرDNS را همچنان بلاک می‌کند؛ warning
+  `tun_all_direct`. هم‌زمانی با VPN/TUN دیگر آزمون‌نشده و ممکن است route conflict
+  بدهد (R-30)؛ setup باید آن را روشن گزارش کند، نه بی‌صدا.
+- هیچ MITM/root CA/کاهش TLS، هیچ تغییر DNS سیستم، هیچ LAN listener/forwarding،
+  و هیچ rule/pool مستقل در سرویس TUN مجاز نیست.
+- اگر engine در دسترس نیست و باید TUN فوراً برداشته شود، مسیر recovery
+  `sudo routelatch tun uninstall` (یا معادل مستند `systemctl stop
+  routelatch-tun.service`) است؛ `tun off` عادی از management socket استفاده
+  می‌کند و در نبود engine کافی نیست. این مسیر باید در README/doctor بیاید.
+
+### ۱۰.۸ نگاشت پذیرش
+
+| معیار | check حداقلی |
+| --- | --- |
+| A17 | helper setup/units/permissions/idempotency/uninstall؛ `tun on/off/status` و JSON/exit؛ dual-stack route/link؛ TCP به SOCKS و domain sniff TLS/HTTP؛ IP/CIDR و targeted/all-proxy/all-direct؛ localhost/LAN direct؛ DNS مستقیم و UDP بلاک؛ stop/Quit ordering؛ قطع engine و fail-closed؛ restart/adopt؛ ماندگاری و helper غایب؛ tray menu/icon/colors؛ صفر مقصد در log/state |
+| A02/A03/A04 | همان ماتریس §۲.۵ روی flowهای TUN؛ pool empty/dead → خطا، نه direct؛ mode switch → registry sweep |
+| A08/A09/A12 | DNS سیستم بدون تغییر؛ hostname تا exit؛ loopback-only؛ socket/lease `0600`؛ UDP غیرDNS `0x07`/blackhole بدون سوکت مستقیم |
+| A15 | `run` readiness و tray؛ stop/restart/Quit با TUN؛ crash/teardown بدون orphan TUN |
+
+**قدم بعد:** R16-A فقط پس از مجوز صریح؛ این قرارداد تا آن زمان پیاده‌سازی‌شده
+نیست و ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.
