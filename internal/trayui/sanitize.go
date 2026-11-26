@@ -117,6 +117,10 @@ func errorKindLabel(err error) string {
 		return "no pending confirmation"
 	case errors.Is(err, ErrNoLifecycle):
 		return "lifecycle unavailable"
+	case errors.Is(err, ErrNoTerminal):
+		return "no terminal found"
+	case errors.Is(err, ErrTerminalUnavailable):
+		return "terminal unavailable"
 	}
 	if isUnavailable(err) {
 		return "engine unavailable"

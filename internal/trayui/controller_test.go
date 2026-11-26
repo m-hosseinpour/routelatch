@@ -437,6 +437,9 @@ func TestQuitUsesAFreshDesktopRead(t *testing.T) {
 		if quits, _ := s.life.counts(); quits != 1 {
 			t.Fatalf("quit requests = %d, want 1", quits)
 		}
+		if restores := s.caller.countOp(control.OpDesktopRestore); restores != 0 {
+			t.Fatalf("plain Quit restored the desktop proxy %d times", restores)
+		}
 	})
 
 	t.Run("applied after the snapshot", func(t *testing.T) {
@@ -499,6 +502,94 @@ func TestQuitRestoreFailureDoesNotQuit(t *testing.T) {
 	}
 	if got := s.ctl.View().LastAction; got != "Failed: state_locked" {
 		t.Fatalf("last action = %q", got)
+	}
+}
+
+func TestQuitKeepDesktopQuitsWithoutRestore(t *testing.T) {
+	fx := newFixture()
+	fx.desktop.Applied = true
+	s := newSetup(t, fx, nil)
+	ctx := context.Background()
+	res, err := s.ctl.Trigger(ctx, ActionQuitKeepDesktop, Target{})
+	if err != nil || res.Status != ResultConfirmationRequired {
+		t.Fatalf("quit and keep = %+v, %v", res, err)
+	}
+	if _, err := s.ctl.Confirm(ctx); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if quits, _ := s.life.counts(); quits != 1 {
+		t.Fatalf("quit requests = %d, want 1", quits)
+	}
+	if restores := s.caller.countOp(control.OpDesktopRestore); restores != 0 {
+		t.Fatalf("quit and keep restored the desktop proxy %d times", restores)
+	}
+	if got := s.ctl.View().LastAction; got != "Quit requested; desktop proxy kept" {
+		t.Fatalf("last action = %q", got)
+	}
+	notes := s.notifier.all()
+	if len(notes) == 0 || notes[len(notes)-1].Body != "Quit requested; desktop proxy kept" {
+		t.Fatalf("notifications = %+v", notes)
+	}
+}
+
+func TestQuitRestoreDesktopRestoresThenQuits(t *testing.T) {
+	fx := newFixture()
+	fx.desktop.Applied = true
+	s := newSetup(t, fx, nil)
+	ctx := context.Background()
+	res, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{})
+	if err != nil || res.Status != ResultConfirmationRequired {
+		t.Fatalf("restore and quit = %+v, %v", res, err)
+	}
+	restoresAtQuit := -1
+	s.life.onQuit = func() { restoresAtQuit = s.caller.countOp(control.OpDesktopRestore) }
+	if _, err := s.ctl.Confirm(ctx); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	waitFor(t, "quit and restore job", func() bool { return s.ctl.View().Job == nil })
+	if restoresAtQuit != 1 {
+		t.Fatalf("desktop.restore calls at quit = %d, want 1", restoresAtQuit)
+	}
+	if quits, _ := s.life.counts(); quits != 1 {
+		t.Fatalf("quit requests = %d, want 1", quits)
+	}
+	if got := s.ctl.View().LastAction; got != "Quit requested; desktop proxy restored" {
+		t.Fatalf("last action = %q", got)
+	}
+	notes := s.notifier.all()
+	if len(notes) == 0 || notes[len(notes)-1].Body != "Quit requested; desktop proxy restored" {
+		t.Fatalf("notifications = %+v", notes)
+	}
+}
+
+func TestQuitKeepDesktopOnUnknownStateQuitsWithWarning(t *testing.T) {
+	s := newSetup(t, newFixture(), nil)
+	s.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
+	ctx := context.Background()
+	// Clicking plain Quit triggers the documented fresh desktop read. When it
+	// fails, plain Quit is rejected and the explicit keep/restore choice is
+	// what the menu then offers.
+	if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("plain Quit with an unknown desktop state = %v, want ErrBlocked", err)
+	}
+	view := s.ctl.View()
+	if n, _ := findNode(view.Root, "quit.keep"); !n.Enabled || !n.Visible {
+		t.Fatalf("quit.keep = %+v, want the explicit choice", n)
+	}
+	if n, _ := findNode(view.Root, "quit.warning"); !strings.Contains(n.Label, "unknown") {
+		t.Fatalf("quit warning = %q", n.Label)
+	}
+	if _, err := s.ctl.Trigger(ctx, ActionQuitKeepDesktop, Target{}); err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	if _, err := s.ctl.Confirm(ctx); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if quits, _ := s.life.counts(); quits != 1 {
+		t.Fatalf("quit requests = %d", quits)
+	}
+	if restores := s.caller.countOp(control.OpDesktopRestore); restores != 0 {
+		t.Fatalf("unknown desktop was restored without the explicit choice: %d", restores)
 	}
 }
 

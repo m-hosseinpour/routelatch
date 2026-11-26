@@ -63,6 +63,7 @@ type fakeLifecycle struct {
 	quits    int
 	restarts int
 	events   chan LifecycleEvent
+	onQuit   func()
 }
 
 func newFakeLifecycle() *fakeLifecycle {
@@ -72,7 +73,11 @@ func newFakeLifecycle() *fakeLifecycle {
 func (l *fakeLifecycle) Quit() error {
 	l.mu.Lock()
 	l.quits++
+	hook := l.onQuit
 	l.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return nil
 }
 

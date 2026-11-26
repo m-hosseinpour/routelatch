@@ -15,14 +15,15 @@ import (
 	"routelatch/internal/control"
 )
 
-// Options wires the controller to its three boundaries. Caller is required;
-// Lifecycle, Notifier and Autostart may be nil in tests or in a headless
-// controller, where the corresponding actions report a safe failure.
+// Options wires the controller to its boundaries. Caller is required;
+// Lifecycle, Notifier, Autostart and Terminal may be nil in tests or in a
+// headless controller, where the corresponding actions report a safe failure.
 type Options struct {
 	Caller    Caller
 	Lifecycle Lifecycle
 	Notifier  Notifier
 	Autostart AutostartManager
+	Terminal  Terminal
 
 	// Paths are the canonical paths from store.Paths. config.path refreshes
 	// Config/State/Socket; Log is the configured log path (Show log path).
@@ -724,10 +725,7 @@ func (c *Controller) notifyNow(body string) {
 func (c *Controller) runSync(ctx context.Context, action Action, target Target) (Result, error) {
 	switch kindOf(action) {
 	case kindTerminal:
-		c.mu.Lock()
-		c.lastAction = "Terminal menu requested"
-		c.mu.Unlock()
-		return Result{Status: ResultCompleted, Message: "Terminal menu requested"}, nil
+		return c.openTerminal(ctx, action)
 	case kindLocal:
 		if action == ActionShowLogPath {
 			return c.showLogPath()
@@ -761,6 +759,35 @@ func (c *Controller) runLifecycle(action Action) (Result, error) {
 	c.mu.Unlock()
 	c.notifyNow(message)
 	return Result{Status: ResultCompleted, Message: message}, nil
+}
+
+// openTerminal launches the CLI menu through the Terminal boundary. A missing
+// terminal is an explicit, actionable outcome: the notification carries the
+// exact manual command, and no shell or hidden fallback is attempted.
+func (c *Controller) openTerminal(ctx context.Context, action Action) (Result, error) {
+	if c.opts.Terminal == nil {
+		return c.failSync(action, ErrTerminalUnavailable)
+	}
+	err := c.opts.Terminal.Open(ctx)
+	if err == nil {
+		message := "Terminal menu opened"
+		c.mu.Lock()
+		c.lastAction = message
+		c.mu.Unlock()
+		return Result{Status: ResultCompleted, Message: message}, nil
+	}
+	if !errors.Is(err, ErrNoTerminal) {
+		return c.failSync(action, ErrTerminalUnavailable)
+	}
+	message := "No supported terminal found"
+	if command := SanitizeHeader(c.opts.Terminal.ManualCommand()); command != "" {
+		message = "No terminal found; run manually: " + command
+	}
+	c.mu.Lock()
+	c.lastAction = "No supported terminal found"
+	c.mu.Unlock()
+	c.notifyNow(message)
+	return Result{}, ErrNoTerminal
 }
 
 func (c *Controller) showLogPath() (Result, error) {

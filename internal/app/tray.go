@@ -278,6 +278,10 @@ func RunTray(opts TrayOptions) error {
 	if opts.ReadyWait <= 0 {
 		opts.ReadyWait = 3 * time.Second
 	}
+	// The tray starts one child of its own (the Terminal menu); the inherited
+	// supervisor descriptors must not survive that exec or a still-running
+	// terminal would keep the supervisor pipes open.
+	sealInheritedDescriptors(opts)
 	lifecycle, err := newTrayLifecycle(opts.ControlFD, opts.EventFD)
 	if err != nil {
 		return internalFailure("app.tray", "the tray descriptors are invalid", err)
@@ -322,6 +326,7 @@ func RunTray(opts TrayOptions) error {
 		Lifecycle:     lifecycle,
 		Notifier:      notifier,
 		Autostart:     trayAutostartManager(),
+		Terminal:      newTrayTerminal(opts.DataDir),
 		Paths:         trayui.Paths{Socket: opts.Socket, Log: opts.LogPath},
 		CustomDataDir: opts.DataDir != "",
 	})
@@ -395,6 +400,17 @@ func RunTray(opts TrayOptions) error {
 				_ = lifecycle.Send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the tray item is no longer registered"}
 			}
+		}
+	}
+}
+
+// sealInheritedDescriptors marks the supervisor descriptors inherited by the
+// tray as close-on-exec. They are for this process only; a terminal emulator
+// started later must not inherit the control or lifecycle pipe write ends.
+func sealInheritedDescriptors(opts TrayOptions) {
+	for _, fd := range []int{opts.ParentFD, opts.ControlFD, opts.EventFD} {
+		if fd >= 3 {
+			unix.CloseOnExec(fd)
 		}
 	}
 }

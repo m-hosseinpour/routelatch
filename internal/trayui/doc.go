@@ -25,6 +25,11 @@
 // AutostartManager is the optional local XDG-autostart boundary. It matches
 // *autostart.Manager, so internal/app can pass the manager directly.
 //
+// Terminal is the optional terminal-menu boundary. internal/app implements it
+// with the fixed konsole/gnome-terminal/xterm allowlist and an explicit argv;
+// the controller only reports success, a launch failure, or the exact manual
+// command when no allowlisted terminal is installed.
+//
 // # Binder contract
 //
 // A Binder applies View by stable node keys, forwards clicks as
@@ -36,9 +41,9 @@
 // RefreshAll includes the expensive desktop/autostart reads; those two are not
 // part of the periodic poll. The controller re-reads desktop status before a
 // Stop/Restart/Quit confirmation, and an action that changes desktop/autostart
-// state updates that state from its own response. TerminalMenu is an action for
-// the runner; this package does not start processes. The runner must log only
-// Action strings, never node labels or targets (D21).
+// state updates that state from its own response. TerminalMenu reaches the
+// Terminal boundary; this package never starts a process itself. The runner
+// must log only Action strings, never node labels or targets (D21).
 //
 // Backend is the rendering seam: Build creates the initial tree, Apply receives
 // one deterministic batch of stable-key operations per changed View, and Close

@@ -78,6 +78,18 @@ type Notifier interface {
 	Notify(Notification)
 }
 
+// Terminal is the terminal-menu boundary. Open starts `<exe> [--data-dir
+// <dir>] menu` in one allowlisted terminal emulator; the implementation owns
+// the fixed allowlist and the explicit argv. There is no shell, no $TERMINAL
+// lookup and no user text in that argv (docs/contracts.md §7.3).
+//
+// ManualCommand is the exact argv to show the user when Open reports
+// ErrNoTerminal. It never carries a destination, URL or credential.
+type Terminal interface {
+	Open(ctx context.Context) error
+	ManualCommand() string
+}
+
 // AutostartManager is the local XDG-autostart boundary. *autostart.Manager
 // satisfies it; no management socket operation is involved.
 type AutostartManager interface {
@@ -94,6 +106,13 @@ var (
 	ErrBlocked     = errors.New("the action is not available in this state")
 	ErrNoPending   = errors.New("there is no pending confirmation")
 	ErrNoLifecycle = errors.New("the lifecycle channel is not configured")
+
+	// ErrNoTerminal means none of the allowlisted terminals is on PATH; the
+	// controller reports the exact manual command instead of starting a
+	// shell or a hidden fallback. ErrTerminalUnavailable is any other launch
+	// failure (a terminal exists but the process could not start).
+	ErrNoTerminal          = errors.New("no supported terminal was found")
+	ErrTerminalUnavailable = errors.New("the terminal could not be started")
 )
 
 // EnvelopeError is a management result with OK=false. It is deliberately
