@@ -28,6 +28,9 @@ const (
 type Options struct {
 	Executable string
 	ConfigDir  string
+	// DefaultInterface is set by RouteLatch only while TUN coverage is active;
+	// it becomes route.default_interface and is never read from an import.
+	DefaultInterface string
 }
 
 // Runtime is one managed sing-box process. It owns no process-global state and
@@ -69,7 +72,7 @@ func (r *Runtime) Sync(ctx context.Context, exits []contract.SidecarExit) error 
 	if len(exits) == 0 {
 		return nil
 	}
-	gen, err := Generate(exits)
+	gen, err := Generate(exits, GenerateOptions{DefaultInterface: r.opts.DefaultInterface})
 	if err != nil {
 		return err
 	}

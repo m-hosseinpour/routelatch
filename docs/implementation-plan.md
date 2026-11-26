@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B انجام شدند؛ R16-C بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C انجام شدند؛ R16-D بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -418,6 +418,26 @@ TCP را به SOCKS لوپ‌بک می‌دهد، DNS/53 را مستقیم و UD
 
 **check:** unit tests + gated `RL_TUN_TEST=1` روی محیط مجاز؛ route/link cleanup؛
 no destination log؛ dual-stack.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-C — انجام شد):** سرویس جدا در `internal/tun/`
+و hidden `__tun-service` پیاده شد: config ثابت (`rl-tun0`، MTU 1500،
+gatewayهای `198.18.0.1/15`/`fc00::1/64`، نیمه‌ها، sniffing `http,tls`،
+`logLevel/access: none`، `autoOutboundsInterface=auto`)، TCP→SOCKS لوپ‌بک،
+DNS/53 مستقیم و UDP غیر53 بلاک؛ fresh core در هر enable، teardown با ترتیب
+down→stop→remove و cleanup گزارش‌شده؛ control socket `0600` با peer-uid و فقط
+`enable|disable|status`؛ lease با boot_id و rebuild؛ `internal/singbox`
+additive `DefaultInterface` (فقط از config تولیدی، نه import).
+**checkها:** gofmt/vet/build سبز؛ full `go test -count=1 ./...` سبز (acceptance
+۱۱۸s)؛ `-race` روی `internal/tun` و `cmd/routelatch` سبز؛ gated
+`RL_TUN_TEST=1 RL_TUN_ISOLATED_NETNS=1` در کانتینر دورانداختنی **PASS**
+(۱.۶s؛ link/route واقعی، sniffing TLS/HTTP+IPv6، UDP غیر53 zero-datagram،
+SIGKILL→lease rebuild، disable cleanup؛ بدون تغییر هاست).
+بازبینی مستقل **Ready with findings** بود؛ هشت یافته رفع و آخرین latch
+(Start+Stop ناموفق) پس از تأیید متمرکز بسته شد. **معوق تا D/G:** `DefaultInterface`
+به engine wire نشده؛ socket unit/`tun setup` (G) باید `routelatch-tun.socket` را
+وصل کند چون disable process را خارج می‌کند؛ SIGTERM عمداً lease را
+`desired=on` نگه می‌دارد برای rebuild؛ DNS-direct در C دوباره runtime نشد
+(شاهد A). **next:** R16-D.
 
 #### R16-D — یکپارچگی engine: enable/disable، ماندگاری و bypass
 
@@ -1805,10 +1825,10 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A و R16-B در ۲۰۲۶-۱۱-۲۷ انجام و
-   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-C قدم بعد است. R16-I/J
-   (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
-   می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A، R16-B و R16-C در ۲۰۲۶-۱۱-۲۷
+   انجام و بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-D قدم بعد است.
+   R16-I/J (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H
+   شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1850,7 +1870,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B انجام شدند و R16-C قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C انجام شدند و R16-D قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

@@ -1,11 +1,13 @@
 package singbox
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/imports"
 )
 
 func testExit(tag string) contract.SidecarExit {
@@ -23,7 +25,7 @@ func testExit(tag string) contract.SidecarExit {
 func TestGenerateAcceptsGeckoWithPassword(t *testing.T) {
 	exit := testExit("rl-gecko")
 	exit.Obfs = "gecko"
-	gen, err := Generate([]contract.SidecarExit{exit})
+	gen, err := Generate([]contract.SidecarExit{exit}, GenerateOptions{})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
@@ -60,7 +62,7 @@ func keysOf(m map[string]any) []string {
 }
 
 func TestGenerateConfigShape(t *testing.T) {
-	gen, err := Generate([]contract.SidecarExit{testExit("rl-x1"), testExit("rl-x2")})
+	gen, err := Generate([]contract.SidecarExit{testExit("rl-x1"), testExit("rl-x2")}, GenerateOptions{})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
@@ -181,6 +183,83 @@ func TestGenerateConfigShape(t *testing.T) {
 	}
 }
 
+func TestGenerateDefaultInterface(t *testing.T) {
+	exits := []contract.SidecarExit{testExit("rl-x1")}
+	gen, err := Generate(exits, GenerateOptions{DefaultInterface: "eth0"})
+	if err != nil {
+		t.Fatalf("generate with TUN interface: %v", err)
+	}
+	var doc struct {
+		Route map[string]any `json:"route"`
+	}
+	if err := json.Unmarshal(gen.Raw, &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if doc.Route["default_interface"] != "eth0" {
+		t.Fatalf("route.default_interface=%v", doc.Route["default_interface"])
+	}
+	if doc.Route["final"] != BlockTag {
+		t.Fatalf("route.final=%v", doc.Route["final"])
+	}
+
+	// Outside TUN mode the field is absent: it must not be a default that a
+	// normal generated config silently carries.
+	plain, err := Generate(exits, GenerateOptions{})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	var plainDoc map[string]any
+	if err := json.Unmarshal(plain.Raw, &plainDoc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	route, _ := plainDoc["route"].(map[string]any)
+	if _, ok := route["default_interface"]; ok {
+		t.Fatal("default_interface was generated without TUN mode")
+	}
+	// A SidecarExit has no field that can carry this setting, so an import
+	// cannot inject it. The only source is GenerateOptions.
+}
+
+func TestDefaultInterfaceCannotComeFromImport(t *testing.T) {
+	// The import boundary refuses any outbound field RouteLatch does not own,
+	// so route.default_interface can only come from GenerateOptions.
+	payload := `{"type":"hysteria2","server":"hy.example.com","server_port":443,` +
+		`"password":"pw","tls":{"enabled":true,"server_name":"hy.example.com"},` +
+		`"default_interface":"eth0"}`
+	im := imports.NewImporter()
+	src := contract.Source{
+		ID:     imports.SourceIDFor(contract.SourceV2rayN, "default-interface"),
+		Kind:   contract.SourceV2rayN,
+		Origin: "default-interface",
+	}
+	records, _, err := im.ImportWithAudit(context.Background(), src, []byte(payload))
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records=%d", len(records))
+	}
+	if records[0].Status != contract.RecordInvalid || records[0].StatusReason != imports.ReasonSingBoxField {
+		t.Fatalf("an imported default_interface was not refused: %+v", records[0])
+	}
+}
+
+func TestGenerateRejectsUnsafeDefaultInterface(t *testing.T) {
+	for _, name := range []string{
+		"eth0\n", "eth 0", "/etc/passwd", "../eth0", ".", "..",
+		strings.Repeat("a", 16), "eth0\x00", "eth0;rm",
+	} {
+		if _, err := Generate([]contract.SidecarExit{testExit("rl-x1")}, GenerateOptions{DefaultInterface: name}); err == nil {
+			t.Fatalf("unsafe default interface %q was accepted", name)
+		}
+	}
+	for _, name := range []string{"eth0", "enp0s3", "br-lan", "wl.1", "wg0"} {
+		if _, err := Generate([]contract.SidecarExit{testExit("rl-x1")}, GenerateOptions{DefaultInterface: name}); err != nil {
+			t.Fatalf("valid default interface %q was rejected: %v", name, err)
+		}
+	}
+}
+
 func TestGenerateValidation(t *testing.T) {
 	cases := []struct {
 		name string
@@ -199,24 +278,24 @@ func TestGenerateValidation(t *testing.T) {
 		{"oversized bandwidth", func() contract.SidecarExit { e := testExit("t"); e.UpMbps = maxMbps + 1; return e }()},
 	}
 	for _, tc := range cases {
-		if _, err := Generate([]contract.SidecarExit{tc.exit}); err == nil {
+		if _, err := Generate([]contract.SidecarExit{tc.exit}, GenerateOptions{}); err == nil {
 			t.Fatalf("%s was accepted", tc.name)
 		}
 	}
-	if _, err := Generate([]contract.SidecarExit{testExit("same"), testExit("same")}); err == nil {
+	if _, err := Generate([]contract.SidecarExit{testExit("same"), testExit("same")}, GenerateOptions{}); err == nil {
 		t.Fatal("duplicate tags were accepted")
 	}
-	if _, err := Generate(nil); err == nil {
+	if _, err := Generate(nil, GenerateOptions{}); err == nil {
 		t.Fatal("empty exit list was accepted")
 	}
 }
 
 func TestGenerateIsFresh(t *testing.T) {
-	a, err := Generate([]contract.SidecarExit{testExit("rl-x1")})
+	a, err := Generate([]contract.SidecarExit{testExit("rl-x1")}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := Generate([]contract.SidecarExit{testExit("rl-x1")})
+	b, err := Generate([]contract.SidecarExit{testExit("rl-x1")}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,8 @@
 // only the hysteria2 exit's own server address may be resolved locally, and the
 // destination hostname is preserved across the tunnel (D15). Logging is
 // disabled so no destination reaches a log (D21). Verification is always on.
+// While TUN coverage is active RouteLatch adds route.default_interface from its
+// own generated options, never from an imported field (contracts §10.6).
 // There is no add/remove-outbound RPC, so every change is a full regeneration
 // and process restart; any failure leaves the runtime failed closed.
 package singbox

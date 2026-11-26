@@ -1976,14 +1976,15 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B پیاده‌شده، سرویس واقعی نه)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B و سرویس R16-C پیاده‌شده؛ اتصال engine/CLI/tray نه)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
-فیلدهای config/status، opهای management و seam تزریق‌شدنی) پیاده شده است؛ اما سرویس
-TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D/E/F وجود
-ندارند. تا آن زمان runtime غایب است: status مقدار `off`/`unavailable` را صادقانه
-گزارش می‌کند، `tun.enable` با `unsupported` رد می‌شود و هیچ ادعای پوشش فعال مجاز
-نیست. نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-C به بعد
+فیلدهای config/status، opهای management و seam تزریق‌شدنی) و سرویس جداگانهٔ R16-C
+(`internal/tun` و `__tun-service`) پیاده شده‌اند؛ اما helper/unit (R16-G)، اتصال
+engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production هنوز runtime TUN
+را به management وصل نمی‌کند: status مقدار `off`/`unavailable` را صادقانه گزارش
+می‌کند، `tun.enable` با `unsupported` رد می‌شود و هیچ ادعای پوشش فعال مجاز نیست.
+نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-C به بعد
 الزام‌آورند.
 
 ### ۱۰.۱ مدل و مرز
@@ -2100,13 +2101,16 @@ TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D
   را می‌سازد (و در uninstall پاک می‌کند):
   - `/etc/systemd/system/routelatch-tun.service`
   - `/etc/systemd/system/routelatch-tun.socket`
-  - `/etc/routelatch/tun.json` (uid مجاز، مسیر absolute باینری، نام/mtu/gatewayهای
-    ثابت؛ بدون secret و بدون input کاربر)
+  - `/etc/routelatch/tun.json` (فقط `allowed_uid` و `socks_address`؛ مسیر
+    باینری از unit root-owned می‌آید و نام/mtu/gateway/routeها در کد سرویس
+    ثابت‌اند؛ بدون secret و بدون input کاربر)
   - `/run/routelatch-tun/` (lease و socket؛ `/run` با boot پاک می‌شود)
 - unit با `CapabilityBoundingSet=CAP_NET_ADMIN`, `AmbientCapabilities=CAP_NET_ADMIN`,
   `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`,
   `PrivateTmp=yes` و `Restart=on-failure` اجرا می‌شود. `User` همان uid مجاز است؛
-  engine/tray هرگز root نمی‌شوند.
+  engine/tray هرگز root نمی‌شوند. سرویس در شروع euid را می‌سنجد: اجرا با root
+  یا uid غیر از `allowed_uid` رد می‌شود، حتی اگر socket را systemd با مالک uid
+  به آن داده باشد.
 - **باینری سرویس must root-owned باشد:** setup یک کپی از باینری را در مسیر
   root-owned مثل `/usr/libexec/routelatch/tun-service` (0755) می‌گذارد و unit
   همان را اجرا می‌کند؛ هرگز باینری قابل‌نوشتن کاربر (مثل `$HOME/.local/bin`) را
@@ -2116,6 +2120,12 @@ TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D
   lease را در restart سرویس نگه می‌دارد (در boot تازه `/run` پاک است).
 - `PrivateDevices=yes` نباید `/dev/net/tun` را پنهان کند؛ یا خاموش می‌ماند یا
   `DeviceAllow=/dev/net/tun rw`/bind معادل دارد.
+- شکل pin‌شدهٔ `/etc/routelatch/tun.json` (R16-C/G) فقط دو فیلد دارد:
+  `allowed_uid` (عدد نامنفی؛ uid مجاز engine) و `socks_address` (فقط IP literal
+  لوپ‌بک `127.0.0.0/8` یا `::1` با پورت معتبر). نام/MTU/gateway/routeها، مسیر
+  socket و lease در سرویس ثابت‌اند (`rl-tun0`، `1500`، `198.18.0.1/15`،
+  `fc00::1/64`، `/run/routelatch-tun/{control.sock,lease.json}`)؛ فیلد ناشناخته
+  config رد می‌شود و هیچ interface/route/domain/log-level از آن پذیرفته نیست.
 - control socket `0600`، peer credential برابر uid مجاز، ورودی فقط listener
   لوپ‌بک و `enable|disable|status`. هر درخواست دیگر/آدرس غیرلوپ‌بک رد می‌شود.
   `.socket` unit با `SocketMode=0600`/`SocketUser=<uid>` ساخته می‌شود (مسیر
@@ -2156,8 +2166,10 @@ TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D
   وارد TUN نشوند؛ DNS مستقیم و loopback SOCKS مستثنا هستند. `autoSystemDnsToGateway`
   هرگز روشن نمی‌شود. firewall/NAT/ip_forward/DNS سیستم تغییر نمی‌کند.
 - سرویس با `core` تازه در هر enable شروع می‌شود و با disable خارج می‌شود؛
-  restart درون‌process ممنوع است (R-4). Stop باید route/address/link را پاک کند
-  و خطای پاک‌سازی را گزارش دهد.
+  restart درون‌process ممنوع است (R-4). یک enable شکست‌خورده (core.Start،
+  CheckUp یا نوشتن lease) core/link خود را پاک می‌کند و core شمرده نمی‌شود،
+  پس retry یک core تازه می‌سازد؛ اگر پاک‌سازی کامل نشود، restart لازم است.
+  Stop باید route/address/link را پاک کند و خطای پاک‌سازی را گزارش دهد.
 
 ### ۱۰.۶ bypass ترافیک خود RouteLatch
 
@@ -2215,7 +2227,9 @@ DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و 
 verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
 جدید در همین سند است، نه تغییر خاموش A17.
 
-**قدم بعد:** R16-B (مدل داده، status/config و opهای management) پیاده و تست شده
-است، ولی این پوشش فعال نیست: سرویس/route/helper و اتصال engine تا R16-C/D و
-CLI/tray تا E/F وجود ندارند. R16-A فقط پس از مجوز صریح؛ ادعای پشتیبانی TUN در
-v1.1.0 وجود ندارد.
+**قدم بعد:** R16-B (مدل داده، status/config و opهای management) و سرویس R16-C
+(`internal/tun`، ساخت TUN/route، مسیر TCP→SOCKS، DNS مستقیم و UDP غیرDNS بلاک،
+control socket و lease) پیاده و تست شده‌اند، ولی این پوشش هنوز فعال نیست:
+helper/unit (G)، اتصال engine (D) و CLI/tray (E/F) وجود ندارند و production
+runtime را وصل نمی‌کند. R16-A فقط پس از مجوز صریح؛ ادعای پشتیبانی TUN در v1.1.0
+وجود ندارد.

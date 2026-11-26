@@ -210,7 +210,7 @@ func TestStoredGeckoWithoutObfsPasswordIsIsolated(t *testing.T) {
 	if seen["rl-x-hy-bad"] || !seen["rl-x-hy-good"] || !seen["rl-x-hy-plain"] {
 		t.Fatalf("sidecar exits=%+v", exits)
 	}
-	gen, err := singbox.Generate(exits)
+	gen, err := singbox.Generate(exits, singbox.GenerateOptions{})
 	if err != nil {
 		t.Fatalf("generated sidecar config is invalid: %v", err)
 	}

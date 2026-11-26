@@ -53,6 +53,11 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 		return c.versionCommand()
 	}
+	// The privileged TUN service is a unit entrypoint, not a user command. It
+	// owns no instance paths, and it must work without a login home directory.
+	if rest[0] == "__tun-service" {
+		return c.tunService(ctx, rest[1:])
+	}
 	paths, err := store.ResolvePaths(c.dataDir)
 	if err != nil {
 		return c.localFailure(rest[0], err)

@@ -255,7 +255,7 @@ type validatingSidecar struct {
 
 func (v *validatingSidecar) Sync(ctx context.Context, exits []contract.SidecarExit) error {
 	if len(exits) > 0 {
-		if _, err := singbox.Generate(exits); err != nil {
+		if _, err := singbox.Generate(exits, singbox.GenerateOptions{}); err != nil {
 			return err
 		}
 	}
