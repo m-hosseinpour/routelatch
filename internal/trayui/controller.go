@@ -423,8 +423,13 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 	if engine == EngineStarting && action != ActionDesktopRefresh {
 		return ErrUnavailable
 	}
-	// Desktop status is a read; it stays available while a job runs.
+	// Desktop status is a read; it stays available while a job runs. An
+	// unsupported desktop only shows its status and reason (§7.3), but a
+	// failed read leaves Refresh enabled so the unknown state can recover.
 	if action == ActionDesktopRefresh {
+		if d := c.snap.Desktop; d.Known && !d.Err && !d.Supported {
+			return ErrBlocked
+		}
 		return nil
 	}
 	if busy {
@@ -489,6 +494,9 @@ func (c *Controller) autostartDisabledLocked() string {
 		return "autostart status is not loaded"
 	}
 	if c.snap.Autostart.Conflict != "" {
+		if c.snap.Autostart.Conflict == autostart.ConflictService {
+			return "a managed RouteLatch service unit exists; remove it before using autostart"
+		}
 		return c.snap.Autostart.Conflict
 	}
 	if c.snap.Autostart.Enabled && !c.snap.Autostart.Managed {
@@ -894,7 +902,17 @@ func (c *Controller) jobRequest(ctx context.Context, action Action, target Targe
 		if action == ActionDesktopSet {
 			return "Desktop proxy set", nil
 		}
-		return "Desktop proxy restored", nil
+		// A key the user changed is deliberately left untouched, so a plain
+		// "restored" would overstate the result. The service notice means there
+		// was nothing to restore; use fixed tray text rather than caller text.
+		switch {
+		case data.Notice != "":
+			return "Desktop proxy: nothing to restore", nil
+		case len(data.UserModified) > 0:
+			return fmt.Sprintf("Desktop proxy restored; %d user-modified settings left unchanged", len(data.UserModified)), nil
+		default:
+			return "Desktop proxy restored", nil
+		}
 	case ActionPoolRefresh:
 		return "Sources refreshed", nil
 	case ActionPoolTest, ActionPoolTestFirst20:

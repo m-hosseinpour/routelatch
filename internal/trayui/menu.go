@@ -420,6 +420,10 @@ func (c *Controller) desktopMenuLocked(engine EngineState) Node {
 		children = append(children, disabledItem("desktop.reason", "Desktop proxy status could not be read; restore/keep is an explicit choice at Quit"))
 	} else if d.Known && !d.Supported {
 		children = append(children, disabledItem("desktop.reason", "This desktop environment is not supported; only GNOME and KDE are changed"))
+	} else if d.Notice != "" {
+		// The service notice explains unverifiable ownership or a changed
+		// setting; showing only "applied" would present a stale marker as fact.
+		children = append(children, disabledItem("desktop.notice", d.Notice))
 	}
 	return submenu("desktop", "Desktop proxy", children...)
 }

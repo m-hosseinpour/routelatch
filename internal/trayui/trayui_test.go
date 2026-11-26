@@ -141,6 +141,7 @@ type fixture struct {
 	paths     control.ConfigPathData
 	env       control.EnvData
 	doctor    control.DoctorData
+	backup    string
 }
 
 func newFixture() fixture {
@@ -181,6 +182,7 @@ func newFixture() fixture {
 			{Name: "listeners", Status: "ok", Detail: "both loopback"},
 			{Name: "pool", Status: "warn", Detail: "20 cooling records"},
 		}},
+		backup: "/data/backups/state.json",
 	}
 }
 
@@ -342,7 +344,7 @@ func (f *fixtureCaller) serve(req control.Request) (contract.Envelope, error) {
 		data.Applied = req.Op == control.OpDesktopSet
 		return ok(data)
 	case control.OpBackup:
-		return ok(control.BackupData{Ref: contract.BackupRef{Path: "backup.json", SchemaVersion: 1}})
+		return ok(control.BackupData{Ref: contract.BackupRef{Path: fx.backup, SchemaVersion: 1}})
 	case control.OpPoolRefresh, control.OpPoolSelect, control.OpPoolRerank,
 		control.OpProposalsAccept, control.OpProposalsReject, control.OpProposalsRecheck:
 		return ok(map[string]any{})
