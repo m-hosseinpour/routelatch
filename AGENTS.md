@@ -98,7 +98,11 @@ compatible contract extension; major for a breaking contract, data-format, or be
 change; a mixed batch takes the highest applicable level. Publication still requires the
 existing gates: a green CI run on the tagged commit, reproducible artifacts with
 checksums, updated notes and notices, no secrets or private connection data, and no new
-remotes or change of publication destination.
+remotes or change of publication destination. **Standing authorization (user decision
+2026-11-26):** once those gates are met, tag and release a qualifying batch without
+waiting for a separate per-release request; do not ask for release permission again.
+This does not authorize a new remote, a publication-destination change, or a release
+that fails the gates above.
 
 Commit coherent, verified local changes, including documentation, with the applicable
 harness attribution rules. Obtain a valid user committer email if unavailable; do not
