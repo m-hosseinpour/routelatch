@@ -440,7 +440,9 @@ other software.
   documented loopback/private exception. The planned post-v1 TUN coverage layer
   (D29/R16) will sit on top of the existing modes rather than add a fifth mode;
   plain DNS will remain direct and non-DNS UDP/QUIC will be blocked in its first
-  phase.
+  phase. DNS-through-pool and UDP coverage are separate research tasks (D30);
+  if they land, DNS will have its own independent switch and will not silently
+  change the routing mode.
 
 ## Verified status
 

@@ -2148,5 +2148,10 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | A08/A09/A12 | DNS سیستم بدون تغییر؛ hostname تا exit؛ loopback-only؛ socket/lease `0600`؛ UDP غیرDNS `0x07`/blackhole بدون سوکت مستقیم |
 | A15 | `run` readiness و tray؛ stop/restart/Quit با TUN؛ crash/teardown بدون orphan TUN |
 
+DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و **بخشی از این
+قرارداد فاز اول نیستند**؛ DNS یک switch مستقل خواهد داشت (جدا از mode) و تا
+verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
+جدید در همین سند است، نه تغییر خاموش A17.
+
 **قدم بعد:** R16-A فقط پس از مجوز صریح؛ این قرارداد تا آن زمان پیاده‌سازی‌شده
 نیست و ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.

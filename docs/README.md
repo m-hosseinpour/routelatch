@@ -22,6 +22,9 @@ desktop-proxy واقعی و autostart/service واقعی در آن آزمون ن
 حالت‌هاست که در R16 تعریف شده و **هنوز پیاده یا اجرا نشده است**. طراحی در
 `architecture.md §۹`، قرارداد در `contracts.md §۱۰` و taskها/دروازه‌ها در
 `implementation-plan.md` (R16) هستند. `v1.1.0` هیچ پشتیبانی TUN ندارد.
+DNS-through-pool و UDP (D30/R16-I/J) فقط task تحقیقی جدا دارند؛ DNS یک switch
+مستقل خواهد داشت و تا verdict آن‌ها رفتار فاز اول (DNS مستقیم/UDP بلاک) تغییر
+نمی‌کند.
 
 **مدل اجرا (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
 `run --headless` engine foreground است؛ بسته هیچ unit/autostart/postinst ندارد و

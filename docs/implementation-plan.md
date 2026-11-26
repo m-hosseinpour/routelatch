@@ -185,8 +185,9 @@ D29 (۲۰۲۶-۱۱-۲۶) به‌عنوان **پوشش** پس از v1 تعریف 
    chmod لینوکس کافی نیست. scope دقیق با کاربر بسته شود.
 2. **UDP و TUN:** TUN در D29 (۲۰۲۶-۱۱-۲۶) به R16 تبدیل شد: پوشش دو-stack روی
    modeها، DNS مستقیم و UDP غیرDNS بلاک در فاز اول، helper یک‌باره و fail-closed.
-   UDP از pool، DNS capture/FakeDNS و per-app coverage همچنان تصمیم/مرحلهٔ جدا
-   می‌خواهند. وجود TUN در Xray اثبات تکمیل R16 نیست؛ R16-A دروازه است. سیاست
+   D30 مسیر بعدی را تعریف کرد: DNS-through-pool و UDP هر کدام یک task تحقیقی
+   جدا (R16-I/J) دارند؛ DNS یک switch مستقل خواهد داشت. DNS capture/FakeDNS،
+   per-app coverage و پیاده‌سازی UDP همچنان تصمیم/مرحلهٔ جدا می‌خواهند. وجود TUN در Xray اثبات تکمیل R16 نیست؛ R16-A دروازه است. سیاست
    فعلی v1 همچنان no-UDP/QUIC است (`requirements.md` بخش «امنیت و موارد خارج از
    نسخهٔ اول» و `architecture.md §۳`).
 3. **Android:** `VpnService`/foreground/per-app/protect/socket، VPN coexistence limits،
@@ -212,6 +213,10 @@ R15 (سطح کنترل tray) یک capability پس از v1 است که در بخ�
 | A16 | R15، سطح کنترل tray: نگاشت actionها، confirmation، pagination، حالت unavailable/stopped، sanitize/D21، restart و Quit/restore؛ check نهایی در R15-H |
 | A17 | R16، پوشش TUN: helper/setup، dual-stack، TCP→router/pool، sniffing، DNS مستقیم/UDP بلاک، fail-closed، persistence، tray/icon، D21؛ check نهایی در R16-A/H و `contracts.md §۱۰.۸` |
 | A14 | **مجوز/ممیزی/بسته (R3+R8):** Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابل‌انتشار است، و push مجاز است — ./release-readiness.md |
+
+DNS-through-pool و پوشش UDP (D30/R16-I/J) عمداً معیار A جدا ندارند، چون هنوز
+تحقیق‌نشده‌اند؛ پس از verdict و تصمیم، acceptance/contract جدید نوشته می‌شود و
+به A17 اضافه نمی‌شود.
 
 دادهٔ dev ساخته‌شده برای بازبینی دستی حذف نشود. import قدیمی read-only؛ upgrade
 از state قبلی backup خصوصی و schema version داشته باشد. rollback موتور و state
@@ -249,6 +254,9 @@ v1.1.0 و R1–R15 را باز نمی‌کند و **مجوز پیاده‌ساز
 - DNS سیستم تغییر نمی‌کند؛ plain DNS (53) داخل TUN دریافت و **مستقیم** فرستاده
   می‌شود. UDP/QUIC غیرDNS در فاز اول بلاک است. دامنه فقط برای TLS/HTTP قابل
   sniff است؛ ECH/غیرTLS فقط IP/CIDR.
+- **DNS-through-pool و UDP بخش A17 نیستند (D30):** هر کدام یک task تحقیقی جدا
+  (R16-I/R16-J) پس از H می‌گیرند؛ DNS یک switch مستقل و جدا از mode/سایر
+  ترافیک خواهد داشت. تا verdict آن‌ها، DNS مستقیم و UDP بلاک می‌ماند.
 - IPv6 هم capture می‌شود (dual-stack). fail-closed تا زنده‌بودن سرویس TUN؛
   خرابی/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد.
 - انتخاب TUN ماندگار است و پس از restart/Login خودکار فعال می‌شود؛ نبود helper
@@ -479,20 +487,78 @@ acceptance پیش‌فرض offline، gated `RL_TUN_TEST=1` روی محیط مج�
 checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS.md` و پس از
 گیت‌های release.
 
+#### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
+
+**وابستگی:** R16-A برای واقعیت‌های TUN، و R16-H برای پذیرش فاز اول. این task
+**بخشی از A17 نیست** و تا verdict آن، رفتار DNS مستقیم/UDP بلاک دست‌نخورده
+است. تصمیم D30 مرجع است.
+
+**نتیجه:** مشخص شود DNS از pool چطور و با چه تضمین‌هایی انجام می‌شود؛ یک
+switch مستقل (`dns_via_pool` یا نام نهایی) فقط مسیر DNS را عوض کند، نه mode،
+نه routing مقصد و نه پوشش TUN. اگر شواهد کافی نبود، verdict `Blocked`/`Not
+verified` ثبت شود؛ پیاده‌سازی ناقص یا fallback مستقیم بی‌صدا مجاز نیست.
+
+**پرسش‌های تحقیق (پیش از کد):**
+
+- transport: DoH/DoT/DNS-over-TCP از طریق exit؛ کدام exitها پشتیبانی می‌کنند؛
+  bootstrap resolver بدون وابستگی به DNS سیستم؛ loop با TUN؛ رفتار با IPv6.
+- policy: همهٔ queryها یا فقط دامنه‌های تأییدشده؛ رابطه با targeted/all-proxy/
+  all-direct؛ pool خالی/مرده → خطای روشن DNS، نه direct؛ cache/retry و سقف
+  latency؛ DNS سیستم همچنان تغییر نکند.
+- switch: کلید مستقل config + CLI (`config set` یا `tun dns ...`)، پیش‌فرض
+  امن، رفتار در restart/backup، و اینکه tray فقط status/switch داشته باشد یا
+  نه؛ عملیات متنی در CLI بماند (D28).
+- D21: no query/domain in log/state/tray؛ exit فقط resolver را می‌بیند؛
+  resolver عمومی/خصوصی و trust boundary مستند شود.
+- سازگاری: DNS مستقیم فعلی، captive portal، resolver محلی، DoH مرورگر و
+  hostname resolution برنامه‌ها؛ اگر switch خاموش است، رفتار فاز اول عیناً.
+
+**پیاده‌سازی (فقط پس از verdict و تصمیم جدا):** DNS path در سرویس TUN/engine،
+انتخاب exit و fail-closed، status/CLI/switch، تست‌های fixture و canary D21.
+
+**check:** گزارش verdict، transport/exit matrix، تست DNS با pool سالم/مرده،
+switch off/on، عدم تغییر DNS سیستم، no loop/leak، صفر مقصد در log/state.
+
+#### R16-J — پوشش UDP/QUIC (تحقیق؛ بعد از H)
+
+**وابستگی:** R16-A/H و D30. **بخشی از A17 نیست** و تا verdict، UDP غیرDNS
+بلاک می‌ماند. این task فقط امکان‌سنجی و تصمیم است، نه اجازهٔ ضعیف‌کردن
+سیاست no-UDP فعلی.
+
+**پرسش‌های تحقیق:**
+
+- کدام exitها UDP را واقعاً پشتیبانی می‌کنند (hysteria2، VLESS/Trojan/XUDP،
+  SOCKS5 UDP) و با چه هزینه/نرخ شکست؛ comport با sidecar.
+- TUN UDP flow، session/NAT، DNS/53، QUIC/HTTP3، IPv6، idle timeout، resource
+  limits و teardown؛ loop با برنامه‌های UDP خود RouteLatch.
+- policy: targeted/all-proxy/all-direct، approved domain بدون sniff، fail-closed
+  در pool خراب، no direct leak، D21 (no flow log)، per-app/per-UID خارج از دامنه.
+- switch/policy: UDP همراه TUN یا opt-in جدا؛ اثر بر no-UDP/QUIC v1 و
+  A12/A17؛ نیاز به acceptance/decision جدید.
+
+**check:** verdict با شواهد منبع/اجرا، matrix exitها، تست fixture UDP/QUIC در
+صورت امکان، صفر leak/direct در pool خراب، و تصمیم صریح برای ادامه یا توقف.
+اگر نتیجه مثبت بود، contract/acceptance جدید پیش از کد نوشته شود.
+
 #### ترتیب، موازی‌کاری و دروازه‌ها
 
 ```text
 R16-A (gate) ──► R16-B ──► R16-C ──┐
                     │              ├──► R16-D ──► R16-E ──► R16-F ──► R16-H
                     └──────────────┘                     └──► R16-G ──┘
+                                                                     │
+                                                    R16-I / R16-J (تحقیق، موازی) ◄┘
 ```
 
 - R16-A تنها دروازهٔ فنی است؛ تا `Ready` نشدن، C/D/F/G شروع نشوند. B می‌تواند
   روی مدل داده موازی شود.
 - C و D به‌ترتیب سرویس و engine را می‌سازند؛ E/F روی قرارداد B/D؛ G بعد از
-  C/D/E. H آخرین است.
+  C/D/E. H آخرین task فاز اول است.
+- R16-I/J پس از H شروع می‌شوند و **بخشی از A17 نیستند**؛ تحقیق آن‌ها می‌تواند
+  از شواهد R16-A استفاده کند، ولی پیاده‌سازی فقط با verdict و تصمیم/قرارداد
+  جدید. I و J مستقل و قابل موازی‌کاری‌اند.
 - هیچ taskی مجوز نصب واقعی systemd، تغییر شبکه، تست با خروجی عمومی یا انتشار
-  نیست؛ این‌ها در R16-A/G/H با مجوز همان جلسه/محیط انجام می‌شوند.
+  نیست؛ این‌ها در R16-A/G/H/I/J با مجوز همان جلسه/محیط انجام می‌شوند.
 - اگر R16-A `Blocked` شد، تصمیم D29 باز می‌شود؛ کاهش بی‌صدا (root engine، TUN
   در engine، حذف fail-closed، direct کردن UDP) مجاز نیست.
 
@@ -1686,7 +1752,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
    هیچ کار باز R15 یا v1 نمانده است.** **R16 (پوشش TUN) در همین تاریخ فقط
    تعریف شد و هیچ taskی شروع نشده است؛ قدم بعد R16-A است و فقط با مجوز صریح
-   محیط/پیاده‌سازی.** `v1.1.0` سطح کنترل tray (R15)،
+   محیط/پیاده‌سازی. R16-I/J (DNS-through-pool و UDP) نیز فقط task تحقیقی
+   تعریف‌شده‌اند و بعد از H شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز

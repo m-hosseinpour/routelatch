@@ -6,8 +6,9 @@ a general VPN or a multi-platform product. An optional **TUN coverage layer** is
 defined for after v1 (decision D29 / plan R16): it is a coverage path over the
 existing modes, uses a separate privileged helper, and does not replace the
 approved-destination policy. It is not implemented or shipped in v1.1.0.
-Changes that widen the scope beyond that decision need a new design decision
-first.
+DNS-through-pool and UDP coverage are separate research tasks (D30/R16-I/J);
+they need a new contract/acceptance and must not be enabled silently. Changes
+that widen the scope beyond these decisions need a new design decision first.
 
 Read [AGENTS.md](AGENTS.md) for the repository rules and
 [docs/implementation-plan.md#open-work](docs/implementation-plan.md#open-work) for
