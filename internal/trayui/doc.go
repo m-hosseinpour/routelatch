@@ -27,14 +27,21 @@
 //
 // # Binder contract
 //
-// A binder (R15-D1) applies View by stable node keys, forwards clicks as
-// Trigger(action, target) and feeds lifecycle events to HandleEvent. It calls
-// View on every poll tick (pending expiry and restart timeouts are evaluated
-// there), RefreshAll at start, RefreshStatus every two seconds, RefreshLists
-// every fifteen seconds, RefreshCore immediately after an action and after a
-// LifecycleReady event, and RefreshDesktop/RefreshAutostart only at start,
-// after an action and before a Stop/Restart/Quit confirmation. TerminalMenu is
-// an action for the binder;
-// this package does not start processes. The binder must log only Action
-// strings, never node labels or targets (D21).
+// A Binder applies View by stable node keys, forwards clicks as
+// Trigger(action, target) and feeds lifecycle events to HandleEvent. Runner is
+// the implementation: it calls View on every poll tick (pending expiry and
+// restart timeouts are evaluated there), RefreshAll at start, RefreshStatus
+// every two seconds, RefreshLists every fifteen seconds, and RefreshCore
+// immediately after an action and after a LifecycleReady event. The initial
+// RefreshAll includes the expensive desktop/autostart reads; those two are not
+// part of the periodic poll. The controller re-reads desktop status before a
+// Stop/Restart/Quit confirmation, and an action that changes desktop/autostart
+// state updates that state from its own response. TerminalMenu is an action for
+// the runner; this package does not start processes. The runner must log only
+// Action strings, never node labels or targets (D21).
+//
+// Backend is the rendering seam: Build creates the initial tree, Apply receives
+// one deterministic batch of stable-key operations per changed View, and Close
+// removes the item. A concrete StatusNotifierItem adapter is R15-D2; this
+// package imports no D-Bus library.
 package trayui
