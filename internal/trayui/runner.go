@@ -332,6 +332,11 @@ func (r *Runner) mainLoop(engine EngineState) {
 			return
 		}
 		view := r.applyCurrent()
+		// A cancellation that lands during the backend call is shutdown, not a
+		// rendering failure; do not publish it as one.
+		if r.ctx.Err() != nil {
+			return
+		}
 		if err := r.binder.LastError(); err != nil {
 			msg := err.Error()
 			if msg != lastRenderErr {
