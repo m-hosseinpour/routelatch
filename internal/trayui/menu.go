@@ -234,11 +234,7 @@ func (c *Controller) proposalNode(p Proposal) Node {
 		c.actionItem(key+".accept", "Accept", ActionProposalAccept, target),
 		c.actionItem(key+".reject", "Reject", ActionProposalReject, target),
 	}
-	recheck := c.actionItem(key+".recheck", "Recheck", ActionProposalRecheck, target)
-	if p.Kind == contract.ProposalUnroute {
-		recheck.Enabled = false
-	}
-	children = append(children, recheck)
+	children = append(children, c.actionItem(key+".recheck", "Recheck", ActionProposalRecheck, target))
 	return submenu(key, proposalLabel(p), children...)
 }
 

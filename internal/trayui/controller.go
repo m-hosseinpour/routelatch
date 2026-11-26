@@ -443,6 +443,14 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 		if !c.snap.Status.DiagnosticsEnabled {
 			return ErrBlocked
 		}
+		// An unroute suggestion has no probe evidence to recheck. The menu
+		// disables the item and a click must be rejected by the same rule
+		// (§7.3).
+		if action == ActionProposalRecheck {
+			if p, ok := c.proposalByIDLocked(target.ProposalID); ok && p.Kind == contract.ProposalUnroute {
+				return ErrBlocked
+			}
+		}
 	case ActionDesktopSet:
 		if !c.desktopSetAllowedLocked() {
 			return ErrBlocked
