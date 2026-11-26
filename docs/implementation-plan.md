@@ -221,17 +221,29 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0 تا R15-H انجام شدند؛ release v1.1.0 طبق سیاست AGENTS)
+### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0 تا R15-H انجام شدند؛ v1.1.0 در ۲۰۲۶-۱۱-۲۶ منتشر شد)
 
-**وضعیت واحد (a): R15-0 تا R15-H انجام شدند؛ release v1.1.0 طبق سیاست AGENTS.** تصمیم D28 و معیار A16
+**وضعیت واحد (a): R15-0 تا R15-H انجام شدند و `v1.1.0` در ۲۰۲۶-۱۱-۲۶ منتشر شد؛ هیچ کار باز R15 نمانده است.** تصمیم D28 و معیار A16
 ثبت شدند و طراحی در `docs/contracts.md §۷.۳`/`§۷.۵` و
-`docs/architecture.md §۷` آمده است. در این جلسه هیچ کد، تست، بسته، سرویس،
-autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد. HEAD هنگام تعریف `cff2884` و
-working tree پاک بود. commit تعریف این سند در پایان همین جلسه انجام می‌شود؛
-self-review پلن علیه چک‌لیست coverage/grounding/sequence/verification انجام شد و
-verdict برای کار رفع‌مانع **Ready for R15-A** است؛
-R15-B به نتیجهٔ دروازهٔ A وابسته است. R15 یک milestone **پس از v1** است و
+`docs/architecture.md §۷` آمده است. در جلسهٔ تعریف (۲۰۲۶-۱۱-۲۵) هیچ کد، تست،
+بسته، سرویس، autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد. HEAD هنگام تعریف
+`cff2884` و working tree پاک بود. commit تعریف این سند در پایان همان جلسه انجام
+شد؛ self-review پلن علیه چک‌لیست coverage/grounding/sequence/verification انجام
+شد و verdict برای کار رفع‌مانع **Ready for R15-A** بود؛
+R15-B به نتیجهٔ دروازهٔ A وابسته بود. R15 یک milestone **پس از v1** است و
 R1–R14/v1.0.1 را باز نمی‌کند؛ R14 بسته می‌ماند.
+
+**انتشار v1.1.0 — انجام شد (۲۰۲۶-۱۱-۲۶):** تگ annotated `v1.1.0` (شیء
+`7abe9704f66cbcc78fe6340093e8a365324b9407`) روی commit
+`532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`) در هر دو remote push شد.
+`CI` `45796357850` روی همان commit سبز بود و `Release` `45800238447` همهٔ jobها
+(plan/build/package/RPM/assemble/publish) را سبز گذراند. Release عمومی `v1.1.0`
+(id `459257636`، بدون draft/prerelease) با ۱۷ دارایی (چهار tarball، چهار
+`.deb`، چهار spec، چهار RPM باینری و `SHA256SUMS`) منتشر شد:
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.1.0>. body با
+«RouteLatch v1.1.0 — tray control surface» شروع می‌شود (پیام تگ annotated).
+انتشار طبق مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ در `AGENTS.md`/همین پلن انجام شد، بدون
+درخواست جدا. جزئیات در `docs/release-readiness.md`.
 
 **به‌روزرسانی ۲۰۲۶-۱۱-۲۵ (R15-A):** دروازهٔ فنی منو روی Plasma 6.6.7/X11 و
 bus ایزوله اجرا شد؛ شاهد در `spike/tray/MENU-FINDINGS.md` و
@@ -388,7 +400,7 @@ runner، مسیر پیشنهادی)؛ R15-C در `internal/app/supervisor.go` و
 | R15-F | **rules + proposals — انجام شد (۲۰۲۶-۱۱-۲۶)** | audit نشان داد implementation کامل بود؛ یک ناسازگاری availability رفع شد: `allowedLocked` اکنون Recheck را برای proposalهای unroute رد می‌کند تا منو و کلیک کهنه یک قاعده داشته باشند و override جدا در `menu.go` حذف شد. rules با pagination/remove confirmation/selected ID؛ proposals pending/decided/expired؛ accept route و unroute؛ reject/recheck/clear دقیقاً یک‌بار؛ unroute recheck blocked؛ malicious ID/key/confirm label؛ stale confirm همان proposal ID و expired confirm بدون request؛ concurrent confirm/refresh. بدون management op/persistence جدید | R15-D2 (پس از E) | fixture ۱۱۷ rule در ۶ صفحه بدون تکرار؛ accept route/unroute؛ reject/recheck/clear؛ label مخرب؛ D21 scan (بدون file-write در trayui؛ canary destination/URL/provider در notification/result/last-action نیست)؛ race و full tests (acceptance ۱۱۷٫۷s) سبز. **آزمون‌نشده:** KDE برای این ردیف؛ `proposals clear` retention ۳۰روزه همان semantics موجود است |
 | R15-G1 | **desktop/diagnostics/data/settings — انجام شد (۲۰۲۶-۱۱-۲۶)** | audit چهار gap کاربرمحور را رفع کرد: `Desktop Refresh status` در محیط unsupported غیرفعال شد (failed read همچنان recovery دارد)؛ نتیجهٔ `desktop.restore` برای no-op/user-modified صریح شد («nothing to restore» / «N user-modified settings left unchanged»)؛ `notice` (changed/unverifiable ownership) به‌صورت یک ردیف disabled نمایش داده می‌شود؛ `conflict=service` به‌جای کلمهٔ خام، تعارض unit مدیریت‌شده را توضیح می‌دهد. desktop set/restore با confirmation و single request؛ stopped/listenerless/unsupported/read-failure؛ doctor/warnings/env/log path؛ backup؛ custom data-dir/config path؛ autostart conflict/foreign/error/no-manager؛ D21 outcome scan و static no-fs-import | R15-D2/E/F | fake desktop/autostart؛ set/restore confirmation؛ custom data-dir؛ D21؛ race؛ trayui/app/full tests سبز (acceptance ۱۱۷٫۹s). **آزمون‌نشده:** desktop/autostart واقعی (KDE/live)؛ ردیف notice افزودنی است و در درخت قرارداد صریح نیامده ولی از الگوی reason-row پیروی می‌کند |
 | R15-G2 | **Terminal menu و Quit — انجام شد (۲۰۲۶-۱۱-۲۶)** | Terminal menu که قبلاً فقط «requested» بود، با boundary `trayui.Terminal` و `internal/app/tray_terminal.go` واقعی شد: `konsole -e`/`gnome-terminal --`/`xterm -e` با argv صریح و `<exe> [--data-dir <abs>] menu`، `Setsid`، بدون shell/$TERMINAL/user text؛ terminal گم‌شده `ErrNoTerminal` با دستور دستی sanitized و بدون request؛ fdهای سوپروایزر close-on-exec. Quit سطح کامل audit شد: applied/unknown warning و restore/keep صریح، شکست restore بدون quit، keep بدون restore، job confirmation و Last action نهایی | R15-G1 | fake terminal در PATH (argv دقیق، failure، missing، hostile `$TERMINAL`، descriptor sealing)؛ quit not-applied/applied/unknown/restore-success/restore-failure/keep/job؛ action-surface invariant در loading/ready/applied/stopped/unavailable/pending-job؛ D21 canary؛ race/full tests (acceptance ۱۱۷٫۱s) و static چهار معماری سبز. **ریسک:** بدون KDE/live؛ دستور دستی space-joined برای مسیرهای دارای فاصله مبهم است؛ restore-and-quit هنگام job دیگر disabled می‌ماند. **بازبینی سطح کامل پس از G2:** Ready with findings؛ پنج یافته (پیام restore در Quit، دستور دستی بلند، identity pending، Loading، متن‌ها) رفع و با تأیید متمرکز بسته شدند |
-| R15-H | **acceptance/docs/review/release gate — انجام شد (۲۰۲۶-۱۱-۲۶)** | acceptance روی `22cb97d` + H changes: gofmt/vet/build، `go test ./...` (۱۳۴s)، `-race` trayui/app/control (۱۰۹s)، build استاتیک چهار معماری، `check-artifact.sh` و `check-package.sh` در `DIST` ایزوله با `REQUIRE_SINGBOX=1` سبز. A16 روی data-dir ایزوله/Plasma/X11: status/radio، stop+confirm، restart تا ready، resume، unavailable/recovery، rules/pool pagination و rule-remove، ESC/۸۰rune، canary proposal+Reject، desktop read-only، doctor/log/env، backup ایزوله، fake-konsole Terminal argv، plain Quit و ۱۲ notification بدون مقصد/URL/credential. **نقص واقعی:** `-race` اول در ۳/۲۰۰ اجرا یک ترتیب label/click-target را نشان داد؛ `internal/trayui/backend.go` اکنون targetها را پیش از Apply منتشر و در failure پاک می‌کند، با regression deterministic؛ rerunها سبز. D21 canary فقط در proposal زنده دیده شد و در data/config/state/backup/XDG/log/notification نبود؛ diff scan بدون secret/private path. README/deploy/docs/contracts/architecture به‌روز؛ شاهد: `spike/tray/evidence/r15h-acceptance-2026-11-26.md` و `r15h-2026-11-26/`. بازبینی نهایی مستقل **Ready with findings** (شاهد گم‌شده copy شد، claimهای غیرآرشیوی شفاف شدند) | R15-B0–G2 | checks بالا؛ KDE gated؛ D21 scan با `dbus-monitor`؛ no-secret scan؛ push با runهای سبز CI `45795386223` (fe155c4) و `45795547961` (71b3c05)؛ release طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶). **آزمون‌نشده:** Wayland/GNOME، اسکرین‌شات/بصری، desktop set/restore واقعی، autostart، proposal accept/recheck/clear، pool remove/test، non-amd64 runtime و service install |
+| R15-H | **acceptance/docs/review/release gate — انجام شد (۲۰۲۶-۱۱-۲۶)** | acceptance روی `22cb97d` + H changes: gofmt/vet/build، `go test ./...` (۱۳۴s)، `-race` trayui/app/control (۱۰۹s)، build استاتیک چهار معماری، `check-artifact.sh` و `check-package.sh` در `DIST` ایزوله با `REQUIRE_SINGBOX=1` سبز. A16 روی data-dir ایزوله/Plasma/X11: status/radio، stop+confirm، restart تا ready، resume، unavailable/recovery، rules/pool pagination و rule-remove، ESC/۸۰rune، canary proposal+Reject، desktop read-only، doctor/log/env، backup ایزوله، fake-konsole Terminal argv، plain Quit و ۱۲ notification بدون مقصد/URL/credential. **نقص واقعی:** `-race` اول در ۳/۲۰۰ اجرا یک ترتیب label/click-target را نشان داد؛ `internal/trayui/backend.go` اکنون targetها را پیش از Apply منتشر و در failure پاک می‌کند، با regression deterministic؛ rerunها سبز. D21 canary فقط در proposal زنده دیده شد و در data/config/state/backup/XDG/log/notification نبود؛ diff scan بدون secret/private path. README/deploy/docs/contracts/architecture به‌روز؛ شاهد: `spike/tray/evidence/r15h-acceptance-2026-11-26.md` و `r15h-2026-11-26/`. بازبینی نهایی مستقل **Ready with findings** (شاهد گم‌شده copy شد، claimهای غیرآرشیوی شفاف شدند) | R15-B0–G2 | checks بالا؛ KDE gated؛ D21 scan با `dbus-monitor`؛ no-secret scan؛ push با runهای سبز CI `45795386223` (fe155c4) و `45795547961` (71b3c05)؛ انتشار `v1.1.0` با مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶. **آزمون‌نشده:** Wayland/GNOME، اسکرین‌شات/بصری، desktop set/restore واقعی، autostart، proposal accept/recheck/clear، pool remove/test، non-amd64 runtime و service install |
 
 **ترتیب و دروازه‌ها.** R15-0 → R15-A (دروازهٔ فنی) → R15-B0 → R15-B → R15-C →
 R15-D1 → R15-D2 → R15-E → R15-F → R15-G1 → R15-G2 → R15-H. R15-A باید
@@ -443,8 +455,11 @@ restart/unavailable قطع می‌شوند و پیام «interrupted» لازم 
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md` ثبت شده‌اند. بازبینی‌های
 مستقل B0/B/C، D2 و سطح کامل action انجام و یافته‌هایشان رفع شدند؛ بازبینی نهایی
 H نیز **Ready with findings** بود و شاهد گم‌شده/claimهای غیرآرشیوی اصلاح شدند.
-تنها قدم باقی‌مانده انتشار `v1.1.0` طبق سیاست `AGENTS.md` و مجوز ایستاده است؛
-R15-H خودش release انجام نداد.
+انتشار `v1.1.0` نیز انجام شد (تگ `7abe9704` روی `532c169`، `Release`
+`45800238447`، Release id `459257636`)؛ هیچ کار باز R15 نمانده است. موارد
+آزمون‌نشده (Wayland/GNOME، اسکرین‌شات، desktop set/restore، autostart، proposal
+accept/recheck/clear، pool remove/test، runtime غیر-amd64 و service install)
+فقط با مجوز/محیط جدا انجام می‌شوند و کار باز R15 نیستند.
 
 ### R14 — ساخت و انتشار ریلیز در GitHub Actions (تعریف ۲۰۲۶-۱۱-۲۴؛ انجام و بسته ۲۰۲۶-۱۱-۲۵)
 
@@ -863,7 +878,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   request می‌دهد. Quit applied/unknown/restore-failure/keep/job و Last action
   پوشش داده شد؛ fake terminal/D21/race/full tests سبز. بازبینی مستقل کل سطح
   action انجام شد (Ready with findings) و پنج یافته در batch اصلاح و تأیید
-  شدند. R15-H پذیرش نهایی را انجام داد؛ release v1.1.0 طبق سیاست AGENTS انجام می‌شود.
+  شدند. R15-H پذیرش نهایی را انجام داد و `v1.1.0` در ۲۰۲۶-۱۱-۲۶ منتشر شد.
 
 - **R15-H — انجام شد (۲۰۲۶-۱۱-۲۶):** acceptance روی data-dir ایزوله/Plasma/X11
   و full checks (tests/race/build/package/check-artifact) سبز؛ A16 matrix با
@@ -874,7 +889,8 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   `r15h-2026-11-26/`. بازبینی نهایی مستقل **Ready with findings** بود و شاهد
   گم‌شده/claim غیرآرشیوی اصلاح شد. آزمون‌نشده: Wayland/GNOME، اسکرین‌شات، desktop
   set/restore واقعی، autostart، proposal accept/recheck/clear، pool remove/test،
-  non-amd64 runtime و service install. tag/release طبق سیاست `AGENTS.md` مجاز است.
+  non-amd64 runtime و service install. `v1.1.0` پس از این ردیف منتشر شد (تگ
+  `7abe9704` روی `532c169`، `Release` `45800238447`، id `459257636`، ۱۷ دارایی).
 
 - **R15-0 — انجام شد (۲۰۲۶-۱۱-۲۵، همان جلسه):** سطح کنترل tray با D28/A16
   و قرارداد `contracts.md §۷.۳/§۷.۵` تعریف شد: کلاینت نازک روی management
@@ -884,7 +900,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   تست، بسته، سرویس، autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد.**
   HEAD هنگام تعریف `cff2884` بود و working tree پاک. self-review پلن انجام شد
   و verdict برای R15-A **Ready** بود. R15 پس از v1 است؛ R1–R14/v1.0.1 باز
-  نمی‌شوند. قدم بعد در آن زمان R15-A بود؛ اکنون R15-D1 است.
+  نمی‌شوند. قدم بعد در آن زمان R15-A بود؛ اکنون R15 بسته و `v1.1.0` منتشر شده است.
 
 - **R14 — واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴، ارکستریتور):** مسیر انتشار D27 در
   `.github/workflows/release.yml` پیاده شد: تگ annotated `v*` (یا branch دائمی
@@ -1149,14 +1165,15 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
 | R14 | **انجام شد (۲۰۲۶-۱۱-۲۵؛ اولین ریلیز ساخته‌شده در CI):** `.github/workflows/release.yml` روی تگ annotated `v*` هر ۱۷ دارایی را در CI می‌سازد/تأیید می‌کند و draft→verify→public منتشر می‌کند؛ dry-runهای سبز `45397329232`/`45400769014`/`45422318159`/`45463989732` و شکست کنترل‌شدهٔ `45399453678` در واحد (a) ثبت‌اند. تلاش‌های ۱ و ۲ در gate annotated شکست خوردند و تلاش سوم draft ساخت ولی verify با endpoint تگ برای draft (404) شکست خورد؛ رفع idمحور/یادداشت‌ها در `d14da10` بازبینی مستقل **Ready with findings** (بدون یافتهٔ مسدودکننده) شد. draft `457460945` با مجوز کاربر حذف و نبود Release/draft با listing احرازشده تأیید شد؛ تگ تازه `v1.0.1` (شیء `4462cc86`) روی `d14da10` با CI سبز `45517940277` و `Release` `45521099138` (job انتشار `138895476159`) منتشر شد: Release عمومی `v1.0.1` (id `457516096`) با ۱۷ دارایی، digests منطبق با `SHA256SUMS` و body برابر پیام تگ. **محدودیت‌های شناخته‌شده:** پنجرهٔ create→id می‌تواند draft یتیم بگذارد؛ `check` صفحه‌بندی را با `per_page=100` فرض می‌کند؛ مسیر fail/cleanup فقط stub شده؛ `workflow_dispatch` اجرا نشده؛ flakiness گاه‌به‌گاه step `Test` مشاهده شد. | A14 (انتشار) | مجوز صریح ۲۰۲۶-۱۱-۲۵ |
-| R15 | **R15-0 تا R15-H انجام شدند؛ release طبق سیاست AGENTS (۲۰۲۶-۱۱-۲۵):** سطح کنترل tray (D28/A16) با منوی کامل runtime، confirmation دو مرحله‌ای، job/refresh، `restart-engine` سطح process، `Terminal menu` و صفحه‌بندی pool/rules؛ R15-A شاهد منو/زیرمنو/تغییر زنده روی Plasma 6.6.7 را ثبت کرد (شکاف: Wayland/GNOME و دو اسکرین‌شات)، R15-B0 فیلد `resume_requires_restart` را با تست/بازبینی Ready اضافه کرد، R15-B بستهٔ model/controller `internal/trayui` را با تست‌های fake caller/control server و race پیاده کرد و R15-C restart سطح process را با generation/token و بازبینی lifecycle Ready گذراند و R15-D1 binder/runner با backend ساختگی و تست‌های idempotent/race/leak را با بازبینی Ready پیاده کرد و R15-D2 اتصال واقعی deedles/lifecycle/notifier و اجرای KDE gated را با بازبینی Ready گذراند و R15-E منوی pool را audit و دو انحراف ترتیب label/سقف را رفع کرد و R15-F rules/proposals را audit و یک قاعدهٔ availability را یکسان کرد و R15-G1 سطح desktop/diagnostics/data/settings را با چهار اصلاح تکمیل کرد و R15-G2 Terminal menu/Quit را واقعی و audit کرد و R15-H پذیرش/مستندات/بازبینی نهایی را با یک رفع race و شاهد D-Bus/D21 گذراند. هیچ تنظیم میزبان/سرویس تغییر نکرد. | A16 | release طبق سیاست `AGENTS.md` |
+| R15 | **R15-0 تا R15-H انجام شدند؛ v1.1.0 منتشر شد (۲۰۲۶-۱۱-۲۶):** سطح کنترل tray (D28/A16) با منوی کامل runtime، confirmation دو مرحله‌ای، job/refresh، `restart-engine` سطح process، `Terminal menu` و صفحه‌بندی pool/rules؛ R15-A شاهد منو/زیرمنو/تغییر زنده روی Plasma 6.6.7 را ثبت کرد (شکاف: Wayland/GNOME و دو اسکرین‌شات)، R15-B0 فیلد `resume_requires_restart` را با تست/بازبینی Ready اضافه کرد، R15-B بستهٔ model/controller `internal/trayui` را با تست‌های fake caller/control server و race پیاده کرد و R15-C restart سطح process را با generation/token و بازبینی lifecycle Ready گذراند و R15-D1 binder/runner با backend ساختگی و تست‌های idempotent/race/leak را با بازبینی Ready پیاده کرد و R15-D2 اتصال واقعی deedles/lifecycle/notifier و اجرای KDE gated را با بازبینی Ready گذراند و R15-E منوی pool را audit و دو انحراف ترتیب label/سقف را رفع کرد و R15-F rules/proposals را audit و یک قاعدهٔ availability را یکسان کرد و R15-G1 سطح desktop/diagnostics/data/settings را با چهار اصلاح تکمیل کرد و R15-G2 Terminal menu/Quit را واقعی و audit کرد و R15-H پذیرش/مستندات/بازبینی نهایی را با یک رفع race و شاهد D-Bus/D21 گذراند. هیچ تنظیم میزبان/سرویس تغییر نکرد. **انتشار:** تگ annotated `7abe9704…` روی `532c169` (هر دو remote)؛ CI سبز `45796357850`؛ `Release` `45800238447`؛ Release عمومی id `459257636` با ۱۷ دارایی. | A16 | مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v1.0.1` | **انجام شد — اولین ریلیز ساخته‌شده در CI (۲۰۲۶-۱۱-۲۵):** تگ annotated `4462cc86` روی `d14da10` (هر دو remote)؛ CI سبز `45517940277`؛ `Release` `45521099138` (job انتشار `138895476159`)؛ Release عمومی id `457516096` با ۱۷ دارایی نسخه‌درست، digests منطبق با `SHA256SUMS` (sha256 خود فایل `3f683f70…dab7d8`) و body برابر پیام تگ؛ بدون ساخت/آپلود محلی | A14 (انتشار) | مجوز صریح کاربر ۲۰۲۶-۱۱-۲۵ |
+| انتشار `v1.1.0` | **انجام شد — سطح کنترل tray (۲۰۲۶-۱۱-۲۶):** تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی `532c1697da6140fdfd5258dc98da2c1f7927cc61` (هر دو remote)؛ CI سبز `45796357850`؛ `Release` `45800238447` (plan/build/package/RPM/assemble/publish)؛ Release عمومی id `459257636` با ۱۷ دارایی و body آغازشده با «RouteLatch v1.1.0 — tray control surface»؛ بدون draft/prerelease | A14/A16 (انتشار) | مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ |
 
-**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0` و `v1.0.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0 تا R15-H انجام شده‌اند و release v1.1.0 طبق سیاست AGENTS انجام می‌شود. بازبودن آن «کار باز v1» نیست.
+**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0`، `v1.0.1` و `v1.1.0` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0 تا R15-H انجام و `v1.1.0` در ۲۰۲۶-۱۱-۲۶ منتشر شد؛ هیچ کار باز R15 نمانده است.
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -1326,7 +1343,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 | A13 | **مدل D26 پیاده شد (R13-B/C/D)؛ smoke واقعی app/tray روی KDE PASS؛ نصب/rollback واقعی service و reboot آزمون‌نشده** | smoke واقعی با data-dir ایزوله: `run --json` پس از readiness برگشت، `status.ready`/`listeners_open`، tray روی watcher ثبت شد، SIGHUP/بستن pty ادامه داد، SIGTERM/SIGKILL supervisor بدون orphan و با بستن listener؛ گیت‌شدهٔ autostart واقعی PASS. **مدل قبلی (R1 + بررسی ۲۰۲۶-۱۱-۲۰ + corrupt-state ۲۰۲۶-۱۱-۲۱)** شاهد تاریخی است؛ corrupt-state حالا آفلاین با `run --headless` پوشش داده می‌شود. **باقی:** نصب/rollback/linger واقعی user manager و upgrade unit قدیمی `/usr/lib` آزمون‌نشده؛ فقط host/amd64 |
 | A01 | **پذیرفته و بسته (شهادت کاربر، ۲۰۲۶-۱۱-۲۱)** | معیار با شهادت کاربر برآورده شد، نه با اجرای ما: کاربر build محلی را از این ماشین برداشت و `.deb` منتشرشدهٔ `v0.1.2` را روی آن نصب کرد و طبق انتظار کار کرد. ما محیط پاک را نیازمودیم و ادعای آزمون آن را نمی‌کنیم؛ شاهدهای محلی همچنان مسیر نصب واقعی/launch (R1)، metadata/payload `.deb`، اسپک RPM و اجرای payload `0.1.2.8.g42b9e4e`/amd64 در container یک‌بارمصرف‌اند. آزمون آیندهٔ VPS به تصمیم کاربر است و کار باز پذیرش شمرده نمی‌شود |
 | A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **GNOME به‌تعویق‌افتاد (اولویت پایین، تصمیم کاربر ۲۰۲۶-۱۱-۲۱):** نشست واقعی GNOME آزموده نشده و این یک محدودیت شناخته‌شده است، نه کار معلق این چرخه |
-| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیزهای `v0.1.1`، `v0.1.2`، `v0.1.3`، `v1.0.0` و `v1.0.1` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند؛ `v1.0.1` در CI ساخته و منتشر شد |
+| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیزهای `v0.1.1`، `v0.1.2`، `v0.1.3`، `v1.0.0`، `v1.0.1` و `v1.1.0` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند؛ `v1.0.1` و `v1.1.0` در CI ساخته و منتشر شدند |
 | A15 | **پیاده‌سازی شد (R13-A..E)؛ smoke واقعی app/tray و package checks pass؛ نصب واقعی service/autostart login و کلیک Quit در tray آزمون‌نشده** | `run` پیش‌فرض detached/tray/readiness، `--headless` foreground، autostart و service idempotent، حذف unit/autostart/postinst از بسته، fail صریح نبود tray/pidfd؛ fake-tray/child و package checks برای idempotency/rollback؛ smoke واقعی KDE (readiness، tray registration، SIGHUP، SIGTERM/SIGKILL بدون orphan) و گیت‌شدهٔ autostart PASS. **باقی:** نصب/rollback/linger واقعی و Quit با کلیک منو؛ GNOME/SSH واقعی؛ pidfd ENOSYS/EPERM؛ runtime غیر-amd64 |
 | `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری (`amd64`، `arm64`، `riscv64`، `ppc64el`)؛ `check-package.sh` مجموعهٔ دقیق `SHA256SUMS`، control بدون maintainer script، مجموعهٔ دقیق payload، mode/owner و اعتبار نام معماری Debian را میسنجد؛ تکرار بایتیکسان؛ تستهای منفی حذف خط checksum/postinst/فایل اضافه/mode غلط همه fail شدند؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | اسپک/باینری RPM (R12 فاز ۲) | **اسپک: ساخت/اعتبارسنجی محلی؛ باینری: ساخت/بازرسی و اجرای payload روی amd64** | چهار اسپک (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) با Version برابر `.deb`، منبع pin‌شده با SHA256، `%files` شامل LICENSE/NOTICE در `/usr/share/licenses/routelatch/` و بقیه اسناد در `/usr/share/doc/routelatch/`، بدون scriptlet/فعال‌سازی سرویس؛ تست منفی ۷ حالت fail کرد؛ rpmbuild/rpm/rpmspec به‌صورت سیستمی نصب نشدند؛ rpm 6.0.1 استخراج‌شده باینری‌های `0.1.1` را ساخت/بازرسی کرد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد؛ jobCI `rpm-packages` در اجرای `44682457124` سبز شد |
@@ -1388,13 +1405,17 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 
 ### نقطهٔ شروع جلسهٔ بعد
 
-1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای کار بعدی و R14 برای تاریخ انتشار) را
+1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای تاریخ capability و R14 برای تاریخ انتشار) را
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۵): **`v1.0.1` آخرین ریلیز عمومی است و R1–R14 بسته‌اند؛
-   هیچ کار باز v1 نمانده است.** R15 (سطح کنترل tray) در همین تاریخ تعریف شد؛
-   R15-0 (ثبت/بازبینی پلن)، R15-A (spike منو) و R15-B0 (`resume_requires_restart`)
-   انجام شده‌اند و R15-H نیز انجام شد؛ قدم بعد انتشار v1.1.0 طبق سیاست AGENTS است. `v1.0.1` اولین ریلیز ساخته‌شده در CI است: تگ
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
+   هیچ کار باز R15 یا v1 نمانده است.** `v1.1.0` سطح کنترل tray (R15)،
+   `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
+   تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
+   `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
+   `45796357850`، `Release` `45800238447` و Release عمومی id `459257636` با ۱۷
+   دارایی و body آغازشده با «RouteLatch v1.1.0 — tray control surface». `v1.0.1`
+   اولین ریلیز ساخته‌شده در CI است: تگ
    annotated `4462cc86` روی `d14da10` (هر دو remote)، CI سبز `45517940277`،
    `Release` `45521099138` (job انتشار `138895476159`) و Release عمومی با ۱۷
    دارایی‌ و digests منطبق. پیش از آن سه تلاش و یک دور رفع ثبت شد (gate
@@ -1403,6 +1424,13 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    نیستند):** پنجرهٔ create→id می‌تواند draft یتیم بگذارد؛ `check` صفحه‌بندی را
    با `per_page=100` فرض می‌کند؛ مسیر fail/cleanup فقط stub شده است؛
    `workflow_dispatch` اجرا نشده؛ و flakiness گاه‌به‌گاه step `Test` در CI دیده شد.
+   محدودیت‌های R15-H (بدون اسکرین‌شات؛ Wayland/GNOME، desktop set/restore و
+   autostart اجرانشده؛ proposal accept/recheck/clear و pool remove/test فقط با
+   تست واحد؛ non-amd64 runtime-untested) در
+   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD فعلی `271964d`
+   یک commit فقط‌مستند است؛ CI `45797624302` آن در job «Build, vet and test» و
+   step `Test` قرمز شد در حالی که full suite محلی سبز است و این شکست به‌عنوان
+   flake شناخته‌شده تأیید نشده است.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -1416,14 +1444,16 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    `45521099138` منتشر شد. `workflow_dispatch` همچنان اجرا نشده است.
 5. برای هر تغییر: YAML/shell parse، dry-run کامل، دو اجرای packaging با
    `SHA256SUMS` یکسان، `check-artifact.sh`/`check-package.sh`، و بازبینی مستقل.
-   ایجاد تگ/انتشار عمومی و هر تغییر میزبان مجوز جدا می‌خواهد.
+   انتشار batch واجد شرایط طبق مجوز ایستادهٔ `AGENTS.md` (۲۰۲۶-۱۱-۲۶) بدون
+   درخواست جدا مجاز است؛ هر تغییر میزبان مجوز جدا می‌خواهد.
 6. شواهد را از `docs/contracts.md`، `packaging/README.md` و اجرای واقعی CI
    بردار، نه از حافظه؛ اگر رفتار GitHub Actions یا محدودیت runner با فرض‌ها فرق
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
-   قدم بعدی را همین‌جا به‌روز کن. R15-A شاهد منو/زیرمنو/تغییر زنده را ثبت کرد
-   (`spike/tray/MENU-FINDINGS.md`) و R15-B0 آماده است؛ release R15 مجوز جدا
-   می‌خواهد.
+   قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
+   موارد آزمون‌نشده (Wayland/GNOME، اسکرین‌شات، desktop set/restore، autostart،
+   proposal accept/recheck/clear، pool remove/test، runtime غیر-amd64 و service
+   install) فقط با مجوز/محیط جدا انجام می‌شوند و کار باز R15 نیستند.
 
 ### مسائل و حدود مجوز
 

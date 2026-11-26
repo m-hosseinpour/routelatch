@@ -530,12 +530,12 @@ the GPL-3.0 text, the verbatim upstream `LICENSE` with its added naming clause,
 and the written source offer; it does not change RouteLatch's Apache-2.0 license.
 
 The v0.1.0 release published two tarballs; `v0.1.1`, `v0.1.2`, `v0.1.3`,
-`v1.0.0` and `v1.0.1` each published all 17 assets (four tarballs, four `.deb`
-files, four RPM specs, four binary RPMs and `SHA256SUMS`). From D27 those assets
-are built and published by the `Release` workflow described above; `v1.0.1` is
-the first release produced that way. Building a package locally
-still does not publish it: do not release, tag, push or upload new artifacts
-without a separate decision from the project owner. `PACKAGE-NOTES` in a local
-tarball/deb says it is a local build for that reason; a package built by the
-release workflow says it is published, and the generated spec header follows the
-same mode.
+`v1.0.0`, `v1.0.1` and `v1.1.0` each published all 17 assets (four tarballs,
+four `.deb` files, four RPM specs, four binary RPMs and `SHA256SUMS`). From D27
+those assets are built and published by the `Release` workflow described above;
+`v1.0.1` is the first release produced that way and `v1.1.0` is the latest.
+Building a package locally still does not publish it: do not release, tag, push
+or upload new artifacts without the authorization described in `AGENTS.md`.
+`PACKAGE-NOTES` in a local tarball/deb says it is a local build for that reason;
+a package built by the release workflow says it is published, and the generated
+spec header follows the same mode.

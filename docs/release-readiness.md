@@ -7,14 +7,18 @@ The first public release, **v0.1.0**, is tagged on `main` and publishes two Linu
 tarballs as assets on the GitHub Release. **v0.1.1** added four-architecture
 tarballs, Debian packages and RPM packages. **v0.1.2** patched the desktop-proxy
 `set` behaviour. **v0.1.3** patched import validation and derived status with
-the same 17-asset layout. The previous release, **v1.0.0**, shipped the D26
-app/tray runtime, `autostart`, the opt-in `service` and unit-free packages; its
-evidence is in "v1.0.0 release (historical)" below. **v1.0.1**, the first
-release built and published by the CI pipeline, is current; its evidence is in
-"v1.0.1 — first CI-built release (2026-11-25)" below. The v1.0.0, v0.1.3,
-v0.1.2, v0.1.1 and v0.1.0 sections, the history scan, name check and dependency
-audit remain historical evidence; they are not repeated here. The tags, pushes
-and releases were explicitly authorized by the project owner.
+the same 17-asset layout. **v1.0.0** shipped the D26 app/tray runtime,
+`autostart`, the opt-in `service` and unit-free packages; its evidence is in
+"v1.0.0 release (historical)" below. **v1.0.1** was the first release built and
+published by the CI pipeline. **v1.1.0**, the current release, adds the R15 tray
+control surface, `status.resume_requires_restart` and the process-level restart
+lifecycle; its evidence is in "v1.1.0 — tray control surface (2026-11-26)"
+below, and the v1.0.1 evidence is in "v1.0.1 — first CI-built release
+(2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections, the
+history scan, name check and dependency audit remain historical evidence; they
+are not repeated here. The tags, pushes and releases were authorized by the
+project owner (v1.1.0 under the standing authorization recorded in `AGENTS.md`
+on 2026-11-26).
 
 **CI release pipeline (D27, 2026-11-24).** From `v1.0.1` on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
@@ -37,8 +41,43 @@ with explicit authorization on 2026-11-25, and an authenticated listing then
 showed no `v1.0.1` release or draft. After independent review of the fix, the
 old tag was deleted locally and on both remotes and **v1.0.1** was recreated on
 the fixed, CI-green commit; attempt 4 published the release (see the v1.0.1
-section). The historical release sections below remain evidence of the local
-build/upload process used for `v0.1.0`–`v1.0.0`.
+section). The v1.0.1 and earlier release sections below remain evidence of the
+local build/upload process used for `v0.1.0`–`v1.0.0`.
+
+## v1.1.0 — tray control surface (2026-11-26)
+
+Tag `v1.1.0` is an annotated tag (tag object
+`7abe9704f66cbcc78fe6340093e8a365324b9407`) on `main` commit
+`532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`), pushed to both remotes.
+The release adds the R15 tray control surface, the additive
+`status.resume_requires_restart` field and the process-level restart lifecycle.
+Routing, pool and fail-closed behaviour are unchanged.
+
+`CI` push run `45796357850` on `532c169` was green before the tag push.
+`Release` run `45800238447` (tag push) succeeded in every job (plan, build,
+package, RPM, assemble and publish). The public GitHub Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.1.0> (release id
+`459257636`, title `v1.1.0`, neither a draft nor a prerelease). It carries
+exactly 17 assets: four `routelatch-v1.1.0-linux-<arch>.tar.gz` tarballs, four
+`routelatch_1.1.0_<debarch>.deb` packages, four `routelatch-<rpmarch>.spec`
+files, four `routelatch-1.1.0-1.<rpmarch>.rpm` binary RPMs and `SHA256SUMS`.
+Its body starts "RouteLatch v1.1.0 — tray control surface" (the annotated tag
+message). The release used the standing authorization recorded in `AGENTS.md`
+and the implementation plan on 2026-11-26; no separate release request was
+needed.
+
+The release is bound to `532c169`. The later docs-only policy commit `271964d`
+(current HEAD) failed in CI run `45797624302`: the `Test` step of the
+"Build, vet and test" job failed while the local full suite was green; the
+cause is not confirmed as a known flake.
+
+Known limits carried from the R15-H acceptance record
+(`spike/tray/evidence/r15h-acceptance-2026-11-26.md`): no screenshots in that
+run; Wayland and GNOME were not tested; real desktop-proxy set/restore and the
+autostart toggle were not run live; restore-and-quit/keep-and-quit, proposal
+Accept/Recheck/Clear, pool remove/test and desktop set/restore were not clicked
+live (unit/race coverage only); only the `amd64` artifact was executed, while
+`arm64`, `riscv64` and `ppc64le` were cross-built and remain runtime-untested.
 
 The sections below were originally a dated readiness snapshot (branch
 `r8-release`, binary/version `110cce3`, based on `47ec19a`, with `main` then at
@@ -53,7 +92,8 @@ release that adds no user-facing value must not be published. The release was
 deleted through the API (HTTP 204) and the tag was deleted locally and on both
 remotes. `git tag -l v0.1.4` is empty, neither remote lists the tag, both `main`
 heads point at `79c0e53`, and `v0.1.0`–`v0.1.3` are unchanged. That batch was
-pushed only; **`v1.0.0` was the current release until `v1.0.1`.**
+pushed only; **`v1.0.0` was the current release until `v1.0.1`, which
+`v1.1.0` has since superseded.**
 
 ## v1.0.1 — first CI-built release (2026-11-25)
 

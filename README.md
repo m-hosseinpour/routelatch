@@ -52,18 +52,20 @@ sweep finishes.
 
 ## Install
 
-The current published release, `v1.0.1`, has 17 unsigned assets on the
-[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.0.1):
+The current published release, `v1.1.0`, has 17 unsigned assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.1.0):
 four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
 packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
-`.spec` files, four binary RPMs (`routelatch-1.0.1-1.<arch>.rpm`) and a
-`SHA256SUMS` file. `v0.1.1`–`v1.0.0` have the same 17-asset layout; the first
+`.spec` files, four binary RPMs (`routelatch-1.1.0-1.<arch>.rpm`) and a
+`SHA256SUMS` file. `v0.1.1`–`v1.1.0` have the same 17-asset layout; the first
 release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
 `SHA256SUMS`.
 
-`v1.0.1` keeps the `v1.0.0` runtime model: plain `routelatch run` is the
+`v1.1.0` keeps the `v1.0.0` runtime model: plain `routelatch run` is the
 detached app/tray, `run --headless` is the foreground engine, and packages
-install no systemd unit, autostart entry or maintainer script. **Upgrade from
+install no systemd unit, autostart entry or maintainer script. This release
+adds the tray control surface, the additive `status.resume_requires_restart`
+field and the tray-driven engine restart. **Upgrade from
 `v0.1.3` requires stopping and removing its old user unit** (`/usr/lib/systemd/user/routelatch.service`)
 before installing; a leftover unit would either lose its main process or start
 an app where a service is expected. The opt-in service unit is created only by
@@ -80,7 +82,7 @@ From D27 (2026-11-24), releases are built and published by the
 tag is pushed; no asset is built or uploaded from a maintainer's machine. It
 verifies the pinned sing-box archives, runs the package checkers and publishes
 only after every uploaded asset's name, size and SHA-256 digest matches the
-build. `v1.0.1` is the first release produced this way.
+build. `v1.0.1` is the first release produced this way; `v1.1.0` is the latest.
 
 Verify a download before unpacking it. From the directory holding the downloaded
 file and the release's `SHA256SUMS`:
@@ -96,22 +98,22 @@ file whose check fails.
 From a tarball:
 
 ```sh
-tar xzf routelatch-v1.0.1-linux-amd64.tar.gz
-cd routelatch-v1.0.1-linux-amd64
+tar xzf routelatch-v1.1.0-linux-amd64.tar.gz
+cd routelatch-v1.1.0-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ln -sf routelatch "$HOME/.local/bin/rlch"
 ```
 
-The last command creates `rlch`, a short alias for `routelatch`. The v1.0.0 and
-v1.0.1 tarballs and packages ship that link; older published assets predate it,
-and the manual `ln -s` works with an older binary too.
+The last command creates `rlch`, a short alias for `routelatch`. The
+`v1.0.0`–`v1.1.0` tarballs and packages ship that link; older published assets
+predate it, and the manual `ln -s` works with an older binary too.
 
 Or install a package (all release packages are **unsigned**; the only
 integrity check is the generated `SHA256SUMS`):
 
 ```sh
-sudo apt install ./routelatch_1.0.1_amd64.deb
-sudo rpm -i routelatch-1.0.1-1.x86_64.rpm
+sudo apt install ./routelatch_1.1.0_amd64.deb
+sudo rpm -i routelatch-1.1.0-1.x86_64.rpm
 ```
 
 Packages install `/usr/bin/routelatch` and its documents under
