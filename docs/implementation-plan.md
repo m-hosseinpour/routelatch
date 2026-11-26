@@ -833,7 +833,9 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   با data-dir ایزوله radio/stop/restart/all-direct/`kill -9`/Quit را ثبت کرد؛
   full/race tests و build چهار معماری سبز؛ بازبینی مستقل **Ready** پس از رفع
   collision کلید تودرتو. آزمون‌نشده: Wayland/GNOME، اسکرین‌شات، desktop proxy
-  واقعی و actionهای pool/rules/proposals.
+  واقعی و actionهای pool/rules/proposals. **CI:** commit `97aa8bc` در job
+  `Test` قرمز شد؛ commit بعدی `dd2f216` (همان اصلاح runner) سبز شد. log
+  GitHub بدون دسترسی خوانده نشد، پس علت دقیق تأیید نشده است.
 
 - **R15-E — انجام شد (۲۰۲۶-۱۱-۲۶):** منوی pool audit شد؛ ترتیب `Test selected
   exit` و label سقف بر پایهٔ `contract.MaxPoolTestExits` اصلاح شد؛ تست‌های
