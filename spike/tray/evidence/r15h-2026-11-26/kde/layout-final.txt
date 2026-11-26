@@ -1,0 +1,177 @@
+0|||||
+1|false||||Targeted · 25 usable · 0 open
+4|||||Mode
+5|true||radio|1|Targeted
+6|true||||All proxy
+7|true||||All direct
+8|true||||Stop listening…
+9|||||Proposals (0)
+1188|false||||No pending proposals
+11|||||Show decided (1)
+1189|false||||rejected · route · rl-canary-c47f6145672bd684.invalid:443
+13|true||||Clear decided/expired…
+14|||||Approved rules (24)
+1190|||||r15h-page-21.example · domain
+1191|||||Remove…
+1192|||||Details
+1193|false||||ID: r-85f1d1c2
+1194|false||||Kind: domain
+1195|false||||Operand: r15h-page-21.example
+1196|false||||Note: —
+1197|false||||Added: 2026-11-26 09:15
+1198|||||r15h-page-22.example · domain
+1199|||||Remove…
+1200|||||Details
+1201|false||||ID: r-69820075
+1202|false||||Kind: domain
+1203|false||||Operand: r15h-page-22.example
+1204|false||||Note: —
+1205|false||||Added: 2026-11-26 09:15
+1206|||||r15h-page-23.example · domain
+1207|||||Remove…
+1208|||||Details
+1209|false||||ID: r-ab32c8e0
+1210|false||||Kind: domain
+1211|false||||Operand: r15h-page-23.example
+1212|false||||Note: —
+1213|false||||Added: 2026-11-26 09:15
+1214|||||r15h-page-24.example · domain
+1215|||||Remove…
+1216|||||Details
+1217|false||||ID: r-96cd9ef6
+1218|false||||Kind: domain
+1219|false||||Operand: r15h-page-24.example
+1220|false||||Note: —
+1221|false||||Added: 2026-11-26 09:15
+1089|false||||Page 2/2
+1090|true||||Previous page
+1091|false||||Next page
+16|||||Add rule… (Terminal menu)
+17|||||Pool
+18|false||||25 records · 25 usable · 0 healthy · 0 cooling
+19|true||radio|1|Auto select
+20|||||Healthy (0)
+1092|false||||No healthy exits
+22|||||Untested (25)
+1093|||||r15h-pool-01 · vless · unknown
+1094|true||||Select exit
+1095|true||||Test this exit
+1096|true||||Remove…
+1097|||||r15h-pool-02 · vless · unknown
+1098|true||||Select exit
+1099|true||||Test this exit
+1100|true||||Remove…
+1101|||||r15h-pool-03 · vless · unknown
+1102|true||||Select exit
+1103|true||||Test this exit
+1104|true||||Remove…
+1105|||||r15h-pool-04 · vless · unknown
+1106|true||||Select exit
+1107|true||||Test this exit
+1108|true||||Remove…
+1109|||||r15h-pool-05 · vless · unknown
+1110|true||||Select exit
+1111|true||||Test this exit
+1112|true||||Remove…
+1113|||||r15h-pool-06 · vless · unknown
+1114|true||||Select exit
+1115|true||||Test this exit
+1116|true||||Remove…
+1117|||||r15h-pool-07 · vless · unknown
+1118|true||||Select exit
+1119|true||||Test this exit
+1120|true||||Remove…
+1121|||||r15h-pool-08 · vless · unknown
+1122|true||||Select exit
+1123|true||||Test this exit
+1124|true||||Remove…
+1125|||||r15h-pool-09 · vless · unknown
+1126|true||||Select exit
+1127|true||||Test this exit
+1128|true||||Remove…
+1129|||||r15h-pool-10 · vless · unknown
+1130|true||||Select exit
+1131|true||||Test this exit
+1132|true||||Remove…
+1133|||||r15h-pool-11 · vless · unknown
+1134|true||||Select exit
+1135|true||||Test this exit
+1136|true||||Remove…
+1137|||||r15h-pool-12 · vless · unknown
+1138|true||||Select exit
+1139|true||||Test this exit
+1140|true||||Remove…
+1141|||||r15h-pool-13 · vless · unknown
+1142|true||||Select exit
+1143|true||||Test this exit
+1144|true||||Remove…
+1145|||||r15h-pool-14 · vless · unknown
+1146|true||||Select exit
+1147|true||||Test this exit
+1148|true||||Remove…
+1149|||||r15h-pool-15 · vless · unknown
+1150|true||||Select exit
+1151|true||||Test this exit
+1152|true||||Remove…
+1153|||||r15h-pool-16 · vless · unknown
+1154|true||||Select exit
+1155|true||||Test this exit
+1156|true||||Remove…
+1157|||||r15h-pool-17 · vless · unknown
+1158|true||||Select exit
+1159|true||||Test this exit
+1160|true||||Remove…
+1161|||||r15h-pool-18 · vless · unknown
+1162|true||||Select exit
+1163|true||||Test this exit
+1164|true||||Remove…
+1165|||||r15h-pool-19 · vless · unknown
+1166|true||||Select exit
+1167|true||||Test this exit
+1168|true||||Remove…
+1169|||||r15h-pool-20 · vless · unknown
+1170|true||||Select exit
+1171|true||||Test this exit
+1172|true||||Remove…
+1173|false||||Page 1/2
+1174|false||||Previous page
+1175|||||Next page
+24|||||Cooling (0)
+1176|false||||No cooling exits
+26|||||Unsupported/Invalid (0)
+1177|false||||No unsupported/invalid exits
+28|true||||Refresh all sources
+29|true||||Re-rank now
+30|true||||Test first 20 usable
+31|||||Add/import… (Terminal menu)
+32|||||Desktop proxy
+33|false||||Desktop proxy: not applied (kde)
+34|true||||Refresh status
+35|true||||Set/Re-apply desktop proxy…
+36|true||||Restore previous desktop proxy…
+37|||||Diagnostics
+38|true||||Run doctor
+39|||||Doctor results
+396|false||||No doctor results yet
+41|||||Warnings (0)
+1179|false||||No warnings
+43|||||Show log path
+44|||||Environment
+1180|false||||HTTP_PROXY=http://127.0.0.1:42279
+1181|false||||HTTPS_PROXY=http://127.0.0.1:42279
+1182|false||||ALL_PROXY=http://127.0.0.1:42279
+1183|false||||NO_PROXY=localhost,127.0.0.1,.localhost,127.0.0.0/8,::1,169.254.0.0/16,fe80::/1…
+49|||||Data
+50|true||||Back up state now
+51|false||||Restore backup… (CLI)
+52|||||Settings
+53|false||||Start at login: Off
+54|false||||Start at login unavailable: autostart manages only the default data directory
+55|false||||HTTP 127.0.0.1:42279 · SOCKS 127.0.0.1:58259 · log info
+56|false||||State /tmp/opencode/r15h/kde-20261126T091503Z/data/state.json · config /tmp/ope…
+57|||||Advanced
+58|true||||Restart engine…
+59|||||Terminal menu…
+60|false||||Last action: Rule removed (0 connections closed)
+2|||||Quit
+3|true||||Quit RouteLatch

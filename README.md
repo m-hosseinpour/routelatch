@@ -27,8 +27,8 @@ RouteLatch never silently falls back to direct for approved traffic.
 - Diagnostics that write **proposals** only; adding or removing a route needs
   your confirmation, and a failed request is never replayed.
 - Opt-in GNOME/KDE desktop-proxy integration with an ownership-aware restore.
-- A CLI, `--json` output on every command, a small interactive menu and
-  documented exit codes.
+- A CLI, `--json` output on every command, a small interactive menu, a tray
+  control surface for the running app and documented exit codes.
 
 Changing mode closes connections that no longer match the new policy,
 including in-flight dials; the change is reported successful only after that
@@ -152,6 +152,45 @@ reason `pidfd_unavailable` before anything is spawned. A missing tray host exits
 tray child starts, and if a spawned tray child reports it anyway, startup aborts
 and stops whatever it already started. Either way no engine or listener is left
 behind. `run --headless` and the opt-in service do not need either capability.
+
+### Tray control surface
+
+The tray is a thin client over the same local management socket as the CLI. It
+does not open a listener, read or write state files, manage systemd, or contain
+routing/pool policy of its own. The menu is in English in this release.
+
+| Menu | What it does |
+| --- | --- |
+| Status line | Mode, usable exits and open connections; `Stopped`, `Restarting` and `Engine unavailable; retrying…` are explicit states. |
+| Mode | Switch between targeted, all-proxy and all-direct; `Stop listening…` closes the traffic listeners. In stopped mode, `Restart engine to resume…` replaces the engine process first. |
+| Proposals | Pending suggestions with Accept, Reject and Recheck; `Show decided` and `Clear decided/expired…`. |
+| Approved rules | The approved list with per-rule removal and details, 20 rows per page. Add a rule from the Terminal menu. |
+| Pool | Counts, auto/pinned exit, groups by health, 20 rows per page, refresh, re-rank, test selected/first 20, and remove with confirmation. Imports stay in the Terminal menu. |
+| Desktop proxy | Status and refresh, plus Set/Re-apply and Restore behind a confirmation. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
+| Diagnostics | Run doctor, doctor results, warnings, the log path, and the proxy environment. |
+| Data | Back up state now (the backup is written under the data directory). Restore and arbitrary paths stay in the CLI. |
+| Settings | Start at login on/off via the XDG autostart entry, and a read-only config/path summary. |
+| Advanced | Restart engine with confirmation, and Terminal menu. |
+| Last action | Short, sanitized result of the most recent action or job. |
+| Quit | Plain quit when the desktop proxy is not applied. If it is applied, quit becomes the explicit restore-and-quit or keep-and-quit choice. Quit never restores the desktop proxy silently. |
+
+A destructive action (stopping, restarting, removing a rule or exit, clearing
+proposals, setting/restoring the desktop proxy, restore-and-quit) first shows
+`Confirm: …` and `Cancel`. Only one confirmation exists at a time, it expires
+after 60 seconds, and a new action replaces it. Operations that need typed
+input (adding a rule, importing a pool, diagnose, `config set`, restoring a
+backup) stay in the CLI; `Terminal menu…` opens that menu in `konsole`,
+`gnome-terminal` or `xterm`, or shows the exact manual command when none is
+installed.
+
+Limits: the tray needs a StatusNotifier host, so GNOME without an extension and
+SSH/no-display sessions still use `--headless`. Linux Wayland and GNOME were not
+tested for this surface; the acceptance run used Plasma 6 on X11. Starting at
+login is offered only for the default data directory (a `--data-dir` session
+shows why it is unavailable). Commands and lists that need a live engine are
+disabled while the engine is unavailable or stopped. Dynamic labels are
+sanitized and bounded, and notifications/logs carry counts, modes, short IDs
+and paths, never destination hostnames, share URLs or credentials.
 
 ### Upgrading from the old packaged unit
 

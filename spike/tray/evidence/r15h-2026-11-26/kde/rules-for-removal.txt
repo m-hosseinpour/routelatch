@@ -1,0 +1,10 @@
+14|||||Approved rules (25)
+1190|||||r15h-page-21.example · domain
+1198|||||r15h-page-22.example · domain
+1206|||||r15h-page-23.example · domain
+1214|||||r15h-page-24.example · domain
+1222|||||r15h-page-25.example · domain
+1089|false||||Page 2/2
+1090|true||||Previous page
+1091|false||||Next page
+16|||||Add rule… (Terminal menu)

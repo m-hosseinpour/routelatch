@@ -1,0 +1,3 @@
+RouteLatch app started (pid 1663908)
+listeners: http 127.0.0.1:42279, socks 127.0.0.1:58259
+log: /tmp/opencode/r15h/kde-20261126T091503Z/data/log/routelatch.log

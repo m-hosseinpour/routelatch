@@ -1,0 +1,5 @@
+44|||||Environment
+45|false||||HTTP_PROXY=http://127.0.0.1:42279
+46|false||||HTTPS_PROXY=http://127.0.0.1:42279
+47|false||||ALL_PROXY=http://127.0.0.1:42279
+48|false||||NO_PROXY=localhost,127.0.0.1,.localhost,127.0.0.0/8,::1,169.254.0.0/16,fe80::/1…

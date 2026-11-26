@@ -191,9 +191,11 @@ func NewBinder(backend Backend) (*Binder, error) {
 // Apply renders view if it differs from the last applied tree. The first call
 // (or the first call after a backend error) performs a full Build; later calls
 // send exactly one Apply batch containing only the changed nodes. A View that
-// is unchanged causes no backend call at all. Clickable state is only replaced
-// after a successful render, so a failed apply cannot leave stale keys
-// accepting clicks.
+// is unchanged causes no backend call at all. Click targets are published
+// before the backend call because hosts may expose a new label while the
+// apply is still running; a click that sees that label must resolve against
+// the same tree. A failed apply clears them until a rebuild succeeds, so no
+// stale key can accept a click.
 func (b *Binder) Apply(ctx context.Context, view View) (applyResult, error) {
 	if b.closed {
 		return applyResult{}, ErrBinderClosed
@@ -204,6 +206,7 @@ func (b *Binder) Apply(ctx context.Context, view View) (applyResult, error) {
 		return applyResult{}, err
 	}
 	tray := trayFor(view)
+	b.publishClickables(view.Root)
 
 	if b.applied == nil || b.needsBuild || b.applied.menu.Key != desired.menu.Key ||
 		b.applied.menu.Kind != desired.menu.Kind {
@@ -268,14 +271,24 @@ func (b *Binder) Close(ctx context.Context) error {
 	return nil
 }
 
-func (b *Binder) commit(t *tree, tray Tray, root Node) {
+// publishClickables makes the view's click targets visible to Lookup before
+// the backend render starts. commit publishes them again on success; keeping
+// the two writes identical means a click resolved during the render matches
+// the label it was rendered next to.
+func (b *Binder) publishClickables(root Node) {
 	clickables := make(map[string]ClickTarget)
 	collectClickables(root, clickables)
+	b.mu.Lock()
+	b.clickables = clickables
+	b.mu.Unlock()
+}
+
+func (b *Binder) commit(t *tree, tray Tray, root Node) {
 	b.applied = t
 	b.appliedTray = tray
 	b.needsBuild = false
+	b.publishClickables(root)
 	b.mu.Lock()
-	b.clickables = clickables
 	b.lastErr = nil
 	b.mu.Unlock()
 }

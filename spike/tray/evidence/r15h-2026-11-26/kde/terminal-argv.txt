@@ -1,0 +1,5 @@
+-e
+/tmp/opencode/r15h/dist-pkg/routelatch-linux-amd64
+--data-dir
+/tmp/opencode/r15h/kde-20261126T091503Z/data
+menu

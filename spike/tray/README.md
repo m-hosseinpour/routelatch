@@ -13,7 +13,8 @@ linked into the product; nothing here is imported from `cmd/` or `internal/`.
 - `internal/spike` — shared watcher/host probe, notification, icon, pidfd watchdog
 - `scripts/` — reproducible measurements (KDE session, absent watcher/host, lifecycle,
   R15-A offline menu harness and live KDE menu evidence)
-- `evidence/` — captured outputs of the dated runs (`menu-*-2026-11-25.*` for R15-A)
+- `evidence/` — captured outputs of the dated runs (`menu-*-2026-11-25.*` for R15-A;
+  `r15h-acceptance-2026-11-26.md` indexes the final R15-H checks and gated run)
 - [`FINDINGS.md`](FINDINGS.md) — R13-A measurements, comparison, pin decision, limitations
 - [`MENU-FINDINGS.md`](MENU-FINDINGS.md) — R15-A menu capability verdicts, host timing,
   the R15-D1 live-refresh decision, and limits

@@ -9,6 +9,15 @@ R1/R2/R4 اثبات شده‌اند. A01 در ۲۰۲۶-۱۱-۲۱ با شهادت
 `T1` در `spike/`، قراردادهای ساخت در `contracts.md` و `internal/contract/`، و
 آزمون پذیرش در `internal/acceptance/` هستند.
 
+**سطح کنترل tray (D28، R15):** منوی tray در همین revision یک کلاینت نازک روی
+همان management socket است (نه منطق مسیریابی دوم) و status، mode/stop/restart،
+proposals، rules، pool، desktop proxy، diagnostics، backup، autostart، Terminal
+menu و Quit را پوشش می‌دهد؛ تأیید دو مرحله‌ای، صفحه‌بندی، حالت
+stopped/unavailable و sanitize در `contracts.md §۷.۳` قرارداد شده‌اند. شاهد
+پذیرش نهایی R15-H (GNU/Linux Plasma 6/X11، data-dir ایزوله) در
+`spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ Wayland/GNOME،
+desktop-proxy واقعی و autostart/service واقعی در آن آزمون نشده‌اند.
+
 **مدل اجرا (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
 `run --headless` engine foreground است؛ بسته هیچ unit/autostart/postinst ندارد و
 `autostart`/`service install` opt-in هستند (R13-B/C/D پیاده و R13-E

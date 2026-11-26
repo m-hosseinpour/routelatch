@@ -1,0 +1,9 @@
+/tmp/opencode/r15h/kde-20261126T091503Z/data/backup/state-20261126T091528.135080610Z.json
+/tmp/opencode/r15h/kde-20261126T091503Z/data/state.json
+/tmp/opencode/r15h/kde-20261126T091503Z/data/state.json.bak
+/tmp/opencode/r15h/kde-20261126T091503Z/data/state.lock
+/tmp/opencode/r15h/kde-20261126T091503Z/data/run/state.lock
+/tmp/opencode/r15h/kde-20261126T091503Z/data/run/app.owner
+/tmp/opencode/r15h/kde-20261126T091503Z/data/run/app.lock
+/tmp/opencode/r15h/kde-20261126T091503Z/data/log/routelatch.log
+/tmp/opencode/r15h/kde-20261126T091503Z/data/config.json

@@ -1,0 +1,5 @@
+52|||||Settings
+53|false||||Start at login: Off
+54|false||||Start at login unavailable: autostart manages only the default data directory
+55|false||||HTTP 127.0.0.1:42279 · SOCKS 127.0.0.1:58259 · log info
+56|false||||State /tmp/opencode/r15h/kde-20261126T091503Z/data/state.json · config /tmp/ope…

@@ -1,0 +1,10 @@
+14|||||Approved rules (25)
+308|||||r15h-page-21.example · domain
+316|||||r15h-page-22.example · domain
+324|||||r15h-page-23.example · domain
+332|||||r15h-page-24.example · domain
+340|||||r15h-page-25.example · domain
+222|false||||Page 2/2
+223|true||||Previous page
+224|false||||Next page
+16|||||Add rule… (Terminal menu)

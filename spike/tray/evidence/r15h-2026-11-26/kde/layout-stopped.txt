@@ -1,0 +1,303 @@
+0|||||
+1|false||||Stopped · listeners closed · restart engine
+4|||||Mode
+5|false|||0|Targeted
+6|false||||All proxy
+7|false||||All direct
+8|false||||Stop listening…
+9|||||Proposals (0)
+664|false||||No pending proposals
+11|||||Show decided (0)
+665|false||||No decided or expired proposals
+13|false||||Clear decided/expired…
+14|||||Approved rules (25)
+666|||||r15h-page-01.example · domain
+667|false||||Remove…
+668|||||Details
+669|false||||ID: r-afb9de14
+670|false||||Kind: domain
+671|false||||Operand: r15h-page-01.example
+672|false||||Note: —
+673|false||||Added: 2026-11-26 09:15
+674|||||r15h-page-02.example · domain
+675|false||||Remove…
+676|||||Details
+677|false||||ID: r-6c5ac816
+678|false||||Kind: domain
+679|false||||Operand: r15h-page-02.example
+680|false||||Note: —
+681|false||||Added: 2026-11-26 09:15
+682|||||r15h-page-03.example · domain
+683|false||||Remove…
+684|||||Details
+685|false||||ID: r-239a1123
+686|false||||Kind: domain
+687|false||||Operand: r15h-page-03.example
+688|false||||Note: —
+689|false||||Added: 2026-11-26 09:15
+690|||||r15h-page-04.example · domain
+691|false||||Remove…
+692|||||Details
+693|false||||ID: r-0f7cf424
+694|false||||Kind: domain
+695|false||||Operand: r15h-page-04.example
+696|false||||Note: —
+697|false||||Added: 2026-11-26 09:15
+698|||||r15h-page-05.example · domain
+699|false||||Remove…
+700|||||Details
+701|false||||ID: r-e72bcc29
+702|false||||Kind: domain
+703|false||||Operand: r15h-page-05.example
+704|false||||Note: —
+705|false||||Added: 2026-11-26 09:15
+706|||||r15h-page-06.example · domain
+707|false||||Remove…
+708|||||Details
+709|false||||ID: r-eb8af35a
+710|false||||Kind: domain
+711|false||||Operand: r15h-page-06.example
+712|false||||Note: —
+713|false||||Added: 2026-11-26 09:15
+714|||||r15h-page-07.example · domain
+715|false||||Remove…
+716|||||Details
+717|false||||ID: r-38e77379
+718|false||||Kind: domain
+719|false||||Operand: r15h-page-07.example
+720|false||||Note: —
+721|false||||Added: 2026-11-26 09:15
+722|||||r15h-page-08.example · domain
+723|false||||Remove…
+724|||||Details
+725|false||||ID: r-48ec721a
+726|false||||Kind: domain
+727|false||||Operand: r15h-page-08.example
+728|false||||Note: —
+729|false||||Added: 2026-11-26 09:15
+730|||||r15h-page-09.example · domain
+731|false||||Remove…
+732|||||Details
+733|false||||ID: r-e6b5bd83
+734|false||||Kind: domain
+735|false||||Operand: r15h-page-09.example
+736|false||||Note: —
+737|false||||Added: 2026-11-26 09:15
+738|||||r15h-page-10.example · domain
+739|false||||Remove…
+740|||||Details
+741|false||||ID: r-66353436
+742|false||||Kind: domain
+743|false||||Operand: r15h-page-10.example
+744|false||||Note: —
+745|false||||Added: 2026-11-26 09:15
+746|||||r15h-page-11.example · domain
+747|false||||Remove…
+748|||||Details
+749|false||||ID: r-625b8b64
+750|false||||Kind: domain
+751|false||||Operand: r15h-page-11.example
+752|false||||Note: —
+753|false||||Added: 2026-11-26 09:15
+754|||||r15h-page-12.example · domain
+755|false||||Remove…
+756|||||Details
+757|false||||ID: r-47127776
+758|false||||Kind: domain
+759|false||||Operand: r15h-page-12.example
+760|false||||Note: —
+761|false||||Added: 2026-11-26 09:15
+762|||||r15h-page-13.example · domain
+763|false||||Remove…
+764|||||Details
+765|false||||ID: r-a07a2735
+766|false||||Kind: domain
+767|false||||Operand: r15h-page-13.example
+768|false||||Note: —
+769|false||||Added: 2026-11-26 09:15
+770|||||r15h-page-14.example · domain
+771|false||||Remove…
+772|||||Details
+773|false||||ID: r-7845958a
+774|false||||Kind: domain
+775|false||||Operand: r15h-page-14.example
+776|false||||Note: —
+777|false||||Added: 2026-11-26 09:15
+778|||||r15h-page-15.example · domain
+779|false||||Remove…
+780|||||Details
+781|false||||ID: r-8be10c36
+782|false||||Kind: domain
+783|false||||Operand: r15h-page-15.example
+784|false||||Note: —
+785|false||||Added: 2026-11-26 09:15
+786|||||r15h-page-16.example · domain
+787|false||||Remove…
+788|||||Details
+789|false||||ID: r-dd3deed0
+790|false||||Kind: domain
+791|false||||Operand: r15h-page-16.example
+792|false||||Note: —
+793|false||||Added: 2026-11-26 09:15
+794|||||r15h-page-17.example · domain
+795|false||||Remove…
+796|||||Details
+797|false||||ID: r-9dcf55ba
+798|false||||Kind: domain
+799|false||||Operand: r15h-page-17.example
+800|false||||Note: —
+801|false||||Added: 2026-11-26 09:15
+802|||||r15h-page-18.example · domain
+803|false||||Remove…
+804|||||Details
+805|false||||ID: r-d4fd8467
+806|false||||Kind: domain
+807|false||||Operand: r15h-page-18.example
+808|false||||Note: —
+809|false||||Added: 2026-11-26 09:15
+810|||||r15h-page-19.example · domain
+811|false||||Remove…
+812|||||Details
+813|false||||ID: r-63d32649
+814|false||||Kind: domain
+815|false||||Operand: r15h-page-19.example
+816|false||||Note: —
+817|false||||Added: 2026-11-26 09:15
+818|||||r15h-page-20.example · domain
+819|false||||Remove…
+820|||||Details
+821|false||||ID: r-d8741875
+822|false||||Kind: domain
+823|false||||Operand: r15h-page-20.example
+824|false||||Note: —
+825|false||||Added: 2026-11-26 09:15
+826|false||||Page 1/2
+827|false||||Previous page
+828|||||Next page
+16|||||Add rule… (Terminal menu)
+17|||||Pool
+18|false||||25 records · 25 usable · 0 healthy · 0 cooling
+19|false||radio|1|Auto select
+20|||||Healthy (0)
+829|false||||No healthy exits
+22|||||Untested (25)
+830|||||r15h-pool-01 · vless · unknown
+831|false||||Select exit
+832|false||||Test this exit
+833|false||||Remove…
+834|||||r15h-pool-02 · vless · unknown
+835|false||||Select exit
+836|false||||Test this exit
+837|false||||Remove…
+838|||||r15h-pool-03 · vless · unknown
+839|false||||Select exit
+840|false||||Test this exit
+841|false||||Remove…
+842|||||r15h-pool-04 · vless · unknown
+843|false||||Select exit
+844|false||||Test this exit
+845|false||||Remove…
+846|||||r15h-pool-05 · vless · unknown
+847|false||||Select exit
+848|false||||Test this exit
+849|false||||Remove…
+850|||||r15h-pool-06 · vless · unknown
+851|false||||Select exit
+852|false||||Test this exit
+853|false||||Remove…
+854|||||r15h-pool-07 · vless · unknown
+855|false||||Select exit
+856|false||||Test this exit
+857|false||||Remove…
+858|||||r15h-pool-08 · vless · unknown
+859|false||||Select exit
+860|false||||Test this exit
+861|false||||Remove…
+862|||||r15h-pool-09 · vless · unknown
+863|false||||Select exit
+864|false||||Test this exit
+865|false||||Remove…
+866|||||r15h-pool-10 · vless · unknown
+867|false||||Select exit
+868|false||||Test this exit
+869|false||||Remove…
+870|||||r15h-pool-11 · vless · unknown
+871|false||||Select exit
+872|false||||Test this exit
+873|false||||Remove…
+874|||||r15h-pool-12 · vless · unknown
+875|false||||Select exit
+876|false||||Test this exit
+877|false||||Remove…
+878|||||r15h-pool-13 · vless · unknown
+879|false||||Select exit
+880|false||||Test this exit
+881|false||||Remove…
+882|||||r15h-pool-14 · vless · unknown
+883|false||||Select exit
+884|false||||Test this exit
+885|false||||Remove…
+886|||||r15h-pool-15 · vless · unknown
+887|false||||Select exit
+888|false||||Test this exit
+889|false||||Remove…
+890|||||r15h-pool-16 · vless · unknown
+891|false||||Select exit
+892|false||||Test this exit
+893|false||||Remove…
+894|||||r15h-pool-17 · vless · unknown
+895|false||||Select exit
+896|false||||Test this exit
+897|false||||Remove…
+898|||||r15h-pool-18 · vless · unknown
+899|false||||Select exit
+900|false||||Test this exit
+901|false||||Remove…
+902|||||r15h-pool-19 · vless · unknown
+903|false||||Select exit
+904|false||||Test this exit
+905|false||||Remove…
+906|||||r15h-pool-20 · vless · unknown
+907|false||||Select exit
+908|false||||Test this exit
+909|false||||Remove…
+910|false||||Page 1/2
+911|false||||Previous page
+912|||||Next page
+24|||||Cooling (0)
+913|false||||No cooling exits
+26|||||Unsupported/Invalid (0)
+914|false||||No unsupported/invalid exits
+28|false||||Refresh all sources
+29|false||||Re-rank now
+30|false||||Test first 20 usable
+31|||||Add/import… (Terminal menu)
+32|||||Desktop proxy
+33|false||||Desktop proxy: not applied (kde)
+34|true||||Refresh status
+35|false||||Set/Re-apply desktop proxy…
+36|true||||Restore previous desktop proxy…
+37|||||Diagnostics
+38|false||||Run doctor
+39|||||Doctor results
+396|false||||No doctor results yet
+41|||||Warnings (1)
+915|false||||service is stopped; traffic listeners are closed and leaving this mode needs a …
+43|||||Show log path
+44|||||Environment
+660|false||||Environment unavailable (stopped)
+49|||||Data
+50|true||||Back up state now
+51|false||||Restore backup… (CLI)
+52|||||Settings
+53|false||||Start at login: Off
+54|false||||Start at login unavailable: autostart manages only the default data directory
+55|false||||HTTP 127.0.0.1:42279 · SOCKS 127.0.0.1:58259 · log info
+56|false||||State /tmp/opencode/r15h/kde-20261126T091503Z/data/state.json · config /tmp/ope…
+57|||||Advanced
+58|true||||Restart engine…
+59|||||Terminal menu…
+663|||||Restart engine to resume…
+60|false||||Last action: Stopped listening
+2|||||Quit
+3|true||||Quit RouteLatch

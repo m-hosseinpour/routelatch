@@ -153,8 +153,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 > شده است؛ R15-A..C (اسپایک منو، controller/model و restart سطح process)،
 > اتصال واقعی tray در R15-D2 و دامنه‌های R15-E..G2 (pool، rules/proposals،
 > desktop/diagnostics/data/settings و Terminal menu/Quit) پیاده شده‌اند و منوی controller
-> جای سه آیتم ثابت را گرفته است؛ فقط R15-H (پذیرش نهایی/بازبینی/release gate)
-> باقی است.
+> جای سه آیتم ثابت را گرفته است. پذیرش R15-H در ۲۰۲۶-۱۱-۲۶ روی data-dir ایزوله
+> اجرا و شاهدش در `spike/tray/evidence/r15h-acceptance-2026-11-26.md` ثبت شد؛
+> بازبینی مستقل، commit و تصمیم انتشار مراحل جدا هستند.
 
 - Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child

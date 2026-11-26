@@ -1,0 +1,9 @@
+== D21: canary occurrences in isolated data/XDG (expect none) ==
+none
+== D21: canary in notification bodies (expect none) ==
+none
+== token= strings in the log (numeric lifecycle sequence only) ==
+token=1
+token=2
+== http(s):// or private home paths in the log (expect none) ==
+none

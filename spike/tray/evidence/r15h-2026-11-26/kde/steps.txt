@@ -1,0 +1,41 @@
+09:15:04 data=/tmp/opencode/r15h/kde-20261126T091503Z/data canary=rl-canary-c47f6145672bd684.invalid ports=42279/58259 binary=/tmp/opencode/r15h/dist-pkg/routelatch-linux-amd64
+09:15:04 supervisor=1663908 tray=1663933 bus=org.freedesktop.StatusNotifierItem-1663933-1
+09:15:20 fixtures loaded
+09:15:20 initial surface: header, radio, root submenus present
+09:15:20 click id=224
+09:15:20 rules pagination 1/2 -> 2/2
+09:15:20 click id=307
+09:15:20 pool pagination and label sanitization/truncation verified
+09:15:20 click id=28
+09:15:24 pool refresh job exercised: Last action: Sources refreshed
+09:15:24 click id=34
+09:15:26 desktop status read-only refresh; set/restore present but not clicked
+09:15:26 click id=38
+09:15:26 click id=43
+09:15:27 doctor results and log-path notification exercised
+09:15:28 click id=50
+09:15:28 isolated backup written: /tmp/opencode/r15h/kde-20261126T091503Z/data/backup/state-20261126T091528.135080610Z.json
+09:15:28 settings/autostart disabled state and data paths verified (isolated XDG)
+09:15:28 click id=59
+09:15:28 Terminal menu used the fake allowlisted konsole argv
+09:15:28 click id=58
+09:15:28 click id=386
+09:15:29 restart completed after confirmation; supervisor events captured
+09:15:35 engine unavailable and recovery shown
+09:15:35 click id=8
+09:15:35 click id=661
+09:15:36 click id=663
+09:15:36 click id=916
+09:15:36 click id=5
+09:15:37 stopped, process restart and mode resume verified
+09:15:38 canary direct request through the isolated listener: HTTP 502
+09:15:38 canary proposal exists only in the live menu; no file/backup hit
+09:15:38 click id=1186
+09:15:39 click id=1091
+09:15:39 click id=1223
+09:15:39 click id=1230
+09:15:39 proposal rejected; confirmed rule removal exercised; canary never persisted
+09:15:39 click id=3
+09:15:40 Quit removed processes and the temporary tray item
+09:15:40 D21/notification scan passed
+09:15:40 RUN OK /tmp/opencode/r15h/kde-20261126T091503Z

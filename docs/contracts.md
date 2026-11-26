@@ -1472,8 +1472,10 @@ extension/SSH همچنان tray ندارد و رفتار D26 تغییر نمی�
 افزونهٔ کنترل tray و restart سطح process است؛ R15-A..C (اسپایک منو،
 controller/model و restart در supervisor)، اتصال واقعی tray در R15-D2 و
 دامنه‌های R15-E..G2 (pool، rules/proposals، desktop/diagnostics/data/settings و Terminal
-menu/Quit) پیاده شده‌اند و منوی controller جای سه آیتم ثابت را گرفته است؛ فقط
-R15-H (پذیرش نهایی/بازبینی/release gate) باقی است.
+menu/Quit) پیاده شده‌اند و منوی controller جای سه آیتم ثابت را گرفته است.
+پذیرش R15-H در ۲۰۲۶-۱۱-۲۶ روی data-dir ایزوله اجرا شد و شاهد آن در
+`spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ بازبینی مستقل، commit
+و تصمیم انتشار مراحل جدا هستند.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق

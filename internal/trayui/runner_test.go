@@ -154,6 +154,17 @@ func (h *runnerHarness) waitLabelFor(t *testing.T, key string, cond func(string)
 	})
 }
 
+// waitClickable waits until the binder publishes the expected click state.
+// Click reads that state rather than the backend's visible label, so a test
+// that clicked as soon as the label changed could observe the previous tree.
+func (h *runnerHarness) waitClickable(t *testing.T, key string, enabled bool) {
+	t.Helper()
+	waitFor(t, "clickable "+key, func() bool {
+		target, ok := h.runner.binder.Lookup(key)
+		return ok && target.Enabled == enabled
+	})
+}
+
 // setStatus replaces the status map instead of mutating it, so a concurrent
 // fixture read never observes a write.
 func (f *fixtureCaller) setStatus(key string, value any) {
@@ -368,6 +379,7 @@ func TestRunnerUnavailableAndRecovery(t *testing.T) {
 	h.ctlSetup.caller.setTransport(true)
 	h.tick(2 * time.Second)
 	h.waitLabel(t, "status", "Engine unavailable; retrying…")
+	h.waitClickable(t, "mode.all-direct", false)
 
 	if err := h.runner.Click("mode.all-direct"); !errors.Is(err, ErrDisabledNode) {
 		t.Fatalf("click while unavailable = %v", err)
@@ -379,6 +391,7 @@ func TestRunnerUnavailableAndRecovery(t *testing.T) {
 	h.ctlSetup.caller.setTransport(false)
 	h.tick(2 * time.Second)
 	h.waitLabel(t, "status", "Targeted · 140 usable · 3 open")
+	h.waitClickable(t, "mode.all-direct", true)
 	if err := h.runner.Click("mode.all-direct"); err != nil {
 		t.Fatalf("click after recovery: %v", err)
 	}

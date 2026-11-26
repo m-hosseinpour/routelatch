@@ -1,0 +1,125 @@
+0|||||
+1|false||||Targeted · 25 usable · 0 open
+4|||||Mode
+5|true||radio|1|Targeted
+6|true||||All proxy
+7|true||||All direct
+8|true||||Stop listening…
+9|||||Proposals (0)
+10|false||||No pending proposals
+11|||||Show decided (0)
+12|false||||No decided or expired proposals
+13|true||||Clear decided/expired…
+14|||||Approved rules (25)
+308|||||r15h-page-21.example · domain
+309|true||||Remove…
+310|||||Details
+311|false||||ID: r-85f1d1c2
+312|false||||Kind: domain
+313|false||||Operand: r15h-page-21.example
+314|false||||Note: —
+315|false||||Added: 2026-11-26 09:15
+316|||||r15h-page-22.example · domain
+317|true||||Remove…
+318|||||Details
+319|false||||ID: r-69820075
+320|false||||Kind: domain
+321|false||||Operand: r15h-page-22.example
+322|false||||Note: —
+323|false||||Added: 2026-11-26 09:15
+324|||||r15h-page-23.example · domain
+325|true||||Remove…
+326|||||Details
+327|false||||ID: r-ab32c8e0
+328|false||||Kind: domain
+329|false||||Operand: r15h-page-23.example
+330|false||||Note: —
+331|false||||Added: 2026-11-26 09:15
+332|||||r15h-page-24.example · domain
+333|true||||Remove…
+334|||||Details
+335|false||||ID: r-96cd9ef6
+336|false||||Kind: domain
+337|false||||Operand: r15h-page-24.example
+338|false||||Note: —
+339|false||||Added: 2026-11-26 09:15
+340|||||r15h-page-25.example · domain
+341|true||||Remove…
+342|||||Details
+343|false||||ID: r-17f1fba0
+344|false||||Kind: domain
+345|false||||Operand: r15h-page-25.example
+346|false||||Note: —
+347|false||||Added: 2026-11-26 09:15
+222|false||||Page 2/2
+223|true||||Previous page
+224|false||||Next page
+16|||||Add rule… (Terminal menu)
+17|||||Pool
+18|false||||25 records · 25 usable · 0 healthy · 0 cooling
+19|true||radio|1|Auto select
+20|||||Healthy (0)
+21|false||||No healthy exits
+22|||||Untested (25)
+348|||||r15h-pool-21 · vless · unknown
+349|true||||Select exit
+350|true||||Test this exit
+351|true||||Remove…
+352|||||r15h-pool-22 · vless · unknown
+353|true||||Select exit
+354|true||||Test this exit
+355|true||||Remove…
+356|||||r15h-[31mred · vless · unknown
+357|true||||Select exit
+358|true||||Test this exit
+359|true||||Remove…
+360|||||r15h-long-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA…
+361|true||||Select exit
+362|true||||Test this exit
+363|true||||Remove…
+364|||||r15h-pool-25 · vless · unknown
+365|true||||Select exit
+366|true||||Test this exit
+367|true||||Remove…
+305|false||||Page 2/2
+306|true||||Previous page
+307|false||||Next page
+24|||||Cooling (0)
+25|false||||No cooling exits
+26|||||Unsupported/Invalid (0)
+27|false||||No unsupported/invalid exits
+28|true||||Refresh all sources
+29|true||||Re-rank now
+30|true||||Test first 20 usable
+31|||||Add/import… (Terminal menu)
+32|||||Desktop proxy
+33|false||||Desktop proxy: not applied (kde)
+34|||||Refresh status
+35|true||||Set/Re-apply desktop proxy…
+36|true||||Restore previous desktop proxy…
+37|||||Diagnostics
+38|true||||Run doctor
+39|||||Doctor results
+40|false||||No doctor results yet
+41|||||Warnings (0)
+61|false||||No warnings
+43|||||Show log path
+44|||||Environment
+45|false||||HTTP_PROXY=http://127.0.0.1:42279
+46|false||||HTTPS_PROXY=http://127.0.0.1:42279
+47|false||||ALL_PROXY=http://127.0.0.1:42279
+48|false||||NO_PROXY=localhost,127.0.0.1,.localhost,127.0.0.0/8,::1,169.254.0.0/16,fe80::/1…
+49|||||Data
+50|true||||Back up state now
+51|false||||Restore backup… (CLI)
+52|||||Settings
+53|false||||Start at login: Off
+54|false||||Start at login unavailable: autostart manages only the default data directory
+55|false||||HTTP 127.0.0.1:42279 · SOCKS 127.0.0.1:58259 · log info
+56|false||||State /tmp/opencode/r15h/kde-20261126T091503Z/data/state.json · config /tmp/ope…
+57|||||Advanced
+58|true||||Restart engine…
+59|||||Terminal menu…
+60|false||||Last action: Sources refreshed
+2|||||Quit
+3|true||||Quit RouteLatch

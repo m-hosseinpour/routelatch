@@ -1,0 +1,11 @@
+Final tree: 22cb97d + three code/test files and docs (see record)
+gofmt rc=0 duration=0s files=0
+vet rc=0 duration=0s
+build rc=0 duration=2s
+test rc=0 duration=134s
+race rc=0 duration=109s
+build4 rc=0 duration=8s
+artifact rc=0 duration=1s
+pkgbuild rc=0 duration=4s
+package rc=0 duration=43s
+checkpackage rc=0 duration=10s

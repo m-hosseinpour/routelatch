@@ -1,0 +1,16 @@
+39|||||Doctor results
+370|false||||[ok] state_dir: mode 0700
+371|false||||[ok] state_file: mode 0600
+372|false||||[ok] config_dir: mode 0700
+373|false||||[ok] runtime_dir: mode 0700
+374|false||||[ok] config_file: mode 0600
+375|false||||[ok] management_socket: socket mode 0600; same-uid peer check is enforced (root…
+376|false||||[ok] listeners: both traffic listeners are literal loopback addresses: 127.0.0.…
+377|false||||[ok] bound_listeners: traffic listeners are bound on loopback
+378|false||||[ok] pool: 25 usable of 25 records
+379|false||||[ok] schema_version: state schema 1
+380|false||||[ok] proposal_residue: no legacy proposal history in state or backups
+381|false||||[ok] log_file: log file /tmp/opencode/r15h/kde-20261126T091503Z/data/log/routel…
+382|false||||[ok] tray_available: a StatusNotifier tray host is registered
+383|false||||[ok] pidfd_available: pidfd_open is allowed
+384|false||||[ok] conflicting_state: no conflicting persisted marker found

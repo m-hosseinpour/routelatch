@@ -1,0 +1,4 @@
+2026-11-26T09:15:04.200Z app: supervisor.engine_started pid=1663921 generation=1
+2026-11-26T09:15:28.996Z app: supervisor.restart_requested source=tray
+2026-11-26T09:15:29.001Z app: supervisor.engine_started pid=1666108 generation=2
+2026-11-26T09:15:29.109Z app: supervisor.engine_restarted reason=tray pid=1666108 generation=2 token=1

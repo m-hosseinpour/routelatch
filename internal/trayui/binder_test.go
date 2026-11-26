@@ -19,6 +19,9 @@ type fakeBackend struct {
 	root     MenuItem
 	buildErr error
 	applyErr error
+	// applyHook runs inside Apply, after the batch is recorded. It lets a test
+	// observe what Lookup returns while the backend render is still in flight.
+	applyHook func()
 }
 
 func newFakeBackend() *fakeBackend { return &fakeBackend{} }
@@ -39,6 +42,9 @@ func (f *fakeBackend) Apply(_ context.Context, ops []Op) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.batches = append(f.batches, append([]Op(nil), ops...))
+	if f.applyHook != nil {
+		f.applyHook()
+	}
 	if f.applyErr != nil {
 		return f.applyErr
 	}
@@ -413,6 +419,43 @@ func TestBinderClickLookup(t *testing.T) {
 	}
 	if _, ok := binder.Lookup("missing"); ok {
 		t.Fatal("unknown key resolved")
+	}
+}
+
+// A host can expose a changed label while the backend apply is still running.
+// Click resolution must already see the tree that produced that label, not the
+// previous one.
+func TestBinderPublishesClickTargetsBeforeBackendApply(t *testing.T) {
+	backend := newFakeBackend()
+	binder, err := NewBinder(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := item("mode", "Targeted")
+	enabled.Action = ActionModeTargeted
+	if _, err := binder.Apply(context.Background(), menuView(EngineReady, enabled)); err != nil {
+		t.Fatal(err)
+	}
+
+	disabled := disabledItem("mode", "Targeted")
+	disabled.Action = ActionModeTargeted
+	checked := 0
+	backend.applyHook = func() {
+		checked++
+		target, ok := binder.Lookup("mode")
+		if !ok {
+			t.Error("the updated key is not published during apply")
+			return
+		}
+		if target.Enabled {
+			t.Error("Lookup still returns the previous enabled target during apply")
+		}
+	}
+	if _, err := binder.Apply(context.Background(), menuView(EngineReady, disabled)); err != nil {
+		t.Fatal(err)
+	}
+	if checked != 1 {
+		t.Fatalf("apply hook ran %d times, want 1", checked)
 	}
 }
 

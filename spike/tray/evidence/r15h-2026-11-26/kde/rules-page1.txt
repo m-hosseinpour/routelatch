@@ -1,0 +1,25 @@
+14|||||Approved rules (25)
+62|||||r15h-page-01.example · domain
+70|||||r15h-page-02.example · domain
+78|||||r15h-page-03.example · domain
+86|||||r15h-page-04.example · domain
+94|||||r15h-page-05.example · domain
+102|||||r15h-page-06.example · domain
+110|||||r15h-page-07.example · domain
+118|||||r15h-page-08.example · domain
+126|||||r15h-page-09.example · domain
+134|||||r15h-page-10.example · domain
+142|||||r15h-page-11.example · domain
+150|||||r15h-page-12.example · domain
+158|||||r15h-page-13.example · domain
+166|||||r15h-page-14.example · domain
+174|||||r15h-page-15.example · domain
+182|||||r15h-page-16.example · domain
+190|||||r15h-page-17.example · domain
+198|||||r15h-page-18.example · domain
+206|||||r15h-page-19.example · domain
+214|||||r15h-page-20.example · domain
+222|false||||Page 1/2
+223|false||||Previous page
+224|||||Next page
+16|||||Add rule… (Terminal menu)

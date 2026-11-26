@@ -1,0 +1,5 @@
+4|||||Mode
+5|true|||0|Targeted
+6|true||||All proxy
+7|true||||All direct
+8|false||||Stop listening…

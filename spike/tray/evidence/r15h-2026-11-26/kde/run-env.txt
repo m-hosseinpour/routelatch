@@ -1,0 +1,9 @@
+base=/tmp/opencode/r15h/kde-20261126T091503Z
+data=/tmp/opencode/r15h/kde-20261126T091503Z/data
+xdg=/tmp/opencode/r15h/kde-20261126T091503Z/xdg
+canary=rl-canary-c47f6145672bd684.invalid
+http=42279
+socks=58259
+supervisor=1663908
+tray=1663933
+bus=org.freedesktop.StatusNotifierItem-1663933-1

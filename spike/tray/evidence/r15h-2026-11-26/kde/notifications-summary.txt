@@ -1,0 +1,12 @@
+5:method call time=1795684520.819621 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=29 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+20:method call time=1795684524.660591 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=36 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+38:method call time=1795684526.839928 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=40 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+53:method call time=1795684526.962038 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=41 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+68:method call time=1795684528.137843 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=42 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+83:method call time=1795684529.110232 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=46 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+113:method call time=1795684535.871374 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=56 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+128:method call time=1795684536.690335 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=60 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+143:method call time=1795684536.823328 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=61 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+158:method call time=1795684538.969585 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=65 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+173:method call time=1795684539.765686 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=66 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+188:method call time=1795684539.888851 sender=:1.10426 -> destination=org.freedesktop.Notifications serial=67 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify

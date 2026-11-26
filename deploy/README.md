@@ -45,7 +45,12 @@ routelatch run --headless
 
 The app's log path is printed by `routelatch run` and is also in `status`/the
 `--json` envelope. Quit from the tray icon stops the supervisor and its engine
-child. In foreground mode Ctrl-C (SIGINT) or SIGTERM stops the engine.
+child. The tray menu also exposes status, mode changes (including Stop listening
+and Restart engine), proposals, approved rules, pool, desktop-proxy status,
+diagnostics, backup, the autostart toggle and the Terminal menu; destructive
+actions require a second confirmation. See "Tray control surface" in
+`README.md` for the action map and limits. In foreground mode Ctrl-C (SIGINT) or
+SIGTERM stops the engine.
 
 ## Login autostart (desktop only)
 
