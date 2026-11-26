@@ -64,6 +64,14 @@ type childProc struct {
 	// readerDone closes after the reader has delivered every line the dead
 	// child wrote, so a quit that races the exit status is not stranded.
 	readerDone chan struct{}
+	// events is the supervisor->tray lifecycle writer for this generation. A
+	// restarted tray gets a fresh pipe, so a ready queued for the previous
+	// generation can never be read as the new generation's lifecycle.
+	events *os.File
+	// eventFD is the same non-blocking descriptor. Writes go through the raw
+	// descriptor because the os.File/poll path can still wait on a full pipe;
+	// a raw write returns EAGAIN and the event is dropped.
+	eventFD int
 }
 
 type supervisor struct {
@@ -93,6 +101,16 @@ type supervisor struct {
 	quitRequested bool
 
 	restarts map[string][]time.Time
+	// engineGeneration increments for every engine child spawn. A restart
+	// attempt captures it so a status reply from any other generation cannot
+	// confirm the new child.
+	engineGeneration uint64
+	// restartSeq is the lifecycle token for the current restart attempt. A
+	// late completion with an older token never emits ready.
+	restartSeq uint64
+	// pendingTrayMsgs holds messages drained during a restart, in arrival
+	// order, so the loop can process them after the restart completes.
+	pendingTrayMsgs []string
 }
 
 // RunSupervisor owns app.lock and app.owner for one app instance. It starts the
@@ -269,6 +287,14 @@ func (s *supervisor) loop(ctx context.Context) error {
 	defer repair.Stop()
 
 	for {
+		// Messages deferred by a restart are handled before the next select so
+		// order is preserved without blocking the lifecycle work.
+		if msg, ok := s.popPendingTrayMessage(); ok {
+			if err, done := s.processTrayMessage(msg); done {
+				return err
+			}
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return s.shutdown(0, nil)
@@ -301,21 +327,64 @@ func (s *supervisor) loop(ctx context.Context) error {
 				return nil
 			}
 		case msg := <-s.trayMessages():
-			if msg == "quit" {
-				s.quitRequested = true
-				s.logf("supervisor.quit requested=tray")
-				return s.shutdown(0, nil)
-			}
-			if err := s.handleTrayMessage(msg); err != nil {
-				return s.shutdown(0, err)
-			}
-			if s.quitRequested {
-				return nil
+			if err, done := s.processTrayMessage(msg); done {
+				return err
 			}
 		case <-repair.C:
 			if err := s.repair(); err != nil {
 				return s.failClosed(err)
 			}
+		}
+	}
+}
+
+// processTrayMessage applies one tray message in loop order. It reports done
+// when the supervisor must exit with err (which is already a completed
+// shutdown/fail-closed outcome).
+func (s *supervisor) processTrayMessage(msg string) (err error, done bool) {
+	if msg == "quit" {
+		s.quitRequested = true
+		s.logf("supervisor.quit requested=tray")
+		return s.shutdown(0, nil), true
+	}
+	// Every handler error is already a completed shutdown/fail-closed
+	// outcome; wrapping it in another shutdown would touch released state a
+	// second time.
+	if err := s.handleTrayMessage(msg); err != nil {
+		return err, true
+	}
+	if s.quitRequested {
+		return nil, true
+	}
+	return nil, false
+}
+
+func (s *supervisor) popPendingTrayMessage() (string, bool) {
+	if len(s.pendingTrayMsgs) == 0 {
+		return "", false
+	}
+	msg := s.pendingTrayMsgs[0]
+	s.pendingTrayMsgs = s.pendingTrayMsgs[1:]
+	return msg, true
+}
+
+// deferMessagesDuringRestart drains what the current tray already queued while
+// a restart was running. A restart request from that window is ignored (§7.5);
+// quit/lost/error stay ordered for the next loop iteration.
+func (s *supervisor) deferMessagesDuringRestart() {
+	if s.tray == nil || s.tray.msgs == nil {
+		return
+	}
+	for {
+		select {
+		case msg := <-s.tray.msgs:
+			if msg == "restart-engine" {
+				s.logf("supervisor.restart_ignored reason=queued_during_restart")
+				continue
+			}
+			s.pendingTrayMsgs = append(s.pendingTrayMsgs, msg)
+		default:
+			return
 		}
 	}
 }
@@ -460,7 +529,11 @@ func (s *supervisor) stopEngineOnly() error {
 	if s.engine == nil {
 		return nil
 	}
-	err := s.engine.handle.Terminate(s.opts.TermWait, s.opts.KillWait)
+	engine := s.engine
+	err := engine.handle.Terminate(s.opts.TermWait, s.opts.KillWait)
+	// The pidfd is no longer needed once exit is confirmed; repeated manual
+	// restarts must not accumulate descriptors (or pin old PIDs).
+	engine.handle.Close()
 	s.engine = nil
 	return err
 }
@@ -487,35 +560,60 @@ func (s *supervisor) engineDied(code int) error {
 	if err := s.restartAllowed("engine"); err != nil {
 		return s.shutdown(1, &Failure{Exit: contract.ExitError, Kind: contract.Internal, Op: "app.engine", Message: "the engine child keeps failing; the app is stopping instead of entering a restart loop", Reason: "restart_limit"})
 	}
+	return s.restartEngineChild("engine_exit")
+}
+
+// restartEngineChild replaces the engine process. The caller decides whether
+// the automatic restart budget applies; a tray request does not consume it.
+// There is never an in-process engine restart (D26/R-4): the old child is torn
+// down completely and a new `run --headless` process is spawned.
+func (s *supervisor) restartEngineChild(reason string) error {
+	trayAtStart := s.tray
+	// starting is written before any teardown so a stale ready marker from the
+	// previous engine generation cannot stay visible during the restart.
 	if err := s.writeState(MarkerStarting); err != nil {
 		return s.failClosed(markerWriteFailed(err))
 	}
-	s.phase = MarkerStarting
+	s.restartSeq++
+	seq := s.restartSeq
+	s.emitLifecycle("restarting")
 	if err := s.stopEngineOnly(); err != nil {
 		return s.failClosed(teardownIncomplete(err))
 	}
 	if err := s.spawnEngine(); err != nil {
 		return s.failClosed(err)
 	}
-	if err := s.waitEngineReady(context.Background()); err != nil {
+	generation := s.engineGeneration
+	if err := s.waitEngineRestartReady(context.Background(), generation); err != nil {
 		var repair *repairError
 		if errors.As(err, &repair) {
 			return s.failClosed(repair.err)
 		}
+		// Timeout, replacement-child exit or a status reply from another
+		// generation is never success and never starts a hidden restart loop.
 		return s.shutdown(0, s.mapChildExit("engine", err))
 	}
-	// Tray must still be registered (it was not restarted here).
+	// The tray was not restarted here; only the same registered generation may
+	// confirm this restart. A tray loss takes its normal documented path.
 	if err := s.checkTray(); err != nil {
 		return s.shutdown(7, unsupportedTray(err))
 	}
-	if s.tray == nil || s.trayRegistered() != nil {
+	if s.tray == nil || s.tray != trayAtStart || s.trayRegistered() != nil {
 		return s.trayDied(3, "")
 	}
 	if err := s.writeState(MarkerReady); err != nil {
 		return s.failClosed(markerWriteFailed(err))
 	}
 	s.phase = MarkerReady
-	s.logf("supervisor.engine_restarted pid=%d", s.engine.handle.PID)
+	// A replacement tray generation has its own event pipe and never saw this
+	// restart's `restarting`; publishing ready there would be a stale signal.
+	if s.tray == trayAtStart {
+		s.emitLifecycleReady(seq)
+	}
+	s.logf("supervisor.engine_restarted reason=%s pid=%d generation=%d token=%d", reason, s.engine.handle.PID, s.engineGeneration, seq)
+	// A request the tray queued while this restart was running is ignored, as
+	// §7.5 requires; quit/lost/error remain ordered for the loop.
+	s.deferMessagesDuringRestart()
 	return nil
 }
 
@@ -591,6 +689,16 @@ func (s *supervisor) handleTrayMessage(msg string) error {
 			return s.trayDied(7, reason)
 		}
 		return s.trayDied(1, reason)
+	case msg == "restart-engine":
+		// Only the authenticated tray control pipe carries this lifecycle
+		// request; no management op maps to it. A request that arrives while
+		// the engine is not ready is ignored, never turned into a hidden loop.
+		if s.phase != MarkerReady {
+			s.logf("supervisor.restart_ignored phase=%s", s.phase)
+			return nil
+		}
+		s.logf("supervisor.restart_requested source=tray")
+		return s.restartEngineChild("tray")
 	}
 	return nil
 }
@@ -647,8 +755,9 @@ func (s *supervisor) spawnEngine() error {
 		wait <- code
 	}()
 	s.engine = &childProc{cmd: cmd, handle: handle, wait: wait}
+	s.engineGeneration++
 	s.reportIdentity("engine", handle)
-	s.logf("supervisor.engine_started pid=%d", handle.PID)
+	s.logf("supervisor.engine_started pid=%d generation=%d", handle.PID, s.engineGeneration)
 	return nil
 }
 
@@ -657,15 +766,33 @@ func (s *supervisor) spawnTray() error {
 	if err != nil {
 		return internalFailure("app.tray", "cannot create the tray control pipe", err)
 	}
+	eventR, eventW, err := os.Pipe()
+	if err != nil {
+		_ = controlR.Close()
+		_ = controlW.Close()
+		return internalFailure("app.tray", "cannot create the tray lifecycle pipe", err)
+	}
+	// Lifecycle events are bounded and non-blocking: a slow or dead tray must
+	// never hold the supervisor. A dropped event is detected by the tray's
+	// status polling and timeout, never turned into a success.
+	eventFD := int(eventW.Fd())
+	if err := syscall.SetNonblock(eventFD, true); err != nil {
+		_ = controlR.Close()
+		_ = controlW.Close()
+		_ = eventR.Close()
+		_ = eventW.Close()
+		return internalFailure("app.tray", "cannot make the tray lifecycle pipe non-blocking", err)
+	}
 	cmd := s.opts.Tray.exec(s.trayArgs()...)
 	cmd.Stdin = nil
 	cmd.Stdout = s.log
 	cmd.Stderr = s.log
-	cmd.ExtraFiles = []*os.File{s.selfPidfd, controlW}
+	cmd.ExtraFiles = []*os.File{s.selfPidfd, controlW, eventR}
 	cmd.Env = append(os.Environ(), s.opts.Tray.Env...)
 	cmd.Env = append(cmd.Env,
 		"ROUTELATCH_TRAY_PARENT_PIDFD=3",
 		"ROUTELATCH_TRAY_CONTROL_FD=4",
+		"ROUTELATCH_TRAY_EVENT_FD=5",
 		"ROUTELATCH_PARENT_PID="+strconv.Itoa(os.Getpid()),
 		"ROUTELATCH_LOG_PATH="+s.logPath,
 		"ROUTELATCH_DATA_DIR="+s.paths.DataDir,
@@ -673,12 +800,16 @@ func (s *supervisor) spawnTray() error {
 	if err := cmd.Start(); err != nil {
 		_ = controlR.Close()
 		_ = controlW.Close()
+		_ = eventR.Close()
+		_ = eventW.Close()
 		return internalFailure("app.tray", "cannot start the tray child", err)
 	}
 	_ = controlW.Close()
+	_ = eventR.Close()
 	handle, err := OpenProc(cmd.Process.Pid)
 	if err != nil {
 		_ = controlR.Close()
+		_ = eventW.Close()
 		stopUnpinnedDirectChild(cmd)
 		return internalFailure("app.tray", "cannot pin the tray child with a pidfd", err)
 	}
@@ -702,7 +833,7 @@ func (s *supervisor) spawnTray() error {
 	readErr := make(chan error, 1)
 	done := make(chan struct{})
 	readerDone := make(chan struct{})
-	s.tray = &childProc{cmd: cmd, handle: handle, wait: wait, control: controlR, msgs: msgs, readErr: readErr, done: done, readerDone: readerDone}
+	s.tray = &childProc{cmd: cmd, handle: handle, wait: wait, control: controlR, msgs: msgs, readErr: readErr, done: done, readerDone: readerDone, events: eventW, eventFD: eventFD}
 	s.reportIdentity("tray", handle)
 	go readTrayControl(controlR, msgs, readErr, done, readerDone)
 	s.logf("supervisor.tray_started pid=%d", handle.PID)
@@ -731,6 +862,9 @@ func (s *supervisor) stopTrayOnly() error {
 	}
 	tray := s.tray
 	err := tray.handle.Terminate(s.opts.TermWait, s.opts.KillWait)
+	if tray.handle != nil {
+		tray.handle.Close()
+	}
 	// The child is dead and its write end is closed, so the reader will reach
 	// EOF. Drain what it already queued before discarding the generation: a
 	// tray Quit writes "quit" and exits 0, and the exit status may win the
@@ -767,11 +901,34 @@ func (s *supervisor) stopTrayOnly() error {
 	if tray.control != nil {
 		_ = tray.control.Close()
 	}
+	if tray.events != nil {
+		_ = tray.events.Close()
+	}
 	s.tray = nil
 	return err
 }
 
 func (s *supervisor) waitEngineReady(ctx context.Context) error {
+	return s.waitEngineStatus(ctx, nil, func(p statusProbe) bool { return p.Ready })
+}
+
+// waitEngineRestartReady is the restart-bound readiness window. It accepts a
+// reply only while the child spawned for this attempt is still alive, and it
+// requires the traffic listeners for a running mode. A stored stopped mode is
+// a valid ready state with listeners_open=false and is not resumed silently.
+func (s *supervisor) waitEngineRestartReady(ctx context.Context, generation uint64) error {
+	return s.waitEngineStatus(ctx, &generation, func(p statusProbe) bool {
+		if !p.Ready {
+			return false
+		}
+		if p.ListenersOpen {
+			return true
+		}
+		return p.Mode == contract.ModeStopped
+	})
+}
+
+func (s *supervisor) waitEngineStatus(ctx context.Context, generation *uint64, accept func(statusProbe) bool) error {
 	deadline := time.NewTimer(s.opts.ReadyTimeout)
 	defer deadline.Stop()
 	poll := time.NewTicker(100 * time.Millisecond)
@@ -791,8 +948,18 @@ func (s *supervisor) waitEngineReady(ctx context.Context) error {
 				return &repairError{err: err}
 			}
 		case <-poll.C:
-			if listeners, ready := s.statusReady(ctx); ready {
-				s.listeners = listeners
+			if generation != nil {
+				if s.engineGeneration != *generation {
+					return internalFailure("app.engine", "the engine generation changed during the restart", nil)
+				}
+				if s.engine == nil || s.engine.handle == nil || !s.engine.handle.Alive() {
+					// Let the child's wait channel report the exit; a reply
+					// from a dead generation can never confirm this restart.
+					continue
+				}
+			}
+			if probe, ready := s.probeStatus(ctx); ready && accept(probe) {
+				s.listeners = probe.Listeners
 				return nil
 			}
 		}
@@ -855,28 +1022,50 @@ func (s *supervisor) waitTrayReady(ctx context.Context) error {
 	}
 }
 
-func (s *supervisor) statusReady(ctx context.Context) (Listeners, bool) {
+// statusProbe is the subset of status used by readiness. Ready/ListenersOpen
+// let a restart be mode-aware: a stored stopped mode is ready with closed
+// listeners, a running mode needs open listeners.
+type statusProbe struct {
+	Listeners     Listeners
+	Ready         bool
+	ListenersOpen bool
+	Mode          contract.Mode
+}
+
+func (s *supervisor) probeStatus(ctx context.Context) (statusProbe, bool) {
 	client := &control.Client{Path: s.opts.Paths.Socket, Timeout: time.Second}
 	callCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	env, err := client.Call(callCtx, control.Request{Op: control.OpStatus})
 	if err != nil || !env.OK {
-		return Listeners{}, false
+		return statusProbe{}, false
 	}
 	data, ok := env.Data.(map[string]any)
 	if !ok || data["ready"] != true {
-		return Listeners{}, false
+		return statusProbe{}, false
 	}
-	out := s.listeners
+	out := statusProbe{Ready: true, Listeners: s.listeners}
 	if raw, ok := data["listeners"].(map[string]any); ok {
 		if v, ok := raw["http"].(string); ok {
-			out.HTTP = v
+			out.Listeners.HTTP = v
 		}
 		if v, ok := raw["socks"].(string); ok {
-			out.SOCKS = v
+			out.Listeners.SOCKS = v
 		}
 	}
+	out.ListenersOpen, _ = data["listeners_open"].(bool)
+	if mode, ok := data["mode"].(string); ok {
+		out.Mode = contract.Mode(mode)
+	}
 	return out, true
+}
+
+func (s *supervisor) statusReady(ctx context.Context) (Listeners, bool) {
+	probe, ok := s.probeStatus(ctx)
+	if !ok || !probe.Ready {
+		return Listeners{}, false
+	}
+	return probe.Listeners, true
 }
 
 // ownerWrite is the single marker write used by the supervisor. Tests replace
@@ -958,6 +1147,31 @@ func (s *supervisor) reportReady() {
 	s.reported = true
 	s.reporter.Emit(ReadyEvent{Event: "ready", PID: os.Getpid(), Listeners: s.listeners, LogPath: s.logPath})
 	s.reporter.Close()
+}
+
+// emitLifecycle sends one bounded supervisor->tray event. The token orders
+// attempts for the future binder; the supervisor itself only emits ready for
+// the current attempt. A slow or dead tray drops the event instead of stalling
+// the supervisor; the tray's status polling and timeout cover that case.
+func (s *supervisor) emitLifecycle(event string) {
+	tray := s.tray
+	if tray == nil || tray.events == nil || tray.eventFD <= 0 {
+		s.logf("supervisor.lifecycle_event_dropped event=%s reason=no_tray", event)
+		return
+	}
+	line := []byte(fmt.Sprintf("%s %d\n", event, s.restartSeq))
+	n, err := syscall.Write(tray.eventFD, line)
+	if err != nil || n != len(line) {
+		s.logf("supervisor.lifecycle_event_dropped event=%s written=%d/%d err=%v", event, n, len(line), err)
+	}
+}
+
+func (s *supervisor) emitLifecycleReady(seq uint64) {
+	if seq == 0 || seq != s.restartSeq {
+		s.logf("supervisor.lifecycle_ready_stale token=%d current=%d", seq, s.restartSeq)
+		return
+	}
+	s.emitLifecycle("ready")
 }
 
 func (s *supervisor) checkTray() error {

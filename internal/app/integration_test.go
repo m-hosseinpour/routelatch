@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -130,6 +131,36 @@ func helperEngine() int {
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(sig)
 
+	launchCount := readCounter(filepath.Join(paths.DataDir, "engine-launch-count"))
+	writeCounter(filepath.Join(paths.DataDir, "engine-launch-count"), launchCount+1)
+	laterGeneration := launchCount > 0
+	waitOrExit := func(d time.Duration) bool {
+		select {
+		case <-time.After(d):
+			return true
+		case <-sig:
+			return false
+		case <-parent.Done():
+			return false
+		}
+	}
+
+	if laterGeneration && (fake == "restartslow" || fake == "autorestart") {
+		if !waitOrExit(500 * time.Millisecond) {
+			return 0
+		}
+	}
+	if laterGeneration && fake == "restartnoready" {
+		select {
+		case <-sig:
+		case <-parent.Done():
+		}
+		return 0
+	}
+	if laterGeneration && fake == "restartfail" {
+		return 1
+	}
+
 	if fake == "noready" {
 		select {
 		case <-sig:
@@ -164,7 +195,22 @@ func helperEngine() int {
 			}
 		}
 	}
-	srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: helperStatus{}, AllowStale: true})
+	handler := helperStatus{}
+	switch {
+	case fake == "stopped":
+		handler = helperStatus{payload: map[string]any{
+			"ready": true, "listeners_open": false, "mode": string(contract.ModeStopped),
+			"listeners": map[string]any{"http": "", "socks": ""},
+		}}
+	case fake == "restartbadpaused" && laterGeneration:
+		// ready=true with closed listeners in a running mode must not confirm
+		// a restart; only a stored stopped mode may be ready with them closed.
+		handler = helperStatus{payload: map[string]any{
+			"ready": true, "listeners_open": false, "mode": string(contract.ModeTargeted),
+			"listeners": map[string]any{"http": "", "socks": ""},
+		}}
+	}
+	srv, err := control.NewServer(control.ServerOptions{Path: paths.Socket, Handler: handler, AllowStale: true})
 	if err != nil {
 		return 1
 	}
@@ -183,9 +229,24 @@ func helperEngine() int {
 			return 0
 		}
 	}
+	if fake == "autorestart" && !laterGeneration {
+		select {
+		case <-time.After(300 * time.Millisecond):
+			return 3
+		case <-sig:
+			return 0
+		case <-parent.Done():
+			return 0
+		}
+	}
 	select {
 	case <-sig:
 		if fake == "slowstop" {
+			time.Sleep(800 * time.Millisecond)
+		}
+		if fake == "restartstubborn" && launchCount == 0 {
+			// Keep serving status.ready while the supervisor's bounded
+			// teardown waits; a restart must not publish ready from it.
 			time.Sleep(800 * time.Millisecond)
 		}
 	case <-parent.Done():
@@ -193,11 +254,16 @@ func helperEngine() int {
 	return 0
 }
 
-type helperStatus struct{}
+type helperStatus struct {
+	payload map[string]any
+}
 
-func (helperStatus) Handle(context.Context, control.Request) (any, error) {
+func (h helperStatus) Handle(context.Context, control.Request) (any, error) {
+	if h.payload != nil {
+		return h.payload, nil
+	}
 	return map[string]any{
-		"ready": true,
+		"ready": true, "listeners_open": true, "mode": string(contract.ModeTargeted),
 		"listeners": map[string]any{
 			"http": "127.0.0.1:19001", "socks": "127.0.0.1:19002",
 		},
@@ -226,6 +292,24 @@ func helperTray() int {
 	if f, err := os.OpenFile(filepath.Join(helperPaths().DataDir, "tray-launches"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
 		_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
 		_ = f.Close()
+	}
+	if opts.EventFD >= 3 {
+		if events := os.NewFile(uintptr(opts.EventFD), "tray-events"); events != nil {
+			go func() {
+				defer events.Close()
+				scanner := bufio.NewScanner(events)
+				for scanner.Scan() {
+					line := strings.TrimSpace(scanner.Text())
+					if line == "" {
+						continue
+					}
+					if f, err := os.OpenFile(filepath.Join(helperPaths().DataDir, "tray-events"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+						_, _ = fmt.Fprintln(f, line)
+						_ = f.Close()
+					}
+				}
+			}()
+		}
 	}
 	switch fake {
 	case "trayerror":
@@ -288,10 +372,11 @@ func helperTray() int {
 		// transition before ready returns.
 		time.Sleep(300 * time.Millisecond)
 	}
-	send("ready")
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	restartReq := make(chan struct{}, 4)
+	sig := make(chan os.Signal, 4)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1, syscall.SIGUSR2)
 	defer signal.Stop(sig)
+	send("ready")
 	var after <-chan time.Time
 	switch fake {
 	case "trayquit":
@@ -312,8 +397,21 @@ func helperTray() int {
 		select {
 		case <-gone:
 			return 0
-		case <-sig:
-			return 0
+		case received := <-sig:
+			switch received {
+			case syscall.SIGUSR1:
+				select {
+				case restartReq <- struct{}{}:
+				default:
+				}
+			case syscall.SIGUSR2:
+				send("quit")
+				return 0
+			default:
+				return 0
+			}
+		case <-restartReq:
+			send("restart-engine")
 		case <-after:
 			switch fake {
 			case "trayquit":

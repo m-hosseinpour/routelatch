@@ -220,9 +220,9 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ، خروجی عمومی و انتشار همیشه مجوز جدا می‌خواهند.
 
-### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0، R15-A، R15-B0 و R15-B انجام شدند؛ R15-C..H شروع‌نشده)
+### R15 — سطح کنترل tray (تعریف ۲۰۲۶-۱۱-۲۵؛ R15-0، R15-A، R15-B0، R15-B و R15-C انجام شدند؛ R15-D1..H شروع‌نشده)
 
-**وضعیت واحد (a): R15-0، R15-A، R15-B0 و R15-B انجام شدند؛ R15-C..H شروع‌نشده.** تصمیم D28 و معیار A16
+**وضعیت واحد (a): R15-0، R15-A، R15-B0، R15-B و R15-C انجام شدند؛ R15-D1..H شروع‌نشده.** تصمیم D28 و معیار A16
 ثبت شدند و طراحی در `docs/contracts.md §۷.۳`/`§۷.۵` و
 `docs/architecture.md §۷` آمده است. در این جلسه هیچ کد، تست، بسته، سرویس،
 autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد. HEAD هنگام تعریف `cff2884` و
@@ -259,7 +259,18 @@ caller/control server در-process، جدول کامل actionها، `OK=false`،
 pool/۱۱۷ rule، label مخرب و race سبز؛ `go vet`/`go build`/full tests سبز. یک
 اجرای `internal/acceptance` پیش از rerun فوری flake کرد و signature آن در خروجی
 truncate‌شده گم شد؛ `internal/trayui` در همان اجرا سبز بود. بازبینی مستقل
-پس از R15-C انجام می‌شود. R15-C قدم بعد است.
+B0/B/C پس از R15-C انجام می‌شود.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۵ (R15-C):** `restart-engine` سطح process در supervisor
+پیاده شد: کانال دوم per-tray-generation (`ROUTELATCH_TRAY_EVENT_FD`) برای
+`restarting`/`ready` و پذیرش فرمان فقط از pipe کنترل همان-uid tray؛ marker
+`starting` قبل از teardown، teardown کامل child با pidfd و spawn child جدید،
+readiness با generation + `status.ready` + listener mode-aware + همان tray، و
+سپس `ready`؛ رد `ready` کهنه با generation/token/pipe تازه. شکست‌ها fail-closed
+با exitهای مستند 1/7/8 و بدون `ready` کاذب؛ restart دستی budget خودکار را مصرف
+نمی‌کند و quit/lost/error سریال می‌مانند. تست‌های fake child/tray، `-race` و
+full tests سبز و بازبینی lifecycle مستقل **Ready**. adapter واقعی deedles
+همچنان R15-D2 است.
 
 **هدف و نتیجهٔ قابل مشاهده.** tray desktop از یک آیکن با چند آیتم ثابت به سطح
 کنترل runtime تبدیل می‌شود: status، mode (شامل stop/restart)، proposals،
@@ -332,7 +343,7 @@ runner، مسیر پیشنهادی)؛ R15-C در `internal/app/supervisor.go` و
 | R15-A | **spike قابلیت‌های منوی tray — انجام شد (۲۰۲۶-۱۱-۲۵)** | شاهد واقعی روی Plasma 6.6.7/X11: زیرمنوی تودرتو/separator، radio (بصری)، checkmark (layout/host، بدون اسکرین‌شات)، visible/enabled (D-Bus/host، بدون تصویر پنهان/خاکستری)، add/remove/relabel **در منوی باز**، صفحهٔ ۲۰آیتمی از fixture ۱۷۶ با clamp، و label بلند/Unicode کار می‌کنند؛ `AboutToShow`/`Opened`/`Clicked`/`Closed`، زمان `GetLayout`/`Event` و amplification host ثبت شد. نتیجه برای R15-D1: live apply کافی است و reopen-only لازم نیست؛ صفحه‌گردانی ۲۰ردیفی ۵۱ `GetLayout` می‌سازد و باید دسته‌بندی شود. شکاف‌ها: اسکرین‌شات checkmark و سطح سوم زیرمنو، و آزمون Wayland/GNOME. شاهد: `spike/tray/MENU-FINDINGS.md` و `spike/tray/evidence/menu-*-2026-11-25.*`؛ build چهار معماری static؛ هیچ کد محصول | R15-0 | KDE gated انجام شد (یک آیتم موقت، حذف‌شده)؛ offline با fake watcher؛ `GetLayout`/`Event`/`SetProps` در `evidence/`؛ snapshot در `research.md`؛ verdict برای R15-B0 **Ready** |
 | R15-B0 | **`status.resume_requires_restart` — انجام شد (۲۰۲۶-۱۱-۲۵)** | فیلد `ResumeRequiresRestart *bool` (tag `resume_requires_restart`) در `StatusData`؛ `status()` همیشه مقدار صریح true/false می‌فرستد و منبع واحد `s.stopped && s.stoppedByThisProcess` است؛ process تازه در stopped → false؛ targeted/all-proxy → false؛ payload قدیمی بدون فیلد در مشتری `nil`/unknown می‌ماند؛ `schema_version` ۱ بدون تغییر؛ هشدار stopped-by-process و process تازه متفاوت؛ قاعدهٔ encode/decode در `docs/contracts.md §۷.۱`؛ تست‌های focused و full tests سبز (acceptance ۱۳۰٫۱s)؛ بازبینی مستقل **Ready** با یک nit رفع‌شده | R15-A | تست control برای stopped-by-process، process تازه در stopped و targeted؛ JSON additive؛ هشدار درست؛ decode JSON بدون فیلد؛ سازگاری مشتری قدیمی؛ `go test ./internal/control/...` |
 | R15-B | **controller/model در `internal/trayui` — انجام شد (۲۰۲۶-۱۱-۲۵)** | بستهٔ جدید `internal/trayui` (فقط model/controller، بدون DBus): snapshot تایپ‌شده از status/rules/pool/proposals/desktop/autostart/env/config/paths؛ `Caller` هم‌شکل `control.Client` (envelope با `OK=false` شکست است)، `Lifecycle` (Quit/RestartEngine + رویدادهای bounded `restarting`/`ready`) و `Notifier`/`AutostartManager` برای adapter آینده؛ `Controller.View/Refresh*/Trigger/Confirm/HandleEvent/Tick/SetPage`؛ درخت با key پایدار و enum بستهٔ ۲۵ action با نگاشت صریح به request/target؛ یک pending confirmation با expiry ۶۰s/replacement/cancel و یک job slot با منع تکرار؛ fingerprint روی snapshot پاک‌شده + pending/job/page/restart (بدون rebuild در دادهٔ ثابت)؛ sanitize همهٔ labelهای داینامیک با `control.SanitizeTerminal` و truncate؛ stopped با tri-state `resume_requires_restart` (true → Restart engine، false → resume، nil → محافظه‌کارانه)؛ بدون dependency جدید و بدون منطق routing/pool | R15-A/B0 | fake caller و control server در-process؛ جدول کامل actionها؛ sequence رویداد restart؛ pending expiry/replacement/cancel؛ `OK=false`؛ fixture ۱۷۶ pool و ۱۱۷ rule؛ page clamp؛ label مخرب ESC/CR/bidi؛ no duplicate request؛ `go test -race`، `go vet`، full tests سبز (یک اجرای acceptance flaked با signature گم‌شده، rerun فوری سبز؛ `internal/trayui` در همان اجرا سبز بود) |
-| R15-C | **restart engine در supervisor** | پیام `restart-engine` از tray؛ کانال کنترل دوطرفه برای رویدادهای `restarting`/`ready` (socketpair یا pipe دوم)؛ نوشتن `starting`، teardown/restart child، انتظار `status.ready`، بررسی ثبت tray و نوشتن `ready`؛ شکست fail-closed/exit مستند؛ restart دستی از budget خودکار مصرف نکند؛ quit حین restart سریال شود | R15-B | تست‌های supervisor با fake child/tray: success، quit در حین restart، شکست child، tray گم‌شده، marker transition، stopped؛ **نبود موفقیت کاذب با `ready` کهنهٔ engine قبلی**؛ timeout/رویداد گم‌شده → unconfirmed؛ هیچ restart درون‌process؛ full tests؛ بازبینی مستقل با محور lifecycle/teardown |
+| R15-C | **restart engine در supervisor — انجام شد (۲۰۲۶-۱۱-۲۵)** | کانال دوم per-tray-generation (fd 5، `ROUTELATCH_TRAY_EVENT_FD`) با write غیرمسدودکنندهٔ `restarting <token>`/`ready <token>`؛ `restart-engine` فقط از pipe کنترل همان-uid tray؛ marker `starting` پیش از teardown، سپس `restarting`؛ teardown کامل child قدیمی با pidfd، spawn `run --headless` جدید، readiness با generation نسل جدید + `status.ready` + listener mode-aware + همان tray ثبت‌شده، سپس `ready` marker/event؛ رد `ready` کهنه با generation/token/pipe تازه؛ شکست marker/teardown/spawn → fail-closed exit 1، timeout/child exit/tray گم‌شده → exit 8/1/7 مستند و هرگز `ready`؛ restart دستی از budget خودکار مصرف نمی‌کند؛ restart صف‌شده حین restart حذف و quit/lost/error سریال می‌مانند؛ هیچ restart درون‌process | R15-B | fake child/tray: success، quit حین restart، شکست child، tray گم‌شده، marker transition، stopped؛ نبود موفقیت کاذب با `ready` کهنه؛ timeout/رویداد گم‌شده → unconfirmed؛ no in-process restart؛ `go test ./internal/app/...` ۱۹s، `-race` ۱۰۸s و full tests (acceptance ۱۱۸٫۵s) سبز؛ بازبینی lifecycle مستقل **Ready** (۱۵ تست و F2×۱۰ rerun) |
 | R15-D1 | **binder/runner با backend ساختگی** | diff/apply درخت منو با key پایدار، handlerها، add/remove/relabel، icon/tooltip، snapshot اولیه، polling، restarting/unavailable، shutdown تمیز؛ بدون DBus | R15-B/C | recording sink؛ apply دوباره idempotent؛ تغییر ترتیب/حذف؛ event/click؛ handler غیرمسدودکننده؛ fake clock؛ race؛ نبود fd/goroutine leak |
 | R15-D2 | **اتصال واقعی tray و actionهای هسته** | `TrayOptions.Socket`/`DataDir` از `store.Paths`؛ adapter واقعی deedles؛ کانال event واقعی supervisor؛ status header، mode (شامل stop/restart)، Advanced، Last action و Quit پایه؛ icon/tooltip وضعیت؛ readiness/registration؛ KDE gated | R15-D1 | KDE واقعی: `GetLayout` و `Event` برای mode/stop/restart/quit؛ هم‌گامی radio؛ restart فقط با event `ready`؛ tray restart generation؛ app readiness؛ بدون fd leak؛ build static؛ هیچ تنظیم میزبان تغییر نکند |
 | R15-E | **pool** | زیرمنوی pool با summary، auto/pin، گروه‌های healthy/untested/cooling/unsupported، صفحه‌بندی، remove با تأیید، refresh/test/rerank به‌صورت job، سقف ۲۰ تست و disabledهای درست | R15-D2 | fixture ۱۷۶ رکورد و صفحه‌ها؛ گروه/شمارنده؛ test فقط ۲۰؛ select/remove؛ job تکراری ممنوع؛ cooling/unsupported؛ رکورد legacy با status unknown ولی غیرقابل‌dial → خطای روشن سرویس، نه ادعای usable؛ notification sanitize؛ race |
@@ -386,10 +397,11 @@ restart/unavailable قطع می‌شوند و پیام «interrupted» لازم 
 و listener موقت بسازد؛ هیچ تنظیم دسکتاپ تغییر نکند)، تغییر واقعی پروکسی دسکتاپ،
 نصب/فعال‌سازی autostart/service، و tag/release.
 
-**قدم بعد.** R15-0، R15-A، R15-B0 و R15-B بسته شدند؛ شاهد منو در
-`spike/tray/MENU-FINDINGS.md`، `status.resume_requires_restart` پیاده شد و
-controller/model در `internal/trayui` آماده است. R15-C (restart در supervisor)
-اولین task بعدی است؛ بازبینی مستقل B0/B/C پس از C انجام می‌شود.
+**قدم بعد.** R15-0، R15-A، R15-B0، R15-B و R15-C بسته شدند؛ شاهد منو در
+`spike/tray/MENU-FINDINGS.md`، `status.resume_requires_restart` و controller/model
+`internal/trayui` آماده‌اند و restart سطح process با generation/token در supervisor
+پیاده شد. R15-D1 (binder/runner با backend ساختگی) اولین task بعدی است؛ بازبینی
+مستقل B0/B/C پیش از ادامه انجام می‌شود.
 
 ### R14 — ساخت و انتشار ریلیز در GitHub Actions (تعریف ۲۰۲۶-۱۱-۲۴؛ انجام و بسته ۲۰۲۶-۱۱-۲۵)
 
@@ -736,7 +748,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   label بلند/Unicode کار می‌کنند؛ eventها/زمان‌ها و محدودیت host ثبت شد. verdict:
   R15-D1 به live apply بسنده می‌کند (reopen-only لازم نیست) و باید صفحه‌گردانی را
   دسته‌بندی کند. جزئیات/شاهد: `spike/tray/MENU-FINDINGS.md` و
-  `docs/research.md`. هیچ کد محصول/سرویس/تنظیم میزبان تغییر نکرد. R15-B0 قدم بعد است.
+  `docs/research.md`. هیچ کد محصول/سرویس/تنظیم میزبان تغییر نکرد.
 
 - **R15-B0 — انجام شد (۲۰۲۶-۱۱-۲۵):** `status.resume_requires_restart` به‌عنوان
   فیلد additive در `StatusData` اضافه شد؛ فقط stopped-by-process مقدار true
@@ -744,7 +756,7 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   payload قدیمی در مشتری unknown می‌ماند و `schema_version` تغییر نمی‌کند؛ هشدار
   `status` بین دو حالت stopped متفاوت است. `docs/contracts.md §۷.۱`، تست‌های
   focused و full tests سبز (acceptance ۱۳۰٫۱s)؛ بازبینی مستقل **Ready** (nit
-  رفع‌شده). R15-B قدم بعد است.
+  رفع‌شده).
 
 - **R15-B — انجام شد (۲۰۲۶-۱۱-۲۵):** بستهٔ `internal/trayui` به‌عنوان
   model/controller خالص (بدون DBus) اضافه شد: snapshot تایپ‌شده، درخت منو با key
@@ -753,7 +765,17 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   حالت stopped مبتنی بر `resume_requires_restart`. تست‌های fake caller/control
   server، `OK=false`، fixture ۱۷۶ pool/۱۱۷ rule، label مخرب و race سبز؛ `go vet`/
   `go build`/full tests سبز (یک اجرای acceptance flaked و rerun فوری سبز). بازبینی
-  مستقل پس از C. R15-C قدم بعد است.
+  مستقل پس از C انجام شد.
+
+- **R15-C — انجام شد (۲۰۲۶-۱۱-۲۵):** `restart-engine` سطح process در supervisor
+  پیاده شد: کانال دوم per-tray-generation برای `restarting`/`ready`، پذیرش فرمان
+  فقط از pipe کنترل همان-uid tray، marker `starting` قبل از teardown، teardown
+  کامل child با pidfd و spawn child جدید، readiness با generation + `status.ready`
+  + listener mode-aware + همان tray، سپس `ready`؛ رد `ready` کهنه با
+  generation/token/pipe تازه. شکست‌ها fail-closed با exit 1/7/8 و هرگز `ready`
+  کاذب؛ restart دستی budget خودکار را مصرف نمی‌کند و quit/lost/error سریال
+  می‌مانند. `internal/app` focused/race/full tests سبز و بازبینی lifecycle مستقل
+  **Ready**. adapter واقعی deedles در R15-D2 می‌آید. R15-D1 قدم بعد است.
 
 - **R15-0 — انجام شد (۲۰۲۶-۱۱-۲۵، همان جلسه):** سطح کنترل tray با D28/A16
   و قرارداد `contracts.md §۷.۳/§۷.۵` تعریف شد: کلاینت نازک روی management
@@ -762,8 +784,8 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
   `Terminal menu` برای عملیات متنی و `restart-engine` سطح process. **هیچ کد،
   تست، بسته، سرویس، autostart، تنظیم دسکتاپ یا tray واقعی تغییر نکرد.**
   HEAD هنگام تعریف `cff2884` بود و working tree پاک. self-review پلن انجام شد
-  و verdict برای R15-A **Ready** است. R15 پس از v1 است؛ R1–R14/v1.0.1 باز
-  نمی‌شوند. قدم بعد در آن زمان R15-A بود؛ اکنون R15-B0 است.
+  و verdict برای R15-A **Ready** بود. R15 پس از v1 است؛ R1–R14/v1.0.1 باز
+  نمی‌شوند. قدم بعد در آن زمان R15-A بود؛ اکنون R15-D1 است.
 
 - **R14 — واحد (a) انجام شد (۲۰۲۶-۱۱-۲۴، ارکستریتور):** مسیر انتشار D27 در
   `.github/workflows/release.yml` پیاده شد: تگ annotated `v*` (یا branch دائمی
@@ -1028,14 +1050,14 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | نام کوتاه `rlch` | **انجام شد (`e181733`؛ CI `45037281497` سبز):** symlink نسبی `rlch -> routelatch` در tarball/`.deb`/RPM، بدون تغییر نام اصلی یا `ExecStart`؛ gate در `check-package.sh` و CI؛ مستندات D25/§۷.۱/README/بسته‌بندی؛ بازبینی مستقل **Ready with nits** و nitها اعمال شدند؛ باینری RPM در job `rpm-packages` ساخته و بررسی شد | D25/A10/A14 | درخواست کاربر |
 | R13 | **R13-A..F انجام شد (۲۰۲۶-۱۱-۲۳/۲۴؛ F: verdict Ready):** D26 برای app/tray، `run --headless`، `autostart` و systemd user service opt-in؛ R13-A tray pin، R13-B runtime، R13-C autostart، R13-D service، R13-E حذف unit/مستندات/migration، R13-F acceptance/review. smoke واقعی KDE app/tray PASS؛ full tests **۲۷۴ PASS/۰ FAIL/۱۵ NOTE** و package checks pass؛ یافته‌های بازبینی نهایی (tray error mapping، marker repair) در `2f1e60d` رفع و بازبینی متمرکز **Ready** شد | A13/A15 | اجرای tray واقعی با data-dir ایزوله انجام شد؛ نصب/rollback واقعی service، reboot و کلیک Quit آزمون‌نشده |
 | R14 | **انجام شد (۲۰۲۶-۱۱-۲۵؛ اولین ریلیز ساخته‌شده در CI):** `.github/workflows/release.yml` روی تگ annotated `v*` هر ۱۷ دارایی را در CI می‌سازد/تأیید می‌کند و draft→verify→public منتشر می‌کند؛ dry-runهای سبز `45397329232`/`45400769014`/`45422318159`/`45463989732` و شکست کنترل‌شدهٔ `45399453678` در واحد (a) ثبت‌اند. تلاش‌های ۱ و ۲ در gate annotated شکست خوردند و تلاش سوم draft ساخت ولی verify با endpoint تگ برای draft (404) شکست خورد؛ رفع idمحور/یادداشت‌ها در `d14da10` بازبینی مستقل **Ready with findings** (بدون یافتهٔ مسدودکننده) شد. draft `457460945` با مجوز کاربر حذف و نبود Release/draft با listing احرازشده تأیید شد؛ تگ تازه `v1.0.1` (شیء `4462cc86`) روی `d14da10` با CI سبز `45517940277` و `Release` `45521099138` (job انتشار `138895476159`) منتشر شد: Release عمومی `v1.0.1` (id `457516096`) با ۱۷ دارایی، digests منطبق با `SHA256SUMS` و body برابر پیام تگ. **محدودیت‌های شناخته‌شده:** پنجرهٔ create→id می‌تواند draft یتیم بگذارد؛ `check` صفحه‌بندی را با `per_page=100` فرض می‌کند؛ مسیر fail/cleanup فقط stub شده؛ `workflow_dispatch` اجرا نشده؛ flakiness گاه‌به‌گاه step `Test` مشاهده شد. | A14 (انتشار) | مجوز صریح ۲۰۲۶-۱۱-۲۵ |
-| R15 | **R15-0، R15-A، R15-B0 و R15-B انجام شدند؛ R15-C..H شروع‌نشده (۲۰۲۶-۱۱-۲۵):** سطح کنترل tray (D28/A16) با منوی کامل runtime، confirmation دو مرحله‌ای، job/refresh، `restart-engine` سطح process، `Terminal menu` و صفحه‌بندی pool/rules؛ R15-A شاهد منو/زیرمنو/تغییر زنده روی Plasma 6.6.7 را ثبت کرد (شکاف: Wayland/GNOME و دو اسکرین‌شات)، R15-B0 فیلد `resume_requires_restart` را با تست/بازبینی Ready اضافه کرد و R15-B بستهٔ model/controller `internal/trayui` را با تست‌های fake caller/control server و race پیاده کرد. هیچ تنظیم میزبان/سرویس تغییر نکرد. | A16 | R15-C؛ KDE واقعی و release مجوز جدا |
+| R15 | **R15-0، R15-A، R15-B0، R15-B و R15-C انجام شدند؛ R15-D1..H شروع‌نشده (۲۰۲۶-۱۱-۲۵):** سطح کنترل tray (D28/A16) با منوی کامل runtime، confirmation دو مرحله‌ای، job/refresh، `restart-engine` سطح process، `Terminal menu` و صفحه‌بندی pool/rules؛ R15-A شاهد منو/زیرمنو/تغییر زنده روی Plasma 6.6.7 را ثبت کرد (شکاف: Wayland/GNOME و دو اسکرین‌شات)، R15-B0 فیلد `resume_requires_restart` را با تست/بازبینی Ready اضافه کرد، R15-B بستهٔ model/controller `internal/trayui` را با تست‌های fake caller/control server و race پیاده کرد و R15-C restart سطح process را با generation/token و بازبینی lifecycle Ready گذراند. هیچ تنظیم میزبان/سرویس تغییر نکرد. | A16 | R15-D1؛ KDE واقعی و release مجوز جدا |
 | انتشار | **انجام شد (`3cb7bd7` هنگام push، HEAD پیش از R12 فاز ۱ `a028469`):** بازنویسی تاریخچه در کپی کاری، push به forgejo و GitHub، تأیید عمومی بودن GitHub و برابری remote heads | A14 (انتشار) | مجوز کاربر |
 | انتشار `v0.1.1` | **انجام شد (تگ روی `2f63814`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM با نسخهٔ `0.1.1` و `SHA256SUMS`؛ آپلود اول ناقص بود و با حذف پنج دارایی اشتباه و جایگزینی آنها اصلاح شد؛ تأیید نهایی API عمومی نام/اندازه/digest همگی منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.2` | **انجام شد (تگ annotated روی `88d04b1`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.2` و `SHA256SUMS`؛ CI سبز `44736109624`؛ آپلود نخستین تلاش timeout خورد ولی هیچ دارایی ذخیره نشد و با curl جریانپذیر کامل شد؛ تأیید نهایی API عمومی name/size/digest منطبق | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v0.1.3` | **انجام شد (تگ annotated `6f226688` روی `a32b033`):** ۱۷ دارایی شامل چهار tarball، چهار `.deb`، چهار اسپک، چهار RPM باینری `0.1.3` و `SHA256SUMS`؛ CI سبز `44883729124` (هر شش job)؛ دو اجرای packaging همان `SHA256SUMS` (`7658f5a0…`)؛ RPMها در container یک‌بارمصرف `ubuntu:26.04` با rpm 6.0.1 ساخته/بازرسی و payload `x86_64` اجرا شد؛ تأیید نهایی API عمومی name/size/digest منطبق، بدون دارایی اضافی، تگ annotated روی `a32b033` | A14 (انتشار) | مجوز صریح کاربر |
 | انتشار `v1.0.1` | **انجام شد — اولین ریلیز ساخته‌شده در CI (۲۰۲۶-۱۱-۲۵):** تگ annotated `4462cc86` روی `d14da10` (هر دو remote)؛ CI سبز `45517940277`؛ `Release` `45521099138` (job انتشار `138895476159`)؛ Release عمومی id `457516096` با ۱۷ دارایی نسخه‌درست، digests منطبق با `SHA256SUMS` (sha256 خود فایل `3f683f70…dab7d8`) و body برابر پیام تگ؛ بدون ساخت/آپلود محلی | A14 (انتشار) | مجوز صریح کاربر ۲۰۲۶-۱۱-۲۵ |
 
-**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0` و `v1.0.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0، R15-A، R15-B0 و R15-B انجام شده‌اند و R15-C..H شروع‌نشده‌اند. بازبودن آن «کار باز v1» نیست و release آن تصمیم جدا می‌خواهد.
+**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0` و `v1.0.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0، R15-A، R15-B0، R15-B و R15-C انجام شده‌اند و R15-D1..H شروع‌نشده‌اند. بازبودن آن «کار باز v1» نیست و release آن تصمیم جدا می‌خواهد.
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -1273,7 +1295,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۵): **`v1.0.1` آخرین ریلیز عمومی است و R1–R14 بسته‌اند؛
    هیچ کار باز v1 نمانده است.** R15 (سطح کنترل tray) در همین تاریخ تعریف شد؛
    R15-0 (ثبت/بازبینی پلن)، R15-A (spike منو) و R15-B0 (`resume_requires_restart`)
-   انجام شده‌اند و R15-C..H شروع‌نشده‌اند؛ قدم بعد R15-C است. `v1.0.1` اولین ریلیز ساخته‌شده در CI است: تگ
+   انجام شده‌اند و R15-D1..H شروع‌نشده‌اند؛ قدم بعد R15-D1 است. `v1.0.1` اولین ریلیز ساخته‌شده در CI است: تگ
    annotated `4462cc86` روی `d14da10` (هر دو remote)، CI سبز `45517940277`،
    `Release` `45521099138` (job انتشار `138895476159`) و Release عمومی با ۱۷
    دارایی‌ و digests منطبق. پیش از آن سه تلاش و یک دور رفع ثبت شد (gate

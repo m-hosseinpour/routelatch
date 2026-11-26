@@ -253,7 +253,12 @@ func TrayRegisteredContext(ctx context.Context, pid int) error {
 
 // TrayOptions configures the standalone tray child.
 type TrayOptions struct {
-	ControlFD   int
+	ControlFD int
+	// EventFD is the inherited supervisor->tray lifecycle pipe. The R15-D2
+	// tray adapter reads `restarting`/`ready` from it; the current fixed menu
+	// does not consume events yet, but the descriptor is part of the child
+	// contract so an old/new supervisor cannot silently change it.
+	EventFD     int
 	ParentFD    int
 	ExpectedPID int
 	LogPath     string
@@ -477,8 +482,15 @@ func TrayOptionsFromEnv() (TrayOptions, error) {
 		return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_PARENT_PIDFD")
 	}
 	expected, _ := strconv.Atoi(os.Getenv("ROUTELATCH_PARENT_PID"))
+	event := 0
+	if raw := os.Getenv("ROUTELATCH_TRAY_EVENT_FD"); raw != "" {
+		event, err = strconv.Atoi(raw)
+		if err != nil || event < 3 {
+			return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_EVENT_FD")
+		}
+	}
 	return TrayOptions{
-		ControlFD: control, ParentFD: parent, ExpectedPID: expected,
+		ControlFD: control, EventFD: event, ParentFD: parent, ExpectedPID: expected,
 		LogPath: os.Getenv("ROUTELATCH_LOG_PATH"),
 	}, nil
 }
