@@ -1,0 +1,12 @@
+
+$ docker exec rl-tun-spike-final7-a sh -c systemctl\ is-active\ routelatch-tun-spike.service\ \|\|\ true\;\ ip\ link\ show\ rl-tun0\ 2\>/dev/null\ \|\|\ echo\ link_absent\;\ ip\ route\ \|\ grep\ -E\ \"rl-tun0\|198\\.18\"\ \|\|\ echo\ no_tun_routes\;\ ip\ -6\ route\ \|\ grep\ -E\ \"rl-tun0\|fc00::/64\"\ \|\|\ echo\ no_tun_routes6
+inactive
+link_absent
+no_tun_routes
+no_tun_routes6
+
+$ docker exec rl-tun-spike-final7-a sha256sum /etc/resolv.conf
+2f762a5d27e1f951a953054564a418c5bb793c72f970d818bffcc56b16a7d010  /etc/resolv.conf
+
+$ sh -c echo "container cleanup: removing rl-tun-spike-final7-a rl-tun-spike-final7-b rl-tun-spike-final7-net"
+container cleanup: removing rl-tun-spike-final7-a rl-tun-spike-final7-b rl-tun-spike-final7-net

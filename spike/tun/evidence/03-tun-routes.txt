@@ -1,0 +1,39 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/tunctl.py enable
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":7,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:54:06.727677849Z"}
+
+$ docker exec rl-tun-spike-final7-a sh -c ip -br link; echo ---; ip route; echo ---; ip -6 route; echo ---; ip -br addr show rl-tun0; echo ---; cat /run/routelatch-tun/lease.json; echo; stat -c "%a %U %G %n" /run/routelatch-tun/control.sock
+lo               UNKNOWN        <mac> <LOOPBACK,UP,LOWER_UP> 
+eth0@if58        UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+rl-tun0          UNKNOWN        <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> 
+---
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 172.31.77.1 dev eth0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.77.0/24 dev eth0 proto kernel scope link src 172.31.77.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+---
+::/1 dev rl-tun0 metric 1 pref medium
+fc00::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fd00:77::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev rl-tun0 proto kernel metric 256 pref medium
+8000::/1 dev rl-tun0 metric 1 pref medium
+default via fd00:77::1 dev eth0 metric 1024 pref medium
+---
+rl-tun0          UNKNOWN        198.18.0.1/15 fc00::1/64 fe80::3439:a0a6:da43:d820/64 
+---
+{"desired":"on","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":265,"interface":"rl-tun0","since":"2026-11-26T20:54:06.729139055Z"}
+600 rlspike rlspike /run/routelatch-tun/control.sock
+
+$ docker exec rl-tun-spike-final7-a ip route get 203.0.113.201
+203.0.113.201 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+
+$ docker exec rl-tun-spike-final7-a ip -6 route get 2001:db8::201
+2001:db8::201 from :: dev rl-tun0 src fc00::1 metric 1 pref medium
+
+$ docker exec rl-tun-spike-final7-a sh -c ip route get 172.31.77.20; ip -6 route get fd00:77::20
+172.31.77.20 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+fd00:77::20 from :: dev rl-tun0 src fc00::1 metric 1024 pref medium

@@ -1,0 +1,83 @@
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-tun-dns",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "rl-tun-socks",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-tun-dns"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "rl-tun-in"
+        ],
+        "network": "tcp",
+        "outboundTag": "rl-tun-socks"
+      }
+    ]
+  }
+}

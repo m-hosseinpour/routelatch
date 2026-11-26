@@ -1,0 +1,14 @@
+
+$ docker exec rl-tun-spike-final7-a sh -c rm\ -f\ /tmp/gap\;\ \(\ i=0\;\ while\ \[\ \$i\ -lt\ 500\ \]\;\ do\ printf\ \"%s\ %s\\n\"\ \"\$\(date\ +%s%N\)\"\ \"\$\(\[\ -d\ /sys/class/net/rl-tun0\ \]\ \&\&\ echo\ 1\ \|\|\ echo\ 0\)\"\;\ i=\$\(\(i+1\)\)\;\ sleep\ 0.005\;\ done\ \)\ \>/tmp/gap\ \&\ MON=\$\!\;\ systemctl\ restart\ routelatch-tun-spike.service\;\ wait\ \$MON\;\ awk\ \"NR\>1\ \&\&\ \\\$2\!=prev\ \{print\ \\\"gap_ms=\\\"\ int\(\(\\\$1-prevt\)/1000000\)\,\ \\\"from=\\\"\ prev\,\ \\\"to=\\\"\ \\\$2\}\;\ \{prev=\\\$2\;\ prevt=\\\$1\}\"\ /tmp/gap
+gap_ms=14 from=1 to=0
+gap_ms=13 from=0 to=1
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/tunctl.py status
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":7,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:54:41.749597395Z"}
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 204, "nonce": "8d6519b9", "ok": true, "stage": "echo"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a cat /run/routelatch-tun/lease.json
+{"desired":"on","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":993,"interface":"rl-tun0","since":"2026-11-26T20:54:41.755418786Z"}

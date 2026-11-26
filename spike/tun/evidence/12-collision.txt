@@ -1,0 +1,64 @@
+
+$ docker exec rl-tun-spike-final7-a sh -c echo\ \"---\ container\ before\"\;\ ip\ -br\ link\;\ ip\ route\;\ ip\ -6\ route\;\ echo\ \"---\ host\ read-only\ \(not\ modified\)\"\;\ true
+--- container before
+lo               UNKNOWN        <mac> <LOOPBACK,UP,LOWER_UP> 
+eth0@if58        UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+default via 172.31.77.1 dev eth0 
+172.31.77.0/24 dev eth0 proto kernel scope link src 172.31.77.10 
+fd00:77::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+default via fd00:77::1 dev eth0 metric 1024 pref medium
+--- host read-only (not modified)
+
+$ sh -c echo "--- host read-only"; ip -br link; echo ---; ip route; echo ---; ip -6 route
+--- host read-only
+lo               UNKNOWN        <mac> <LOOPBACK,UP,LOWER_UP> 
+<host-iface>        DOWN           <mac> <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+<host-iface>        UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+docker0          DOWN           <mac> <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+br-e92db0637722  DOWN           <mac> <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+<host-vpn-iface>       UNKNOWN        <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> 
+virbr0           DOWN           <mac> <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+br-9b333d630008  UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth38c5490@if2  UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth4c8f3ee@if2  UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+---
+default via <host-lan-ip> dev <host-iface> proto dhcp src <host-lan-ip> metric 600 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 metric 425 linkdown 
+172.18.0.0/16 dev br-e92db0637722 proto kernel scope link src 172.18.0.1 metric 426 linkdown 
+172.31.77.0/24 dev br-9b333d630008 proto kernel scope link src 172.31.77.1 
+<host-lan-ip>/24 dev <host-iface> proto kernel scope link src <host-lan-ip> metric 600 
+<host-virbr-ip>/24 dev virbr0 proto kernel scope link src <host-virbr-ip> metric 427 linkdown 
+---
+fd00:77::/64 dev br-9b333d630008 proto kernel metric 256 pref medium
+fe80::/64 dev <host-vpn-iface> proto kernel metric 256 pref medium
+fe80::/64 dev docker0 proto kernel metric 256 linkdown pref medium
+fe80::/64 dev veth38c5490 proto kernel metric 256 pref medium
+fe80::/64 dev br-9b333d630008 proto kernel metric 256 pref medium
+fe80::/64 dev veth4c8f3ee proto kernel metric 256 pref medium
+fe80::/64 dev <host-iface> proto kernel metric 1024 pref medium
+
+$ docker exec rl-tun-spike-final7-a sh -c ip\ route\ add\ 192.168.50.0/24\ dev\ eth0\;\ ip\ tuntap\ add\ dev\ vpn0\ mode\ tun\;\ ip\ link\ set\ vpn0\ up\;\ ip\ addr\ add\ 10.8.0.1/24\ dev\ vpn0\;\ ip\ -6\ addr\ add\ fd42:0:0:1::1/64\ dev\ vpn0\ 2\>/dev/null\ \|\|\ true\;\ echo\ \"---\ simulated\ LAN/VPN\"\;\ ip\ -br\ link\ \|\ grep\ -E\ \"rl-tun0\|vpn0\"\;\ ip\ route\ \|\ grep\ -E\ \"198\\.18\|10\\.8\\.\|192\\.168\\.50\"\;\ ip\ -6\ route\ \|\ grep\ -E\ \"fc00::/64\|fd42\"
+--- simulated LAN/VPN
+vpn0             DOWN           <NO-CARRIER,POINTOPOINT,MULTICAST,NOARP,UP> 
+10.8.0.0/24 dev vpn0 proto kernel scope link src 10.8.0.1 linkdown 
+192.168.50.0/24 dev eth0 scope link 
+fd42:0:0:1::/64 dev vpn0 proto kernel metric 256 linkdown pref medium
+
+$ docker exec rl-tun-spike-final7-a sh -c echo\ \"---\ after\ TUN\"\;\ ip\ -br\ addr\ show\ rl-tun0\;\ ip\ route\ \|\ grep\ -E\ \"rl-tun0\|192\\.168\\.50\|10\\.8\\.\"\;\ ip\ -6\ route\ \|\ grep\ -E\ \"rl-tun0\|fd42\"
+--- after TUN
+rl-tun0          UNKNOWN        198.18.0.1/15 fc00::1/64 fe80::c678:43f0:b40:e4c1/64 
+0.0.0.0/1 dev rl-tun0 metric 1 
+10.8.0.0/24 dev vpn0 proto kernel scope link src 10.8.0.1 linkdown 
+128.0.0.0/1 dev rl-tun0 metric 1 
+192.168.50.0/24 dev eth0 scope link 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+::/1 dev rl-tun0 metric 1 pref medium
+fc00::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fd42:0:0:1::/64 dev vpn0 proto kernel metric 256 linkdown pref medium
+fe80::/64 dev rl-tun0 proto kernel metric 256 pref medium
+8000::/1 dev rl-tun0 metric 1 pref medium
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 192.168.50.20 --port 7104 --mode http
+{"bytes": 64, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 1, "ok": true, "stage": "http"}
+[exit 0]

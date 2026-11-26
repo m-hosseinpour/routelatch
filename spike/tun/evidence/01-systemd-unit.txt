@@ -1,0 +1,145 @@
+
+$ docker exec rl-tun-spike-final7-a stat -c %U %G %a %n /usr/libexec/routelatch-spike/tun-service /etc/routelatch-tun-spike/xray.json /etc/routelatch-tun-spike/service.json /etc/systemd/system/routelatch-tun-spike.service
+root root 755 /usr/libexec/routelatch-spike/tun-service
+root root 644 /etc/routelatch-tun-spike/xray.json
+root root 644 /etc/routelatch-tun-spike/service.json
+root root 644 /etc/systemd/system/routelatch-tun-spike.service
+
+$ docker exec rl-tun-spike-final7-a systemctl show routelatch-tun-spike.service -p User -p Group -p AmbientCapabilities -p CapabilityBoundingSet -p NoNewPrivileges -p ProtectSystem -p ProtectHome -p PrivateTmp -p PrivateDevices -p ProtectKernelTunables -p ProtectKernelModules -p ProtectControlGroups -p RestrictAddressFamilies -p RuntimeDirectory -p RuntimeDirectoryMode -p RuntimeDirectoryPreserve
+CapabilityBoundingSet=cap_net_admin
+AmbientCapabilities=cap_net_admin
+User=rlspike
+Group=rlspike
+PrivateTmp=yes
+PrivateDevices=no
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0750
+RuntimeDirectory=routelatch-tun
+
+$ docker exec rl-tun-spike-final7-a sh -c systemctl start routelatch-tun-spike.service; sleep 1; P=$(systemctl show -p MainPID --value routelatch-tun-spike.service); echo mainpid=$P; readlink /proc/$P/exe; grep -E "^(Uid|Gid|CapEff|CapBnd|NoNewPrivs):" /proc/$P/status; ls -l /run/routelatch-tun/ /run/routelatch-tun/control.sock
+mainpid=265
+/usr/libexec/routelatch-spike/tun-service
+Uid:	1500	1500	1500	1500
+Gid:	1500	1500	1500	1500
+CapEff:	0000000000001000
+CapBnd:	0000000000001000
+NoNewPrivs:	1
+srw------- 1 rlspike rlspike 0 Nov 26 20:54 /run/routelatch-tun/control.sock
+
+/run/routelatch-tun/:
+total 0
+srw------- 1 rlspike rlspike 0 Nov 26 20:54 control.sock
+
+$ docker exec rl-tun-spike-final7-a journalctl -u routelatch-tun-spike.service --no-pager -o cat
+Started routelatch-tun-spike.service - RouteLatch R16-A TUN feasibility service (disposable spike).
+routelatch-tun-spike: 2026/11/26 20:54:05 binary /usr/libexec/routelatch-spike/tun-service is root-owned mode 0755 (uid=0)
+routelatch-tun-spike: 2026/11/26 20:54:05 identity uid=1500 euid=1500 capeff=0x1000 capbnd=0x1000 cap_net_admin=true
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip tuntap add dev rl-probe0 mode tun ->
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip link set rl-probe0 up ->
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip addr add 192.0.2.1/32 dev rl-probe0 ->
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip route add 192.0.2.2/32 dev rl-probe0 ->
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip route get 192.0.2.2 -> 192.0.2.2 dev rl-probe0 src 192.0.2.1 uid 1500
+    cache
+routelatch-tun-spike: 2026/11/26 20:54:05 probe: ip link del rl-probe0 ->
+routelatch-tun-spike: 2026/11/26 20:54:05 capability probe passed: non-root service created a TUN, addressed it and added a route
+routelatch-tun-spike: 2026/11/26 20:54:05 control socket ready at /run/routelatch-tun/control.sock (mode 0600, allowed uid 1500)
+
+$ docker exec rl-tun-spike-final7-a systemd-analyze security routelatch-tun-spike.service --no-pager
+  NAME                                                        DESCRIPTION                                                                   EXPOSURE
+✗ RemoveIPC=                                                  Service user may leave SysV IPC objects around                                     0.1
+✗ RootDirectory=/RootImage=                                   Service runs within the host's root directory                                      0.1
+✓ User=/DynamicUser=                                          Service runs under a static non-root user identity                            
+✓ RestrictRealtime=                                           Service realtime scheduling access is restricted                              
+✓ CapabilityBoundingSet=~CAP_SYS_TIME                         Service processes cannot change the system clock                              
+✓ NoNewPrivileges=                                            Service processes cannot acquire new privileges                               
+✗ AmbientCapabilities=                                        Service process receives ambient capabilities                                      0.1
+✗ PrivateDevices=                                             Service potentially has access to hardware devices                                 0.2
+✗ ProtectKernelLogs=                                          Service may read from or write to the kernel log ring buffer                       0.2
+✓ CapabilityBoundingSet=~CAP_BPF                              Service may not load BPF programs                                             
+✓ SystemCallArchitectures=                                    Service may execute system calls only with native ABI                         
+✗ MemoryDenyWriteExecute=                                     Service may create writable executable memory mappings                             0.1
+✗ RestrictAddressFamilies=~AF_NETLINK                         Service may allocate netlink sockets                                               0.1
+✗ RestrictAddressFamilies=~AF_UNIX                            Service may allocate local sockets                                                 0.1
+✗ RestrictAddressFamilies=~AF_(INET|INET6)                    Service may allocate Internet sockets                                              0.3
+✓ ProtectSystem=                                              Service has strict read-only access to the OS file hierarchy                  
+✓ ProtectProc=                                                Service has restricted access to process tree (/proc hidepid=)                
+✓ SupplementaryGroups=                                        Service has no supplementary groups                                           
+✓ CapabilityBoundingSet=~CAP_SYS_RAWIO                        Service has no raw I/O access                                                 
+✓ CapabilityBoundingSet=~CAP_SYS_PTRACE                       Service has no ptrace() debugging abilities                                   
+✓ CapabilityBoundingSet=~CAP_SYS_(NICE|RESOURCE)              Service has no privileges to change resource use parameters                   
+✓ CapabilityBoundingSet=~CAP_NET_(BIND_SERVICE|BROADCAST|RAW) Service has no elevated networking privileges                                 
+✗ DeviceAllow=                                                Service has no device ACL                                                          0.2
+✓ CapabilityBoundingSet=~CAP_AUDIT_*                          Service has no audit subsystem access                                         
+✓ CapabilityBoundingSet=~CAP_SYS_ADMIN                        Service has no administrator privileges                                       
+✓ PrivateTmp=                                                 Service has no access to other software's temporary files                     
+✓ CapabilityBoundingSet=~CAP_SYSLOG                           Service has no access to kernel logging                                       
+✓ ProtectHome=                                                Service has no access to home directories                                     
+✗ CapabilityBoundingSet=~CAP_NET_ADMIN                        Service has network configuration privileges                                       0.2
+✗ ProcSubset=                                                 Service has full access to non-process /proc files (/proc subset=)                 0.1
+✗ PrivateNetwork=                                             Service has access to the host's network                                           0.5
+✗ PrivateUsers=                                               Service has access to other users                                                  0.2
+✓ KeyringMode=                                                Service doesn't share key material with other services                        
+✓ Delegate=                                                   Service does not maintain its own delegated control group subtree             
+✗ SystemCallFilter=~@clock                                    Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@cpu-emulation                            Service does not filter system calls                                               0.1
+✗ SystemCallFilter=~@debug                                    Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@module                                   Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@mount                                    Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@obsolete                                 Service does not filter system calls                                               0.1
+✗ SystemCallFilter=~@privileged                               Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@raw-io                                   Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@reboot                                   Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@resources                                Service does not filter system calls                                               0.2
+✗ SystemCallFilter=~@swap                                     Service does not filter system calls                                               0.2
+✗ IPAddressDeny=                                              Service does not define an IP address allow list                                   0.2
+✓ NotifyAccess=                                               Service child processes cannot alter service state                            
+✓ ProtectClock=                                               Service cannot write to the hardware clock or system clock                    
+✓ CapabilityBoundingSet=~CAP_SYS_PACCT                        Service cannot use acct()                                                     
+✓ CapabilityBoundingSet=~CAP_KILL                             Service cannot send UNIX signals to arbitrary processes                       
+✓ CapabilityBoundingSet=~CAP_WAKE_ALARM                       Service cannot program timers that wake up the system                         
+✓ CapabilityBoundingSet=~CAP_(DAC_*|FOWNER|IPC_OWNER)         Service cannot override UNIX file/IPC permission checks                       
+✓ ProtectControlGroups=                                       Service cannot modify the control group file system                           
+✓ CapabilityBoundingSet=~CAP_LINUX_IMMUTABLE                  Service cannot mark files immutable                                           
+✓ CapabilityBoundingSet=~CAP_IPC_LOCK                         Service cannot lock memory into RAM                                           
+✓ ProtectKernelModules=                                       Service cannot load or read kernel modules                                    
+✓ CapabilityBoundingSet=~CAP_SYS_MODULE                       Service cannot load kernel modules                                            
+✓ CapabilityBoundingSet=~CAP_SYS_TTY_CONFIG                   Service cannot issue vhangup()                                                
+✓ CapabilityBoundingSet=~CAP_SYS_BOOT                         Service cannot issue reboot()                                                 
+✓ CapabilityBoundingSet=~CAP_SYS_CHROOT                       Service cannot issue chroot()                                                 
+✓ PrivateMounts=                                              Service cannot install system mounts                                          
+✓ CapabilityBoundingSet=~CAP_BLOCK_SUSPEND                    Service cannot establish wake locks                                           
+✓ RestrictNamespaces=~user                                    Service cannot create user namespaces                                         
+✓ RestrictNamespaces=~pid                                     Service cannot create process namespaces                                      
+✓ RestrictNamespaces=~net                                     Service cannot create network namespaces                                      
+✓ RestrictNamespaces=~uts                                     Service cannot create hostname namespaces                                     
+✓ RestrictNamespaces=~mnt                                     Service cannot create file system namespaces                                  
+✓ CapabilityBoundingSet=~CAP_LEASE                            Service cannot create file leases                                             
+✓ CapabilityBoundingSet=~CAP_MKNOD                            Service cannot create device nodes                                            
+✓ RestrictNamespaces=~cgroup                                  Service cannot create cgroup namespaces                                       
+✓ RestrictNamespaces=~ipc                                     Service cannot create IPC namespaces                                          
+✓ ProtectHostname=                                            Service cannot change system host/domainname                                  
+✓ CapabilityBoundingSet=~CAP_(CHOWN|FSETID|SETFCAP)           Service cannot change file ownership/access mode/capabilities                 
+✓ CapabilityBoundingSet=~CAP_SET(UID|GID|PCAP)                Service cannot change UID/GID identities/capabilities                         
+✓ LockPersonality=                                            Service cannot change ABI personality                                         
+✓ ProtectKernelTunables=                                      Service cannot alter kernel tunables (/proc/sys, …)                           
+✓ RestrictAddressFamilies=~AF_PACKET                          Service cannot allocate packet sockets                                        
+✓ RestrictAddressFamilies=~…                                  Service cannot allocate exotic sockets                                        
+✓ CapabilityBoundingSet=~CAP_MAC_*                            Service cannot adjust SMACK MAC                                               
+✓ RestrictSUIDSGID=                                           SUID/SGID file creation by service is restricted                              
+✓ UMask=                                                      Files created by service are accessible only by service's own user by default 
+
+→ Overall exposure level for routelatch-tun-spike.service: 3.6 OK :-)
+
+$ docker exec rl-tun-spike-final7-a python3 /opt/tunctl.py status
+{"ok":false,"error":"peer_uid_rejected","state":"","interface":"","uid":0,"euid":0,"cap_net_admin":false,"cap_eff":"","core_running":false,"link_present":false,"routes":0,"lease_desired":"","cleanup_ms":0}
+[exit 1]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/tunctl.py status
+{"ok":true,"state":"off","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":false,"link_present":false,"routes":0,"lease_desired":"","cleanup_ms":0}

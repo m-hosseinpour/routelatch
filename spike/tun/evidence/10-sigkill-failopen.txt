@@ -1,0 +1,41 @@
+
+$ docker exec rl-tun-spike-final7-a sh -c T0=\$\(date\ +%s%N\)\;\ systemctl\ kill\ -s\ KILL\ routelatch-tun-spike.service\;\ while\ \[\ -d\ /sys/class/net/rl-tun0\ \]\;\ do\ sleep\ 0.005\;\ done\;\ T1=\$\(date\ +%s%N\)\;\ while\ \[\ \!\ -d\ /sys/class/net/rl-tun0\ \]\;\ do\ sleep\ 0.005\;\ done\;\ T2=\$\(date\ +%s%N\)\;\ echo\ \"kill_to_link_down_ms=\$\(\(\ \(T1-T0\)/1000000\ \)\)\"\;\ echo\ \"link_down_to_up_ms=\$\(\(\ \(T2-T1\)/1000000\ \)\)\"\;\ echo\ \"kill_to_recovered_ms=\$\(\(\ \(T2-T0\)/1000000\ \)\)\"\;\ echo\ \"active=\$\(systemctl\ is-active\ routelatch-tun-spike.service\)\"\;\ runuser\ -u\ rlspike\ --\ python3\ /opt/tunctl.py\ status
+kill_to_link_down_ms=22
+link_down_to_up_ms=1147
+kill_to_recovered_ms=1170
+active=active
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":7,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:54:52.017276348Z"}
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 205, "nonce": "df3072c2", "ok": true, "stage": "echo"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py dns --server 172.31.77.20 --name canary-r16a.invalid
+{"answers": ["203.0.113.201"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a cat /run/routelatch-tun/lease.json
+{"desired":"on","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":2660,"interface":"rl-tun0","since":"2026-11-26T20:54:52.019219951Z"}--- orphan test with Restart disabled (drop-in), then restore the real unit
+
+$ docker exec rl-tun-spike-final7-a sh -c mkdir\ -p\ /run/systemd/system/routelatch-tun-spike.service.d\;\ printf\ \"\[Service\]\\nRestart=no\\n\"\ \>/run/systemd/system/routelatch-tun-spike.service.d/restart.conf\;\ systemctl\ daemon-reload\;\ systemctl\ restart\ routelatch-tun-spike.service\;\ sleep\ 1\;\ ip\ route\ add\ 172.31.77.20/32\ dev\ rl-tun0\ 2\>/dev/null\ \|\|\ true\;\ T0=\$\(date\ +%s%N\)\;\ systemctl\ kill\ -s\ KILL\ routelatch-tun-spike.service\;\ while\ \[\ -d\ /sys/class/net/rl-tun0\ \]\;\ do\ sleep\ 0.005\;\ done\;\ T1=\$\(date\ +%s%N\)\;\ echo\ \"orphan_link_gone_ms=\$\(\(\ \(T1-T0\)/1000000\ \)\)\"\;\ sleep\ 2\;\ echo\ \"active=\$\(systemctl\ is-active\ routelatch-tun-spike.service\)\"\;\ ip\ link\ show\ rl-tun0\ 2\>/dev/null\ \|\|\ echo\ link_absent\;\ ip\ route\ \|\ grep\ rl-tun0\ \|\|\ echo\ no_v4_tun_route\;\ ip\ -6\ route\ \|\ grep\ rl-tun0\ \|\|\ echo\ no_v6_tun_route\;\ cat\ /run/routelatch-tun/lease.json
+orphan_link_gone_ms=24
+active=failed
+link_absent
+no_v4_tun_route
+no_v6_tun_route
+{"desired":"on","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":2756,"interface":"rl-tun0","since":"2026-11-26T20:54:53.008114438Z"}
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 1, "nonce": "cdf21c6d", "ok": true, "stage": "echo"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py dns --server 172.31.77.20 --name canary-r16a.invalid
+{"answers": ["203.0.113.201"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c rm\ -f\ /run/systemd/system/routelatch-tun-spike.service.d/restart.conf\;\ rmdir\ /run/systemd/system/routelatch-tun-spike.service.d\ 2\>/dev/null\ \|\|\ true\;\ systemctl\ daemon-reload\;\ systemctl\ start\ routelatch-tun-spike.service\;\ sleep\ 1\;\ ip\ route\ add\ 172.31.77.20/32\ dev\ rl-tun0\ 2\>/dev/null\ \|\|\ true\;\ ip\ link\ show\ rl-tun0\ \|\ head\ -1\;\ runuser\ -u\ rlspike\ --\ python3\ /opt/tunctl.py\ status
+16: rl-tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 500
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":8,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:54:56.519310139Z"}
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 203, "nonce": "3a53a645", "ok": true, "stage": "echo"}
+[exit 0]

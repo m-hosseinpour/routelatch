@@ -1,0 +1,18 @@
+$ grep -n "logLevel" spike/tun/xray-tun.json
+3:    "logLevel": "none",
+
+$ grep -n "processing from" <module>/proxy/tun/*.go
+<work>/gomodcache/github.com/xtls/xray-core@v1.260327.1-0.20261109052709-676eaf66f8f0/proxy/tun/handler.go:246:	errors.LogInfo(ctx, "processing from ", source, " to ", destination)
+
+$ sed -n "240,250p" <module>/proxy/tun/handler.go
+	ctx = log.ContextWithAccessMessage(ctx, &log.AccessMessage{
+		From:   inbound.Source,
+		To:     destination,
+		Status: log.AccessAccepted,
+		Reason: "",
+	})
+	errors.LogInfo(ctx, "processing from ", source, " to ", destination)
+
+	// both kinds of connection are buf.Reader and buf.Writer, what they carry is counted on the way
+	reader := &buf.TimeoutWrapperReader{Reader: buf.NewReader(conn), Counter: t.uplinkCounter}
+	writer := buf.NewWriter(conn)

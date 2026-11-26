@@ -1,0 +1,46 @@
+
+$ docker version --format docker server {{.Server.Version}}
+docker server 29.10.1
+
+$ docker image inspect rl-tun-spike:base --format image id {{.Id}} created {{.Created}}
+image id sha256:cbf0ea967ebe733c1072a3ba64e0816e609098b8e1dd98108d083ef9f909c13a created 2026-11-26T23:13:10.230318358+03:30
+
+$ docker image inspect ubuntu:26.04 --format base id {{.Id}}
+base id sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
+
+$ uname -a
+Linux <host> 7.0.0-44-generic #44-Ubuntu SMP PREEMPT_DYNAMIC Fri Nov  6 02:38:04 UTC 2026 x86_64 GNU/Linux
+
+$ <repo>/.toolchain/go/bin/go version
+go version go1.27.4 linux/amd64
+
+$ <work>/bin/xray-official version
+Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+A unified platform for anti-censorship.
+
+$ docker exec rl-tun-spike-final7-a sh -c systemctl\ --version\ \|\ head\ -2\;\ ip\ -V\;\ cat\ /etc/os-release\ \|\ grep\ -E\ \"\^\(PRETTY_NAME\|VERSION_ID\)=\"\;\ cat\ /proc/sys/kernel/osrelease
+systemd 259 (259.9-0ubuntu0.1)
++PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE
+ip utility, iproute2-6.19.0, libbpf 1.6.3
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+VERSION_ID="26.04"
+7.0.0-44-generic
+
+$ docker exec rl-tun-spike-final7-a sh -c cat\ /proc/self/cgroup\;\ lsns\ -t\ cgroup\ -o\ NS\,TYPE\,NPROCS\,PID\,COMMAND\ \|\ head
+0::/init.scope
+        NS TYPE   NPROCS PID COMMAND
+4026533262 cgroup      8   1 /sbin/init
+
+$ docker inspect rl-tun-spike-final7-a --format cgroupns={{.HostConfig.CgroupnsMode}} privileged={{.HostConfig.Privileged}}
+cgroupns=private privileged=true
+
+$ grep -n xray-core <repo>/spike/tun/src/go.mod
+6:	github.com/xtls/xray-core v1.260327.1-0.20261109052709-676eaf66f8f0
+
+$ <work>/bin/sing-box version
+sing-box version 1.14.4
+
+Environment: go1.26.10 linux/amd64
+Tags: with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,with_cloudflared,with_naive_outbound,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_purego
+Revision: c005f35300ce76427dc285481ec5695f5b179cd2
+CGO: disabled

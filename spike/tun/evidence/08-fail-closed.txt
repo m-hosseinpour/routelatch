@@ -1,0 +1,18 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 204, "nonce": "4898196e", "ok": true, "stage": "echo"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c ip\ link\ show\ rl-tun0\ \|\ head\ -1\;\ ip\ route\ \|\ grep\ -E\ \"0.0.0.0/1\|128.0.0.0/1\"
+8: rl-tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 500
+0.0.0.0/1 dev rl-tun0 metric 1 
+128.0.0.0/1 dev rl-tun0 metric 1 
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 0, "ms": 1205, "nonce": "c9e0c787", "ok": false, "stage": "echo"}
+[exit 1]
+peer echo requests before kill=5 after failed probe=5
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 205, "nonce": "6645c95f", "ok": true, "stage": "echo"}
+[exit 0]

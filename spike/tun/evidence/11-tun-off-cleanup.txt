@@ -1,0 +1,14 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/tunctl.py disable
+{"ok":true,"state":"off","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":false,"link_present":false,"routes":0,"lease_desired":"off","cleanup_ms":21,"started_at":"2026-11-26T20:54:56.519310139Z"}
+
+$ docker exec rl-tun-spike-final7-a sh -c ip\ link\ show\ rl-tun0\ 2\>/dev/null\ \|\|\ echo\ link_absent\;\ ip\ route\ \|\ grep\ rl-tun0\ \|\|\ echo\ no_v4_tun_route\;\ ip\ -6\ route\ \|\ grep\ rl-tun0\ \|\|\ echo\ no_v6_tun_route\;\ cat\ /run/routelatch-tun/lease.json
+link_absent
+no_v4_tun_route
+no_v6_tun_route
+{"desired":"off","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":2836,"interface":"rl-tun0","since":"2026-11-26T20:54:57.970865667Z"}
+$ docker exec rl-tun-spike-final7-a systemctl stop routelatch-tun-spike.service
+
+$ docker exec rl-tun-spike-final7-a sh -c systemctl\ is-active\ routelatch-tun-spike.service\ \|\|\ true\;\ ip\ link\ show\ rl-tun0\ 2\>/dev/null\ \|\|\ echo\ link_absent_after_stop
+inactive
+link_absent_after_stop

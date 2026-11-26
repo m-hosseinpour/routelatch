@@ -1,0 +1,25 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7101 --mode tls --sni canary-r16a.invalid
+{"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 6, "ok": true, "stage": "tls"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7104 --mode http
+{"bytes": 64, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 2, "ok": true, "stage": "http"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py dns --server 172.31.77.20 --name canary-r16a.invalid
+{"answers": ["203.0.113.201"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+[exit 0]
+
+$ cat <work>/status.json
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":9,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:55:01.257038217Z"}
+--- canary in service journal:
+NO_CANARY_IN_SERVICE_JOURNAL_OR_STATUS
+--- canary in lease/runtime/config:
+NO_CANARY_IN_SERVICE_STATE_CONFIG
+--- fixture log (allowed to log destinations):
+{"atyp": 1, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:36440", "port": 7102, "target": "172.31.77.20"}
+{"atyp": 3, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:36444", "port": 7101, "target": "canary-r16a.invalid"}
+{"atyp": 3, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:36458", "port": 7104, "target": "canary-http-r16a.invalid"}
+--- service journal peer-address count (informational):
+0

@@ -1,0 +1,21 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- /opt/egressprobe -mode direct -interface eth0 -target 172.31.77.20:7103 -timeout 5s
+{"mode":"direct","interface":"eth0","target":"172.31.77.20:7103","echo":true,"local":"172.31.77.10:60804","dial_ms":0,"echo_ms":0,"nonce":"80d2f77014c08bec"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c curl\ -s\ http://127.0.0.1:18080/counters\;\ echo
+{"by_port": {}, "entries": [], "total": 0}
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- /opt/egressprobe -mode xray-bound -interface eth0 -target 172.31.77.20:7103 -timeout 5s
+{"mode":"xray-bound","interface":"eth0","target":"172.31.77.20:7103","echo":true,"dial_ms":0,"echo_ms":0,"nonce":"dec8375e6147df5f"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c curl\ -s\ http://127.0.0.1:18080/counters\;\ echo
+{"by_port": {}, "entries": [], "total": 0}
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- /opt/egressprobe -mode xray-loop -interface eth0 -target 172.31.77.20:7103 -timeout 5s
+{"mode":"xray-loop","interface":"eth0","target":"172.31.77.20:7103","echo":true,"dial_ms":0,"echo_ms":1,"nonce":"ef987d0d7a1bfe81"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c curl\ -s\ http://127.0.0.1:18080/counters\;\ echo
+{"by_port": {"7103": 1}, "entries": [{"atyp": 1, "mapped": "172.31.77.20", "port": 7103, "target": "172.31.77.20", "ts": "2026-11-26T20:54:17Z"}], "total": 1}

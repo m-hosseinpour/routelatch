@@ -1,0 +1,38 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7102 --mode echo
+{"bytes": 19, "ms": 203, "nonce": "caf91044", "ok": true, "stage": "echo"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7101 --mode tls --sni canary-r16a.invalid
+{"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 10, "ok": true, "stage": "tls"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host fd00:77::20 --port 7101 --mode tls --sni canary6-r16a.invalid
+{"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 7, "ok": true, "stage": "tls"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py tcp --host 172.31.77.20 --port 7104 --mode http
+{"bytes": 64, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 2, "ok": true, "stage": "http"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-a sh -c curl\ -s\ http://127.0.0.1:18080/counters\;\ echo\;\ tail\ -12\ /opt/socks.log
+{"by_port": {"7101": 2, "7102": 1, "7104": 1}, "entries": [{"atyp": 1, "mapped": "172.31.77.20", "port": 7102, "target": "172.31.77.20", "ts": "2026-11-26T20:54:07Z"}, {"atyp": 3, "mapped": "172.31.77.20", "port": 7101, "target": "canary-r16a.invalid", "ts": "2026-11-26T20:54:07Z"}, {"atyp": 3, "mapped": "fd00:77::20", "port": 7101, "target": "canary6-r16a.invalid", "ts": "2026-11-26T20:54:07Z"}, {"atyp": 3, "mapped": "172.31.77.20", "port": 7104, "target": "canary-http-r16a.invalid", "ts": "2026-11-26T20:54:07Z"}], "total": 4}
+{"addr": "127.0.0.1:1080", "event": "listening"}
+{"atyp": 1, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:57172", "port": 7102, "target": "172.31.77.20"}
+{"atyp": 3, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:57184", "port": 7101, "target": "canary-r16a.invalid"}
+{"atyp": 3, "event": "connect", "mapped": "fd00:77::20", "peer": "127.0.0.1:57186", "port": 7101, "target": "canary6-r16a.invalid"}
+{"atyp": 3, "event": "connect", "mapped": "172.31.77.20", "peer": "127.0.0.1:57188", "port": 7104, "target": "canary-http-r16a.invalid"}
+
+$ docker exec rl-tun-spike-final7-b sh -c tail\ -12\ /opt/fixture/peer.log
+{"event": "listen", "family": "AF_INET6", "port": 7101, "tag": "tls6"}
+{"event": "listen", "family": "AF_INET6", "port": 7102, "tag": "echo6"}
+{"event": "listen", "family": "AF_INET", "port": 7102, "tag": "echo4"}
+{"event": "listen", "family": "AF_INET6", "port": 7103, "tag": "pool6"}
+{"event": "listen", "family": "AF_INET", "port": 7104, "tag": "http4"}
+{"event": "listen", "family": "AF_INET6", "port": 7104, "tag": "http6"}
+{"event": "listen", "family": "AF_INET", "port": 7103, "tag": "pool4"}
+{"event": "ready", "ts": "2026-11-26T20:54:03Z"}
+{"bytes": 14, "event": "echo", "peer": "172.31.77.10:59708", "port": "echo4"}
+{"event": "tls_request", "peer": "172.31.77.10:56298", "port": "tls4", "sni": "canary-r16a.invalid"}
+{"event": "tls_request", "peer": "fd00:77::10:49210", "port": "tls6", "sni": "canary6-r16a.invalid"}
+{"event": "http", "host": "canary-http-r16a.invalid", "peer": "172.31.77.10:36532", "port": "http4"}

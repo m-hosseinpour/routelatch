@@ -1,0 +1,9 @@
+{
+  "allowed_uid": 1500,
+  "socket_path": "/run/routelatch-tun/control.sock",
+  "lease_path": "/run/routelatch-tun/lease.json",
+  "xray_config_path": "/etc/routelatch-tun-spike/xray.json",
+  "probe_interface": "rl-probe0",
+  "physical_interface": "eth0",
+  "interface": "rl-tun0"
+}

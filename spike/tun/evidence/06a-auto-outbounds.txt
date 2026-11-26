@@ -1,0 +1,13 @@
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/app_probe.py dns --server 172.31.77.20 --name canary-r16a.invalid
+{"answers": ["203.0.113.201"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+[exit 0]
+
+$ docker exec rl-tun-spike-final7-b sh -c tail\ -4\ /opt/fixture/dns.log
+Nov 26 20:54:08 dnsmasq[19]: query[A] canary-r16a.invalid from 172.31.77.10
+Nov 26 20:54:08 dnsmasq[19]: config canary-r16a.invalid is 203.0.113.201
+Nov 26 20:54:15 dnsmasq[19]: query[A] canary-r16a.invalid from 172.31.77.10
+Nov 26 20:54:15 dnsmasq[19]: config canary-r16a.invalid is 203.0.113.201
+
+$ docker exec rl-tun-spike-final7-a runuser -u rlspike -- python3 /opt/tunctl.py status
+{"ok":true,"state":"on","interface":"rl-tun0","uid":1500,"euid":1500,"cap_net_admin":true,"cap_eff":"0x1000","core_running":true,"link_present":true,"routes":9,"lease_desired":"on","cleanup_ms":0,"started_at":"2026-11-26T20:54:15.544985014Z"}

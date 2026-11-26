@@ -1,0 +1,46 @@
+[Unit]
+Description=RouteLatch R16-A TUN feasibility service (disposable spike)
+Documentation=file:///opt/spike/README.txt
+After=network.target
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=rlspike
+Group=rlspike
+ExecStart=/usr/libexec/routelatch-spike/tun-service --config /etc/routelatch-tun-spike/service.json
+Restart=on-failure
+RestartSec=1
+
+# The only privilege the service gets. The engine/tray never run with this.
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+
+RuntimeDirectory=routelatch-tun
+RuntimeDirectoryMode=0750
+UMask=0077
+RuntimeDirectoryPreserve=yes
+
+# Hardening. PrivateDevices stays off because a private /dev would not carry
+# the /dev/net/tun node; the contract permits this explicit choice.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=no
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

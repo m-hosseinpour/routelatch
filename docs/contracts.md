@@ -1964,12 +1964,12 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | R-22 | پوشش TUN به `CAP_NET_ADMIN` (سرویس جدا) و برای bypass غیرroot به `SO_BINDTODEVICE` بدون capability (Linux ≥5.7) و systemd system manager نیاز دارد؛ در محیط‌های بدون این‌ها `tun on` با `unsupported` و دلیل امن refuse می‌شود | helper/systemd به‌عنوان پیش‌نیاز مستند؛ TUN بخشی از v1 نیست و fallback بی‌صدا یا اجرای root engine ندارد |
 | R-23 | plain DNS در فاز اول مستقیم است (سیستم resolver تغییر نمی‌کند) و UDP/QUIC غیرDNS بلاک می‌شود؛ برنامه‌های UDP-only و برخی QUIC-only کار نمی‌کنند | DNS-through-pool و UDP از pool تصمیم/پیاده‌سازی جدا می‌خواهند؛ status/README این محدودیت را صریح نشان می‌دهند |
 | R-24 | TUN کل ترافیک host را می‌گیرد، از جمله ترافیک کاربران دیگر؛ نصب helper با sudo و هشدار صریح است و یک TUN در هر host بیشتر مجاز نیست | مدل چندکاربره/per-UID خارج از فاز اول؛ helper فقط uid مجاز را می‌پذیرد و conflict را رد می‌کند |
-| R-25 | fail-closed فقط تا زمانی معتبر است که سرویس TUN زنده باشد؛ crash/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد و یک kill-switch دائمی وجود ندارد | lease در `/run` و restart خودکار سرویس پنجره را کم می‌کند؛ kill-switch تصمیم جدا و نیازمند firewall/privileged watchdog است |
+| R-25 | fail-closed فقط تا زمانی معتبر است که سرویس TUN زنده باشد؛ crash/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد و یک kill-switch دائمی وجود ندارد | lease در `/run` و restart خودکار سرویس پنجره را کم می‌کند (R16-A: ~۱۱۷۰ms؛ ۲۲ms teardown + ۱۱۴۷ms systemd restart)؛ kill-switch تصمیم جدا و نیازمند firewall/privileged watchdog است |
 | R-26 | دامنه برای ECH، QUIC و پروتکل‌های بدون SNI/Host قابل بازیابی نیست؛ در targeted فقط قانون IP/CIDR اعمال می‌شود. برعکس، وقتی دامنه sniff شود اولویت با domain است و IP/CIDR همان flow اعمال نمی‌شود | محدودیت sniffing در status/docs؛ راه‌حل کامل FakeIP/DNS capture برای حفظ هم‌زمان دامنه و IP تصمیم جدا می‌خواهد |
-| R-27 | TUN stack پیش از اثبات اتصال مقصد به TCP پاسخ می‌دهد؛ شکست pool در TUN به‌صورت بستن/reset flow دیده می‌شود، نه refuse فوری | محدودیت ذاتی proxy در لایهٔ ۳؛ بدون direct fallback؛ محدودیت در status/docs |
+| R-27 | TUN stack پیش از اثبات اتصال مقصد به TCP پاسخ می‌دهد؛ شکست pool در TUN به‌صورت بستن/reset flow دیده می‌شود، نه refuse فوری | محدودیت ذاتی proxy در لایهٔ ۳؛ بدون direct fallback؛ محدودیت در status/docs (R16-A: engine kill → accept-then-EOF ~۱۲۰۵ms با peer echo count بدون تغییر) |
 | R-28 | تغییر interface فیزیکی پیش‌فرض (Wi-Fi→Ethernet، VPN، suspend/resume) در فاز اول به‌صورت خودکار به bypass/TUN منتقل نمی‌شود؛ ممکن است تا `tun off/on` خطا یا مسیر کهنه بماند | R16-A رفتار route monitor را می‌سنجد؛ در غیر این صورت watch/restart تصمیم بعدی است و status خطا را نشان می‌دهد |
-| R-29 | sidecar hysteria2 برای جلوگیری از loop زیر TUN به `route.default_interface` نسخهٔ pin‌شده وابسته است؛ پشتیبانی آن هنوز تأیید نشده | R16-A آن را تأیید می‌کند؛ در غیر این صورت exitهای hysteria2 در TUN با `unsupported`/`sidecar_loop_risk` کنار می‌روند، نه loop |
-| R-30 | هم‌زمانی TUN با VPN/TUN دیگر یا route/firewall خارجی آزمون‌نشده است و ممکن است تصادم route/blackhole بدهد | `tun setup` وضعیت را بررسی و conflict را روشن گزارش می‌کند؛ coexistence کامل تصمیم/آزمون جدا می‌خواهد |
+| R-29 | sidecar hysteria2 برای جلوگیری از loop زیر TUN به `route.default_interface` نسخهٔ pin‌شده وابسته است | R16-A پشتیبانی sing-box 1.14.4 و hysteria2 را runtime تأیید کرد (container، root)؛ unit hardened آزمون‌نشده است. fallback برای نسخهٔ بدون پشتیبانی/خطای runtime همچنان `unsupported`/`sidecar_loop_risk` است، نه loop |
+| R-30 | هم‌زمانی TUN با VPN/TUN دیگر یا route/firewall خارجی آزمون‌نشده است و ممکن است تصادم route/blackhole بدهد (R16-A فقط routeهای هاست را read-only و LAN/VPN را شبیه‌سازی کرد؛ VPN کامل هم‌زمان آزمون‌نشده) | `tun setup` وضعیت را بررسی و conflict را روشن گزارش می‌کند؛ coexistence کامل تصمیم/آزمون جدا می‌خواهد |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است
@@ -2132,16 +2132,24 @@ TUN، helper/unit، route/interface، اتصال engine و CLI/tray تا R16-C/D
 ### ۱۰.۵ کانفیگ سرویس TUN (ثابت، تولیدشده)
 
 - interface `rl-tun0`، MTU 1500، IPv4 gateway غیرقابل‌مسیریابی
-  `198.18.0.1/15` و IPv6 ULA `fc00::1/64` (ثابت‌ها در R16-A با تست تصادم
-  تأیید می‌شوند).
+  `198.18.0.1/15` و IPv6 ULA `fc00::1/64` (در R16-A تأیید شدند: بدون تصادم با
+  routeهای واقعی هاست به‌صورت read-only و LAN/VPN شبیه‌سازی‌شده؛ coexistence
+  واقعی VPN کامل همچنان R-30 است. `198.18.0.0/15` محدودهٔ benchmarking است و
+  setup باید conflict را روشن گزارش کند).
 - routeها: `0.0.0.0/1`، `128.0.0.0/1`، `::/1`، `8000::/1` با metric 1؛
   default route سیستم جایگزین نمی‌شود تا routeهای LAN/DNS محلی حفظ شوند.
-- Xray TUN inbound با sniffing `http,tls`، `routeOnly=false`، log error/access
-  خاموش؛ هیچ inbounds دیگر/API/routing کاربری در این core نیست.
+- Xray TUN inbound با sniffing `http,tls`، `routeOnly=false`، `logLevel:
+  "none"` و `access: "none"` **ثابت**؛ هیچ knob یا فایل لاگ سطح‌دار وجود ندارد
+  (D21؛ stock Xray در info/debug مقصد را در `proxy/tun/handler.go:246` لاگ
+  می‌کند؛ هر debug آینده نیازمند patch/redaction و تصمیم جدید است. R16-A این را
+  با canary در تنظیمات shipped تأیید کرد). هیچ inbounds دیگر/API/routing کاربری
+  در این core نیست.
 - routing داخل سرویس TUN:
   1. TCP همه → outbound `rl-tun-socks` به SOCKS لوپ‌بک engine.
-  2. UDP/TCP پورت 53 → outbound `rl-tun-dns` از نوع freedom، bind به interface
-     فیزیکی (DNS مستقیم، بدون proxy).
+  2. UDP/TCP پورت 53 → outbound `rl-tun-dns` از نوع freedom، با
+     `autoOutboundsInterface=auto` به interface فیزیکی (DNS مستقیم، بدون proxy؛
+     این معادل در R16-A آزموده شد و peer منبع را eth0 دید؛ bind صریح
+     `sockopt.interface` در سرویس غیرroot timeout داد و استفاده نمی‌شود).
   3. UDP غیر 53 → `rl-block` (blackhole).
   4. final → `rl-block`.
 - `autoOutboundsInterface=auto` (یا معادل تست‌شده) تا dialهای خود سرویس TUN

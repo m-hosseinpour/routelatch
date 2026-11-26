@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-B انجام شد، R16-A در حال اجرا)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B انجام شدند؛ R16-C بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -323,6 +323,37 @@ checkها در همین بخش ثبت می‌شود.
 مشاهده، fail-open window و موارد آزمون‌نشده. verdict یکی از `Ready`، `Blocked`
 یا `Not verified` است؛ هیچ fallback بی‌صدا (root engine، TUN در engine، حذف
 fail-closed) مجاز نیست.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-A — انجام شد؛ verdict `Ready`):** دروازهٔ فنی در
+دو کانتینر Docker دورانداختنی با netns ایزوله اجرا شد (Ubuntu 26.04، kernel
+7.0.0-44، systemd 259.9، iproute2 6.19.0، Docker 29.10.1)؛ هیچ تغییر DNS/
+firewall/route/interface/سرویس هاست انجام نشد. شاهد: `spike/tun/FINDINGS.md` و
+`spike/tun/evidence/`؛ بازتولید با `spike/tun/run.sh`.
+- **runtime-verified:** unit system با uid غیرroot 1500 و فقط `CAP_NET_ADMIN`،
+  باینری root-owned 0755، ساخت TUN/route، socket `0600` با peer-uid (root رد
+  شد)؛ Xray `26.11.9` با `rl-tun0` دو-stack، routeهای نیمه، sniffing TLS/HTTP و
+  IPv6 تا SOCKS لوپ‌بک؛ DNS/53 مستقیم از eth0 و UDP غیر53 blackhole؛
+  `autoSystemDnsToGateway` خاموش و DNS سیستم بدون تغییر؛ direct و embedded-Xray
+  pool dial با bind به eth0 و loop counter صفر (کنترلِ بدون controller یک بار
+  loop شد)؛ sing-box 1.14.4 `route.default_interface` و hysteria2 هر دو پشتیبانی
+  شدند (نیازی به exclude نبود)؛ engine kill → accept-then-EOF در ۱۲۰۵ms بدون
+  direct؛ restart engine/SOCKS بازیابی کرد؛ restart سرویس با lease در ~۲۷ms؛
+  SIGKILL fail-open ۱۱۷۰ms (۲۲ms teardown + ۱۱۴۷ms systemd restart)؛ `tun off`
+  پاک‌سازی ۲۱ms؛ پس از SIGKILL هیچ route/link/DNS یتیم نماند؛ ثابت‌ها با
+  routeهای واقعی هاست (read-only) و LAN/VPN شبیه‌سازی‌شده تصادم نداشتند.
+- **constraint 1 (D21):** سرویس باید `logLevel: "none"` و `access: "none"` را
+  ثابت نگه دارد و هیچ knob سطح لاگ نداشته باشد؛ stock Xray در info/debug مقصد را
+  لاگ می‌کند (`proxy/tun/handler.go:246`). canary در تنظیمات shipped صفر بود؛
+  تضمین «حتی debug» با Xray دست‌نخورده برآورده نمی‌شود و یک debug آینده نیازمند
+  patch/redaction و تصمیم جدید است. این محدودیت در `contracts.md §۱۰.۵` ثبت شد.
+- **constraint 2:** مسیر DNS با `autoOutboundsInterface=auto` آزموده و پذیرفته شد
+  (معادل مجاز §۱۰.۵)؛ bind صریح `sockopt.interface` روی سرویس غیرroot timeout داد
+  و استفاده نمی‌شود.
+- **untested:** ترافیک عمومی/off-link، تضمین literal debug D21، bind صریح DNS،
+  sidecar زیر unit hardened، R-28/R-30 (تغییر interface/هم‌زمانی VPN کامل)،
+  per-app/ECH/QUIC غیر از blackhole. این‌ها C/D/H یا تصمیم جدا هستند.
+**next:** C/D/F/G با Ready شدن A باز شدند؛ C با B موجود شروع می‌شود و B اکنون
+وابستگی برآورده‌شده دارد.
 
 #### R16-B — قرارداد، state/status و opها
 
@@ -1774,9 +1805,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-B (مدل داده/قرارداد TUN) در
-   ۲۰۲۶-۱۱-۲۷ انجام و بازبینی شد؛ R16-A با مجوز صریح کاربر در یک کانتینر
-   دورانداختنی در حال اجراست و تا verdict آن C/D/F/G مجاز نیستند. R16-I/J
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A و R16-B در ۲۰۲۶-۱۱-۲۷ انجام و
+   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-C قدم بعد است. R16-I/J
    (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
    می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
@@ -1820,8 +1850,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-B انجام شد و R16-A در جریان است؛ قدم بعد پس از ثبت verdict A تعیین
-   می‌شود. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B انجام شدند و R16-C قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.
