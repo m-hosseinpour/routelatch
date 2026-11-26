@@ -1,0 +1,22 @@
+version=v1.0.1-16-g22cb97d-dirty commit=22cb97d date=2026-11-26T07:11:37Z
+building linux/amd64 -> /tmp/opencode/r15h/dist-pkg/routelatch-linux-amd64
+building linux/arm64 -> /tmp/opencode/r15h/dist-pkg/routelatch-linux-arm64
+building linux/riscv64 -> /tmp/opencode/r15h/dist-pkg/routelatch-linux-riscv64
+building linux/ppc64le -> /tmp/opencode/r15h/dist-pkg/routelatch-linux-ppc64le
+RouteLatch v1.0.1-16-g22cb97d-dirty
+commit: 22cb97d
+build date: 2026-11-26T07:11:37Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"v1.0.1-16-g22cb97d-dirty","commit":"22cb97d","build_date":"2026-11-26T07:11:37Z"}}
+stamp linux/amd64: proven via version and --json
+stamp linux/arm64: version/commit/date embedded (not executable on amd64)
+stamp linux/riscv64: version/commit/date embedded (not executable on amd64)
+stamp linux/ppc64le: version/commit/date embedded (not executable on amd64)
+
+wrote /tmp/opencode/r15h/dist-pkg/SHA256SUMS:
+57dae7762e2ad77c7a955f77dfc2a828d8c35cae60e3f43f459caccb550e2070  routelatch-linux-amd64
+a83c2818dc735845ae3e84156d7829c6b051f6bda3bc2ce0f428507230c43e83  routelatch-linux-arm64
+3cdee62735e6e4489ed740c66dd2db6926745cbab57a5434d4ef3696107b7da0  routelatch-linux-riscv64
+d4a918359fb7ae6c46945739df4f5d8762be54b19711b5764ca86deddfd84774  routelatch-linux-ppc64le
+
+wrote /tmp/opencode/r15h/dist-pkg/BUILD-INFO (version/commit/date stamp that the package ships)
+install or enable nothing here; packaging/README.md documents the user's steps.

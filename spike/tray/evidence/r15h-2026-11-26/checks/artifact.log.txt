@@ -1,0 +1,21 @@
+== file ==
+/tmp/opencode/r15h/dist-build/routelatch-linux-amd64: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=vJAEC941T0DmeLdKktoi/9N9NXWAkeKXGmkvtRNRE/WpZuGB8kJo9Iku7jtVTo/5n_y5gYuzAGwO8p25RiC, BuildID[sha1]=659c8ba444c32909fd68a7ca6bcec70f74ea73bf, stripped
+== dynamic linkage ==
+static: ldd reports no dynamic executable
+== build stamp: expected version=v1.0.1-16-g22cb97d-dirty commit=22cb97d build_date=2026-11-26T07:11:37Z ==
+RouteLatch v1.0.1-16-g22cb97d-dirty
+commit: 22cb97d
+build date: 2026-11-26T07:11:37Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"v1.0.1-16-g22cb97d-dirty","commit":"22cb97d","build_date":"2026-11-26T07:11:37Z"}}
+stamp: version, commit and build_date match in human and --json output
+== empty environment, temporary XDG, loopback-only listeners ==
+mode: targeted (policy 1)
+exit: auto
+ready: yes
+listeners: http 127.0.0.1:18317, socks 127.0.0.1:18318
+pool: 0 total, 0 usable, 0 healthy, 0 cooling
+connections: 0 open, 0 dialing
+diagnostics: enabled=true queued=0
+warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'
+run exit after SIGTERM: 0
+PASS: artifact is static, stamped, and answers version/status with an empty environment

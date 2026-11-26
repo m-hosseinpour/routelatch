@@ -1,0 +1,56 @@
+package stamp amd64: version, commit and date match BUILD-INFO
+sing-box official archive linux/amd64: sha256 699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968 matches pinned v1.14.4 digest
+sing-box-linux-amd64: OK
+sing-box linux/amd64: sha256 1264361b5f8868c8768f7555d3e77e20118bf503c41ac08bb290a0d99056aa3a (tag v1.14.4) verified
+packaged routelatch-v1.0.1-16-g22cb97d-dirty-linux-amd64.tar.gz
+packaged routelatch_1.0.1.16.g22cb97d.dirty_amd64.deb
+generated routelatch-x86_64.spec (binary RPM built and inspected in CI)
+sing-box official archive linux/arm64: sha256 436441f76ee2f7fe21b5b2d426d3cb261a480455a704865789ad533e4273ec26 matches pinned v1.14.4 digest
+sing-box-linux-arm64: OK
+sing-box linux/arm64: sha256 d953af885f11d6b547c21a3c0ffe70796963afc802fab959d548311002b4908a (tag v1.14.4) verified
+packaged routelatch-v1.0.1-16-g22cb97d-dirty-linux-arm64.tar.gz
+packaged routelatch_1.0.1.16.g22cb97d.dirty_arm64.deb
+generated routelatch-aarch64.spec (binary RPM built and inspected in CI)
+note: no pinned sing-box sidecar exists for linux/riscv64; packaging without it
+packaged routelatch-v1.0.1-16-g22cb97d-dirty-linux-riscv64.tar.gz
+packaged routelatch_1.0.1.16.g22cb97d.dirty_riscv64.deb
+generated routelatch-riscv64.spec (binary RPM built and inspected in CI)
+note: no pinned sing-box sidecar exists for linux/ppc64le; packaging without it
+packaged routelatch-v1.0.1-16-g22cb97d-dirty-linux-ppc64le.tar.gz
+packaged routelatch_1.0.1.16.g22cb97d.dirty_ppc64el.deb
+generated routelatch-ppc64le.spec (binary RPM built and inspected in CI)
+
+package roots, tarballs, .deb files and RPM specs are under /tmp/opencode/r15h/dist-pkg/packages:
+/tmp/opencode/r15h/dist-pkg/packages/routelatch_1.0.1.16.g22cb97d.dirty_amd64.deb
+/tmp/opencode/r15h/dist-pkg/packages/routelatch_1.0.1.16.g22cb97d.dirty_arm64.deb
+/tmp/opencode/r15h/dist-pkg/packages/routelatch_1.0.1.16.g22cb97d.dirty_ppc64el.deb
+/tmp/opencode/r15h/dist-pkg/packages/routelatch_1.0.1.16.g22cb97d.dirty_riscv64.deb
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-aarch64.spec
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-ppc64le.spec
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-riscv64.spec
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-v1.0.1-16-g22cb97d-dirty-linux-amd64.tar.gz
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-v1.0.1-16-g22cb97d-dirty-linux-arm64.tar.gz
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-v1.0.1-16-g22cb97d-dirty-linux-ppc64le.tar.gz
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-v1.0.1-16-g22cb97d-dirty-linux-riscv64.tar.gz
+/tmp/opencode/r15h/dist-pkg/packages/routelatch-x86_64.spec
+/tmp/opencode/r15h/dist-pkg/packages/SHA256SUMS
+
+7df099d0893c14910690542f37d476b923bdc8eacf1329688de40f9d14e836dc  routelatch-v1.0.1-16-g22cb97d-dirty-linux-amd64.tar.gz
+3271b19204ce22061da330d83b8eada35e49e9542de79639bb749d86a6880903  routelatch_1.0.1.16.g22cb97d.dirty_amd64.deb
+85e99f18ba37b7dcdb272450f3f7728cb56c8cab4e0231fc7dfcc9abb655488b  routelatch-x86_64.spec
+67148791c662aaa7d4a034cfa0baf35ef00751c32d279c1a025b6549abb23dc8  routelatch-v1.0.1-16-g22cb97d-dirty-linux-arm64.tar.gz
+f2d46f5d81e7d2f99afcedad39dcdeb0a5656e464a1d250a10854603e6908943  routelatch_1.0.1.16.g22cb97d.dirty_arm64.deb
+35dc4e5a61535af803a110dd8ee9ff7d2c724a3bfb2cba1e6652b4122e48caa7  routelatch-aarch64.spec
+602092bfe41b00c00ae08caac018a0afb9750d71fc49a4e4102c1a12b0197cbf  routelatch-v1.0.1-16-g22cb97d-dirty-linux-riscv64.tar.gz
+6b73f1ddb563cc1b1ec27a85f68ed8d65f0dca8151238e5354e0e64be95247a4  routelatch_1.0.1.16.g22cb97d.dirty_riscv64.deb
+392033fb3b1170571e67e29d8dc76488f61bb313d715f4a195ae1ded598beecc  routelatch-riscv64.spec
+0034420cc43e1ef6cb2cea04507da8dcff175f20ac6bfcc6d066ce1b5144d012  routelatch-v1.0.1-16-g22cb97d-dirty-linux-ppc64le.tar.gz
+9a2e91fc5f8680544560d6a777f1d5ec7b4db38f2f84d273270d5ad8aaf85ec5  routelatch_1.0.1.16.g22cb97d.dirty_ppc64el.deb
+8efc91e13a6c6f1536d562d20b275bca169a42bb1daed0329af12efe8f469584  routelatch-ppc64le.spec
+
+sing-box sidecar: included for amd64 arm64 (tag v1.14.4), verified against <repo>/dist/singbox/SHA256SUMS
+Debian packages: routelatch_1.0.1.16.g22cb97d.dirty_<debian-arch>.deb (unsigned; verify with SHA256SUMS)
+Debian architecture names match GOARCH except ppc64le -> ppc64el.
+RPM specs: routelatch-<rpm-arch>.spec (Version 1.0.1.16.g22cb97d.dirty); binary RPMs are built and inspected by CI.
+RPM architecture names: amd64->x86_64, arm64->aarch64, riscv64 and ppc64le unchanged.
+inspect with: tar tzf /tmp/opencode/r15h/dist-pkg/packages/routelatch-v1.0.1-16-g22cb97d-dirty-linux-amd64.tar.gz

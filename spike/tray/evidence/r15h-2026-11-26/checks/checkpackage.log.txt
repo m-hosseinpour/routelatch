@@ -1,0 +1,38 @@
+== checksums in /tmp/opencode/r15h/dist-pkg/packages/SHA256SUMS ==
+routelatch-v1.0.1-16-g22cb97d-dirty-linux-amd64.tar.gz: OK
+routelatch_1.0.1.16.g22cb97d.dirty_amd64.deb: OK
+routelatch-x86_64.spec: OK
+routelatch-v1.0.1-16-g22cb97d-dirty-linux-arm64.tar.gz: OK
+routelatch_1.0.1.16.g22cb97d.dirty_arm64.deb: OK
+routelatch-aarch64.spec: OK
+routelatch-v1.0.1-16-g22cb97d-dirty-linux-riscv64.tar.gz: OK
+routelatch_1.0.1.16.g22cb97d.dirty_riscv64.deb: OK
+routelatch-riscv64.spec: OK
+routelatch-v1.0.1-16-g22cb97d-dirty-linux-ppc64le.tar.gz: OK
+routelatch_1.0.1.16.g22cb97d.dirty_ppc64el.deb: OK
+routelatch-ppc64le.spec: OK
+== linux/amd64 tarball ==
+== linux/amd64 .deb metadata ==
+== linux/amd64 .deb control archive ==
+== linux/amd64 .deb payload ==
+== linux/amd64 RPM spec (x86_64) ==
+linux/amd64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/arm64 tarball ==
+== linux/arm64 .deb metadata ==
+== linux/arm64 .deb control archive ==
+== linux/arm64 .deb payload ==
+== linux/arm64 RPM spec (aarch64) ==
+linux/arm64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/riscv64 tarball ==
+== linux/riscv64 .deb metadata ==
+== linux/riscv64 .deb control archive ==
+== linux/riscv64 .deb payload ==
+== linux/riscv64 RPM spec (riscv64) ==
+linux/riscv64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/ppc64le tarball ==
+== linux/ppc64le .deb metadata ==
+== linux/ppc64le .deb control archive ==
+== linux/ppc64le .deb payload ==
+== linux/ppc64le RPM spec (ppc64le) ==
+linux/ppc64le: tarball, .deb and RPM spec layout, metadata and checksums match
+PASS: package checksums, tarball layout, .deb metadata/payload and RPM specs are consistent

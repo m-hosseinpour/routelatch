@@ -1,0 +1,3 @@
+ok  	routelatch/internal/trayui	3.835s
+ok  	routelatch/internal/app	107.208s
+ok  	routelatch/internal/control	2.443s
