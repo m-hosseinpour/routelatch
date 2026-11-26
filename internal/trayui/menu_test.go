@@ -457,10 +457,11 @@ func TestPendingAndJobAppearAtRoot(t *testing.T) {
 	}
 	view := s.ctl.View()
 	keys := rootKeys(view.Root)
-	if len(keys) < 2 || keys[1] != "pending.confirm" || keys[2] != "pending.cancel" {
+	if len(keys) < 3 || !strings.HasPrefix(keys[1], "pending.") || !strings.HasSuffix(keys[1], ".confirm") ||
+		!strings.HasSuffix(keys[2], ".cancel") {
 		t.Fatalf("pending root keys = %v", keys)
 	}
-	if n, _ := findNode(view.Root, "pending.confirm"); n.Action != ActionConfirm {
-		t.Fatalf("confirm = %+v", n)
+	if n, _ := findNode(view.Root, keys[1]); n.Action != ActionConfirm || n.Target.PendingID != view.Pending.ID {
+		t.Fatalf("confirm = %+v, want pending id %d", n, view.Pending.ID)
 	}
 }

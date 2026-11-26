@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"unicode/utf8"
 
 	"routelatch/internal/contract"
@@ -45,6 +46,48 @@ func sanitizeLimit(s string, limit int) string {
 		return string(r[:limit-1]) + "…"
 	}
 	return string(r)
+}
+
+// manualCommandNotification shows the exact fallback command when it fits the
+// header bound. A longer command is elided in the middle so both the
+// executable and the runnable `menu` suffix survive; the ellipsis makes the
+// truncation explicit instead of silently dropping the tail (docs/contracts.md
+// §7.3, §7.4).
+func manualCommandNotification(command string) string {
+	const prefix = "No terminal found; run manually: "
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return "No supported terminal found"
+	}
+	available := HeaderLimit - utf8.RuneCountInString(prefix)
+	if available < 1 {
+		return SanitizeHeader(prefix)
+	}
+	safe := SanitizeHeader(command)
+	if safe == "" {
+		return "No supported terminal found"
+	}
+	if utf8.RuneCountInString(safe) <= available {
+		return prefix + safe
+	}
+	return SanitizeHeader(prefix + middleElide(command, available))
+}
+
+// middleElide shortens s to at most limit runes by keeping its beginning and
+// end around an ellipsis. The result is still untrusted text and must be
+// sanitized by the caller.
+func middleElide(s string, limit int) string {
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	if limit <= 0 {
+		return ""
+	}
+	keep := limit - 1
+	head := (keep + 1) / 2
+	tail := keep - head
+	return string(r[:head]) + "…" + string(r[len(r)-tail:])
 }
 
 // stableKeyPart turns an id received from the management socket into a safe

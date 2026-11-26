@@ -26,8 +26,8 @@ func TestPendingReplacementExpiryAndCancel(t *testing.T) {
 	if view.Pending == nil || view.Pending.Action != ActionStopListening {
 		t.Fatalf("pending = %+v", view.Pending)
 	}
-	confirm, ok := findNode(view.Root, "pending.confirm")
-	if !ok || !strings.HasPrefix(confirm.Label, "Confirm: Stop listening") {
+	confirm, ok := findNode(view.Root, rootKeys(view.Root)[1])
+	if !ok || !strings.HasPrefix(confirm.Label, "Confirm: Stop listening") || confirm.Target.PendingID != view.Pending.ID {
 		t.Fatalf("confirm node = %+v", confirm)
 	}
 
@@ -82,6 +82,53 @@ func TestPendingReplacementExpiryAndCancel(t *testing.T) {
 	}
 	if s.caller.countOp(control.OpMode) != 1 {
 		t.Fatal("expired confirmation executed a request")
+	}
+}
+
+func TestStalePendingClickCannotConsumeReplacement(t *testing.T) {
+	s := newSetup(t, newFixture(), nil)
+	ctx := context.Background()
+	if _, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil {
+		t.Fatal(err)
+	}
+	first := s.ctl.View()
+	firstKeys := rootKeys(first.Root)
+	oldConfirm, _ := findNode(first.Root, firstKeys[1])
+	oldCancel, _ := findNode(first.Root, firstKeys[2])
+	if first.Pending == nil || oldConfirm.Target.PendingID != first.Pending.ID {
+		t.Fatalf("first pending = %+v", first.Pending)
+	}
+
+	// A replacement pending gets a new identity, so a click rendered for the
+	// old confirm/cancel pair must not consume it.
+	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: "r-001"}); err != nil {
+		t.Fatal(err)
+	}
+	second := s.ctl.View()
+	secondKeys := rootKeys(second.Root)
+	if secondKeys[1] == firstKeys[1] || secondKeys[2] == firstKeys[2] {
+		t.Fatalf("pending keys did not change: old %v new %v", firstKeys, secondKeys)
+	}
+	if _, err := s.ctl.Trigger(ctx, oldConfirm.Action, oldConfirm.Target); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("stale confirm = %v, want ErrNoPending", err)
+	}
+	if _, err := s.ctl.Trigger(ctx, oldCancel.Action, oldCancel.Target); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("stale cancel = %v, want ErrNoPending", err)
+	}
+	if p := s.ctl.View().Pending; p == nil || p.ID != second.Pending.ID || p.Action != ActionRuleRemove {
+		t.Fatalf("replacement pending was consumed: %+v", p)
+	}
+	if s.caller.countOp(control.OpRulesRemove) != 0 || s.caller.countOp(control.OpMode) != 0 {
+		t.Fatal("a stale click executed an action")
+	}
+
+	// The replacement's own rendered confirm still works.
+	confirm, _ := findNode(second.Root, secondKeys[1])
+	if _, err := s.ctl.Trigger(ctx, confirm.Action, confirm.Target); err != nil {
+		t.Fatalf("replacement confirm: %v", err)
+	}
+	if s.caller.countOp(control.OpRulesRemove) != 1 {
+		t.Fatal("replacement confirmation did not run its stored action")
 	}
 }
 
@@ -505,6 +552,64 @@ func TestQuitRestoreFailureDoesNotQuit(t *testing.T) {
 	}
 }
 
+func TestQuitRestoreOutcomeIsTruthful(t *testing.T) {
+	cases := []struct {
+		name    string
+		desktop control.DesktopData
+		want    string
+	}{
+		{
+			name: "nothing to restore",
+			desktop: control.DesktopData{
+				Environment: "GNOME", Supported: true, Applied: true,
+				Notice: "no desktop proxy setting was applied by RouteLatch",
+			},
+			want: "Quit requested; desktop proxy: nothing to restore",
+		},
+		{
+			name: "user-modified setting left",
+			desktop: control.DesktopData{
+				Environment: "KDE", Supported: true, Applied: true,
+				Restored: []string{"https_proxy"}, UserModified: []string{"http_proxy"},
+			},
+			want: "Quit requested; desktop proxy restored; 1 user-modified setting left unchanged",
+		},
+		{
+			name: "nothing was restorable",
+			desktop: control.DesktopData{
+				Environment: "KDE", Supported: true, Applied: true,
+				UserModified: []string{"http_proxy"},
+			},
+			want: "Quit requested; desktop proxy: no setting restored; 1 user-modified setting left unchanged",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newFixture()
+			fx.desktop = tc.desktop
+			s := newSetup(t, fx, nil)
+			ctx := context.Background()
+			if _, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.ctl.Confirm(ctx); err != nil {
+				t.Fatal(err)
+			}
+			waitForJobEnd(t, s)
+			if quits, _ := s.life.counts(); quits != 1 {
+				t.Fatalf("quit requests = %d, want 1 after a successful restore call", quits)
+			}
+			if got := s.ctl.View().LastAction; got != tc.want {
+				t.Fatalf("last action = %q, want %q", got, tc.want)
+			}
+			note, ok := lastNotification(s)
+			if !ok || note.Body != tc.want {
+				t.Fatalf("notification = %+v, want %q", note, tc.want)
+			}
+		})
+	}
+}
+
 func TestQuitKeepDesktopQuitsWithoutRestore(t *testing.T) {
 	fx := newFixture()
 	fx.desktop.Applied = true
@@ -535,6 +640,7 @@ func TestQuitKeepDesktopQuitsWithoutRestore(t *testing.T) {
 func TestQuitRestoreDesktopRestoresThenQuits(t *testing.T) {
 	fx := newFixture()
 	fx.desktop.Applied = true
+	fx.desktop.Restored = []string{"http_proxy"}
 	s := newSetup(t, fx, nil)
 	ctx := context.Background()
 	res, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{})

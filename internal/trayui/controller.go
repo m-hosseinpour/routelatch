@@ -47,8 +47,10 @@ const (
 )
 
 // Pending is the one in-memory two-step confirmation. It is never written to
-// state, config, a log or a database.
+// state, config, a log or a database. ID identifies one rendered confirmation:
+// a click on an older confirm/cancel pair must not consume a replacement.
 type Pending struct {
+	ID        uint64
 	Action    Action
 	Target    Target
 	Label     string
@@ -117,10 +119,11 @@ type Controller struct {
 	lastAction string
 	restarting bool
 
-	cachedRoot Node
-	cachedFP   string
-	builds     int
-	nextJob    uint64
+	cachedRoot  Node
+	cachedFP    string
+	builds      int
+	nextJob     uint64
+	nextPending uint64
 }
 
 // New validates the required boundary and applies the documented defaults.
@@ -256,9 +259,9 @@ func (c *Controller) Trigger(ctx context.Context, action Action, target Target) 
 	case ActionConfirm:
 		c.mu.Unlock()
 		c.notify(notes)
-		return c.Confirm(ctx)
+		return c.confirmTarget(ctx, target.PendingID)
 	case ActionCancel:
-		if c.pending == nil {
+		if c.pending == nil || c.pending.ID != target.PendingID {
 			c.mu.Unlock()
 			c.notify(notes)
 			return Result{}, ErrNoPending
@@ -295,8 +298,9 @@ func (c *Controller) Trigger(ctx context.Context, action Action, target Target) 
 	}
 	if c.requiresConfirmationLocked(action, target) {
 		label := c.actionLabelLocked(action, target)
+		c.nextPending++
 		c.pending = &Pending{
-			Action: action, Target: target, Label: label,
+			ID: c.nextPending, Action: action, Target: target, Label: label,
 			ExpiresAt: c.opts.Now().Add(c.opts.PendingTTL),
 		}
 		c.lastAction = "Confirmation required"
@@ -319,6 +323,24 @@ func (c *Controller) Confirm(ctx context.Context) (Result, error) {
 	if p == nil {
 		return Result{}, ErrNoPending
 	}
+	return c.confirmPending(ctx, p)
+}
+
+// confirmTarget confirms only the pending generation the click was rendered
+// for. A replacement or expiry invalidates the old click's target.
+func (c *Controller) confirmTarget(ctx context.Context, id uint64) (Result, error) {
+	c.mu.Lock()
+	notes := c.expireLocked(c.opts.Now())
+	p := c.pending
+	c.mu.Unlock()
+	c.notify(notes)
+	if p == nil || p.ID != id {
+		return Result{}, ErrNoPending
+	}
+	return c.confirmPending(ctx, p)
+}
+
+func (c *Controller) confirmPending(ctx context.Context, p *Pending) (Result, error) {
 	c.mu.Lock()
 	// Another click may have replaced or cancelled it between the two locks;
 	// only the same record may be confirmed.
@@ -386,6 +408,9 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 		}
 		return nil
 	case ActionQuitKeepDesktop:
+		if engine == EngineLoading {
+			return ErrUnavailable
+		}
 		return nil
 	case ActionQuitRestoreDesktop:
 		if busy {
@@ -779,10 +804,7 @@ func (c *Controller) openTerminal(ctx context.Context, action Action) (Result, e
 	if !errors.Is(err, ErrNoTerminal) {
 		return c.failSync(action, ErrTerminalUnavailable)
 	}
-	message := "No supported terminal found"
-	if command := SanitizeHeader(c.opts.Terminal.ManualCommand()); command != "" {
-		message = "No terminal found; run manually: " + command
-	}
+	message := manualCommandNotification(c.opts.Terminal.ManualCommand())
 	c.mu.Lock()
 	c.lastAction = "No supported terminal found"
 	c.mu.Unlock()
@@ -932,14 +954,7 @@ func (c *Controller) jobRequest(ctx context.Context, action Action, target Targe
 		// A key the user changed is deliberately left untouched, so a plain
 		// "restored" would overstate the result. The service notice means there
 		// was nothing to restore; use fixed tray text rather than caller text.
-		switch {
-		case data.Notice != "":
-			return "Desktop proxy: nothing to restore", nil
-		case len(data.UserModified) > 0:
-			return fmt.Sprintf("Desktop proxy restored; %d user-modified settings left unchanged", len(data.UserModified)), nil
-		default:
-			return "Desktop proxy restored", nil
-		}
+		return desktopRestoreSummary(data, "Desktop proxy"), nil
 	case ActionPoolRefresh:
 		return "Sources refreshed", nil
 	case ActionPoolTest, ActionPoolTestFirst20:
@@ -991,9 +1006,11 @@ func (c *Controller) jobQuitRestore(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	outcome := "desktop proxy restore result unknown"
 	var data control.DesktopData
 	if err := decodeData(env, &data); err == nil {
 		c.applyDesktop(desktopFromData(data))
+		outcome = desktopRestoreSummary(data, "desktop proxy")
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -1004,7 +1021,34 @@ func (c *Controller) jobQuitRestore(ctx context.Context) (string, error) {
 	if err := c.opts.Lifecycle.Quit(); err != nil {
 		return "", err
 	}
-	return "Quit requested; desktop proxy restored", nil
+	return "Quit requested; " + outcome, nil
+}
+
+// desktopRestoreSummary describes exactly what a restore result did: a no-op
+// reported by the service, a partial or absent restore that left user-modified
+// settings untouched, a full restore, or a success that touched no key. It never
+// turns a partial or absent restore into a full-restore claim
+// (docs/contracts.md §7.3).
+func desktopRestoreSummary(data control.DesktopData, subject string) string {
+	switch {
+	case data.Notice != "":
+		return subject + ": nothing to restore"
+	case len(data.UserModified) > 0 && len(data.Restored) == 0:
+		return subject + ": no setting restored; " + userModifiedSummary(len(data.UserModified))
+	case len(data.UserModified) > 0:
+		return subject + " restored; " + userModifiedSummary(len(data.UserModified))
+	case len(data.Restored) > 0:
+		return subject + " restored"
+	default:
+		return subject + ": no setting was restored"
+	}
+}
+
+func userModifiedSummary(n int) string {
+	if n == 1 {
+		return "1 user-modified setting left unchanged"
+	}
+	return fmt.Sprintf("%d user-modified settings left unchanged", n)
 }
 
 // ---------- pagination ----------

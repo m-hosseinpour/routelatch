@@ -166,6 +166,9 @@ type Target struct {
 	RuleID     contract.RuleID
 	ExitID     contract.ExitID
 	Section    Section
+	// PendingID identifies the rendered confirmation. Confirm/Cancel clicks
+	// carry it so an old rendered pair cannot consume a replacement.
+	PendingID uint64
 }
 
 // Section identifies one independently paginated menu list.

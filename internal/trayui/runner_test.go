@@ -236,9 +236,15 @@ func TestRunnerClickTriggersControllerAndConfirmation(t *testing.T) {
 	if err := h.runner.Click("mode.stop"); err != nil {
 		t.Fatalf("stop click: %v", err)
 	}
+	confirmKey := ""
 	waitFor(t, "pending confirmation", func() bool {
-		_, ok := h.backend.find("pending.confirm")
-		return ok
+		for _, key := range h.backend.keysOf("root") {
+			if strings.HasPrefix(key, "pending.") && strings.HasSuffix(key, ".confirm") {
+				confirmKey = key
+				return true
+			}
+		}
+		return false
 	})
 	if h.ctlSetup.caller.countOp(control.OpMode) != 1 {
 		t.Fatal("pending action executed before confirmation")
@@ -246,7 +252,7 @@ func TestRunnerClickTriggersControllerAndConfirmation(t *testing.T) {
 	// The tree can be visible a moment before the binder publishes its click
 	// map; retry until the key resolves.
 	waitFor(t, "confirm clickable", func() bool {
-		err := h.runner.Click("pending.confirm")
+		err := h.runner.Click(confirmKey)
 		if err == nil {
 			return true
 		}

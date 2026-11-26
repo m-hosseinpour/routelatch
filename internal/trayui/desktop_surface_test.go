@@ -68,7 +68,7 @@ func TestDesktopSetAndRestoreUseConfirmationAndOneRequest(t *testing.T) {
 	// must say so instead of claiming a full restore.
 	s.caller.setDesktop(control.DesktopData{
 		Environment: "KDE", Supported: true, Applied: true,
-		UserModified: []string{"http_proxy"},
+		Restored: []string{"https_proxy"}, UserModified: []string{"http_proxy"},
 	})
 	baseline = s.caller.countOp(control.OpDesktopRestore)
 	res, err = s.ctl.Trigger(ctx, ActionDesktopRestore, Target{})
@@ -91,7 +91,7 @@ func TestDesktopSetAndRestoreUseConfirmationAndOneRequest(t *testing.T) {
 	if got := s.ctl.Snapshot().Desktop; got.Applied {
 		t.Fatalf("desktop after restore = %+v", got)
 	}
-	want := "Desktop proxy restored; 1 user-modified settings left unchanged"
+	want := "Desktop proxy restored; 1 user-modified setting left unchanged"
 	if got := s.ctl.View().LastAction; got != want {
 		t.Fatalf("last action = %q, want %q", got, want)
 	}

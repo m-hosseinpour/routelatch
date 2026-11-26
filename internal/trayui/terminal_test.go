@@ -89,6 +89,34 @@ func TestTerminalMenuMissingShowsManualCommand(t *testing.T) {
 	}
 }
 
+func TestTerminalManualCommandLongDataDirKeepsMenuSuffix(t *testing.T) {
+	longDir := "/data/" + strings.Repeat("d", 120)
+	command := "/opt/routelatch --data-dir " + longDir + " menu"
+	term := &fakeTerminal{err: ErrNoTerminal, command: command}
+	s := newSetup(t, newFixture(), func(o *Options) { o.Terminal = term })
+
+	if _, err := s.ctl.Trigger(context.Background(), ActionTerminalMenu, Target{}); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("trigger error = %v, want ErrNoTerminal", err)
+	}
+	notes := s.notifier.all()
+	if len(notes) != 1 {
+		t.Fatalf("notifications = %+v, want one", notes)
+	}
+	body := notes[0].Body
+	if containsControl(body) || runeLen(body) > HeaderLimit {
+		t.Fatalf("unsafe notification %q", body)
+	}
+	if !strings.HasSuffix(body, "menu") {
+		t.Fatalf("notification = %q, want the runnable menu suffix", body)
+	}
+	if !strings.Contains(body, "…") || !strings.HasPrefix(body, "No terminal found; run manually: /opt/routelatch --data-dir ") {
+		t.Fatalf("notification = %q, want an explicit middle elision", body)
+	}
+	if strings.Contains(body, command) {
+		t.Fatalf("notification = %q, want a visible truncation marker", body)
+	}
+}
+
 func TestTerminalMenuFailureIsExplicit(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -132,6 +160,18 @@ func TestTerminalManualCommandIsSanitized(t *testing.T) {
 	}
 	if containsControl(s.ctl.View().LastAction) {
 		t.Fatalf("unsafe last action %q", s.ctl.View().LastAction)
+	}
+}
+
+func TestTerminalManualCommandOnlyControlsFallsBackToUnavailable(t *testing.T) {
+	term := &fakeTerminal{err: ErrNoTerminal, command: "\x1b[2J\r\n\t"}
+	s := newSetup(t, newFixture(), func(o *Options) { o.Terminal = term })
+	if _, err := s.ctl.Trigger(context.Background(), ActionTerminalMenu, Target{}); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("trigger error = %v", err)
+	}
+	notes := s.notifier.all()
+	if len(notes) != 1 || notes[0].Body != "No supported terminal found" {
+		t.Fatalf("notifications = %+v", notes)
 	}
 }
 

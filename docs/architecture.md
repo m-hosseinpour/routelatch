@@ -150,9 +150,11 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 > R13 در درخت کامل شده است (R13-F verdict **Ready**) و `v1.0.0` منتشر شده
 > است؛ بسته‌های `v0.1.3` و پیش از آن همان unit و `run` foreground را دارند.
 > README/INSTALL/SERVICE در R13-E به‌روز شدند. R15 (D28) در همین بخش طراحی
-> شده است؛ R15-A..C (اسپایک منو، controller/model و restart سطح process) و
-> اتصال واقعی tray در R15-D2 پیاده شده‌اند و منوی controller جای سه آیتم ثابت را
-> گرفته است؛ دامنه‌های بعدی (R15-E..H) هنوز باقی‌اند.
+> شده است؛ R15-A..C (اسپایک منو، controller/model و restart سطح process)،
+> اتصال واقعی tray در R15-D2 و دامنه‌های R15-E..G2 (pool، rules/proposals،
+> desktop/diagnostics/data/settings و Terminal menu/Quit) پیاده شده‌اند و منوی controller
+> جای سه آیتم ثابت را گرفته است؛ فقط R15-H (پذیرش نهایی/بازبینی/release gate)
+> باقی است.
 
 - Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child

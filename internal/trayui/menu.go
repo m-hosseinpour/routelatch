@@ -72,11 +72,12 @@ func (c *Controller) actionItem(key, label string, action Action, target Target)
 // silently removed.
 func (c *Controller) buildMenuLocked(engine EngineState) Node {
 	if engine == EngineLoading {
-		// Before the first snapshot the contents are unknown; the contract's
-		// minimal menu is the header plus Quit, with no management actions.
+		// Before the first snapshot the contents are unknown; §7.3 requires the
+		// minimal Loading… menu with disabled actions. The desktop has not been
+		// read yet, so no Quit variant is offered before the first snapshot.
 		root := []Node{
 			disabledItem("status", statusLabel(c.snap, engine)),
-			c.quitMenuLocked(),
+			submenu("quit", "Quit", disabledItem("quit.now", "Quit RouteLatch")),
 		}
 		return submenu("root", "RouteLatch", root...)
 	}
@@ -84,10 +85,13 @@ func (c *Controller) buildMenuLocked(engine EngineState) Node {
 	root = append(root, disabledItem("status", statusLabel(c.snap, engine)))
 
 	if c.pending != nil {
-		confirm := item("pending.confirm", "Confirm: "+c.pending.Label)
+		target := Target{PendingID: c.pending.ID}
+		confirm := item(fmt.Sprintf("pending.%d.confirm", c.pending.ID), "Confirm: "+c.pending.Label)
 		confirm.Action = ActionConfirm
-		cancel := item("pending.cancel", "Cancel")
+		confirm.Target = target
+		cancel := item(fmt.Sprintf("pending.%d.cancel", c.pending.ID), "Cancel")
 		cancel.Action = ActionCancel
+		cancel.Target = target
 		root = append(root, confirm, cancel)
 	}
 	if c.job != nil {

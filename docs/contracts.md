@@ -1421,13 +1421,15 @@ deadline کوتاه می‌گیرد. اگر `applied=true` باشد، Quit به 
 `gnome-terminal -- <exe> … menu` و `xterm -e <exe> … menu`. هیچ shell،
 `$TERMINAL` تعبیرشده یا ورودی کاربر در argv قرار نمی‌گیرد. فرآیند ترمینال با
 `Setsid` detached و مستقل از tray است. اگر ترمینالی پیدا نشد، notification
-دستور دقیق برای اجرای دستی می‌دهد. این مسیر برای عملیات متنی و restore بکاپ است
-و هیچ secret/URLی به tray داده نمی‌شود.
+دستور دقیق برای اجرای دستی می‌دهد؛ اگر notification با این دستور از سقف ۱۲۰
+rune بیشتر شود، میان آن با `…` کوتاه می‌شود تا executable و پسوند اجرایی `menu`
+حفظ شوند. این مسیر برای عملیات متنی و restore بکاپ است و هیچ secret/URLی به tray
+داده نمی‌شود.
 
 **امنیت خروجی و D21.** هر label پویا (نام node، rule note، نام source، دلیل
 خطا و…) پیش از نمایش از `SanitizeTerminal` و یک truncation ثابت عبور می‌کند؛
 سقف label آیتم **۸۰ rune** و سقف هدر/notification **۱۲۰ rune** است و متن
-بریده‌شده با `…` تمام می‌شود. CR/LF/TAB، ESC/C0/C1 و کنترل‌های bidi حذف
+بریده‌شده با `…` مشخص می‌شود. CR/LF/TAB، ESC/C0/C1 و کنترل‌های bidi حذف
 می‌شوند. actionها یک enum بسته‌اند و
 label هرگز منبع id فرمان نیست. notificationها فقط شمارنده، mode، id کوتاه،
 مسیر log یا پیام خطای sanitize‌شده دارند و هیچ مقصد، host مقصد/exit، share URL
@@ -1468,9 +1470,10 @@ extension/SSH همچنان tray ندارد و رفتار D26 تغییر نمی�
 (R13-F verdict **Ready**) و `v1.0.0` همین مدل را منتشر کرده است؛ بسته‌های
 `v0.1.3` و پیش از آن همان `run` foreground و unit قدیمی را دارند. **R15 (D28)**
 افزونهٔ کنترل tray و restart سطح process است؛ R15-A..C (اسپایک منو،
-controller/model و restart در supervisor) و اتصال واقعی tray در R15-D2 پیاده
-شده‌اند و منوی controller جای سه آیتم ثابت را گرفته است؛ دامنه‌های بعدی
-(R15-E..H) باقی‌اند.
+controller/model و restart در supervisor)، اتصال واقعی tray در R15-D2 و
+دامنه‌های R15-E..G2 (pool، rules/proposals، desktop/diagnostics/data/settings و Terminal
+menu/Quit) پیاده شده‌اند و منوی controller جای سه آیتم ثابت را گرفته است؛ فقط
+R15-H (پذیرش نهایی/بازبینی/release gate) باقی است.
 
 **مسیرهای canonical instance.** همهٔ فایل‌های هماهنگی instance — `state.lock`،
 `app.lock`، `app.owner` و management socket — فقط از دایرکتوری state/data مشتق
