@@ -1,0 +1,14 @@
+== supervisor log excerpt (app log, sanitized)
+2026-11-26T03:08:43.691Z app: supervisor.start pid=1059834 data_dir=/tmp/opencode/rl-r15d2-final-20261126T063843Z
+2026-11-26T03:08:43.693Z app: supervisor.engine_started pid=1059848 generation=1
+2026-11-26T03:08:43.797Z app: supervisor.tray_started pid=1059861
+2026-11-26T03:08:43.826Z app.tray: tray ready pid=1059861
+2026-11-26T03:08:57.291Z app: supervisor.restart_requested source=tray
+2026-11-26T03:08:57.294Z app: supervisor.engine_started pid=1060112 generation=2
+2026-11-26T03:08:57.402Z app: supervisor.engine_restarted reason=tray pid=1060112 generation=2 token=1
+2026-11-26T03:08:59.716Z app: supervisor.tray_exit code=-1 reason=
+2026-11-26T03:08:59.717Z app: supervisor.tray_started pid=1060230
+2026-11-26T03:08:59.747Z app.tray: tray ready pid=1060230
+2026-11-26T03:08:59.747Z app: supervisor.tray_restarted pid=1060230
+2026-11-26T03:09:01.862Z app: supervisor.quit requested=tray
+2026-11-26T03:09:01.863Z app.tray: tray: runner stopped

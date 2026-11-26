@@ -3,25 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"image/color"
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 )
-
-// The tray only suggests the documented command; it must not promise or perform
-// an automatic restore of desktop proxy settings.
-func TestDesktopProxyRestoreHintNamesTheCommand(t *testing.T) {
-	if !strings.Contains(desktopProxyRestoreHint, "routelatch desktop proxy restore") {
-		t.Fatalf("hint = %q, want the documented restore command", desktopProxyRestoreHint)
-	}
-	if !strings.Contains(desktopProxyRestoreHint, "if the desktop proxy was enabled") {
-		t.Fatalf("hint = %q, want the user-visible condition", desktopProxyRestoreHint)
-	}
-}
 
 // A cancelled context must abort the probe before it dials the session bus.
 func TestProbeTrayContextHonoursCancellation(t *testing.T) {
@@ -94,5 +83,63 @@ func TestSessionBusHandshakeHonoursDeadline(t *testing.T) {
 				t.Fatal("handshake ignored the context deadline and is stuck")
 			}
 		})
+	}
+}
+
+func TestTrayOptionsFromEnvIncludesSocketAndDataDir(t *testing.T) {
+	dir := t.TempDir()
+	socket := filepath.Join(dir, "run", "control.sock")
+	t.Setenv("ROUTELATCH_TRAY_CONTROL_FD", "4")
+	t.Setenv("ROUTELATCH_TRAY_PARENT_PIDFD", "3")
+	t.Setenv("ROUTELATCH_TRAY_EVENT_FD", "5")
+	t.Setenv("ROUTELATCH_PARENT_PID", "4242")
+	t.Setenv("ROUTELATCH_TRAY_SOCKET", socket)
+	t.Setenv("ROUTELATCH_DATA_DIR", dir)
+	t.Setenv("ROUTELATCH_LOG_PATH", filepath.Join(dir, "log", "app.log"))
+
+	opts, err := TrayOptionsFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.ControlFD != 4 || opts.ParentFD != 3 || opts.EventFD != 5 || opts.ExpectedPID != 4242 {
+		t.Fatalf("descriptors = %+v", opts)
+	}
+	if opts.Socket != socket || opts.DataDir != dir {
+		t.Fatalf("socket/data dir = %q / %q", opts.Socket, opts.DataDir)
+	}
+	if opts.LogPath != filepath.Join(dir, "log", "app.log") {
+		t.Fatalf("log path = %q", opts.LogPath)
+	}
+}
+
+func TestTrayOptionsFromEnvRequiresAbsoluteSocket(t *testing.T) {
+	t.Setenv("ROUTELATCH_TRAY_CONTROL_FD", "4")
+	t.Setenv("ROUTELATCH_TRAY_PARENT_PIDFD", "3")
+	for _, socket := range []string{"", "relative/control.sock"} {
+		t.Setenv("ROUTELATCH_TRAY_SOCKET", socket)
+		if _, err := TrayOptionsFromEnv(); err == nil {
+			t.Fatalf("socket %q was accepted", socket)
+		}
+	}
+}
+
+func TestTrayStatusIconDistinguishesStates(t *testing.T) {
+	states := []string{"ready", "starting", "loading", "stopped", "restarting", "unavailable"}
+	seen := make(map[color.RGBA]bool)
+	for _, state := range states {
+		img := trayStatusIcon(state)
+		bounds := img.Bounds()
+		if bounds.Dx() != 22 || bounds.Dy() != 22 {
+			t.Fatalf("%s bounds = %v", state, bounds)
+		}
+		fill := color.RGBAModel.Convert(img.At(11, 11)).(color.RGBA)
+		if state == "ready" || state == "restarting" || state == "unavailable" {
+			// The centre carries the white mark; sample the coloured rim.
+			fill = color.RGBAModel.Convert(img.At(1, 11)).(color.RGBA)
+		}
+		seen[fill] = true
+	}
+	if len(seen) < 5 {
+		t.Fatalf("status icons share too many colours: %v", seen)
 	}
 }

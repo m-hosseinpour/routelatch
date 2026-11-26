@@ -1,0 +1,2324 @@
+method call time=1795662530.902490 sender=:1.6487 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662530.970771 sender=:1.6488 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 9
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662530.972171 sender=:1.6482 -> destination=(null destination) serial=238 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Mode: all proxy"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662530.975215 sender=:1.6482 -> destination=(null destination) serial=253 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "All proxy · 0 usable · 0 open"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662530.975292 sender=:1.6482 -> destination=(null destination) serial=254 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 8
+         array [
+            dict entry(
+               string "toggle-type"
+               variant                   string ""
+            )
+            dict entry(
+               string "toggle-state"
+               variant                   int32 0
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662530.975353 sender=:1.6482 -> destination=(null destination) serial=255 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 9
+         array [
+            dict entry(
+               string "toggle-type"
+               variant                   string "radio"
+            )
+            dict entry(
+               string "toggle-state"
+               variant                   int32 1
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662532.984802 sender=:1.6490 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662533.079754 sender=:1.6491 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 11
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662533.080302 sender=:1.6482 -> destination=(null destination) serial=261 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 78
+   int32 0
+signal time=1795662533.080352 sender=:1.6482 -> destination=(null destination) serial=262 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 65
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Confirm: Stop listening"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662533.080369 sender=:1.6482 -> destination=(null destination) serial=263 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 79
+   int32 0
+signal time=1795662533.080387 sender=:1.6482 -> destination=(null destination) serial=264 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 80
+   int32 0
+signal time=1795662533.080407 sender=:1.6482 -> destination=(null destination) serial=265 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 66
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Cancel"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662533.080425 sender=:1.6482 -> destination=(null destination) serial=266 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 81
+   int32 0
+signal time=1795662533.080446 sender=:1.6482 -> destination=(null destination) serial=267 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Confirmation required"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662533.080483 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40787 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662533.080508 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40788 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662534.095059 sender=:1.6493 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662534.132123 sender=:1.6494 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 65
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662534.132862 sender=:1.6482 -> destination=(null destination) serial=274 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 82
+   int32 0
+signal time=1795662534.132886 sender=:1.6482 -> destination=(null destination) serial=275 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 83
+   int32 0
+signal time=1795662534.132904 sender=:1.6482 -> destination=(null destination) serial=276 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Stopped listening"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135346 sender=:1.6482 -> destination=(null destination) serial=291 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 84
+   int32 0
+signal time=1795662534.135350 sender=:1.6482 -> destination=(null destination) serial=292 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 67
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Restart engine to resume…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135365 sender=:1.6482 -> destination=(null destination) serial=293 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 85
+   int32 0
+signal time=1795662534.135370 sender=:1.6482 -> destination=(null destination) serial=294 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Stopped · listeners closed · restart engine"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135385 sender=:1.6482 -> destination=(null destination) serial=295 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 8
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135398 sender=:1.6482 -> destination=(null destination) serial=296 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 9
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+            dict entry(
+               string "toggle-type"
+               variant                   string ""
+            )
+            dict entry(
+               string "toggle-state"
+               variant                   int32 0
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135420 sender=:1.6482 -> destination=(null destination) serial=297 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 10
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135433 sender=:1.6482 -> destination=(null destination) serial=298 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 11
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135471 sender=:1.6482 -> destination=(null destination) serial=299 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 16
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135488 sender=:1.6482 -> destination=(null destination) serial=300 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 22
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135502 sender=:1.6482 -> destination=(null destination) serial=301 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 31
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135516 sender=:1.6482 -> destination=(null destination) serial=302 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 32
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135544 sender=:1.6482 -> destination=(null destination) serial=303 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 33
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135558 sender=:1.6482 -> destination=(null destination) serial=304 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 42
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135581 sender=:1.6482 -> destination=(null destination) serial=305 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 46
+         array [
+            dict entry(
+               string "label"
+               variant                   string "service is stopped; traffic listeners are closed and leaving this mode needs a …"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135621 sender=:1.6482 -> destination=(null destination) serial=306 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 86
+   int32 48
+signal time=1795662534.135654 sender=:1.6482 -> destination=(null destination) serial=307 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 87
+   int32 48
+signal time=1795662534.135689 sender=:1.6482 -> destination=(null destination) serial=308 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 88
+   int32 48
+signal time=1795662534.135725 sender=:1.6482 -> destination=(null destination) serial=309 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 89
+   int32 48
+signal time=1795662534.135790 sender=:1.6482 -> destination=(null destination) serial=310 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 48
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135826 sender=:1.6482 -> destination=(null destination) serial=311 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 90
+   int32 48
+signal time=1795662534.135863 sender=:1.6482 -> destination=(null destination) serial=312 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 68
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Environment unavailable (stopped)"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662534.135902 sender=:1.6482 -> destination=(null destination) serial=313 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 48
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662534.176192 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40791 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662534.176212 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40792 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 48
+   int32 1
+   array [
+   ]
+method call time=1795662536.147801 sender=:1.6495 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662536.229981 sender=:1.6496 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 67
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662536.230885 sender=:1.6482 -> destination=(null destination) serial=321 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 91
+   int32 0
+signal time=1795662536.230928 sender=:1.6482 -> destination=(null destination) serial=322 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 69
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Confirm: Restart engine"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662536.231015 sender=:1.6482 -> destination=(null destination) serial=323 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 92
+   int32 0
+signal time=1795662536.231058 sender=:1.6482 -> destination=(null destination) serial=324 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 93
+   int32 0
+signal time=1795662536.231107 sender=:1.6482 -> destination=(null destination) serial=325 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 70
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Cancel"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662536.231157 sender=:1.6482 -> destination=(null destination) serial=326 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 94
+   int32 0
+signal time=1795662536.231206 sender=:1.6482 -> destination=(null destination) serial=327 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Confirmation required"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662536.241087 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40795 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662536.241644 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40796 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662537.247415 sender=:1.6497 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662537.291771 sender=:1.6498 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 69
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662537.292382 sender=:1.6482 -> destination=(null destination) serial=334 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 95
+   int32 0
+signal time=1795662537.292403 sender=:1.6482 -> destination=(null destination) serial=335 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 96
+   int32 0
+signal time=1795662537.292426 sender=:1.6482 -> destination=(null destination) serial=336 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 97
+   int32 0
+signal time=1795662537.292495 sender=:1.6482 -> destination=(null destination) serial=337 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 71
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+            dict entry(
+               string "label"
+               variant                   string "Job: restart engine running"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.292526 sender=:1.6482 -> destination=(null destination) serial=338 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 98
+   int32 0
+signal time=1795662537.292536 sender=:1.6482 -> destination=(null destination) serial=339 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 54
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.292561 sender=:1.6482 -> destination=(null destination) serial=340 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 62
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.292584 sender=:1.6482 -> destination=(null destination) serial=341 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 67
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.292607 sender=:1.6482 -> destination=(null destination) serial=342 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Job started: restart engine"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662537.292817 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40797 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662537.292837 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40798 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+signal time=1795662537.294250 sender=:1.6482 -> destination=(null destination) serial=359 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 99
+   int32 0
+signal time=1795662537.294253 sender=:1.6482 -> destination=(null destination) serial=360 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Restarting engine…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294266 sender=:1.6482 -> destination=(null destination) serial=361 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 12
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Proposals"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294283 sender=:1.6482 -> destination=(null destination) serial=362 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 100
+   int32 12
+signal time=1795662537.294288 sender=:1.6482 -> destination=(null destination) serial=363 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 101
+   int32 12
+signal time=1795662537.294300 sender=:1.6482 -> destination=(null destination) serial=364 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 72
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Proposal list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294541 sender=:1.6482 -> destination=(null destination) serial=365 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 102
+   int32 12
+signal time=1795662537.294646 sender=:1.6482 -> destination=(null destination) serial=366 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Show decided"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294708 sender=:1.6482 -> destination=(null destination) serial=367 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 103
+   int32 14
+signal time=1795662537.294734 sender=:1.6482 -> destination=(null destination) serial=368 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294815 sender=:1.6482 -> destination=(null destination) serial=369 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 104
+   int32 14
+signal time=1795662537.294859 sender=:1.6482 -> destination=(null destination) serial=370 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 73
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+            dict entry(
+               string "label"
+               variant                   string "Proposal list refreshing…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294915 sender=:1.6482 -> destination=(null destination) serial=371 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.294983 sender=:1.6482 -> destination=(null destination) serial=372 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 17
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Approved rules"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295045 sender=:1.6482 -> destination=(null destination) serial=373 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 105
+   int32 17
+signal time=1795662537.295105 sender=:1.6482 -> destination=(null destination) serial=374 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 106
+   int32 17
+signal time=1795662537.295184 sender=:1.6482 -> destination=(null destination) serial=375 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 74
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Rules list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295246 sender=:1.6482 -> destination=(null destination) serial=376 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 107
+   int32 17
+signal time=1795662537.295309 sender=:1.6482 -> destination=(null destination) serial=377 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 21
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Pool list refreshing…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295369 sender=:1.6482 -> destination=(null destination) serial=378 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Healthy"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295426 sender=:1.6482 -> destination=(null destination) serial=379 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 108
+   int32 23
+signal time=1795662537.295490 sender=:1.6482 -> destination=(null destination) serial=380 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295549 sender=:1.6482 -> destination=(null destination) serial=381 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 109
+   int32 23
+signal time=1795662537.295613 sender=:1.6482 -> destination=(null destination) serial=382 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 75
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Pool list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295674 sender=:1.6482 -> destination=(null destination) serial=383 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295740 sender=:1.6482 -> destination=(null destination) serial=384 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Untested"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.295805 sender=:1.6482 -> destination=(null destination) serial=385 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 110
+   int32 25
+method call time=1795662537.295896 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40799 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662537.295946 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40800 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 12
+   int32 1
+   array [
+   ]
+method call time=1795662537.296013 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40801 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 12
+   int32 1
+   array [
+   ]
+signal time=1795662537.296328 sender=:1.6482 -> destination=(null destination) serial=386 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296390 sender=:1.6482 -> destination=(null destination) serial=387 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 111
+   int32 25
+signal time=1795662537.296432 sender=:1.6482 -> destination=(null destination) serial=388 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 76
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Pool list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296487 sender=:1.6482 -> destination=(null destination) serial=389 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296558 sender=:1.6482 -> destination=(null destination) serial=390 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Cooling"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296622 sender=:1.6482 -> destination=(null destination) serial=391 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 112
+   int32 27
+signal time=1795662537.296684 sender=:1.6482 -> destination=(null destination) serial=392 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296746 sender=:1.6482 -> destination=(null destination) serial=393 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 113
+   int32 27
+signal time=1795662537.296811 sender=:1.6482 -> destination=(null destination) serial=394 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 77
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Pool list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296872 sender=:1.6482 -> destination=(null destination) serial=395 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296939 sender=:1.6482 -> destination=(null destination) serial=396 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Unsupported/Invalid"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.296998 sender=:1.6482 -> destination=(null destination) serial=397 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 114
+   int32 29
+signal time=1795662537.297061 sender=:1.6482 -> destination=(null destination) serial=398 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297120 sender=:1.6482 -> destination=(null destination) serial=399 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 115
+   int32 29
+signal time=1795662537.297195 sender=:1.6482 -> destination=(null destination) serial=400 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 78
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Pool list refreshing…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297256 sender=:1.6482 -> destination=(null destination) serial=401 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297317 sender=:1.6482 -> destination=(null destination) serial=402 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 37
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297380 sender=:1.6482 -> destination=(null destination) serial=403 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Warnings (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297447 sender=:1.6482 -> destination=(null destination) serial=404 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 116
+   int32 45
+signal time=1795662537.297515 sender=:1.6482 -> destination=(null destination) serial=405 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297579 sender=:1.6482 -> destination=(null destination) serial=406 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 117
+   int32 45
+signal time=1795662537.297646 sender=:1.6482 -> destination=(null destination) serial=407 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 79
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No warnings"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297710 sender=:1.6482 -> destination=(null destination) serial=408 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.297885 sender=:1.6482 -> destination=(null destination) serial=409 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 68
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Environment unavailable (engine unavailable)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.298009 sender=:1.6482 -> destination=(null destination) serial=410 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Restarting engine…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662537.306664 sender=:1.6499 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662537.307398 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40802 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 12
+   int32 1
+   array [
+   ]
+method call time=1795662537.309584 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40804 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 25
+   int32 1
+   array [
+   ]
+method call time=1795662537.309598 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40805 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 45
+   int32 1
+   array [
+   ]
+method call time=1795662537.309611 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40806 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 17
+   int32 1
+   array [
+   ]
+method call time=1795662537.309624 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40807 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 14
+   int32 1
+   array [
+   ]
+method call time=1795662537.309638 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40808 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 27
+   int32 1
+   array [
+   ]
+method call time=1795662537.309652 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40809 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 23
+   int32 1
+   array [
+   ]
+method call time=1795662537.309665 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40810 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 29
+   int32 1
+   array [
+   ]
+signal time=1795662537.407290 sender=:1.6482 -> destination=(null destination) serial=439 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 118
+   int32 0
+signal time=1795662537.407299 sender=:1.6482 -> destination=(null destination) serial=440 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Starting engine…"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.407338 sender=:1.6482 -> destination=(null destination) serial=441 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 37
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.407371 sender=:1.6482 -> destination=(null destination) serial=442 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Engine restart confirmed"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.409947 sender=:1.6482 -> destination=(null destination) serial=457 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Stopped · choose a mode to resume"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.409983 sender=:1.6482 -> destination=(null destination) serial=458 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 8
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410018 sender=:1.6482 -> destination=(null destination) serial=459 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 9
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410052 sender=:1.6482 -> destination=(null destination) serial=460 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 10
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410086 sender=:1.6482 -> destination=(null destination) serial=461 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 12
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Proposals (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410178 sender=:1.6482 -> destination=(null destination) serial=462 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 119
+   int32 12
+signal time=1795662537.410193 sender=:1.6482 -> destination=(null destination) serial=463 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 120
+   int32 12
+signal time=1795662537.410203 sender=:1.6482 -> destination=(null destination) serial=464 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 80
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No pending proposals"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410272 sender=:1.6482 -> destination=(null destination) serial=465 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 121
+   int32 12
+signal time=1795662537.410380 sender=:1.6482 -> destination=(null destination) serial=466 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Show decided (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410472 sender=:1.6482 -> destination=(null destination) serial=467 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 122
+   int32 14
+signal time=1795662537.410575 sender=:1.6482 -> destination=(null destination) serial=468 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.410672 sender=:1.6482 -> destination=(null destination) serial=469 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 123
+   int32 14
+signal time=1795662537.410777 sender=:1.6482 -> destination=(null destination) serial=470 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 81
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No decided or expired proposals"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411175 sender=:1.6482 -> destination=(null destination) serial=471 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 14
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411297 sender=:1.6482 -> destination=(null destination) serial=472 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 17
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Approved rules (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411391 sender=:1.6482 -> destination=(null destination) serial=473 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 124
+   int32 17
+signal time=1795662537.411488 sender=:1.6482 -> destination=(null destination) serial=474 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 125
+   int32 17
+signal time=1795662537.411591 sender=:1.6482 -> destination=(null destination) serial=475 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 82
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No approved rules"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411688 sender=:1.6482 -> destination=(null destination) serial=476 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 126
+   int32 17
+signal time=1795662537.411789 sender=:1.6482 -> destination=(null destination) serial=477 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 21
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No exits; add or refresh from the Terminal menu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411889 sender=:1.6482 -> destination=(null destination) serial=478 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Healthy (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.411983 sender=:1.6482 -> destination=(null destination) serial=479 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 127
+   int32 23
+signal time=1795662537.412085 sender=:1.6482 -> destination=(null destination) serial=480 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412254 sender=:1.6482 -> destination=(null destination) serial=481 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 128
+   int32 23
+signal time=1795662537.412310 sender=:1.6482 -> destination=(null destination) serial=482 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 83
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No healthy exits"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412380 sender=:1.6482 -> destination=(null destination) serial=483 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 23
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412502 sender=:1.6482 -> destination=(null destination) serial=484 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Untested (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412592 sender=:1.6482 -> destination=(null destination) serial=485 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 129
+   int32 25
+signal time=1795662537.412692 sender=:1.6482 -> destination=(null destination) serial=486 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412786 sender=:1.6482 -> destination=(null destination) serial=487 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 130
+   int32 25
+signal time=1795662537.412891 sender=:1.6482 -> destination=(null destination) serial=488 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 84
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+            dict entry(
+               string "label"
+               variant                   string "No untested exits"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.412987 sender=:1.6482 -> destination=(null destination) serial=489 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 25
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.413086 sender=:1.6482 -> destination=(null destination) serial=490 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Cooling (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.413192 sender=:1.6482 -> destination=(null destination) serial=491 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 131
+   int32 27
+signal time=1795662537.413293 sender=:1.6482 -> destination=(null destination) serial=492 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.413389 sender=:1.6482 -> destination=(null destination) serial=493 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 132
+   int32 27
+signal time=1795662537.413712 sender=:1.6482 -> destination=(null destination) serial=494 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 85
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No cooling exits"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.413811 sender=:1.6482 -> destination=(null destination) serial=495 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 27
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.413907 sender=:1.6482 -> destination=(null destination) serial=496 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Unsupported/Invalid (0)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414003 sender=:1.6482 -> destination=(null destination) serial=497 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 133
+   int32 29
+signal time=1795662537.414104 sender=:1.6482 -> destination=(null destination) serial=498 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414217 sender=:1.6482 -> destination=(null destination) serial=499 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 134
+   int32 29
+signal time=1795662537.414319 sender=:1.6482 -> destination=(null destination) serial=500 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 86
+         array [
+            dict entry(
+               string "label"
+               variant                   string "No unsupported/invalid exits"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414408 sender=:1.6482 -> destination=(null destination) serial=501 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 29
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414629 sender=:1.6482 -> destination=(null destination) serial=502 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Warnings (1)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414731 sender=:1.6482 -> destination=(null destination) serial=503 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 135
+   int32 45
+signal time=1795662537.414833 sender=:1.6482 -> destination=(null destination) serial=504 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.414929 sender=:1.6482 -> destination=(null destination) serial=505 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 136
+   int32 45
+signal time=1795662537.415033 sender=:1.6482 -> destination=(null destination) serial=506 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 87
+         array [
+            dict entry(
+               string "label"
+               variant                   string "service is stopped; traffic listeners are closed; choose a mode to resume, no p…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.415133 sender=:1.6482 -> destination=(null destination) serial=507 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 45
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.415248 sender=:1.6482 -> destination=(null destination) serial=508 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 68
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Environment unavailable (stopped)"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.415348 sender=:1.6482 -> destination=(null destination) serial=509 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 54
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.415447 sender=:1.6482 -> destination=(null destination) serial=510 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 62
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662537.452623 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40813 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 25
+   int32 1
+   array [
+   ]
+method call time=1795662537.452657 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40814 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 45
+   int32 1
+   array [
+   ]
+method call time=1795662537.452696 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40815 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 17
+   int32 1
+   array [
+   ]
+method call time=1795662537.452735 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40816 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 14
+   int32 1
+   array [
+   ]
+method call time=1795662537.452807 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40817 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662537.452847 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40818 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 27
+   int32 1
+   array [
+   ]
+method call time=1795662537.452912 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40819 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 23
+   int32 1
+   array [
+   ]
+method call time=1795662537.452946 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40820 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 12
+   int32 1
+   array [
+   ]
+method call time=1795662537.453006 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40821 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 29
+   int32 1
+   array [
+   ]
+method call time=1795662537.549189 sender=:1.6502 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662537.641591 sender=:1.6503 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 10
+   string "clicked"
+   variant       string ""
+   uint32 0
+signal time=1795662537.642995 sender=:1.6482 -> destination=(null destination) serial=525 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 64
+         array [
+            dict entry(
+               string "label"
+               variant                   string "Last action: Mode: all direct"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645095 sender=:1.6482 -> destination=(null destination) serial=540 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 1
+         array [
+            dict entry(
+               string "label"
+               variant                   string "All direct · 0 open"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645112 sender=:1.6482 -> destination=(null destination) serial=541 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 10
+         array [
+            dict entry(
+               string "toggle-type"
+               variant                   string "radio"
+            )
+            dict entry(
+               string "toggle-state"
+               variant                   int32 1
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645136 sender=:1.6482 -> destination=(null destination) serial=542 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 11
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645161 sender=:1.6482 -> destination=(null destination) serial=543 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 16
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645178 sender=:1.6482 -> destination=(null destination) serial=544 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 22
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645284 sender=:1.6482 -> destination=(null destination) serial=545 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 31
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645296 sender=:1.6482 -> destination=(null destination) serial=546 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 32
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645306 sender=:1.6482 -> destination=(null destination) serial=547 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 33
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645316 sender=:1.6482 -> destination=(null destination) serial=548 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 42
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean true
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645325 sender=:1.6482 -> destination=(null destination) serial=549 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 87
+         array [
+            dict entry(
+               string "label"
+               variant                   string "all-direct mode: pool is unused and automatic probing is off"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645334 sender=:1.6482 -> destination=(null destination) serial=550 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 137
+   int32 48
+signal time=1795662537.645337 sender=:1.6482 -> destination=(null destination) serial=551 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 48
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string ""
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645351 sender=:1.6482 -> destination=(null destination) serial=552 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 138
+   int32 48
+signal time=1795662537.645353 sender=:1.6482 -> destination=(null destination) serial=553 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 88
+         array [
+            dict entry(
+               string "label"
+               variant                   string "HTTP_PROXY=http://127.0.0.1:49583"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645366 sender=:1.6482 -> destination=(null destination) serial=554 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 48
+         array [
+            dict entry(
+               string "children-display"
+               variant                   string "submenu"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645376 sender=:1.6482 -> destination=(null destination) serial=555 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 139
+   int32 48
+signal time=1795662537.645378 sender=:1.6482 -> destination=(null destination) serial=556 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 89
+         array [
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+            dict entry(
+               string "label"
+               variant                   string "HTTPS_PROXY=http://127.0.0.1:49583"
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645391 sender=:1.6482 -> destination=(null destination) serial=557 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 140
+   int32 48
+signal time=1795662537.645393 sender=:1.6482 -> destination=(null destination) serial=558 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 90
+         array [
+            dict entry(
+               string "label"
+               variant                   string "ALL_PROXY=http://127.0.0.1:49583"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+signal time=1795662537.645406 sender=:1.6482 -> destination=(null destination) serial=559 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=LayoutUpdated
+   uint32 141
+   int32 48
+signal time=1795662537.645408 sender=:1.6482 -> destination=(null destination) serial=560 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=ItemsPropertiesUpdated
+   array [
+      struct {
+         int32 91
+         array [
+            dict entry(
+               string "label"
+               variant                   string "NO_PROXY=localhost,127.0.0.1,.localhost,127.0.0.0/8,::1,169.254.0.0/16,fe80::/1…"
+            )
+            dict entry(
+               string "enabled"
+               variant                   boolean false
+            )
+         ]
+      }
+   ]
+   array [
+   ]
+method call time=1795662537.670383 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=40825 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 48
+   int32 1
+   array [
+   ]
+method call time=1795662539.655276 sender=:1.6504 -> destination=org.freedesktop.StatusNotifierItem-1059861-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662539.763335 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40855 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662539.802075 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40856 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 25
+   int32 1
+   array [
+   ]
+method call time=1795662539.802089 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40857 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 45
+   int32 1
+   array [
+   ]
+method call time=1795662539.802092 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40858 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 61
+   int32 1
+   array [
+   ]
+method call time=1795662539.802094 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40859 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 17
+   int32 1
+   array [
+   ]
+method call time=1795662539.802097 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40860 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 2
+   int32 1
+   array [
+   ]
+method call time=1795662539.802100 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40861 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 14
+   int32 1
+   array [
+   ]
+method call time=1795662539.802102 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40862 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 43
+   int32 1
+   array [
+   ]
+method call time=1795662539.802105 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40863 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 7
+   int32 1
+   array [
+   ]
+method call time=1795662539.802108 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40864 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 1
+   array [
+   ]
+method call time=1795662539.802110 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40865 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 35
+   int32 1
+   array [
+   ]
+method call time=1795662539.802122 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40866 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 27
+   int32 1
+   array [
+   ]
+method call time=1795662539.802130 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40867 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 23
+   int32 1
+   array [
+   ]
+method call time=1795662539.802137 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40868 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 12
+   int32 1
+   array [
+   ]
+method call time=1795662539.802162 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40869 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 48
+   int32 1
+   array [
+   ]
+method call time=1795662539.802173 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40870 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 41
+   int32 1
+   array [
+   ]
+method call time=1795662539.802319 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40871 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 20
+   int32 1
+   array [
+   ]
+method call time=1795662539.802328 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40872 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 29
+   int32 1
+   array [
+   ]
+method call time=1795662539.802331 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40873 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 53
+   int32 1
+   array [
+   ]
+method call time=1795662539.802334 sender=:1.24 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=40874 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 56
+   int32 1
+   array [
+   ]
+method call time=1795662541.756247 sender=:1.6511 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662541.821352 sender=:1.6512 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=GetLayout
+   int32 0
+   int32 10
+   array [
+   ]
+method call time=1795662541.862276 sender=:1.6513 -> destination=org.freedesktop.StatusNotifierItem-1060230-1 serial=3 path=/StatusNotifierMenu; interface=com.canonical.dbusmenu; member=Event
+   int32 3
+   string "clicked"
+   variant       string ""
+   uint32 0

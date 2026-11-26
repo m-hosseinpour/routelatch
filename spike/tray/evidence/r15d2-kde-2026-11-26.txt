@@ -1,0 +1,89 @@
+# R15-D2 — real deedles tray on KDE (gated evidence)
+
+> **Dated evidence snapshot (2026-11-26).** This file records the authorized
+> R15-D2 live run of the product tray child. It is not a general status claim.
+> R15-A evidence (`menu-*`, `FINDINGS.md`) was not modified.
+
+**Status: gated run passed.** A real `routelatch run` supervisor on an isolated
+data-dir registered one temporary StatusNotifierItem; `GetLayout` and `Event`
+drove mode, stop, process restart and Quit; radio state followed the mode;
+restart only completed after the `ready` event; a killed tray generation was
+restarted and re-registered; every process and item was removed at the end.
+No desktop or host setting was read as a target or written, and no real desktop
+proxy set/restore was invoked.
+
+## Environment
+
+| Item | Observed |
+|---|---|
+| Date (UTC) | 2026-11-26, run 03:08:43Z → 03:09:01Z |
+| Desktop | same X11 KDE session as R15-A (Plasma 6.6.7 / kwin 6.6.4 per `MENU-FINDINGS.md`); `DISPLAY=:0` (1920x1200), session bus `unix:path=/run/user/1000/bus` |
+| Binary | product `cmd/routelatch`, built with `.toolchain` Go 1.27.4, `GOTOOLCHAIN=local`, `CGO_ENABLED=0`, `-trimpath` |
+| Data dir | `/tmp/opencode/rl-r15d2-final-20261126T063843Z` (mode 0700), isolated from the installed instance |
+| Listeners | `127.0.0.1:49583` (HTTP), `127.0.0.1:43001` (SOCKS); free ports chosen immediately before the run |
+| Tray item | `org.freedesktop.StatusNotifierItem-1059861-1` (pid 1059861), unique sender `:1.6482` |
+| Restarted tray | `org.freedesktop.StatusNotifierItem-1060230-1` (pid 1060230), after the first item was killed |
+| Product items | the installed RouteLatch items (`…-4955-1`, `…-4620-1`) coexisted untouched; no event targeted them |
+
+## Exercise
+
+All calls used `gdbus` against `/StatusNotifierMenu` (`com.canonical.dbusmenu`),
+with item ids discovered from the labels in the preceding layout. Raw layouts
+are linked below; the filtered D-Bus monitor is
+[`r15d2-kde-monitor-2026-11-26.txt`](r15d2-kde-monitor-2026-11-26.txt).
+
+| Stage | Action | Observed |
+|---|---|---|
+| initial | `GetLayout(0,10)` | header `Targeted · 0 usable · 0 open` (disabled); Mode radios: Targeted `toggle-type=radio toggle-state=1`; status header is the tooltip source; `Initial layout` |
+| mode | `Event(9,"clicked")` on `All proxy` | status became `All proxy · 0 usable · 0 open`; service `mode=all-proxy`; layout now `All proxy radio/1`, `Targeted toggle-type='' state=0` (no stale checked item) |
+| stop | `Event(11,"clicked")` on `Stop listening…` | one pending root row `Confirm: Stop listening`; `Event(65,"clicked")` confirmed |
+| stopped | `GetLayout` after confirm | header `Stopped · listeners closed · restart engine`; every mode item and `Stop listening…` `enabled=false`; root `Restart engine to resume…` enabled; `status` = `ready=true, listeners_open=false, mode=stopped, resume_requires_restart=true` |
+| restart | `Event(67,"clicked")` on `Restart engine to resume…`, then `Event(69)` on `Confirm: Restart engine` | immediate `GetLayout` = `Restarting engine…`; the next poll = `Stopped · choose a mode to resume`; mode items `enabled=true` again |
+| restart evidence | supervisor log | `supervisor.restart_requested source=tray`, new `engine_started … generation=2`, `engine_restarted … generation=2 token=1` at 03:08:57.402Z; the menu only left `Restarting engine…` after the `ready` event (no timeout/unconfirmed message) |
+| resume | `Event(10,"clicked")` on `All direct` | header `All direct · 0 open`; `All direct radio/1`; `status mode=all-direct listeners_open=true` |
+| tray generation | `kill -9 1059861` | `tray_exit code=-1`; new `tray_started pid=1060230`; `tray ready pid=1060230`; `tray_restarted pid=1060230`; new item registered; `GetLayout` still `All direct · 0 open`; app `status` still ready/all-direct; no separate engine restart |
+| quit | `Event(3,"clicked")` on `Quit RouteLatch` | `supervisor.quit requested=tray` at 03:09:01.862Z; supervisor, engine and tray exited; watcher list no longer contains either R15-D2 item |
+
+Final-run render log contains no `render failed`/`render recovered` lines. An
+earlier development run exposed a nested-page replace bug (add stored a child
+list under the bare parent key while remove resolved it through the parent's
+identity); it was fixed and a regression test added before this run.
+
+## Artifacts
+
+- [`r15d2-kde-layout-initial-2026-11-26.txt`](r15d2-kde-layout-initial-2026-11-26.txt)
+- [`r15d2-kde-layout-mode-allproxy-2026-11-26.txt`](r15d2-kde-layout-mode-allproxy-2026-11-26.txt)
+- [`r15d2-kde-layout-stop-pending-2026-11-26.txt`](r15d2-kde-layout-stop-pending-2026-11-26.txt)
+- [`r15d2-kde-layout-stopped-2026-11-26.txt`](r15d2-kde-layout-stopped-2026-11-26.txt)
+- [`r15d2-kde-layout-restart-pending-2026-11-26.txt`](r15d2-kde-layout-restart-pending-2026-11-26.txt)
+- [`r15d2-kde-layout-restart-1-2026-11-26.txt`](r15d2-kde-layout-restart-1-2026-11-26.txt) (`Restarting engine…`)
+- [`r15d2-kde-layout-restart-2-2026-11-26.txt`](r15d2-kde-layout-restart-2-2026-11-26.txt) (`Stopped · choose a mode to resume`)
+- [`r15d2-kde-layout-all-direct-2026-11-26.txt`](r15d2-kde-layout-all-direct-2026-11-26.txt)
+- [`r15d2-kde-layout-after-tray-restart-2026-11-26.txt`](r15d2-kde-layout-after-tray-restart-2026-11-26.txt)
+- [`r15d2-kde-layout-final-quit-2026-11-26.txt`](r15d2-kde-layout-final-quit-2026-11-26.txt)
+- [`r15d2-kde-monitor-2026-11-26.txt`](r15d2-kde-monitor-2026-11-26.txt)
+- supervisor log excerpt: [`r15d2-kde-supervisor-2026-11-26.txt`](r15d2-kde-supervisor-2026-11-26.txt)
+
+## Limits
+
+- **No human visual inspection and no screenshot.** The menu was driven through
+  D-Bus rather than opened with a pointer, so icon artwork, tooltip rendering
+  and radio paint are confirmed at the D-Bus/property level only. (R15-A
+  already captured Plasma menu screenshots for the same host.)
+- **Wayland and GNOME were not tested**; this host is X11 Plasma.
+- **Desktop proxy set/restore was not exercised** and no desktop setting was
+  touched. Quit was the plain `Quit RouteLatch` row; restore/keep rows are
+  controller-mapped but not part of this gated run.
+- Only the core surface was exercised (header, Mode, stop, restart, Advanced
+  presence, Last action label, Quit). Pool/rules/proposals/desktop/settings
+  actions remain R15-E..G work; no such action was clicked.
+- The temporary supervisor/engine/tray processes and tray items were removed at
+  the end; the isolated data dir under `/tmp/opencode` was left for inspection.
+- **Probe side effect:** the version check for this report ran
+  `plasmashell --version` / `kwin_x11 --version` without `DISPLAY`; each Qt
+  probe aborted (SIGABRT), produced a coredump under `/var/crash`, and a
+  DrKonqi handler appeared briefly. They were not product or tray processes;
+  the running session (`kwin_x11` PID 4349, `plasmashell` PID 4374, both from
+  2026-11-25) stayed up, and the DrKonqi process/tray item was closed. The
+  Plasma 6.6.7 / kwin 6.6.4 versions are therefore taken from the R15-A
+  snapshot, not re-measured here.

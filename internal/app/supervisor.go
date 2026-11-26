@@ -796,6 +796,7 @@ func (s *supervisor) spawnTray() error {
 		"ROUTELATCH_PARENT_PID="+strconv.Itoa(os.Getpid()),
 		"ROUTELATCH_LOG_PATH="+s.logPath,
 		"ROUTELATCH_DATA_DIR="+s.paths.DataDir,
+		"ROUTELATCH_TRAY_SOCKET="+s.paths.Socket,
 	)
 	if err := cmd.Start(); err != nil {
 		_ = controlR.Close()

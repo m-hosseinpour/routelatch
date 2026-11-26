@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,18 +8,18 @@ import (
 	"image/color"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"deedles.dev/tray"
 	"github.com/godbus/dbus/v5"
 	"golang.org/x/sys/unix"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
+	"routelatch/internal/trayui"
 )
 
 // WatcherNames lists the StatusNotifierWatcher bus names in probe order. KDE
@@ -200,18 +199,20 @@ func contains(haystack, needle string) bool {
 	return false
 }
 
-// desktopProxyRestoreHint is shown on demand from the tray menu. The tray never
-// changes desktop proxy settings itself; the user runs the documented command.
-const desktopProxyRestoreHint = "Run `routelatch desktop proxy restore` if the desktop proxy was enabled."
-
 // Notify sends one destination-free desktop notification.
 func Notify(conn *dbus.Conn, summary, body string) error {
+	return NotifyContext(context.Background(), conn, summary, body)
+}
+
+// NotifyContext is Notify with a caller-chosen bound so the tray's
+// notification worker can never wait indefinitely on a rate-limited host.
+func NotifyContext(ctx context.Context, conn *dbus.Conn, summary, body string) error {
 	if conn == nil {
 		return errors.New("no session bus")
 	}
 	var id uint32
-	return conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications").Call(
-		"org.freedesktop.Notifications.Notify", 0,
+	return conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications").CallWithContext(
+		ctx, "org.freedesktop.Notifications.Notify", 0,
 		"RouteLatch", uint32(0), "", summary, body,
 		[]string{}, map[string]dbus.Variant{"desktop-entry": dbus.MakeVariant("routelatch")}, int32(-1),
 	).Store(&id)
@@ -254,38 +255,38 @@ func TrayRegisteredContext(ctx context.Context, pid int) error {
 // TrayOptions configures the standalone tray child.
 type TrayOptions struct {
 	ControlFD int
-	// EventFD is the inherited supervisor->tray lifecycle pipe. The R15-D2
-	// tray adapter reads `restarting`/`ready` from it; the current fixed menu
-	// does not consume events yet, but the descriptor is part of the child
-	// contract so an old/new supervisor cannot silently change it.
+	// EventFD is the inherited supervisor->tray lifecycle pipe. The tray
+	// adapter reads `restarting`/`ready` from it; readiness is only published
+	// to the controller after both events arrive in order.
 	EventFD     int
 	ParentFD    int
 	ExpectedPID int
-	LogPath     string
-	ReadyWait   time.Duration
+	// Socket is the canonical management socket from store.Paths. The tray is
+	// a thin client on it and never reads configuration or state directly.
+	Socket  string
+	DataDir string
+	LogPath string
+	// ReadyWait bounds the registration check before `ready` is sent.
+	ReadyWait time.Duration
 }
 
-// RunTray is the tray child: one StatusNotifierItem, one godbus notification
-// path and a control pipe to the supervisor. It never retries tray.New on a
-// missing watcher; the supervisor restarts the process instead.
+// RunTray is the tray child: one StatusNotifierItem driven by the trayui
+// controller, a control pipe to the supervisor and the supervisor lifecycle
+// event pipe. It never retries tray.New on a missing watcher; the supervisor
+// restarts the process instead.
 func RunTray(opts TrayOptions) error {
 	if opts.ReadyWait <= 0 {
 		opts.ReadyWait = 3 * time.Second
 	}
-	controlFile := os.NewFile(uintptr(opts.ControlFD), "tray-control")
-	if controlFile == nil {
-		return internalFailure("app.tray", "tray control descriptor is invalid", nil)
+	lifecycle, err := newTrayLifecycle(opts.ControlFD, opts.EventFD)
+	if err != nil {
+		return internalFailure("app.tray", "the tray descriptors are invalid", err)
 	}
-	defer controlFile.Close()
-	writer := bufio.NewWriter(controlFile)
-	send := func(line string) {
-		_, _ = writer.WriteString(line + "\n")
-		_ = writer.Flush()
-	}
+	defer lifecycle.Close()
 
 	parentGone, err := watchParent(opts.ParentFD, opts.ExpectedPID)
 	if err != nil {
-		send("error parent_watch_failed")
+		_ = lifecycle.Send("error parent_watch_failed")
 		return internalFailure("app.tray", "cannot watch the supervisor pidfd", err)
 	}
 	select {
@@ -296,79 +297,75 @@ func RunTray(opts TrayOptions) error {
 
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
-		send("error tray_unavailable")
+		_ = lifecycle.Send("error tray_unavailable")
 		return unsupportedTray(err)
 	}
 	defer conn.Close()
 	watcher, err := findWatcher(context.Background(), conn)
 	if err != nil || watcher == "" {
-		send("error tray_unavailable")
+		_ = lifecycle.Send("error tray_unavailable")
 		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierWatcher")))
 	}
 	host, err := hostRegistered(context.Background(), conn, watcher)
 	if err != nil || !host {
-		send("error tray_unavailable")
+		_ = lifecycle.Send("error tray_unavailable")
 		return unsupportedTray(firstErr(err, errors.New("no StatusNotifierHost")))
 	}
 
-	item, err := tray.New(
-		tray.ItemID("routelatch"),
-		tray.ItemTitle("RouteLatch"),
-		tray.ItemIconPixmap(trayIcon()),
-		tray.ItemToolTip("", nil, "RouteLatch", "local proxy with an approved-destination list"),
-		tray.ItemIsMenu(true),
-	)
+	notifier := newTrayNotifier(func(ctx context.Context, title, body string) error {
+		return NotifyContext(ctx, conn, title, body)
+	})
+	defer notifier.Close()
+
+	ctl, err := trayui.New(trayui.Options{
+		Caller:        &control.Client{Path: opts.Socket},
+		Lifecycle:     lifecycle,
+		Notifier:      notifier,
+		Autostart:     trayAutostartManager(),
+		Paths:         trayui.Paths{Socket: opts.Socket, Log: opts.LogPath},
+		CustomDataDir: opts.DataDir != "",
+	})
 	if err != nil {
-		send("error tray_unavailable")
-		return unsupportedTray(err)
+		_ = lifecycle.Send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot create the tray controller", err)
 	}
-	var closeOnce sync.Once
-	closeItem := func() {
-		closeOnce.Do(func() { _ = item.Close() })
-	}
-	defer closeItem()
+	defer ctl.Close()
 
-	quit := make(chan struct{}, 1)
-	if _, err := item.Menu().AddChild(
-		tray.MenuItemLabel("Quit RouteLatch"),
-		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
-			select {
-			case quit <- struct{}{}:
-			default:
-			}
+	// The backend closure resolves a D-Bus click through the runner's stable
+	// key map; Runner.Click performs Binder.Lookup and enqueues the action
+	// without waiting for management work in the D-Bus handler.
+	var runner *trayui.Runner
+	backend := newTrayBackend(func(key string) error {
+		if runner == nil {
 			return nil
-		})),
-	); err != nil {
-		send("error tray_menu_failed")
-		return internalFailure("app.tray", "cannot add the tray Quit entry", err)
+		}
+		if err := runner.Click(key); err != nil {
+			trayLogf("tray: click rejected: %v", err)
+		}
+		return nil
+	})
+	runner, err = trayui.NewRunner(ctl, trayui.RunnerOptions{Backend: backend, Logf: trayLogf})
+	if err != nil {
+		_ = lifecycle.Send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot create the tray runner", err)
 	}
-	if _, err := item.Menu().AddChild(
-		tray.MenuItemLabel("Show log path"),
-		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
-			_ = Notify(conn, "RouteLatch log", control.SanitizeTerminal(opts.LogPath))
-			return nil
-		})),
-	); err != nil {
-		send("error tray_menu_failed")
-		return internalFailure("app.tray", "cannot add the tray log entry", err)
+	if err := runner.Start(context.Background()); err != nil {
+		if errors.Is(err, errTrayUnavailable) {
+			_ = lifecycle.Send("error tray_unavailable")
+			return unsupportedTray(err)
+		}
+		_ = lifecycle.Send("error tray_menu_failed")
+		return internalFailure("app.tray", "cannot render the tray menu", err)
 	}
-	if _, err := item.Menu().AddChild(
-		tray.MenuItemLabel("Desktop proxy restore hint"),
-		tray.MenuItemHandler(tray.ClickedHandler(func(any, uint32) error {
-			_ = Notify(conn, "Desktop proxy restore", desktopProxyRestoreHint)
-			return nil
-		})),
-	); err != nil {
-		send("error tray_menu_failed")
-		return internalFailure("app.tray", "cannot add the tray desktop-proxy entry", err)
-	}
+	defer runner.Stop()
 
-	if err := waitRegistered(context.Background(), conn, watcher, os.Getpid(), opts.ReadyWait); err != nil {
-		send("error tray_registration_failed")
+	register := func() error {
+		return waitRegistered(context.Background(), conn, watcher, os.Getpid(), opts.ReadyWait)
+	}
+	if err := announceTrayReady(register, lifecycle.Send); err != nil {
 		return internalFailure("app.tray", "the tray item did not register", err)
 	}
-	send("ready")
-	_ = Notify(conn, "RouteLatch is running", "Tray icon is ready. Log: "+control.SanitizeTerminal(opts.LogPath))
+	trayLogf("tray ready pid=%d", os.Getpid())
 
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
@@ -379,33 +376,46 @@ func RunTray(opts TrayOptions) error {
 	for {
 		select {
 		case <-parentGone:
-			closeItem()
-			return nil
-		case <-quit:
-			send("quit")
-			closeItem()
 			return nil
 		case <-sigCh:
-			closeItem()
 			return nil
 		case <-monitor.C:
 			watcher, err := findWatcher(context.Background(), conn)
 			if err != nil || watcher == "" {
-				send("lost")
+				_ = lifecycle.Send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierWatcher disappeared"}
 			}
 			host, err := hostRegistered(context.Background(), conn, watcher)
 			if err != nil || !host {
-				send("lost")
+				_ = lifecycle.Send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the StatusNotifierHost disappeared"}
 			}
 			items, err := registeredItems(context.Background(), conn, watcher)
 			if err != nil || !itemRegistered(items, os.Getpid()) {
-				send("lost")
+				_ = lifecycle.Send("lost")
 				return &Failure{Exit: 3, Kind: contract.Internal, Op: "app.tray", Message: "the tray item is no longer registered"}
 			}
 		}
 	}
+}
+
+// announceTrayReady publishes `ready` only after registration succeeded. A
+// registration failure reports its documented reason and never claims
+// readiness; a failed ready write is returned so the supervisor sees a dead
+// child instead of a silently unready one.
+func announceTrayReady(register func() error, send func(string) error) error {
+	if err := register(); err != nil {
+		_ = send("error tray_registration_failed")
+		return err
+	}
+	return send("ready")
+}
+
+// trayLogf writes one sanitized operational line to the supervisor log. Menu
+// labels and targets are never passed here (docs/contracts.md §7.3).
+func trayLogf(format string, args ...any) {
+	msg := control.SanitizeTerminal(fmt.Sprintf(format, args...))
+	fmt.Fprintf(os.Stderr, "%s app.tray: %s\n", time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), msg)
 }
 
 // watchParent returns a channel that closes when the supervisor pidfd becomes
@@ -453,19 +463,69 @@ func firstErr(a, b error) error {
 	return b
 }
 
-func trayIcon() image.Image {
+// trayStatusIcon draws the 22px status icon for one semantic tray state. The
+// colour and inner mark both change so the state is distinguishable without a
+// tooltip; the tray never loads theme icons that may not exist.
+func trayStatusIcon(state string) image.Image {
+	type iconStyle struct {
+		fill color.RGBA
+	}
+	styles := map[string]iconStyle{
+		"ready":       {color.RGBA{R: 0x2f, G: 0x81, B: 0xf7, A: 0xff}},
+		"starting":    {color.RGBA{R: 0x8b, G: 0x94, B: 0x9e, A: 0xff}},
+		"loading":     {color.RGBA{R: 0x8b, G: 0x94, B: 0x9e, A: 0xff}},
+		"stopped":     {color.RGBA{R: 0xd2, G: 0x99, B: 0x22, A: 0xff}},
+		"restarting":  {color.RGBA{R: 0xa3, G: 0x71, B: 0xf7, A: 0xff}},
+		"unavailable": {color.RGBA{R: 0xf8, G: 0x51, B: 0x49, A: 0xff}},
+	}
+	style, ok := styles[state]
+	if !ok {
+		style = styles["loading"]
+	}
 	img := image.NewRGBA(image.Rect(0, 0, 22, 22))
+	white := color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 	for y := 0; y < 22; y++ {
 		for x := 0; x < 22; x++ {
 			dx, dy := x-11, y-11
 			if dx*dx+dy*dy <= 100 {
-				img.Set(x, y, color.RGBA{R: 0x2f, G: 0x81, B: 0xf7, A: 0xff})
+				img.Set(x, y, style.fill)
 			}
 		}
 	}
-	for y := 8; y < 14; y++ {
-		for x := 7; x < 15; x++ {
-			img.Set(x, y, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff})
+	switch state {
+	case "ready":
+		for y := 7; y < 15; y++ {
+			for x := 7; x < 15; x++ {
+				dx, dy := x-11, y-11
+				if dx*dx+dy*dy <= 12 {
+					img.Set(x, y, white)
+				}
+			}
+		}
+	case "starting", "loading":
+		for y := 9; y < 13; y++ {
+			for x := 7; x < 15; x++ {
+				img.Set(x, y, white)
+			}
+		}
+	case "stopped":
+		for y := 12; y < 14; y++ {
+			for x := 7; x < 15; x++ {
+				img.Set(x, y, white)
+			}
+		}
+	case "restarting":
+		for y := 7; y < 15; y++ {
+			for x := 9; x < 13; x++ {
+				img.Set(x, y, white)
+			}
+		}
+		img.Set(7, 9, white)
+		img.Set(14, 9, white)
+	case "unavailable":
+		for i := 0; i < 8; i++ {
+			img.Set(7+i, 7+i, white)
+			img.Set(14-i, 7+i, white)
 		}
 	}
 	return img
@@ -489,8 +549,13 @@ func TrayOptionsFromEnv() (TrayOptions, error) {
 			return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_EVENT_FD")
 		}
 	}
+	socket := os.Getenv("ROUTELATCH_TRAY_SOCKET")
+	if socket == "" || !filepath.IsAbs(socket) {
+		return TrayOptions{}, fmt.Errorf("invalid ROUTELATCH_TRAY_SOCKET")
+	}
 	return TrayOptions{
 		ControlFD: control, EventFD: event, ParentFD: parent, ExpectedPID: expected,
+		Socket: socket, DataDir: os.Getenv("ROUTELATCH_DATA_DIR"),
 		LogPath: os.Getenv("ROUTELATCH_LOG_PATH"),
 	}, nil
 }

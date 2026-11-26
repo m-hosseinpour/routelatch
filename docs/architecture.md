@@ -150,9 +150,9 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
 > R13 در درخت کامل شده است (R13-F verdict **Ready**) و `v1.0.0` منتشر شده
 > است؛ بسته‌های `v0.1.3` و پیش از آن همان unit و `run` foreground را دارند.
 > README/INSTALL/SERVICE در R13-E به‌روز شدند. R15 (D28) در همین بخش طراحی
-> شده است؛ R15-A..C (اسپایک منو، controller/model و restart سطح process) پیاده
-> شده‌اند، ولی اتصال واقعی tray (R15-D2) و دامنه‌های بعدی هنوز باقی‌اند و رفتار
-> tray کاربر همان سه آیتم فعلی است.
+> شده است؛ R15-A..C (اسپایک منو، controller/model و restart سطح process) و
+> اتصال واقعی tray در R15-D2 پیاده شده‌اند و منوی controller جای سه آیتم ثابت را
+> گرفته است؛ دامنه‌های بعدی (R15-E..H) هنوز باقی‌اند.
 
 - Linux `amd64`+`arm64`؛ root/TUN لازم نیست. `routelatch run` پیش‌فرض اپ است: از
   ترمینال detach می‌شود، tray (و بعداً GUI) نشان می‌دهد و engine را به‌عنوان child
@@ -207,7 +207,7 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   `run` پیش‌فرض در این محیط‌ها با پیام روشن fail می‌شود و `--headless` پیشنهاد
   می‌دهد؛ fallback بی‌صدا وجود ندارد. KDE مسیر آزمون اولیه است؛ سایر DEها تا آزمون
   واقعی ادعا نمی‌شوند.
-- **سطح کنترل tray (D28؛ controller/model در R15-B پیاده‌شده، اتصال واقعی tray در R15-D2).** tray child یک کلاینت نازک
+- **سطح کنترل tray (D28؛ controller/model در R15-B و اتصال واقعی deedles در R15-D2 پیاده شدند).** tray child یک کلاینت نازک
   روی همان management socket است، نه یک لایهٔ منطق دوم:
   status/mode/rules/pool/proposals/desktop/backup/doctor
   را با همان `control.Request`های موجود می‌خواند و تغییر می‌دهد. فقط `quit` و
