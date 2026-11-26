@@ -354,11 +354,13 @@ func (c *Controller) poolMenuLocked(engine EngineState) Node {
 	children = append(children,
 		c.actionItem("pool.refresh", "Refresh all sources", ActionPoolRefresh, Target{}),
 		c.actionItem("pool.rerank", "Re-rank now", ActionPoolRerank, Target{}),
-		c.actionItem("pool.test.first20", "Test first 20 usable", ActionPoolTestFirst20, Target{}),
 	)
 	if c.snap.Status.SelectedExit != "" {
 		children = append(children, c.actionItem("pool.test.selected", "Test selected exit", ActionPoolTest, Target{ExitID: c.snap.Status.SelectedExit}))
 	}
+	// The label carries the service cap so the menu never claims to test more
+	// than pool.test accepts (docs/contracts.md §7.3, §4.6).
+	children = append(children, c.actionItem("pool.test.first20", fmt.Sprintf("Test first %d usable", contract.MaxPoolTestExits), ActionPoolTestFirst20, Target{}))
 	children = append(children, c.actionItem("pool.import.terminal", "Add/import… (Terminal menu)", ActionTerminalMenu, Target{}))
 	return submenu("pool", "Pool", children...)
 }
