@@ -240,18 +240,13 @@ func TestSettingsSurfaceOutcomeD21(t *testing.T) {
 		view := s.ctl.View()
 		texts = append(texts, view.LastAction)
 	}
-	runJob := func(action Action, confirm bool) {
+	runJob := func(action Action) {
 		t.Helper()
 		res, err := s.ctl.Trigger(ctx, action, Target{})
 		if err != nil {
 			t.Fatalf("%s: %v", action, err)
 		}
 		texts = append(texts, res.Message)
-		if confirm {
-			if _, err := s.ctl.Confirm(ctx); err != nil {
-				t.Fatalf("%s confirm: %v", action, err)
-			}
-		}
 		waitForJobEnd(t, s)
 		record()
 	}
@@ -264,15 +259,15 @@ func TestSettingsSurfaceOutcomeD21(t *testing.T) {
 		Environment: "KDE", Supported: true, Applied: true,
 		UserModified: []string{"http_proxy"},
 	})
-	runJob(ActionDesktopSet, true)
+	runJob(ActionDesktopSet)
 	s.caller.setDesktop(control.DesktopData{
 		Environment: "KDE", Supported: true, Applied: true,
 		UserModified: []string{"http_proxy", canary},
 	})
-	runJob(ActionDesktopRestore, true)
-	runJob(ActionBackup, false)
-	runJob(ActionDoctor, false)
-	runJob(ActionAutostartToggle, false)
+	runJob(ActionDesktopRestore)
+	runJob(ActionBackup)
+	runJob(ActionDoctor)
+	runJob(ActionAutostartToggle)
 	if _, err := s.ctl.Trigger(ctx, ActionShowLogPath, Target{}); err != nil {
 		t.Fatal(err)
 	}

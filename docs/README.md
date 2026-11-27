@@ -12,7 +12,7 @@ R1/R2/R4 اثبات شده‌اند. A01 در ۲۰۲۶-۱۱-۲۱ با شهادت
 **سطح کنترل tray (D28، R15):** منوی tray در همین revision یک کلاینت نازک روی
 همان management socket است (نه منطق مسیریابی دوم) و status، mode/stop/restart،
 proposals، rules، pool، desktop proxy، diagnostics، backup، autostart، Terminal
-menu و Quit را پوشش می‌دهد؛ تأیید دو مرحله‌ای، صفحه‌بندی، حالت
+menu و Quit را پوشش می‌دهد؛ اجرای تک‌کلیکی (D33)، صفحه‌بندی، حالت
 stopped/unavailable و sanitize در `contracts.md §۷.۳` قرارداد شده‌اند. شاهد
 پذیرش نهایی R15-H (GNU/Linux Plasma 6/X11، data-dir ایزوله) در
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ Wayland/GNOME،

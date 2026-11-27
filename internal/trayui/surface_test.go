@@ -8,7 +8,7 @@ import (
 )
 
 // TestRenderedActionSurfaceIsComplete walks every rendered action in the
-// representative engine/confirmation states. It is the G2 cross-check that the
+// representative engine states. It is the G2 cross-check that the
 // visible surface and the click path cannot drift: each action has a kind, a
 // management request exactly when it is a management action, and an enabled
 // item is accepted by the same availability rule a click uses.
@@ -47,16 +47,13 @@ func TestRenderedActionSurfaceIsComplete(t *testing.T) {
 			}
 			return s.ctl, func() {}
 		},
-		"pending during a job": func(t *testing.T) (*Controller, func()) {
+		"job running": func(t *testing.T) (*Controller, func()) {
 			s := newSetup(t, newFixture(), nil)
 			entered, release := s.caller.gateOn(control.OpBackup)
 			if _, err := s.ctl.Trigger(context.Background(), ActionBackup, Target{}); err != nil {
 				t.Fatal(err)
 			}
 			<-entered
-			if _, err := s.ctl.Trigger(context.Background(), ActionQuit, Target{}); err != nil {
-				t.Fatal(err)
-			}
 			return s.ctl, func() {
 				release()
 				waitFor(t, "job after surface scan", func() bool { return s.ctl.View().Job == nil })

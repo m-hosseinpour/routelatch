@@ -210,7 +210,7 @@ R15 (سطح کنترل tray) یک capability پس از v1 است که در بخ�
 | A08/A12 | T1/T3، DNS/HTTP/stream/UDP boundaries در T7 |
 | A09 | T2–T6، private management، perms، terminal/log/secret checks در T7 |
 | A10/A11 | T5/T6، CLI/menu/launcher/desktop recovery در T7 |
-| A16 | R15، سطح کنترل tray: نگاشت actionها، confirmation، pagination، حالت unavailable/stopped، sanitize/D21، restart و Quit/restore؛ check نهایی در R15-H |
+| A16 | R15، سطح کنترل tray: نگاشت actionها، اجرای تک‌کلیکی (D33)، pagination، حالت unavailable/stopped، sanitize/D21، restart و Quit/restore؛ check نهایی در R15-H |
 | A17 | R16، پوشش TUN: helper/setup، dual-stack، TCP→router/pool، sniffing، DNS مستقیم/UDP بلاک، fail-closed، persistence، tray/icon، D21؛ check نهایی در R16-A/H و `contracts.md §۱۰.۸` |
 | A14 | **مجوز/ممیزی/بسته (R3+R8):** Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابل‌انتشار است، و push مجاز است — ./release-readiness.md |
 
@@ -231,6 +231,31 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 جداگانه تکرار نشود. هنگام شروع/پایان task، وضعیت، شاهد check و قدم بعدی اینجا
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
+
+### R17 — حذف تأیید دو مرحله‌ای از tray (تعریف/انجام ۲۰۲۶-۱۱-۲۸)
+
+**وضعیت واحد: انجام شد (۲۰۲۶-۱۱-۲۸).** به درخواست کاربر، مرحلهٔ تأیید دوم از
+منوی tray حذف شد: هر action با همان کلیک روی آیتم اجرا می‌شود و pending/Confirm/
+Cancel، `ResultConfirmationRequired`، `Pending` و `ActionConfirm`/`ActionCancel`
+از `internal/trayui` حذف شدند. D28/A16 با **D33** بازنگری شدند و درخت منو/نگاشت
+actionها در `contracts.md §۷.۳` به‌روز شد. دلیل: host منو را با کلیک می‌بندد، پس
+مرحلهٔ دوم نیازمند بازکردن دوبارهٔ منو و ناوبری بود. guardهای واقعی حفظ شدند:
+Quit ساده با desktop proxy applied/unknown پیشنهاد نمی‌شود (و پیش از آن یک
+`desktop.status` تازه خوانده می‌شود)، زیر Mode/Advanced و ریشه یک warning دائمی
+برای قطع desktop proxy نمایش داده می‌شود، یک Quit سادهٔ کهنه پس از خواندن تازه
+با پیام «restore or keep» (یا «keep» وقتی restore در دسترس نیست) رد می‌شود، تا
+پایان job actionهای تغییردهنده disabled
+می‌مانند، و نتیجهٔ هر action با notification/«Last action» گزارش می‌شود.
+**checkها:** `go build ./...` و `go vet ./...` سبز؛ `go test -count=1 ./...` سبز
+(trayui 1.466s، acceptance 125.823s، app 19.842s)؛ `go test -race ./internal/trayui` و
+`-count=5` trayui سبز؛ تست `TestQuitRestoreFailureDoesNotQuit` با
+`GOMAXPROCS=8 -count=1000` سبز (رفع race تست)؛ تست‌های تأیید به تست‌های اجرای
+تک‌کلیکی/job/availability تبدیل شدند. یک اجرای کامل قبلی یک flake در
+`internal/app` (launch cancellation) داد که ۲۰ بار ایزوله سبز شد و به این تغییر
+مربوط نیست. **بازبینی مستقل:** دو دور بازبینی و دو دور رفع؛ verdict نهایی
+**Ready with findings** با هیچ یافتهٔ مسدودکننده/مادی (دو یافتهٔ مادی اولیهٔ
+مستندات عمومی و race تست رفع شدند؛ nitهای باقی‌مانده هم اعمال شدند). **قدم بعدی:** push همین batch طبق `AGENTS.md`؛
+release فقط پس از سبزشدن CI روی commit و رفع CI جاری سشن دیگر/دروازه‌های انتشار.
 
 ### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
@@ -1062,6 +1087,8 @@ quit. هر action به همان management op موجود یا پیام lifecycle
 - زبان منو و notification **English** است؛ i18n خارج از این milestone است.
 - کنترل کامل runtime با تأیید دو مرحله‌ای، شامل حذف rule/exit، clear proposals،
   restore پروکسی دسکتاپ، `Stop listening` و `Restart engine` سطح process.
+  **(به‌روزرسانی D33، ۲۰۲۶-۱۱-۲۸): تأیید دو مرحله‌ای حذف شد و این actionها
+  تک‌کلیکی‌اند؛ بقیهٔ تصمیم‌ها بدون تغییرند.**
 - pool/rules گروه‌بندی و صفحه‌بندی می‌شوند (۲۰–۲۵ آیتم در هر صفحه).
 - مدیریت service/systemd، restore بکاپ دلخواه، diagnose متنی و GUI کامل خارج از
   دامنه‌اند. D21/D26 و invariantهای مسیر/pool تغییر نمی‌کنند.
@@ -1090,7 +1117,7 @@ quit. هر action به همان management op موجود یا پیام lifecycle
   `PATH` نیست؛ روش R13-A (toolchain module zip تأییدشده زیر `/tmp/opencode`،
   `GOTOOLCHAIN=local`) مرجع است. نصب system-wide Go بدون مجوز لازم نیست.
 
-**قرارداد.** درخت منو، جدول actionها، تأیید دو مرحله‌ای، job/refresh، حالت
+**قرارداد.** درخت منو، جدول actionها، اجرای تک‌کلیکی (D33)، job/refresh، حالت
 stopped، Quit/پروکسی دسکتاپ، Terminal menu و امنیت خروجی در
 [`contracts.md`](contracts.md) §۷.۳ آمده‌اند. پیام `restart-engine` و
 transitionهای supervisor در [`contracts.md`](contracts.md) §۷.۵ هستند. خلاصهٔ
@@ -1152,7 +1179,7 @@ checkهای مورد انتظار و ممنوعیت تغییرات نامرتب�
 نباید هم‌زمان با دیگری روی فایل‌های مشترک منو/supervisor کار کند.
 
 **پذیرش (A16).** R15-B0..G2 باید هر ردیف A16 را پوشش دهند: نگاشت کامل actionها،
-تأیید دو مرحله‌ای، صفحه‌بندی، حالت‌های unavailable/stopped، sanitize، عدم
+اجرای تک‌کلیکی (D33)، صفحه‌بندی، حالت‌های unavailable/stopped، sanitize، عدم
 مقصد/URL در log/notification، Quit/restore و restart. A10/A15 و رفتار v1
 باید رگرسیون‌نشده بمانند؛ D21 با یک مقصد یکتا در proposal و سپس grep
 log/state/config/backup بررسی می‌شود. ادعای «menu روی KDE کار می‌کند» فقط با

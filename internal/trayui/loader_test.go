@@ -216,9 +216,6 @@ func TestRuleRemovalNotificationHasNoDestination(t *testing.T) {
 	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: "r-000"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatal(err)
-	}
 	notes := s.notifier.all()
 	if len(notes) != 1 || notes[0].Body != "Rule removed (1 connections closed)" {
 		t.Fatalf("notifications = %+v", notes)

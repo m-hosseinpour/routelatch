@@ -250,22 +250,28 @@ routing/pool policy of its own. The menu is in English in this release.
 | Menu | What it does |
 | --- | --- |
 | Status line | Mode, usable exits and open connections; `Stopped`, `Restarting` and `Engine unavailable; retrying…` are explicit states. |
-| Mode | Switch between targeted, all-proxy and all-direct; `Stop listening…` closes the traffic listeners. In stopped mode, `Restart engine to resume…` replaces the engine process first. |
-| Proposals | Pending suggestions with Accept, Reject and Recheck; `Show decided` and `Clear decided/expired…`. |
+| Mode | Switch between targeted, all-proxy and all-direct; `Stop listening` closes the traffic listeners. In stopped mode, `Restart engine to resume` replaces the engine process first. |
+| Proposals | Pending suggestions with Accept, Reject and Recheck; `Show decided` and `Clear decided/expired`. |
 | Approved rules | The approved list with per-rule removal and details, 20 rows per page. Add a rule from the Terminal menu. |
-| Pool | Counts, auto/pinned exit, groups by health, 20 rows per page, refresh, re-rank, test selected/first 20, and remove with confirmation. Imports stay in the Terminal menu. |
-| Desktop proxy | Status and refresh, plus Set/Re-apply and Restore behind a confirmation. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
+| Pool | Counts, auto/pinned exit, groups by health, 20 rows per page, refresh, re-rank, test selected/first 20, and remove. Imports stay in the Terminal menu. |
+| Desktop proxy | Status and refresh, plus Set/Re-apply and Restore. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
 | Diagnostics | Run doctor, doctor results, warnings, the log path, and the proxy environment. |
 | Data | Back up state now (the backup is written under the data directory). Restore and arbitrary paths stay in the CLI. |
 | Settings | Start at login on/off via the XDG autostart entry, and a read-only config/path summary. |
-| Advanced | Restart engine with confirmation, and Terminal menu. |
+| Advanced | Restart engine, and Terminal menu. |
 | Last action | Short, sanitized result of the most recent action or job. |
 | Quit | Plain quit when the desktop proxy is not applied. If it is applied, quit becomes the explicit restore-and-quit or keep-and-quit choice. Quit never restores the desktop proxy silently. |
 
-A destructive action (stopping, restarting, removing a rule or exit, clearing
-proposals, setting/restoring the desktop proxy, restore-and-quit) first shows
-`Confirm: …` and `Cancel`. Only one confirmation exists at a time, it expires
-after 60 seconds, and a new action replaces it. Operations that need typed
+Every action runs on the single click that selects it (D33). There is no
+`Confirm: …` / `Cancel` step and no pending-action expiry, because the
+StatusNotifier host closes the menu on the first click and a second step would
+force the user to reopen and navigate the menu again. The explicit click is the
+user's decision; the menu uses clear labels for consequences and reports the
+result in a notification and `Last action`. A plain Quit is not offered while
+the desktop proxy is applied or unknown: the menu shows the explicit
+restore-and-quit and keep-and-quit choices instead, and reads
+`desktop.status` fresh before a plain-quit click. Mutating actions stay
+disabled while a job runs. Operations that need typed
 input (adding a rule, importing a pool, diagnose, `config set`, restoring a
 backup) stay in the CLI; `Terminal menu…` opens that menu in `konsole`,
 `gnome-terminal` or `xterm`, or shows the exact manual command when none is

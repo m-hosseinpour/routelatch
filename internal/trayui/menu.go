@@ -81,19 +81,9 @@ func (c *Controller) buildMenuLocked(engine EngineState) Node {
 		}
 		return submenu("root", "RouteLatch", root...)
 	}
-	root := make([]Node, 0, 18)
+	root := make([]Node, 0, 16)
 	root = append(root, disabledItem("status", statusLabel(c.snap, engine)))
 
-	if c.pending != nil {
-		target := Target{PendingID: c.pending.ID}
-		confirm := item(fmt.Sprintf("pending.%d.confirm", c.pending.ID), "Confirm: "+c.pending.Label)
-		confirm.Action = ActionConfirm
-		confirm.Target = target
-		cancel := item(fmt.Sprintf("pending.%d.cancel", c.pending.ID), "Cancel")
-		cancel.Action = ActionCancel
-		cancel.Target = target
-		root = append(root, confirm, cancel)
-	}
 	if c.job != nil {
 		label := "Job: " + c.job.Name + " running"
 		if c.job.Interrupted {
@@ -116,7 +106,10 @@ func (c *Controller) buildMenuLocked(engine EngineState) Node {
 	if engine == EngineStopped && c.resumeBlockedLocked() {
 		// resumeBlocked means restart is the only way back. The extra root item
 		// uses the same action as Advanced -> Restart engine.
-		root = append(root, c.actionItem("restart.resume", "Restart engine to resume…", ActionRestartEngine, Target{}))
+		root = append(root, c.actionItem("restart.resume", "Restart engine to resume", ActionRestartEngine, Target{}))
+		if warning := c.desktopCutWarningLocked(); warning != "" {
+			root = append(root, disabledItem("restart.resume.warning", warning))
+		}
 	}
 
 	last := "Last action: none"
@@ -168,7 +161,10 @@ func (c *Controller) modeMenuLocked(engine EngineState) Node {
 		c.modeNode("mode.targeted", "Targeted", ActionModeTargeted, contract.ModeTargeted),
 		c.modeNode("mode.all-proxy", "All proxy", ActionModeAllProxy, contract.ModeProxyAll),
 		c.modeNode("mode.all-direct", "All direct", ActionModeAllDirect, contract.ModeDirectAll),
-		c.actionItem("mode.stop", "Stop listening…", ActionStopListening, Target{}),
+		c.actionItem("mode.stop", "Stop listening", ActionStopListening, Target{}),
+	}
+	if warning := c.desktopCutWarningLocked(); warning != "" {
+		children = append(children, disabledItem("mode.desktop-warning", warning))
 	}
 	return submenu("mode", "Mode", children...)
 }
@@ -355,7 +351,7 @@ func (c *Controller) proposalsMenuLocked(engine EngineState) Node {
 		decidedLabel = "Show decided"
 	}
 	children = append(children, submenu("proposals.decided", decidedLabel, decidedChildren...))
-	clear := c.actionItem("proposals.clear", "Clear decided/expired…", ActionProposalsClear, Target{})
+	clear := c.actionItem("proposals.clear", "Clear decided/expired", ActionProposalsClear, Target{})
 	clear.Enabled = clear.Enabled && c.snap.ListsKnown
 	children = append(children, clear)
 	proposalsLabel := fmt.Sprintf("Proposals (%d)", len(pending))
@@ -435,7 +431,7 @@ func (c *Controller) ruleNode(r Rule) Node {
 		disabledItem(key+".details.added", "Added: "+r.AddedAt.UTC().Format("2006-01-02 15:04")),
 	)
 	children := []Node{
-		c.actionItem(key+".remove", "Remove…", ActionRuleRemove, target),
+		c.actionItem(key+".remove", "Remove", ActionRuleRemove, target),
 		details,
 	}
 	return submenu(key, ruleLabel(r), children...)
@@ -532,7 +528,7 @@ func (c *Controller) poolRowNode(row PoolRow) Node {
 	testNode := c.actionItem(key+".test", "Test this exit", ActionPoolTest, target)
 	testNode.Enabled = testNode.Enabled && selectable
 	children = append(children, testNode)
-	children = append(children, c.actionItem(key+".remove", "Remove…", ActionPoolRemove, target))
+	children = append(children, c.actionItem(key+".remove", "Remove", ActionPoolRemove, target))
 	return submenu(key, poolRowLabel(row), children...)
 }
 
@@ -552,8 +548,8 @@ func (c *Controller) desktopMenuLocked(engine EngineState) Node {
 	d := c.snap.Desktop
 	children := []Node{disabledItem("desktop.status", desktopStatusLabel(d))}
 	children = append(children, c.actionItem("desktop.refresh", "Refresh status", ActionDesktopRefresh, Target{}))
-	children = append(children, c.actionItem("desktop.set", "Set/Re-apply desktop proxy…", ActionDesktopSet, Target{}))
-	children = append(children, c.actionItem("desktop.restore", "Restore previous desktop proxy…", ActionDesktopRestore, Target{}))
+	children = append(children, c.actionItem("desktop.set", "Set/Re-apply desktop proxy", ActionDesktopSet, Target{}))
+	children = append(children, c.actionItem("desktop.restore", "Restore previous desktop proxy", ActionDesktopRestore, Target{}))
 	if d.Err {
 		children = append(children, disabledItem("desktop.reason", "Desktop proxy status could not be read; restore/keep is an explicit choice at Quit"))
 	} else if d.Known && !d.Supported {
@@ -688,8 +684,11 @@ func (c *Controller) settingsMenuLocked() Node {
 
 func (c *Controller) advancedMenuLocked() Node {
 	children := []Node{
-		c.actionItem("advanced.restart", "Restart engine…", ActionRestartEngine, Target{}),
+		c.actionItem("advanced.restart", "Restart engine", ActionRestartEngine, Target{}),
 		c.actionItem("advanced.terminal", "Terminal menu…", ActionTerminalMenu, Target{}),
+	}
+	if warning := c.desktopCutWarningLocked(); warning != "" {
+		children = append(children, disabledItem("advanced.restart.warning", warning))
 	}
 	return submenu("advanced", "Advanced", children...)
 }
@@ -704,8 +703,8 @@ func (c *Controller) quitMenuLocked() Node {
 	children = append(children, quit)
 	if appliedOrUnknown {
 		children = append(children,
-			c.actionItem("quit.restore", "Restore desktop proxy and quit…", ActionQuitRestoreDesktop, Target{}),
-			c.actionItem("quit.keep", "Quit and keep desktop proxy… (internet may stay broken)", ActionQuitKeepDesktop, Target{}),
+			c.actionItem("quit.restore", "Restore desktop proxy and quit", ActionQuitRestoreDesktop, Target{}),
+			c.actionItem("quit.keep", "Quit and keep desktop proxy (internet may stay broken)", ActionQuitKeepDesktop, Target{}),
 		)
 		if c.snap.Desktop.Err || !c.snap.Desktop.Known {
 			children = append(children, disabledItem("quit.warning", "Desktop proxy status is unknown; keeping it may leave the connection broken"))

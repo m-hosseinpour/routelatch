@@ -285,13 +285,6 @@ func TestTunCoverageTransitionsAllowIdempotentDisable(t *testing.T) {
 			if _, err := s.ctl.Trigger(ctx, ActionTunDisable, Target{}); err != nil {
 				t.Fatalf("%s disable trigger = %v", state, err)
 			}
-			pending := s.ctl.View().Pending
-			if pending == nil {
-				t.Fatalf("%s disable did not request confirmation", state)
-			}
-			if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: pending.ID}); err != nil {
-				t.Fatalf("%s confirm = %v", state, err)
-			}
 			waitFor(t, string(state)+" tun disable", func() bool {
 				return s.caller.countOp(control.OpTunDisable) == 1
 			})
@@ -325,13 +318,6 @@ func TestTunActionsStoppedAndUnavailable(t *testing.T) {
 	if _, err := s.ctl.Trigger(ctx, ActionTunDisable, Target{}); err != nil {
 		t.Fatalf("disable in stopped = %v", err)
 	}
-	view = s.ctl.View()
-	if view.Pending == nil {
-		t.Fatal("stopped disable did not request confirmation")
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: view.Pending.ID}); err != nil {
-		t.Fatalf("confirm stopped disable = %v", err)
-	}
 	waitFor(t, "stopped tun disable", func() bool { return s.caller.countOp(control.OpTunDisable) == 1 })
 
 	down := newSetup(t, newFixture(), nil)
@@ -348,52 +334,22 @@ func TestTunActionsStoppedAndUnavailable(t *testing.T) {
 	}
 }
 
-func TestTunConfirmationCancelStaleAndNoDuplicate(t *testing.T) {
+func TestTunActionsRunOnTheClickAndRejectDuplicates(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 
+	entered, release := s.caller.gateOn(control.OpTunEnable)
 	res, err := s.ctl.Trigger(ctx, ActionTunEnable, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultJobStarted {
 		t.Fatalf("enable trigger = %+v, %v", res, err)
 	}
-	if s.caller.countOp(control.OpTunEnable) != 0 {
-		t.Fatal("enable ran before confirmation")
+	<-entered
+	if _, err := s.ctl.Trigger(ctx, ActionTunEnable, Target{}); !errors.Is(err, ErrBusy) {
+		t.Fatalf("second enable = %v, want ErrBusy", err)
 	}
-	if res.Message != "Enable system-wide coverage (all host traffic)" {
-		t.Fatalf("confirmation label = %q", res.Message)
-	}
-	view := s.ctl.View()
-	if view.Pending == nil {
-		t.Fatal("no pending confirmation")
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionCancel, Target{PendingID: view.Pending.ID}); err != nil {
-		t.Fatalf("cancel = %v", err)
-	}
-	if s.caller.countOp(control.OpTunEnable) != 0 {
-		t.Fatal("cancel ran the operation")
-	}
-
-	// Confirm once; the job must issue exactly one management request.
-	if _, err := s.ctl.Trigger(ctx, ActionTunEnable, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	view = s.ctl.View()
-	pending := view.Pending
-	if pending == nil {
-		t.Fatal("missing pending after retrigger")
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: pending.ID}); err != nil {
-		t.Fatalf("confirm = %v", err)
-	}
+	release()
 	waitFor(t, "tun enable request", func() bool { return s.caller.countOp(control.OpTunEnable) == 1 })
 	waitFor(t, "tun enable job", func() bool { return s.ctl.View().Job == nil })
-	waitFor(t, "tun enable notification", func() bool {
-		notes := s.notifier.all()
-		return len(notes) > 0 && strings.Contains(notes[len(notes)-1].Body, "coverage")
-	})
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: pending.ID}); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("second confirm = %v, want ErrNoPending", err)
-	}
 	if n := s.caller.countOp(control.OpTunEnable); n != 1 {
 		t.Fatalf("enable requests = %d, want 1", n)
 	}
@@ -407,32 +363,15 @@ func TestTunConfirmationCancelStaleAndNoDuplicate(t *testing.T) {
 		}
 	}
 
-	// A stale confirm click must not consume a replacement pending.
 	on := tunFixture()
 	on.Desired, on.State = true, contract.TunOn
 	s.caller.setTun(on)
 	if err := s.ctl.RefreshStatus(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ctl.Trigger(ctx, ActionTunDisable, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	old := s.ctl.View().Pending
-	if _, err := s.ctl.Trigger(ctx, ActionTunDisable, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	replacement := s.ctl.View().Pending
-	if old == nil || replacement == nil || old.ID == replacement.ID {
-		t.Fatalf("replacement pending = %+v (old %+v)", replacement, old)
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: old.ID}); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("stale confirm = %v, want ErrNoPending", err)
-	}
-	if s.caller.countOp(control.OpTunDisable) != 0 {
-		t.Fatal("stale confirm ran disable")
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: replacement.ID}); err != nil {
-		t.Fatalf("replacement confirm = %v", err)
+	res, err = s.ctl.Trigger(ctx, ActionTunDisable, Target{})
+	if err != nil || res.Status != ResultJobStarted {
+		t.Fatalf("disable trigger = %+v, %v", res, err)
 	}
 	waitFor(t, "tun disable request", func() bool { return s.caller.countOp(control.OpTunDisable) == 1 })
 	waitFor(t, "tun disable job", func() bool { return s.ctl.View().Job == nil })
@@ -455,13 +394,6 @@ func TestTunDisableDoesNotClaimOffWhenCoverageUncertain(t *testing.T) {
 	s := newSetup(t, fx, nil)
 	ctx := context.Background()
 	if _, err := s.ctl.Trigger(ctx, ActionTunDisable, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	view := s.ctl.View()
-	if view.Pending == nil {
-		t.Fatal("disable did not require confirmation")
-	}
-	if _, err := s.ctl.Trigger(ctx, ActionConfirm, Target{PendingID: view.Pending.ID}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "uncertain disable", func() bool {

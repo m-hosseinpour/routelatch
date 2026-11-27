@@ -423,7 +423,7 @@ func actionNeedsRefresh(a Action, res Result) bool {
 		return false
 	}
 	switch a {
-	case ActionPageNext, ActionPagePrevious, ActionCancel, ActionTerminalMenu,
+	case ActionPageNext, ActionPagePrevious, ActionTerminalMenu,
 		ActionShowLogPath, ActionDesktopRefresh, ActionAutostartToggle,
 		ActionQuit, ActionQuitKeepDesktop, ActionQuitRestoreDesktop:
 		return false

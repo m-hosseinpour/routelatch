@@ -1265,7 +1265,8 @@ RouteLatch
   <status line>                                  disabled
   Mode ▸
     Targeted | All proxy | All direct            radio
-    Stop listening…                              pending confirmation
+    Stop listening
+    Desktop proxy warning: <reason>              disabled (applied/unknown only)
   Coverage ▸
     Coverage: <state> · desired <on|off>         disabled
     Interface: <local interface>                 disabled
@@ -1273,16 +1274,16 @@ RouteLatch
     Error: <stable reason>                       disabled
     Warnings (N) ▸
       <dns/udp/conflict/all-direct/desktop overlap>  disabled
-    Enable system-wide coverage…                 pending confirmation
-    Disable system-wide coverage…                pending confirmation
+    Enable system-wide coverage…
+    Disable system-wide coverage…
   Proposals (N) ▸
     <pending proposal> ▸
       Accept | Reject | Recheck
     Show decided (N) ▸
-    Clear decided/expired…                       pending confirmation
+    Clear decided/expired
   Approved rules (N) ▸
     <rule> ▸
-      Remove…                                    pending confirmation
+      Remove
       Details                                    disabled
     Page x/y · Previous page · Next page
     Add rule… (Terminal menu)
@@ -1300,8 +1301,8 @@ RouteLatch
   Desktop proxy ▸
     <status>                                     disabled
     Refresh status
-    Set/Re-apply desktop proxy…                  pending confirmation
-    Restore previous desktop proxy…              pending confirmation
+    Set/Re-apply desktop proxy
+    Restore previous desktop proxy
   Diagnostics ▸
     Run doctor                                   job
     Doctor results ▸
@@ -1316,20 +1317,21 @@ RouteLatch
     <config summary>                             disabled
     <data paths>                                 disabled
   Advanced ▸
-    Restart engine…                              pending confirmation
+    Restart engine
     Terminal menu…
+    Restart warning: <reason>                   disabled (applied/unknown only)
   Last action: <short result>                    disabled
   Quit ▸
     Quit RouteLatch
-    Restore desktop proxy and quit…              pending confirmation
-    Quit and keep desktop proxy…                 pending confirmation
+    Restore desktop proxy and quit
+    Quit and keep desktop proxy
 ```
 
 **Coverage (R16-F).** زیرمنوی Coverage فقط نمای `status.tun` و دو op
 `tun.enable`/`tun.disable` است؛ هیچ state، route، helper یا setup مستقلی در tray
 نیست. state/desired/helper/DNS/UDP/آخرین خطای امن و warningهای TUN نمایش داده
-می‌شوند و «Enable/Disable system-wide coverage…» هر دو تأیید دو مرحله‌ای دارند
-(enable تغییر پوشش کل host و disable کاهش پوشش است). Enable فقط با engine
+می‌شوند و «Enable/Disable system-wide coverage…» هر دو با همان کلیک صریح
+اجرا می‌شوند (enable تغییر پوشش کل host و disable کاهش پوشش است؛ D33). Enable فقط با engine
 Ready، mode غیر stopped، helper `installed` و وقتی coverage در on/starting/
 stopping نیست فعال است و برای retry در off/error/unavailable باز می‌ماند؛
 Disable در هر mode از جمله stopped فعال است مگر اینکه coverage قطعاً off و
@@ -1343,8 +1345,8 @@ desired=false باشد. آیتم غیرقابل‌اجرا با دلیل کوت�
 `All direct · 3 open`، `Stopped · listeners closed` یا
 `Engine unavailable; retrying…`. در all-direct شمار pool در هدر نمایش داده
 نمی‌شود چون انتخاب خروجی موضوعیت ندارد؛ در stopped/unavailable actionهای
-نامعتبر غیرفعال می‌شوند. `Restart engine…` در حالت stopped به‌صورت یک آیتم اضافی در ریشه با
-متن «Restart engine to resume…» هم دیده می‌شود؛ action یکی است. صفحه‌بندی pool و
+نامعتبر غیرفعال می‌شوند. `Restart engine` در حالت stopped به‌صورت یک آیتم اضافی در ریشه با
+متن «Restart engine to resume» هم دیده می‌شود؛ action یکی است. صفحه‌بندی pool و
 rules ۲۰–۲۵ آیتم دارد (تعداد دقیق در پیاده‌سازی ثابت و تست می‌شود) و گروه‌های
 pool از `Counts` و `status` همان `pool list` می‌آیند. «Test first 20 usable»
 همان سقف `MaxPoolTestExits` قرارداد است؛ tray نباید ادعای تست کل pool بدهد.
@@ -1367,32 +1369,32 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 
 **نگاشت actionها.**
 
-| آیتم | request/مسیر | تأیید | job |
-| --- | --- | --- | --- |
-| Mode: targeted/all-proxy/all-direct | `mode` با همان مقدار | نه | نه |
-| Stop listening | `mode=stopped` | بله | نه |
-| Restart engine | pipe `restart-engine` به supervisor | بله | بله (انتظار readiness) |
-| Proposal Accept (route) | `proposals.accept` | نه (کلیک همان تأیید است) | نه |
-| Proposal Accept (unroute) | `proposals.accept` | بله (حذف rule) | نه |
-| Proposal Reject | `proposals.reject` | نه | نه |
-| Proposal Recheck | `proposals.recheck` | نه | بله |
-| Clear decided/expired | `proposals.clear` | بله | نه |
-| Rule Remove | `rules.remove` | بله | نه |
-| Pool Auto/Pin | `pool.select` با `auto` یا id | نه | نه |
-| Pool Remove | `pool.remove` | بله | نه |
-| Pool Refresh all | `pool.refresh` با `all=true` | نه | بله |
-| Pool Test selected / first 20 | `pool.test` با id یا بدون id | نه | بله |
-| Pool Re-rank | `pool.rerank` | نه | نه |
-| Desktop Refresh status | `desktop.status` | نه | نه |
-| Desktop Set/Re-apply | `desktop.set` | بله | بله |
-| Desktop Restore | `desktop.restore` | بله | بله |
-| Back up now | `backup` | نه | بله |
-| Run doctor | `doctor` | نه | بله |
-| Start at login | `autostart.Manager.Status/Enable/Disable` محلی | نه | بله (محلی) |
-| Terminal menu | اجرای همان باینری با `menu` | نه | نه |
-| Quit RouteLatch | pipe `quit` | فقط اگر desktop applied یا job در حال اجرا باشد | نه |
-| Restore desktop proxy and quit | `desktop.restore` سپس pipe `quit` | بله | بله |
-| Quit and keep desktop proxy | pipe `quit` | بله اگر desktop applied باشد | نه |
+| آیتم | request/مسیر | job |
+| --- | --- | --- |
+| Mode: targeted/all-proxy/all-direct | `mode` با همان مقدار | نه |
+| Stop listening | `mode=stopped` | نه |
+| Restart engine | pipe `restart-engine` به supervisor | بله (انتظار readiness) |
+| Proposal Accept (route) | `proposals.accept` | نه |
+| Proposal Accept (unroute) | `proposals.accept` (حذف rule) | نه |
+| Proposal Reject | `proposals.reject` | نه |
+| Proposal Recheck | `proposals.recheck` | بله |
+| Clear decided/expired | `proposals.clear` | نه |
+| Rule Remove | `rules.remove` | نه |
+| Pool Auto/Pin | `pool.select` با `auto` یا id | نه |
+| Pool Remove | `pool.remove` | نه |
+| Pool Refresh all | `pool.refresh` با `all=true` | بله |
+| Pool Test selected / first 20 | `pool.test` با id یا بدون id | بله |
+| Pool Re-rank | `pool.rerank` | نه |
+| Desktop Refresh status | `desktop.status` | نه |
+| Desktop Set/Re-apply | `desktop.set` | بله |
+| Desktop Restore | `desktop.restore` | بله |
+| Back up now | `backup` | بله |
+| Run doctor | `doctor` | بله |
+| Start at login | `autostart.Manager.Status/Enable/Disable` محلی | بله (محلی) |
+| Terminal menu | اجرای همان باینری با `menu` | نه |
+| Quit RouteLatch | pipe `quit` | نه |
+| Restore desktop proxy and quit | `desktop.restore` سپس pipe `quit` | بله |
+| Quit and keep desktop proxy | pipe `quit` | نه |
 
 `add/import` pool، `rules add`، `diagnose`، `config set`، `restore <path>` و
 `exec` در tray نیستند و از `Terminal menu…` یا CLI انجام می‌شوند؛
@@ -1400,16 +1402,20 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 می‌کنند (متن در ترمینال وارد می‌شود، نه در tray). مدیریت
 `service install/uninstall/status` هم در tray نیست؛ این یک اقدام نصب/میزبان است
 و با app/tray هم‌زمان تعارض دارد. برای unroute proposal، `Recheck` غیرفعال است
-چون شواهد probe ندارد؛ Accept آن چون rule را حذف می‌کند pending می‌خواهد.
+چون شواهد probe ندارد؛ Accept آن چون rule را حذف می‌کند یک کلیک صریح روی همان
+پیشنهاد است و مرحلهٔ دوم ندارد (D33).
 
-**تأیید دو مرحله‌ای.** action مخرب با کلیک اول اجرا نمی‌شود: یک pending در
-حافظهٔ tray ساخته می‌شود و در ریشهٔ منو دو آیتم «Confirm: <label>» و «Cancel»
-ظاهر می‌شوند. pending پس از ۶۰ ثانیه منقضی می‌شود، فقط یکی هم‌زمان وجود دارد،
-با action جدید جایگزین یا لغو می‌شود، و هرگز در state/config/log نوشته نمی‌شود.
-Confirm دقیقاً همان action ذخیره‌شده را اجرا می‌کند؛ label هرگز برای استخراج
-id/action پارس نمی‌شود. فهرست حداقلی actionهای pending در جدول بالا آمده است.
-عمل «Accept» برای proposal route با کلیک خود کاربر تأیید می‌شود؛ چون این کلیک
-یک افزودن صریح به فهرست approved است و نیازی به pending دوم ندارد.
+**اجرای تک‌کلیکی (D33، ۲۰۲۶-۱۱-۲۸).** هر action tray با همان کلیک روی آیتم منو
+اجرا می‌شود و هیچ pending/Confirm/Cancel جداگانه‌ای وجود ندارد؛ label هرگز برای
+استخراج id/action پارس نمی‌شود. host منو را با کلیک می‌بندد، پس تأیید دو مرحله‌ای
+عملاً بازکردن دوبارهٔ منو و ناوبری تا آیتم Confirm را لازم می‌کرد؛ D33 آن را حذف
+کرد و کلیک صریح روی label را همان تصمیم کاربر دانست. خروجی هر action/job با
+notification و «Last action» گزارش می‌شود. guardهای واقعی حفظ می‌شوند: Quit ساده
+وقتی desktop proxy applied/unknown است پیشنهاد نمی‌شود و به restore/keep صریح
+تبدیل می‌شود؛ تا پایان یک job، actionهای تغییردهنده disabled می‌مانند؛ و هیچ
+actionی بدون کلیک یا از روی label اجرا نمی‌شود. حذف rule/exit، clear proposals،
+restore، stop/restart و TUN هم تک‌کلیکی‌اند. منوی huh در CLI قاعدهٔ مستقل خود را
+دارد و پیش‌فرض «نه» آن دست‌نخورده است.
 
 **jobها و refresh.** حداکثر یک job طولانی هم‌زمان اجرا می‌شود؛ تا پایان آن،
 actionهای تغییردهنده disabled‌اند و ریشه یک آیتم «Job: … running» نشان می‌دهد.
@@ -1442,20 +1448,27 @@ actionهای pool/probe/rules mutation و proposalها را غیرفعال می�
 با state ذخیره‌شدهٔ stopped)، mode مستقیماً فعال است. این flag از `status`
 می‌آید و با restart خود tray از بین نمی‌رود؛ نبود فیلد در سرویس قدیمی
 «نامعلوم» است و محافظه‌کارانه restart پیشنهاد می‌شود. restart دستی از budget
-restart خودکار supervisor مصرف نمی‌کند. پیش از pending برای `Stop listening` و
-`Restart engine` (و Quit)، وضعیت desktop با یک `desktop.status` تازه و deadline
-کوتاه خوانده می‌شود؛ اگر `applied=true` باشد، label تأیید هشدار می‌دهد که
-پروکسی دسکتاپ تا بازگشت listener قطع می‌شود و restore/keep همچنان تصمیم
-جداگانهٔ Quit است. اگر خواندن وضعیت ناموفق بود، هشدار «نامعلوم» نمایش داده
-می‌شود و action مخفی نمی‌شود.
+restart خودکار supervisor مصرف نمی‌کند. پیش از Quit، وضعیت desktop با یک
+`desktop.status` تازه و deadline کوتاه خوانده می‌شود تا یک Quit ساده با proxy
+applied از snapshot کهنه اجرا نشود؛ اگر خواندن وضعیت ناموفق بود، Quit ساده blocked
+می‌شود و گزینه‌های restore/keep نمایش داده می‌شوند. Stop و Restart به وضعیت
+desktop وابسته نیستند و با یک کلیک اجرا می‌شوند (D33)؛ اگر desktop proxy
+applied یا نامعلوم باشد، زیر Mode و زیر Advanced → Restart engine (و در ریشه
+کنار Restart engine to resume) یک ردیف disabled هشدار می‌دهد که stop/restart
+آن را تا بازگشت listening قطع می‌کند (همان هشدارِ حذف‌شده از confirmation label).
+این هشدار از snapshot desktop می‌آید و تا refresh بعدی می‌تواند کهنه باشد؛ فقط
+Quit ساده همیشه پیش از اجرا یک `desktop.status` تازه می‌خواند.
 
 **Quit و پروکسی دسکتاپ.** پیش از Quit، tray یک `desktop.status` تازه با
 deadline کوتاه می‌گیرد. اگر `applied=true` باشد، Quit به دو گزینه تبدیل می‌شود:
-«Restore desktop proxy and quit…» (اول `desktop.restore`؛ اگر شکست خورد Quit
-انجام نمی‌شود و خطا نمایش داده می‌شود) و «Quit and keep desktop proxy…» (با
+«Restore desktop proxy and quit» (اول `desktop.restore`؛ اگر شکست خورد Quit
+انجام نمی‌شود و خطا نمایش داده می‌شود) و «Quit and keep desktop proxy» (با
 هشدار که اینترنت ممکن است تا restore قطع بماند). اگر وضعیت نامعلوم باشد، همان
 هشدار با گزینهٔ صریح نمایش داده می‌شود. Quit هرگز به‌طور خودکار تنظیمات دسکتاپ
-را restore نمی‌کند. اگر job در حال اجرا باشد، Quit تأیید اضافی می‌خواهد.
+را restore نمی‌کند. اگر job در حال اجرا باشد، Quit یک job غیر-restart را
+interrupted می‌کند و سپس خارج می‌شود؛ jobهای restart همان مسیر restart را دارند
+و Quit آن‌ها را به‌عنوان interrupted علامت نمی‌زند. مرحلهٔ تأیید اضافی وجود
+ندارد (D33).
 ثابت `desktopProxyRestoreHint` قبلی در R15-D2 حذف شد و جای آن همین رفتار
 واقعی است؛ شکست `desktop.restore` فقط پیام خطای sanitize‌شدهٔ action را نشان
 می‌دهد و هیچ متن راهنمای جداگانه‌ای باقی نمی‌ماند.
@@ -1907,7 +1920,7 @@ rollback نصب و سیاست restart با هم ناسازگار نشوند؛ sy
 R15-H)** ورودی hint منوی tray فقط `routelatch desktop proxy restore` را پیشنهاد
 می‌دهد (notification) و هیچ تنظیم دسکتاپ یا state را تغییر نمی‌دهد؛ restore خودکار
 یا مخفی وجود ندارد. **R15 (D28؛ controller در R15-B پیاده‌شده، اتصال واقعی tray در R15-D2)** این hint را با
-actionهای واقعی `Set/Re-apply` و `Restore` (هر دو با تأیید دو مرحله‌ای) و
+actionهای واقعی `Set/Re-apply` و `Restore` (هر دو با کلیک صریح؛ D33) و
 Quit با گزینه‌های `Restore and quit`/`Keep` جایگزین می‌کند؛ Quit همچنان
 خودکار restore نمی‌کند.
 
@@ -2015,7 +2028,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 (`internal/tun` و `__tun-service`)، اتصال engine در R16-D (`start/stop`، ماندگاری،
 adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tun status|on|off`
 و `tun setup|uninstall` privileged) پیاده شده‌اند. tray Coverage (منو،
-`tun.enable`/`tun.disable` با تأیید دو مرحله‌ای و آیکن active/error/desired-off)
+`tun.enable`/`tun.disable` با کلیک صریح (D33) و آیکن active/error/desired-off)
 در R16-F پیاده شده است. R16-G منطق privileged setup/uninstall را تکمیل کرده
 است: کپی root-owned باینری از `/proc/self/exe`، tmpfiles.d برای بازسازی
 `/run/routelatch-tun` پس از boot، سخت‌گیری mode/owner، readiness واقعی socket
@@ -2130,8 +2143,8 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 - `tun.enable` ورودی دلخواه (interface/route/domain) ندارد؛ listener هدف از
   config همان instance گرفته می‌شود و سرویس TUN فقط `127.0.0.1:port` یا
   `[::1]:port` را می‌پذیرد.
-- tray (R16-F) فقط همین دو op را از زیرمنوی Coverage با تأیید دو مرحله‌ای صدا
-  می‌زند؛ enable با mode stopped/helper ناموجود یا ناسازگار/state فعال یا
+- tray (R16-F) فقط همین دو op را از زیرمنوی Coverage با کلیک صریح صدا
+  می‌زند (D33)؛ enable با mode stopped/helper ناموجود یا ناسازگار/state فعال یا
   درحال‌گذار disabled است و disable (کاهش پوشش) در هر mode از جمله stopped
   مجاز می‌ماند. tray هیچ setup/uninstall یا route/interface دلخواهی ندارد و
   دلیل خطای نمایش‌داده‌شده فقط از واژگان امن §۱۰.۲ است.

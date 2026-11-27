@@ -195,8 +195,8 @@ func TestPoolRowDisabledStatesFollowStatus(t *testing.T) {
 	}
 }
 
-// TestPoolSelectAndRemoveReachTheSocketOnce covers the non-job pool actions and
-// the remove confirmation: a click never executes the destructive request.
+// TestPoolSelectAndRemoveReachTheSocketOnce covers the non-job pool actions:
+// a click sends exactly one request.
 func TestPoolSelectAndRemoveReachTheSocketOnce(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
@@ -224,19 +224,8 @@ func TestPoolSelectAndRemoveReachTheSocketOnce(t *testing.T) {
 
 	before := s.caller.countOp(control.OpPoolRemove)
 	res, err := s.ctl.Trigger(ctx, ActionPoolRemove, Target{ExitID: contract.ExitID(id)})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("remove trigger = %+v, %v", res, err)
-	}
-	if s.caller.countOp(control.OpPoolRemove) != before {
-		t.Fatal("remove executed before confirmation")
-	}
-	pending := s.ctl.View().Pending
-	if pending == nil || pending.Action != ActionPoolRemove || !strings.Contains(pending.Label, "Remove exit "+shortID(string(id))) {
-		t.Fatalf("pending = %+v", pending)
-	}
-
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatal(err)
 	}
 	if got := poolLastRequest(t, s, control.OpPoolRemove); got.ID != string(id) {
 		t.Fatalf("remove request id = %q", got.ID)

@@ -39,7 +39,7 @@ func TestDeterministicMenuTreeMatchesContract(t *testing.T) {
 	if !mode.Checked || mode.Check != CheckRadio || !mode.Enabled {
 		t.Fatalf("mode target = %+v", mode)
 	}
-	if stop, _ := findNode(view.Root, "mode.stop"); stop.Label != "Stop listening…" {
+	if stop, _ := findNode(view.Root, "mode.stop"); stop.Label != "Stop listening" {
 		t.Fatalf("stop = %+v", stop)
 	}
 	if summary, _ := findNode(view.Root, "coverage.summary"); summary.Label != "Coverage: off · desired off" {
@@ -322,7 +322,7 @@ func TestUnrouteRecheckIsDisabled(t *testing.T) {
 	}
 	accept, _ := findNode(view.Root, "proposals.pending.p-unroute-1.accept")
 	if !accept.Enabled {
-		t.Fatal("unroute accept should be available (with confirmation)")
+		t.Fatal("unroute accept should be available")
 	}
 }
 
@@ -396,9 +396,6 @@ func TestStoppedRestartAndFreshProcessResumes(t *testing.T) {
 	if _, err := s.ctl.Trigger(ctx, ActionRestartEngine, Target{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatal(err)
-	}
 	waitFor(t, "restart request", func() bool {
 		_, restarts := s.life.counts()
 		return restarts == 1
@@ -462,18 +459,23 @@ func TestShowLogPathNotifiesOnlyThePath(t *testing.T) {
 	}
 }
 
-func TestPendingAndJobAppearAtRoot(t *testing.T) {
+func TestJobAppearsAtRoot(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
-	if _, err := s.ctl.Trigger(context.Background(), ActionStopListening, Target{}); err != nil {
+	entered, release := s.caller.gateOn(control.OpBackup)
+	if _, err := s.ctl.Trigger(context.Background(), ActionBackup, Target{}); err != nil {
 		t.Fatal(err)
 	}
+	<-entered
 	view := s.ctl.View()
-	keys := rootKeys(view.Root)
-	if len(keys) < 3 || !strings.HasPrefix(keys[1], "pending.") || !strings.HasSuffix(keys[1], ".confirm") ||
-		!strings.HasSuffix(keys[2], ".cancel") {
-		t.Fatalf("pending root keys = %v", keys)
+	job, ok := findNode(view.Root, "job")
+	if !ok || job.Enabled || !strings.Contains(job.Label, "backup") {
+		t.Fatalf("job item = %+v", job)
 	}
-	if n, _ := findNode(view.Root, keys[1]); n.Action != ActionConfirm || n.Target.PendingID != view.Pending.ID {
-		t.Fatalf("confirm = %+v, want pending id %d", n, view.Pending.ID)
+	for _, key := range rootKeys(view.Root) {
+		if strings.HasPrefix(key, "pending.") {
+			t.Fatalf("confirmation node %q is still rendered", key)
+		}
 	}
+	release()
+	waitFor(t, "job end", func() bool { return s.ctl.View().Job == nil })
 }

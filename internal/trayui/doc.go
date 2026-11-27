@@ -34,13 +34,13 @@
 //
 // A Binder applies View by stable node keys, forwards clicks as
 // Trigger(action, target) and feeds lifecycle events to HandleEvent. Runner is
-// the implementation: it calls View on every poll tick (pending expiry and
-// restart timeouts are evaluated there), RefreshAll at start, RefreshStatus
+// the implementation: it calls View on every poll tick (the restart timeout is
+// evaluated there), RefreshAll at start, RefreshStatus
 // every two seconds, RefreshLists every fifteen seconds, and RefreshCore
 // immediately after an action and after a LifecycleReady event. The initial
 // RefreshAll includes the expensive desktop/autostart reads; those two are not
 // part of the periodic poll. The controller re-reads desktop status before a
-// Stop/Restart/Quit confirmation, and an action that changes desktop/autostart
+// plain Quit, and an action that changes desktop/autostart
 // state updates that state from its own response. TerminalMenu reaches the
 // Terminal boundary; this package never starts a process itself. The runner
 // must log only Action strings, never node labels or targets (D21).

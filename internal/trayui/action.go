@@ -41,15 +41,13 @@ const (
 	ActionQuit
 	ActionQuitRestoreDesktop
 	ActionQuitKeepDesktop
-	ActionConfirm
-	ActionCancel
 	ActionPageNext
 	ActionPagePrevious
 )
 
 // allActions is every public action, including ActionNone. The action mapping
 // test walks this list so a newly added constant cannot silently lose its
-// request, confirmation, or job classification.
+// request or job classification.
 var allActions = []Action{
 	ActionNone,
 	ActionModeTargeted,
@@ -82,8 +80,6 @@ var allActions = []Action{
 	ActionQuit,
 	ActionQuitRestoreDesktop,
 	ActionQuitKeepDesktop,
-	ActionConfirm,
-	ActionCancel,
 	ActionPageNext,
 	ActionPagePrevious,
 }
@@ -154,10 +150,6 @@ func (a Action) String() string {
 		return "quit.restore-desktop"
 	case ActionQuitKeepDesktop:
 		return "quit.keep-desktop"
-	case ActionConfirm:
-		return "confirm"
-	case ActionCancel:
-		return "cancel"
 	case ActionPageNext:
 		return "page.next"
 	case ActionPagePrevious:
@@ -174,9 +166,6 @@ type Target struct {
 	RuleID     contract.RuleID
 	ExitID     contract.ExitID
 	Section    Section
-	// PendingID identifies the rendered confirmation. Confirm/Cancel clicks
-	// carry it so an old rendered pair cannot consume a replacement.
-	PendingID uint64
 }
 
 // Section identifies one independently paginated menu list.
@@ -224,7 +213,7 @@ func kindOf(a Action) actionKind {
 		return kindTerminal
 	case ActionQuit, ActionQuitKeepDesktop:
 		return kindLifecycle
-	case ActionShowLogPath, ActionConfirm, ActionCancel, ActionPageNext, ActionPagePrevious:
+	case ActionShowLogPath, ActionPageNext, ActionPagePrevious:
 		return kindLocal
 	default:
 		return kindNone
@@ -320,68 +309,7 @@ func jobName(a Action) (string, bool) {
 	}
 }
 
-// requiresConfirmationLocked is the two-step table. Proposal accept is
-// state-dependent: accepting an unroute suggestion deletes a rule, so only the
-// route kind is confirmed by the click itself.
-func (c *Controller) requiresConfirmationLocked(a Action, t Target) bool {
-	switch a {
-	case ActionStopListening, ActionRestartEngine, ActionProposalsClear,
-		ActionRuleRemove, ActionPoolRemove, ActionDesktopSet, ActionDesktopRestore,
-		ActionQuitRestoreDesktop, ActionQuitKeepDesktop, ActionTunEnable, ActionTunDisable:
-		return true
-	case ActionProposalAccept:
-		if p, ok := c.proposalByIDLocked(t.ProposalID); ok {
-			return p.Kind == contract.ProposalUnroute
-		}
-		return true // conservative: an unknown proposal is never treated as safe
-	case ActionQuit:
-		return c.desktopAppliedOrUnknownLocked() || c.job != nil
-	default:
-		return false
-	}
-}
-
-// actionLabel is the sanitized short label shown in "Confirm: <label>". It is
-// derived from the action and target, never parsed back.
-func (c *Controller) actionLabelLocked(a Action, t Target) string {
-	var label string
-	switch a {
-	case ActionStopListening:
-		label = "Stop listening" + c.desktopCutWarningLocked()
-	case ActionRestartEngine:
-		label = "Restart engine" + c.desktopCutWarningLocked()
-	case ActionTunEnable:
-		label = "Enable system-wide coverage (all host traffic)"
-	case ActionTunDisable:
-		label = "Disable system-wide coverage"
-	case ActionProposalsClear:
-		label = "Clear decided/expired proposals"
-	case ActionRuleRemove:
-		label = "Remove rule " + shortID(string(t.RuleID))
-	case ActionPoolRemove:
-		label = "Remove exit " + shortID(string(t.ExitID))
-	case ActionDesktopSet:
-		label = "Set desktop proxy"
-	case ActionDesktopRestore:
-		label = "Restore previous desktop proxy"
-	case ActionQuitRestoreDesktop:
-		label = "Restore desktop proxy and quit"
-	case ActionQuitKeepDesktop:
-		label = "Quit and keep desktop proxy"
-	case ActionQuit:
-		label = "Quit RouteLatch"
-	case ActionProposalAccept:
-		if p, ok := c.proposalByIDLocked(t.ProposalID); ok && p.Kind == contract.ProposalUnroute {
-			label = "Accept unroute (removes rule " + shortID(string(p.RuleID)) + ")"
-			break
-		}
-		label = "Accept proposal " + shortID(string(t.ProposalID))
-	default:
-		label = a.String()
-	}
-	return SanitizeLabel(label)
-}
-
+// proposalByIDLocked finds the live view of one proposal.
 func (c *Controller) proposalByIDLocked(id contract.ProposalID) (Proposal, bool) {
 	for _, p := range c.snap.Proposals {
 		if p.ID == id {
@@ -391,6 +319,8 @@ func (c *Controller) proposalByIDLocked(id contract.ProposalID) (Proposal, bool)
 	return Proposal{}, false
 }
 
+// desktopAppliedOrUnknownLocked reports whether a plain Quit could leave an
+// applied desktop proxy behind.
 func (c *Controller) desktopAppliedOrUnknownLocked() bool {
 	d := c.snap.Desktop
 	// Never-read is unknown, not "not applied": the initial menu must not offer
@@ -398,16 +328,16 @@ func (c *Controller) desktopAppliedOrUnknownLocked() bool {
 	return d.Err || !d.Known || d.Applied
 }
 
-// desktopCutWarningLocked is appended to the confirmation label for actions
-// that close the listeners. Unknown is warned about explicitly instead of
-// being treated as "not applied".
+// desktopCutWarningLocked is the visible warning under Mode when stopping or
+// restarting would cut an applied desktop proxy. It replaces the warning that
+// the old confirmation label carried; unknown is warned about explicitly.
 func (c *Controller) desktopCutWarningLocked() string {
 	d := c.snap.Desktop
 	switch {
 	case d.Err || !d.Known:
-		return " (desktop proxy state unknown; may be cut)"
+		return "Desktop proxy state unknown; stopping or restarting may cut it"
 	case d.Applied:
-		return " (desktop proxy applied; cut until listeners return)"
+		return "Desktop proxy applied; stopping or restarting cuts it until listening resumes"
 	default:
 		return ""
 	}

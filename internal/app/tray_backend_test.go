@@ -173,10 +173,10 @@ func TestTrayBackendBuildRendersDeedlesTree(t *testing.T) {
 		trayui.MenuItem{Key: "mode", Kind: trayui.BackendSubmenu, Label: "Mode", Enabled: true, Visible: true, Children: []trayui.MenuItem{
 			{Key: "mode.targeted", Kind: trayui.BackendItem, Label: "Targeted", Enabled: true, Visible: true, Checked: true, Check: trayui.CheckRadio},
 			{Key: "mode.all-proxy", Kind: trayui.BackendItem, Label: "All proxy", Enabled: true, Visible: true, Check: trayui.CheckRadio},
-			{Key: "mode.stop", Kind: trayui.BackendItem, Label: "Stop listening…", Enabled: true, Visible: true},
+			{Key: "mode.stop", Kind: trayui.BackendItem, Label: "Stop listening", Enabled: true, Visible: true},
 		}},
 		trayui.MenuItem{Key: "advanced", Kind: trayui.BackendSubmenu, Label: "Advanced", Enabled: true, Visible: true, Children: []trayui.MenuItem{
-			{Key: "advanced.restart", Kind: trayui.BackendItem, Label: "Restart engine…", Enabled: true, Visible: true},
+			{Key: "advanced.restart", Kind: trayui.BackendItem, Label: "Restart engine", Enabled: true, Visible: true},
 		}},
 		trayui.MenuItem{Key: "sep", Kind: trayui.BackendSeparator, Visible: true},
 	)
@@ -420,7 +420,7 @@ func TestTrayBackendMovedSubtreeKeepsChildren(t *testing.T) {
 	row := func() trayui.MenuItem {
 		return trayui.MenuItem{Key: "row", Kind: trayui.BackendSubmenu, Label: "row", Enabled: true, Visible: true, Children: []trayui.MenuItem{
 			{Key: "row.select", Kind: trayui.BackendItem, Label: "Select exit", Enabled: true, Visible: true},
-			{Key: "row.remove", Kind: trayui.BackendItem, Label: "Remove…", Enabled: true, Visible: true},
+			{Key: "row.remove", Kind: trayui.BackendItem, Label: "Remove", Enabled: true, Visible: true},
 		}}
 	}
 	root := buildTestRoot(
@@ -471,7 +471,7 @@ func TestTrayBackendBinderMovedSubtree(t *testing.T) {
 	root := func(children ...trayui.Node) trayui.Node {
 		return trayui.Node{Key: "root", Label: "RouteLatch", Kind: trayui.NodeSubmenu, Enabled: true, Visible: true, Children: children}
 	}
-	row := sub("row", "row", item("row.select", "Select exit"), item("row.remove", "Remove…"))
+	row := sub("row", "row", item("row.select", "Select exit"), item("row.remove", "Remove"))
 	first := trayui.View{Root: root(sub("g1", "G1", item("g1.empty", "No rows")), sub("g2", "G2", row)), Engine: trayui.EngineReady}
 	second := trayui.View{Root: root(sub("g1", "G1", row), sub("g2", "G2", item("g2.empty", "No rows"))), Engine: trayui.EngineReady}
 	if _, err := binder.Apply(context.Background(), first); err != nil {

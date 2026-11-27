@@ -230,7 +230,7 @@ func TestRunnerInitialLoadingMenuThenRefreshAll(t *testing.T) {
 	}
 }
 
-func TestRunnerClickTriggersControllerAndConfirmation(t *testing.T) {
+func TestRunnerClickRunsControllerActions(t *testing.T) {
 	h := startRunner(t, newFixture())
 
 	rulesBefore := h.ctlSetup.caller.countOp(control.OpRulesList)
@@ -243,37 +243,17 @@ func TestRunnerClickTriggersControllerAndConfirmation(t *testing.T) {
 		return h.ctlSetup.caller.countOp(control.OpRulesList) > rulesBefore
 	})
 
-	// A destructive click uses the same path and renders a pending confirmation.
+	// A destructive click executes on the same click, without a confirmation
+	// node or a second step.
 	if err := h.runner.Click("mode.stop"); err != nil {
 		t.Fatalf("stop click: %v", err)
 	}
-	confirmKey := ""
-	waitFor(t, "pending confirmation", func() bool {
-		for _, key := range h.backend.keysOf("root") {
-			if strings.HasPrefix(key, "pending.") && strings.HasSuffix(key, ".confirm") {
-				confirmKey = key
-				return true
-			}
-		}
-		return false
-	})
-	if h.ctlSetup.caller.countOp(control.OpMode) != 1 {
-		t.Fatal("pending action executed before confirmation")
-	}
-	// The tree can be visible a moment before the binder publishes its click
-	// map; retry until the key resolves.
-	waitFor(t, "confirm clickable", func() bool {
-		err := h.runner.Click(confirmKey)
-		if err == nil {
-			return true
-		}
-		if errors.Is(err, ErrUnknownNode) {
-			return false
-		}
-		t.Fatalf("confirm click: %v", err)
-		return false
-	})
 	waitFor(t, "stop executed", func() bool { return h.ctlSetup.caller.countOp(control.OpMode) == 2 })
+	for _, key := range h.backend.keysOf("root") {
+		if strings.HasPrefix(key, "pending.") {
+			t.Fatalf("confirmation node %q was rendered", key)
+		}
+	}
 }
 
 func TestRunnerRejectsDisabledAndUnknownClicks(t *testing.T) {

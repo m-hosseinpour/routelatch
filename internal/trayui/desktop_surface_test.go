@@ -23,31 +23,22 @@ func lastNotification(s *controllerSetup) (Notification, bool) {
 	return notes[len(notes)-1], true
 }
 
-func TestDesktopSetAndRestoreUseConfirmationAndOneRequest(t *testing.T) {
+func TestDesktopSetAndRestoreRunOnClickAndSendOneRequest(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	view := s.ctl.View()
 
-	if set, _ := findNode(view.Root, "desktop.set"); set.Label != "Set/Re-apply desktop proxy…" || !set.Enabled {
+	if set, _ := findNode(view.Root, "desktop.set"); set.Label != "Set/Re-apply desktop proxy" || !set.Enabled {
 		t.Fatalf("set item = %+v", set)
 	}
-	if restore, _ := findNode(view.Root, "desktop.restore"); restore.Label != "Restore previous desktop proxy…" || !restore.Enabled {
+	if restore, _ := findNode(view.Root, "desktop.restore"); restore.Label != "Restore previous desktop proxy" || !restore.Enabled {
 		t.Fatalf("restore item = %+v", restore)
 	}
 
 	baseline := s.caller.countOp(control.OpDesktopSet)
 	res, err := s.ctl.Trigger(ctx, ActionDesktopSet, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultJobStarted {
 		t.Fatalf("set trigger = %+v, %v", res, err)
-	}
-	if p := s.ctl.View().Pending; p == nil || p.Action != ActionDesktopSet || p.Label != "Set desktop proxy" {
-		t.Fatalf("set pending = %+v", p)
-	}
-	if got := s.caller.countOp(control.OpDesktopSet); got != baseline {
-		t.Fatalf("set reached the socket before confirmation: %d", got-baseline)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("set confirm: %v", err)
 	}
 	waitForJobEnd(t, s)
 	if got := s.caller.countOp(control.OpDesktopSet); got != baseline+1 {
@@ -72,17 +63,8 @@ func TestDesktopSetAndRestoreUseConfirmationAndOneRequest(t *testing.T) {
 	})
 	baseline = s.caller.countOp(control.OpDesktopRestore)
 	res, err = s.ctl.Trigger(ctx, ActionDesktopRestore, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultJobStarted {
 		t.Fatalf("restore trigger = %+v, %v", res, err)
-	}
-	if p := s.ctl.View().Pending; p == nil || p.Action != ActionDesktopRestore || p.Label != "Restore previous desktop proxy" {
-		t.Fatalf("restore pending = %+v", p)
-	}
-	if got := s.caller.countOp(control.OpDesktopRestore); got != baseline {
-		t.Fatalf("restore reached the socket before confirmation: %d", got-baseline)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("restore confirm: %v", err)
 	}
 	waitForJobEnd(t, s)
 	if got := s.caller.countOp(control.OpDesktopRestore); got != baseline+1 {
@@ -109,9 +91,6 @@ func TestDesktopRestoreNoOpReportsTheServiceNotice(t *testing.T) {
 	})
 	ctx := context.Background()
 	if _, err := s.ctl.Trigger(ctx, ActionDesktopRestore, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
 		t.Fatal(err)
 	}
 	waitForJobEnd(t, s)
@@ -232,9 +211,7 @@ func TestDesktopConflictAndNoticeAreVisible(t *testing.T) {
 	if _, err := s.ctl.Trigger(context.Background(), ActionDesktopSet, Target{}); err != nil {
 		t.Fatalf("set on conflict: %v", err)
 	}
-	if p := s.ctl.View().Pending; p == nil || p.Label != "Set desktop proxy" {
-		t.Fatalf("pending = %+v", p)
-	}
+	waitForJobEnd(t, s)
 }
 
 func TestUnsupportedDesktopNoticeIsNotShownAsAReason(t *testing.T) {

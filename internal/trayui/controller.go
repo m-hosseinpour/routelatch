@@ -33,29 +33,16 @@ type Options struct {
 	CustomDataDir bool
 
 	Now            func() time.Time
-	PendingTTL     time.Duration
 	CallTimeout    time.Duration
 	ActionTimeout  time.Duration
 	RestartTimeout time.Duration
 }
 
 const (
-	defaultPendingTTL     = 60 * time.Second
 	defaultCallTimeout    = 1500 * time.Millisecond
 	defaultActionTimeout  = 30 * time.Second
 	defaultRestartTimeout = 45 * time.Second
 )
-
-// Pending is the one in-memory two-step confirmation. It is never written to
-// state, config, a log or a database. ID identifies one rendered confirmation:
-// a click on an older confirm/cancel pair must not consume a replacement.
-type Pending struct {
-	ID        uint64
-	Action    Action
-	Target    Target
-	Label     string
-	ExpiresAt time.Time
-}
 
 // Job is the public view of the one long-running operation.
 type Job struct {
@@ -82,7 +69,6 @@ type ResultStatus int
 const (
 	ResultCompleted ResultStatus = iota
 	ResultJobStarted
-	ResultConfirmationRequired
 	ResultNoop
 )
 
@@ -103,31 +89,28 @@ type View struct {
 	// carry the same data; this copy avoids a second traversal and is immutable
 	// like Root.
 	Tun        TunView
-	Pending    *Pending
 	Job        *Job
 	LastAction string
 	Loaded     bool
 }
 
-// Controller owns pending confirmations, the single job slot, restart event
-// ordering and the fingerprint cache. All methods are safe for concurrent use.
+// Controller owns the single job slot, restart event ordering and the
+// fingerprint cache. All methods are safe for concurrent use.
 type Controller struct {
 	opts Options
 
 	refreshMu  sync.Mutex // serializes network/local refresh reads
 	mu         sync.Mutex
 	snap       Snapshot
-	pending    *Pending
 	job        *job
 	pages      map[Section]int
 	lastAction string
 	restarting bool
 
-	cachedRoot  Node
-	cachedFP    string
-	builds      int
-	nextJob     uint64
-	nextPending uint64
+	cachedRoot Node
+	cachedFP   string
+	builds     int
+	nextJob    uint64
 }
 
 // New validates the required boundary and applies the documented defaults.
@@ -137,9 +120,6 @@ func New(opts Options) (*Controller, error) {
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
-	}
-	if opts.PendingTTL <= 0 {
-		opts.PendingTTL = defaultPendingTTL
 	}
 	if opts.CallTimeout <= 0 {
 		opts.CallTimeout = defaultCallTimeout
@@ -183,7 +163,7 @@ func copySnapshot(s Snapshot) Snapshot {
 	return out
 }
 
-// View evaluates expiry/timeouts, clamps pagination, rebuilds the tree only
+// View evaluates restart timeouts, clamps pagination, rebuilds the tree only
 // when the menu fingerprint changed, and returns the immutable model.
 func (c *Controller) View() View {
 	c.mu.Lock()
@@ -201,7 +181,6 @@ func (c *Controller) View() View {
 		Fingerprint: fp,
 		Engine:      engine,
 		Tun:         copyTunView(c.snap.Status.Tun),
-		Pending:     copyPending(c.pending),
 		Job:         copyJob(c.job),
 		LastAction:  c.lastAction,
 		Loaded:      c.snap.Engine != EngineLoading,
@@ -209,14 +188,6 @@ func (c *Controller) View() View {
 	c.mu.Unlock()
 	c.notify(notes)
 	return view
-}
-
-func copyPending(p *Pending) *Pending {
-	if p == nil {
-		return nil
-	}
-	out := *p
-	return &out
 }
 
 func copyTunView(v TunView) TunView {
@@ -241,21 +212,15 @@ func (c *Controller) engineLocked() EngineState {
 }
 
 // needsFreshDesktopStatus reports whether a click must re-read desktop.status
-// before it builds a pending confirmation. Stop, Restart and Quit can cut or
-// leave behind an applied desktop proxy (§7.3), so a stale snapshot must not
-// hide that warning.
+// before it runs. A plain Quit must not rely on a stale "not applied" snapshot:
+// quitting while the desktop proxy is applied leaves it pointing at a closed
+// listener.
 func needsFreshDesktopStatus(a Action) bool {
-	switch a {
-	case ActionStopListening, ActionRestartEngine, ActionQuit:
-		return true
-	default:
-		return false
-	}
+	return a == ActionQuit
 }
 
-// Trigger is the click entry point. A destructive action creates or replaces
-// the single pending confirmation; Confirm executes exactly the stored action
-// and target. No label is ever parsed.
+// Trigger is the click entry point: an enabled menu item executes its action
+// directly. Labels are never parsed.
 func (c *Controller) Trigger(ctx context.Context, action Action, target Target) (Result, error) {
 	if needsFreshDesktopStatus(action) {
 		// The read is best effort and outside c.mu: a bounded management call
@@ -268,21 +233,6 @@ func (c *Controller) Trigger(ctx context.Context, action Action, target Target) 
 	notes := c.expireLocked(c.opts.Now())
 
 	switch action {
-	case ActionConfirm:
-		c.mu.Unlock()
-		c.notify(notes)
-		return c.confirmTarget(ctx, target.PendingID)
-	case ActionCancel:
-		if c.pending == nil || c.pending.ID != target.PendingID {
-			c.mu.Unlock()
-			c.notify(notes)
-			return Result{}, ErrNoPending
-		}
-		c.pending = nil
-		c.lastAction = "Cancelled"
-		c.mu.Unlock()
-		c.notify(notes)
-		return Result{Status: ResultCompleted, Message: "Cancelled"}, nil
 	case ActionPageNext, ActionPagePrevious:
 		delta := 1
 		if action == ActionPagePrevious {
@@ -299,83 +249,26 @@ func (c *Controller) Trigger(ctx context.Context, action Action, target Target) 
 		c.notify(notes)
 		return Result{}, ErrBlocked
 	}
-	// Any new action replaces the one pending confirmation. Page navigation and
-	// Confirm/Cancel are the exceptions; they do not start a new action.
-	c.pending = nil
 	if err := c.allowedLocked(action, target); err != nil {
-		c.lastAction = "Action unavailable: " + errorKindLabel(err)
+		message := "Action unavailable: " + errorKindLabel(err)
+		if action == ActionQuit && errors.Is(err, ErrBlocked) && c.desktopAppliedOrUnknownLocked() {
+			// A stale plain-Quit click is rejected after the fresh desktop read.
+			// Say why instead of leaving the user with a closed menu and no
+			// visible outcome.
+			message = "Quit needs an explicit desktop proxy choice: restore or keep"
+			if c.allowedLocked(ActionQuitRestoreDesktop, Target{}) != nil {
+				message = "Quit needs an explicit desktop proxy choice: keep (restore is unavailable here)"
+			}
+			notes = append(notes, Notification{Title: "RouteLatch", Body: message})
+		}
+		c.lastAction = message
 		c.mu.Unlock()
 		c.notify(notes)
 		return Result{}, err
 	}
-	if c.requiresConfirmationLocked(action, target) {
-		label := c.actionLabelLocked(action, target)
-		c.nextPending++
-		c.pending = &Pending{
-			ID: c.nextPending, Action: action, Target: target, Label: label,
-			ExpiresAt: c.opts.Now().Add(c.opts.PendingTTL),
-		}
-		c.lastAction = "Confirmation required"
-		c.mu.Unlock()
-		c.notify(notes)
-		return Result{Status: ResultConfirmationRequired, Message: label}, nil
-	}
 	c.mu.Unlock()
 	c.notify(notes)
 	return c.dispatch(ctx, action, target)
-}
-
-// Confirm consumes the pending record and executes its stored action/target.
-func (c *Controller) Confirm(ctx context.Context) (Result, error) {
-	c.mu.Lock()
-	notes := c.expireLocked(c.opts.Now())
-	p := c.pending
-	c.mu.Unlock()
-	c.notify(notes)
-	if p == nil {
-		return Result{}, ErrNoPending
-	}
-	return c.confirmPending(ctx, p)
-}
-
-// confirmTarget confirms only the pending generation the click was rendered
-// for. A replacement or expiry invalidates the old click's target.
-func (c *Controller) confirmTarget(ctx context.Context, id uint64) (Result, error) {
-	c.mu.Lock()
-	notes := c.expireLocked(c.opts.Now())
-	p := c.pending
-	c.mu.Unlock()
-	c.notify(notes)
-	if p == nil || p.ID != id {
-		return Result{}, ErrNoPending
-	}
-	return c.confirmPending(ctx, p)
-}
-
-func (c *Controller) confirmPending(ctx context.Context, p *Pending) (Result, error) {
-	c.mu.Lock()
-	// Another click may have replaced or cancelled it between the two locks;
-	// only the same record may be confirmed.
-	if c.pending != p {
-		c.mu.Unlock()
-		return Result{}, ErrNoPending
-	}
-	action, target := p.Action, p.Target
-	c.pending = nil
-	c.mu.Unlock()
-	return c.dispatch(ctx, action, target)
-}
-
-// CancelPending drops the pending confirmation, if any.
-func (c *Controller) CancelPending() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.pending == nil {
-		return false
-	}
-	c.pending = nil
-	c.lastAction = "Cancelled"
-	return true
 }
 
 // dispatch revalidates state, starts the single job slot or runs a synchronous
@@ -405,7 +298,7 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 	busy := c.job != nil
 
 	switch action {
-	case ActionConfirm, ActionCancel, ActionPageNext, ActionPagePrevious:
+	case ActionPageNext, ActionPagePrevious:
 		return nil
 	case ActionTerminalMenu, ActionShowLogPath:
 		if engine == EngineLoading {
@@ -710,7 +603,6 @@ func (c *Controller) HandleEvent(event LifecycleEvent) {
 	c.mu.Lock()
 	if event.Kind == LifecycleRestarting {
 		c.restarting = true
-		c.pending = nil
 		c.lastAction = "Restarting engine…"
 		if c.job != nil {
 			if c.job.action == ActionRestartEngine {
@@ -730,7 +622,6 @@ func (c *Controller) HandleEvent(event LifecycleEvent) {
 		return
 	}
 	c.restarting = false
-	c.pending = nil
 	// A ready event proves a new engine generation only together with a fresh
 	// status. Until the binder refreshes, do not let the previous snapshot's
 	// ready state enable management actions or show its lists as current.
@@ -752,14 +643,10 @@ func (c *Controller) HandleEvent(event LifecycleEvent) {
 	}
 }
 
-// expireLocked evaluates the pending TTL and restart deadline. It returns the
-// notifications the caller must deliver after releasing the mutex.
+// expireLocked evaluates the restart deadline. It returns the notifications
+// the caller must deliver after releasing the mutex.
 func (c *Controller) expireLocked(now time.Time) []Notification {
 	var notes []Notification
-	if c.pending != nil && !now.Before(c.pending.ExpiresAt) {
-		c.pending = nil
-		c.lastAction = "Confirmation expired"
-	}
 	if c.job != nil && c.job.restart && !now.Before(c.job.deadline) {
 		c.job = nil
 		c.restarting = false
@@ -781,7 +668,7 @@ func (c *Controller) LifecycleEvents() <-chan LifecycleEvent {
 	return c.opts.Lifecycle.Events()
 }
 
-// Tick exists for a binder that wants expiry/timeout processing without
+// Tick exists for a binder that wants restart-timeout processing without
 // applying a tree. View itself performs the same evaluation.
 func (c *Controller) Tick() {
 	c.mu.Lock()
@@ -1255,7 +1142,6 @@ type fingerprintPayload struct {
 	Config     ConfigView
 	Paths      Paths
 	Doctor     []Check
-	Pending    *Pending
 	Job        *Job
 	LastAction string
 	Restarting bool
@@ -1278,7 +1164,6 @@ func (c *Controller) menuFingerprintLocked(engine EngineState) string {
 		Config:     c.snap.Config,
 		Paths:      c.snap.Paths,
 		Doctor:     c.snap.Doctor,
-		Pending:    c.pending,
 		Job:        copyJob(c.job),
 		LastAction: c.lastAction,
 		Restarting: c.restarting,

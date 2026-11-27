@@ -223,8 +223,8 @@ TLS ناامن (D18): هستهٔ pin‌شده `allowInsecure` را حذف کرد
   جدید باز نمی‌کند و سرویس/systemd را مدیریت نمی‌کند. منطق منو در یک بستهٔ pure-Go
   و testable (`internal/trayui`، مسیر پیشنهادی) از binding D-Bus جدا می‌شود؛
   GUI آینده می‌تواند از همان management contract استفاده کند، نه از داخلی‌های tray.
-  actionهای طولانی asynchronous‌اند و handler D-Bus را بلوکه نمی‌کنند؛ عمل مخرب
-  با یک pending confirmation دو مرحله‌ای اجرا می‌شود. labelها از همان
+  actionهای طولانی asynchronous‌اند و handler D-Bus را بلوکه نمی‌کنند؛ هر action
+  با یک کلیک صریح روی آیتم منو اجرا می‌شود (بدون تأیید دو مرحله‌ای؛ D33). labelها از همان
   `SanitizeTerminal` می‌گذرند و notification/log هیچ مقصد/URL/credentialی ندارد
   (D21). عملیات نیازمند متن در CLI/`Terminal menu` می‌مانند. جزئیات درخت منو،
   refresh و حالت‌ها در `contracts.md §۷.۳` است. این تصمیم GUI کامل نیست (D24).

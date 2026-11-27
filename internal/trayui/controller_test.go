@@ -11,154 +11,34 @@ import (
 	"routelatch/internal/control"
 )
 
-func TestPendingReplacementExpiryAndCancel(t *testing.T) {
+func TestTrayActionsRunOnTheClick(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 
-	res, err := s.ctl.Trigger(ctx, ActionStopListening, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
-		t.Fatalf("stop trigger = %+v, %v", res, err)
+	if res, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil || res.Status != ResultCompleted {
+		t.Fatalf("stop = %+v, %v", res, err)
 	}
-	if s.caller.countOp(control.OpMode) != 0 {
-		t.Fatal("a pending action executed before confirmation")
+	if got := s.caller.countOp(control.OpMode); got != 1 {
+		t.Fatalf("stop requests = %d, want 1", got)
 	}
-	view := s.ctl.View()
-	if view.Pending == nil || view.Pending.Action != ActionStopListening {
-		t.Fatalf("pending = %+v", view.Pending)
-	}
-	confirm, ok := findNode(view.Root, rootKeys(view.Root)[1])
-	if !ok || !strings.HasPrefix(confirm.Label, "Confirm: Stop listening") || confirm.Target.PendingID != view.Pending.ID {
-		t.Fatalf("confirm node = %+v", confirm)
+	if got := s.ctl.View().LastAction; got != "Stopped listening" {
+		t.Fatalf("last action = %q", got)
 	}
 
-	// A new action replaces the pending record; only one can exist.
-	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: "r-001"}); err != nil {
-		t.Fatal(err)
+	if res, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: "r-005"}); err != nil || res.Status != ResultCompleted {
+		t.Fatalf("remove = %+v, %v", res, err)
 	}
-	if p := s.ctl.View().Pending; p == nil || p.Action != ActionRuleRemove || p.Target.RuleID != "r-001" {
-		t.Fatalf("pending was not replaced: %+v", p)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 0 {
-		t.Fatal("replacement executed the destructive action")
-	}
-
-	// A non-destructive action clears the pending record instead of leaving a
-	// stale confirmation that could fire later.
-	if _, err := s.ctl.Trigger(ctx, ActionModeTargeted, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	if s.ctl.View().Pending != nil {
-		t.Fatal("pending survived a new action")
-	}
-	if s.caller.countOp(control.OpMode) != 1 {
-		t.Fatal("mode action did not execute")
-	}
-
-	// Cancel.
-	if _, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	if !s.ctl.CancelPending() {
-		t.Fatal("CancelPending returned false")
-	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("confirm after cancel = %v", err)
-	}
-
-	// Expiry.
-	if _, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	s.clock.Advance(61 * time.Second)
-	view = s.ctl.View()
-	if view.Pending != nil {
-		t.Fatal("expired pending survived View")
-	}
-	if view.LastAction != "Confirmation expired" {
-		t.Fatalf("last action = %q", view.LastAction)
-	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("confirm after expiry = %v", err)
-	}
-	if s.caller.countOp(control.OpMode) != 1 {
-		t.Fatal("expired confirmation executed a request")
-	}
-}
-
-func TestStalePendingClickCannotConsumeReplacement(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-	if _, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	first := s.ctl.View()
-	firstKeys := rootKeys(first.Root)
-	oldConfirm, _ := findNode(first.Root, firstKeys[1])
-	oldCancel, _ := findNode(first.Root, firstKeys[2])
-	if first.Pending == nil || oldConfirm.Target.PendingID != first.Pending.ID {
-		t.Fatalf("first pending = %+v", first.Pending)
-	}
-
-	// A replacement pending gets a new identity, so a click rendered for the
-	// old confirm/cancel pair must not consume it.
-	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: "r-001"}); err != nil {
-		t.Fatal(err)
-	}
-	second := s.ctl.View()
-	secondKeys := rootKeys(second.Root)
-	if secondKeys[1] == firstKeys[1] || secondKeys[2] == firstKeys[2] {
-		t.Fatalf("pending keys did not change: old %v new %v", firstKeys, secondKeys)
-	}
-	if _, err := s.ctl.Trigger(ctx, oldConfirm.Action, oldConfirm.Target); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("stale confirm = %v, want ErrNoPending", err)
-	}
-	if _, err := s.ctl.Trigger(ctx, oldCancel.Action, oldCancel.Target); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("stale cancel = %v, want ErrNoPending", err)
-	}
-	if p := s.ctl.View().Pending; p == nil || p.ID != second.Pending.ID || p.Action != ActionRuleRemove {
-		t.Fatalf("replacement pending was consumed: %+v", p)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 0 || s.caller.countOp(control.OpMode) != 0 {
-		t.Fatal("a stale click executed an action")
-	}
-
-	// The replacement's own rendered confirm still works.
-	confirm, _ := findNode(second.Root, secondKeys[1])
-	if _, err := s.ctl.Trigger(ctx, confirm.Action, confirm.Target); err != nil {
-		t.Fatalf("replacement confirm: %v", err)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 1 {
-		t.Fatal("replacement confirmation did not run its stored action")
-	}
-}
-
-func TestConfirmRunsStoredTargetExactlyOnce(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-	bad := "r-\x1b[2Jbad\u202e\r\n"
-	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: contract.RuleID(bad)}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
-	}
-	reqs := s.caller.requests()
-	var remove control.Request
-	removeCount := 0
-	for _, req := range reqs {
+	removes := 0
+	for _, req := range s.caller.requests() {
 		if req.Op == control.OpRulesRemove {
-			remove = req
-			removeCount++
+			removes++
+			if req.ID != "r-005" {
+				t.Fatalf("rules.remove id = %q, want r-005", req.ID)
+			}
 		}
 	}
-	if removeCount != 1 || remove.ID != bad {
-		t.Fatalf("rules.remove requests = %d id=%q, want one with the stored id", removeCount, remove.ID)
-	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("second confirm = %v", err)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 1 {
-		t.Fatal("second confirm executed another request")
+	if removes != 1 {
+		t.Fatalf("rules.remove requests = %d, want 1", removes)
 	}
 }
 
@@ -246,11 +126,8 @@ func TestRestartEventOrdering(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	res, err := s.ctl.Trigger(ctx, ActionRestartEngine, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultJobStarted {
 		t.Fatalf("restart trigger = %+v, %v", res, err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("restart confirm: %v", err)
 	}
 	waitFor(t, "restart request", func() bool {
 		_, restarts := s.life.counts()
@@ -292,9 +169,6 @@ func TestRestartReadyWithoutRestartingIsUnconfirmed(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	if _, err := s.ctl.Trigger(ctx, ActionRestartEngine, Target{}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
 		t.Fatal(err)
 	}
 	s.ctl.HandleEvent(LifecycleEvent{Kind: LifecycleReady})
@@ -387,7 +261,7 @@ func TestFingerprintPreventsUnchangedRebuild(t *testing.T) {
 	}
 }
 
-func TestQuitDuringJobNeedsExtraConfirmation(t *testing.T) {
+func TestQuitDuringJobInterruptsTheJob(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	entered, release := s.caller.gateOn(control.OpBackup)
@@ -396,11 +270,8 @@ func TestQuitDuringJobNeedsExtraConfirmation(t *testing.T) {
 	}
 	<-entered
 	res, err := s.ctl.Trigger(ctx, ActionQuit, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("quit during job = %+v, %v", res, err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm quit: %v", err)
 	}
 	if quits, _ := s.life.counts(); quits != 1 {
 		t.Fatalf("quit requests = %d", quits)
@@ -409,67 +280,100 @@ func TestQuitDuringJobNeedsExtraConfirmation(t *testing.T) {
 	waitFor(t, "job after quit", func() bool { return s.ctl.View().Job == nil })
 }
 
-func TestStopAndRestartWarnAboutAppliedDesktopProxy(t *testing.T) {
+func TestStopAndRestartRunOnceWithAppliedDesktopProxy(t *testing.T) {
 	fx := newFixture()
 	fx.desktop.Applied = true
 	s := newSetup(t, fx, nil)
 	ctx := context.Background()
 
-	for _, action := range []Action{ActionStopListening, ActionRestartEngine} {
-		res, err := s.ctl.Trigger(ctx, action, Target{})
-		if err != nil || res.Status != ResultConfirmationRequired {
-			t.Fatalf("%s trigger = %+v, %v", action, res, err)
+	if res, err := s.ctl.Trigger(ctx, ActionStopListening, Target{}); err != nil || res.Status != ResultCompleted {
+		t.Fatalf("stop = %+v, %v", res, err)
+	}
+	if got := s.caller.countOp(control.OpMode); got != 1 {
+		t.Fatalf("stop requests = %d, want 1", got)
+	}
+	if got := s.ctl.View().LastAction; got != "Stopped listening" {
+		t.Fatalf("stop last action = %q", got)
+	}
+
+	fx = newFixture()
+	fx.desktop.Applied = true
+	s = newSetup(t, fx, nil)
+	if res, err := s.ctl.Trigger(ctx, ActionRestartEngine, Target{}); err != nil || res.Status != ResultJobStarted {
+		t.Fatalf("restart = %+v, %v", res, err)
+	}
+	waitFor(t, "restart request", func() bool {
+		_, restarts := s.life.counts()
+		return restarts == 1
+	})
+}
+
+func TestModeMenuWarnsWhenDesktopProxyMayBeCut(t *testing.T) {
+	fx := newFixture()
+	fx.desktop.Applied = true
+	s := newSetup(t, fx, nil)
+	warning, ok := findNode(s.ctl.View().Root, "mode.desktop-warning")
+	if !ok || warning.Enabled || !strings.Contains(warning.Label, "applied") || !strings.Contains(warning.Label, "resumes") {
+		t.Fatalf("applied warning = %+v", warning)
+	}
+
+	unknown := newSetup(t, newFixture(), nil)
+	unknown.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
+	if err := unknown.ctl.RefreshDesktop(context.Background()); err == nil {
+		t.Fatal("expected a desktop read failure")
+	}
+	warning, ok = findNode(unknown.ctl.View().Root, "mode.desktop-warning")
+	if !ok || warning.Enabled || !strings.Contains(warning.Label, "unknown") {
+		t.Fatalf("unknown warning = %+v", warning)
+	}
+
+	if _, ok := findNode(s.ctl.View().Root, "advanced.restart.warning"); !ok {
+		t.Fatal("Advanced -> Restart engine has no desktop-cut warning")
+	}
+
+	stopped := newFixture()
+	stopped.status["mode"] = string(contract.ModeStopped)
+	stopped.status["listeners_open"] = false
+	stopped.status["resume_requires_restart"] = true
+	stopped.desktop.Applied = true
+	stoppedSetup := newSetup(t, stopped, nil)
+	for _, key := range []string{"restart.resume", "restart.resume.warning"} {
+		if _, ok := findNode(stoppedSetup.ctl.View().Root, key); !ok {
+			t.Fatalf("%q missing in the stopped menu", key)
 		}
-		p := s.ctl.View().Pending
-		if p == nil || p.Action != action {
-			t.Fatalf("%s pending = %+v", action, p)
-		}
-		if !strings.Contains(p.Label, "desktop proxy applied") {
-			t.Fatalf("%s label = %q, want the applied warning", action, p.Label)
-		}
-		if containsControl(p.Label) || runeLen(p.Label) > LabelLimit {
-			t.Fatalf("%s label is unsafe: %q", action, p.Label)
-		}
-		for _, leak := range []string{"http", "example", "://"} {
-			if strings.Contains(strings.ToLower(p.Label), leak) {
-				t.Fatalf("%s label leaked %q: %q", action, leak, p.Label)
-			}
-		}
+	}
+
+	if _, ok := findNode(newSetup(t, newFixture(), nil).ctl.View().Root, "mode.desktop-warning"); ok {
+		t.Fatal("warning rendered while the desktop proxy is not applied")
 	}
 }
 
-func TestStopAndRestartHaveNoDesktopWarningWhenNotApplied(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-	for _, tc := range []struct {
-		action Action
-		want   string
-	}{
-		{ActionStopListening, "Stop listening"},
-		{ActionRestartEngine, "Restart engine"},
-	} {
-		if _, err := s.ctl.Trigger(ctx, tc.action, Target{}); err != nil {
-			t.Fatalf("%s trigger: %v", tc.action, err)
+func TestStopAndRestartDoNotDependOnDesktopStatus(t *testing.T) {
+	setup := func() *controllerSetup {
+		s := newSetup(t, newFixture(), nil)
+		s.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
+		if err := s.ctl.RefreshDesktop(context.Background()); err == nil {
+			t.Fatal("expected a desktop read failure")
 		}
-		if p := s.ctl.View().Pending; p == nil || p.Label != tc.want {
-			t.Fatalf("%s label = %+v, want %q", tc.action, p, tc.want)
-		}
+		return s
 	}
-}
 
-func TestStopAndRestartStayAvailableWhenDesktopReadFails(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	s.caller.setFail(control.OpDesktopStatus, contract.ExternalToolFailed, "tool failed")
-	ctx := context.Background()
-	for _, action := range []Action{ActionStopListening, ActionRestartEngine} {
-		if _, err := s.ctl.Trigger(ctx, action, Target{}); err != nil {
-			t.Fatalf("%s must stay available on an unknown desktop state: %v", action, err)
-		}
-		p := s.ctl.View().Pending
-		if p == nil || !strings.Contains(p.Label, "unknown") {
-			t.Fatalf("%s pending = %+v, want the unknown warning", action, p)
-		}
+	stop := setup()
+	if res, err := stop.ctl.Trigger(context.Background(), ActionStopListening, Target{}); err != nil || res.Status != ResultCompleted {
+		t.Fatalf("stop with unknown desktop = %+v, %v", res, err)
 	}
+	if got := stop.caller.countOp(control.OpMode); got != 1 {
+		t.Fatalf("stop requests = %d, want 1", got)
+	}
+
+	restart := setup()
+	if res, err := restart.ctl.Trigger(context.Background(), ActionRestartEngine, Target{}); err != nil || res.Status != ResultJobStarted {
+		t.Fatalf("restart with unknown desktop = %+v, %v", res, err)
+	}
+	waitFor(t, "restart request", func() bool {
+		_, restarts := restart.life.counts()
+		return restarts == 1
+	})
 }
 
 func TestQuitUsesAFreshDesktopRead(t *testing.T) {
@@ -495,6 +399,12 @@ func TestQuitUsesAFreshDesktopRead(t *testing.T) {
 		if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
 			t.Fatalf("plain Quit = %v, want ErrBlocked", err)
 		}
+		if got := s.ctl.View().LastAction; !strings.Contains(got, "restore or keep") {
+			t.Fatalf("last action = %q", got)
+		}
+		if note, ok := lastNotification(s); !ok || !strings.Contains(note.Body, "restore or keep") {
+			t.Fatalf("notification = %+v", note)
+		}
 		if quits, _ := s.life.counts(); quits != 0 {
 			t.Fatalf("quit ran with an applied proxy: %d", quits)
 		}
@@ -518,6 +428,12 @@ func TestQuitUsesAFreshDesktopRead(t *testing.T) {
 		if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
 			t.Fatalf("plain Quit = %v, want ErrBlocked", err)
 		}
+		if got := s.ctl.View().LastAction; !strings.Contains(got, "restore or keep") {
+			t.Fatalf("last action = %q", got)
+		}
+		if note, ok := lastNotification(s); !ok || !strings.Contains(note.Body, "restore or keep") {
+			t.Fatalf("notification = %+v", note)
+		}
 		view := s.ctl.View()
 		if n, _ := findNode(view.Root, "quit.now"); n.Visible {
 			t.Fatal("plain Quit stayed visible")
@@ -531,16 +447,30 @@ func TestQuitUsesAFreshDesktopRead(t *testing.T) {
 			t.Fatalf("quit warning = %q", n.Label)
 		}
 	})
+
+	t.Run("engine unavailable", func(t *testing.T) {
+		s := newSetup(t, newFixture(), nil)
+		s.caller.setTransport(true)
+		if err := s.ctl.RefreshStatus(ctx); err == nil {
+			t.Fatal("status unexpectedly succeeded")
+		}
+		if _, err := s.ctl.Trigger(ctx, ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
+			t.Fatalf("plain Quit = %v, want ErrBlocked", err)
+		}
+		if got := s.ctl.View().LastAction; !strings.Contains(got, "keep (restore is unavailable here)") {
+			t.Fatalf("last action = %q", got)
+		}
+		if note, ok := lastNotification(s); !ok || !strings.Contains(note.Body, "keep (restore is unavailable here)") {
+			t.Fatalf("notification = %+v", note)
+		}
+	})
 }
 
 func TestQuitRestoreFailureDoesNotQuit(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
-	if _, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{}); err != nil {
-		t.Fatal(err)
-	}
 	s.caller.setFail(control.OpDesktopRestore, contract.StateLocked, "denied")
-	if _, err := s.ctl.Confirm(ctx); err != nil {
+	if _, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "failed quit job", func() bool { return s.ctl.View().Job == nil })
@@ -592,9 +522,6 @@ func TestQuitRestoreOutcomeIsTruthful(t *testing.T) {
 			if _, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.ctl.Confirm(ctx); err != nil {
-				t.Fatal(err)
-			}
 			waitForJobEnd(t, s)
 			if quits, _ := s.life.counts(); quits != 1 {
 				t.Fatalf("quit requests = %d, want 1 after a successful restore call", quits)
@@ -616,11 +543,8 @@ func TestQuitKeepDesktopQuitsWithoutRestore(t *testing.T) {
 	s := newSetup(t, fx, nil)
 	ctx := context.Background()
 	res, err := s.ctl.Trigger(ctx, ActionQuitKeepDesktop, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("quit and keep = %+v, %v", res, err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
 	}
 	if quits, _ := s.life.counts(); quits != 1 {
 		t.Fatalf("quit requests = %d, want 1", quits)
@@ -644,14 +568,11 @@ func TestQuitRestoreDesktopRestoresThenQuits(t *testing.T) {
 	s := newSetup(t, fx, nil)
 	ctx := context.Background()
 	res, err := s.ctl.Trigger(ctx, ActionQuitRestoreDesktop, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultJobStarted {
 		t.Fatalf("restore and quit = %+v, %v", res, err)
 	}
 	restoresAtQuit := -1
 	s.life.onQuit = func() { restoresAtQuit = s.caller.countOp(control.OpDesktopRestore) }
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
-	}
 	waitFor(t, "quit and restore job", func() bool { return s.ctl.View().Job == nil })
 	if restoresAtQuit != 1 {
 		t.Fatalf("desktop.restore calls at quit = %d, want 1", restoresAtQuit)
@@ -687,9 +608,6 @@ func TestQuitKeepDesktopOnUnknownStateQuitsWithWarning(t *testing.T) {
 	}
 	if _, err := s.ctl.Trigger(ctx, ActionQuitKeepDesktop, Target{}); err != nil {
 		t.Fatalf("trigger: %v", err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
 	}
 	if quits, _ := s.life.counts(); quits != 1 {
 		t.Fatalf("quit requests = %d", quits)

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
@@ -80,7 +79,7 @@ func TestRulePagesCoverAll117RulesOnce(t *testing.T) {
 	}
 }
 
-func TestRuleRemoveConfirmationUsesTheSelectedRule(t *testing.T) {
+func TestRuleRemoveRunsOnClickWithTheSelectedRule(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	view := s.ctl.View()
@@ -89,18 +88,8 @@ func TestRuleRemoveConfirmationUsesTheSelectedRule(t *testing.T) {
 		t.Fatalf("remove node = %+v", node)
 	}
 	res, err := s.ctl.Trigger(ctx, node.Action, node.Target)
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("remove trigger = %+v, %v", res, err)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 0 {
-		t.Fatal("Remove executed before confirmation")
-	}
-	pending := s.ctl.View().Pending
-	if pending == nil || pending.Label != "Remove rule r-005" {
-		t.Fatalf("pending = %+v", pending)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
 	}
 	reqs := s.caller.requests()
 	removes := 0
@@ -123,12 +112,6 @@ func TestRuleRemoveConfirmationUsesTheSelectedRule(t *testing.T) {
 			t.Fatalf("notification leaked the rule destination: %q", note.Body)
 		}
 	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("second confirm = %v", err)
-	}
-	if s.caller.countOp(control.OpRulesRemove) != 1 {
-		t.Fatal("second confirm executed another removal")
-	}
 }
 
 func TestProposalAcceptRouteRunsOnTheClick(t *testing.T) {
@@ -142,9 +125,6 @@ func TestProposalAcceptRouteRunsOnTheClick(t *testing.T) {
 	res, err := s.ctl.Trigger(ctx, node.Action, node.Target)
 	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("accept route = %+v, %v", res, err)
-	}
-	if pending := s.ctl.View().Pending; pending != nil {
-		t.Fatalf("route accept created a pending confirmation: %+v", pending)
 	}
 	reqs := s.caller.requests()
 	accepts := 0
@@ -169,7 +149,7 @@ func TestProposalAcceptRouteRunsOnTheClick(t *testing.T) {
 	}
 }
 
-func TestProposalAcceptUnrouteNeedsConfirmationAndUsesTheSelectedProposal(t *testing.T) {
+func TestProposalAcceptUnrouteRunsOnClickWithTheSelectedProposal(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
 	view := s.ctl.View()
@@ -178,21 +158,8 @@ func TestProposalAcceptUnrouteNeedsConfirmationAndUsesTheSelectedProposal(t *tes
 		t.Fatalf("accept node = %+v", node)
 	}
 	res, err := s.ctl.Trigger(ctx, node.Action, node.Target)
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("accept unroute = %+v, %v", res, err)
-	}
-	if s.caller.countOp(control.OpProposalsAccept) != 0 {
-		t.Fatal("unroute accept executed before confirmation")
-	}
-	pending := s.ctl.View().Pending
-	if pending == nil || pending.Target.ProposalID != "p-unroute-1" {
-		t.Fatalf("pending = %+v", pending)
-	}
-	if pending.Label != "Accept unroute (removes rule r-000)" {
-		t.Fatalf("pending label = %q", pending.Label)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
 	}
 	reqs := s.caller.requests()
 	accepts := 0
@@ -214,12 +181,6 @@ func TestProposalAcceptUnrouteNeedsConfirmationAndUsesTheSelectedProposal(t *tes
 		if strings.Contains(note.Body, "rule-000.example") {
 			t.Fatalf("notification leaked the unroute destination: %q", note.Body)
 		}
-	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("second confirm = %v", err)
-	}
-	if s.caller.countOp(control.OpProposalsAccept) != 1 {
-		t.Fatal("second confirm executed another accept")
 	}
 }
 
@@ -280,17 +241,8 @@ func TestProposalRejectRecheckAndClearReachTheSocketOnce(t *testing.T) {
 	}
 
 	res, err = s.ctl.Trigger(ctx, ActionProposalsClear, Target{})
-	if err != nil || res.Status != ResultConfirmationRequired {
+	if err != nil || res.Status != ResultCompleted {
 		t.Fatalf("clear = %+v, %v", res, err)
-	}
-	if s.caller.countOp(control.OpProposalsClear) != 0 {
-		t.Fatal("clear executed before confirmation")
-	}
-	if p := s.ctl.View().Pending; p == nil || p.Label != "Clear decided/expired proposals" {
-		t.Fatalf("clear pending = %+v", p)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm clear: %v", err)
 	}
 	if s.caller.countOp(control.OpProposalsClear) != 1 {
 		t.Fatal("clear did not reach the socket once")
@@ -298,15 +250,9 @@ func TestProposalRejectRecheckAndClearReachTheSocketOnce(t *testing.T) {
 	if got := s.ctl.View().LastAction; got != "Cleared 2 proposals" {
 		t.Fatalf("last action after clear = %q", got)
 	}
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("second confirm = %v", err)
-	}
-	if s.caller.countOp(control.OpProposalsClear) != 1 {
-		t.Fatal("second confirm repeated the clear")
-	}
 }
 
-func TestMaliciousProposalAndRuleIDsStayOutOfKeysAndConfirmLabels(t *testing.T) {
+func TestMaliciousProposalAndRuleIDsStayOutOfKeysAndLabels(t *testing.T) {
 	bad := "id-\x1b[2J\u202e\r\n" + strings.Repeat("z", 100)
 	fx := newFixture()
 	fx.rules[0].ID = contract.RuleID(bad)
@@ -328,77 +274,17 @@ func TestMaliciousProposalAndRuleIDsStayOutOfKeysAndConfirmLabels(t *testing.T) 
 	if _, err := s.ctl.Trigger(ctx, ActionRuleRemove, Target{RuleID: contract.RuleID(bad)}); err != nil {
 		t.Fatal(err)
 	}
-	pending := s.ctl.View().Pending
-	if pending == nil {
-		t.Fatal("no pending confirmation")
-	}
-	if containsControl(pending.Label) || runeLen(pending.Label) > LabelLimit {
-		t.Fatalf("unsafe confirmation label: %q", pending.Label)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatal(err)
-	}
 	found := false
 	for _, req := range s.caller.requests() {
 		if req.Op == control.OpRulesRemove {
 			found = true
 			if req.ID != bad {
-				t.Fatalf("confirm sent %q, want the stored id", req.ID)
+				t.Fatalf("click sent %q, want the selected id", req.ID)
 			}
 		}
 	}
 	if !found {
-		t.Fatal("confirm did not send the stored rule id")
-	}
-}
-
-func TestStaleProposalConfirmationKeepsTheSelectedTarget(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-	if _, err := s.ctl.Trigger(ctx, ActionProposalAccept, Target{ProposalID: "p-unroute-1"}); err != nil {
-		t.Fatal(err)
-	}
-
-	// The proposal list refreshes with the selected proposal gone and another
-	// pending entry first. Confirm must keep the stored target, not the new row.
-	s.caller.mu.Lock()
-	s.caller.fx.proposals = []control.ProposalView{
-		{ID: "p-unroute-9", Kind: contract.ProposalUnroute, RuleID: "r-009", Status: contract.ProposalPending},
-	}
-	s.caller.mu.Unlock()
-	if err := s.ctl.RefreshLists(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.ctl.Confirm(ctx); err != nil {
-		t.Fatalf("confirm: %v", err)
-	}
-	reqs := s.caller.requests()
-	accepts := 0
-	for _, req := range reqs {
-		if req.Op == control.OpProposalsAccept {
-			accepts++
-			if req.ID != "p-unroute-1" {
-				t.Fatalf("stale confirm accepted %q, want the selected p-unroute-1", req.ID)
-			}
-		}
-	}
-	if accepts != 1 {
-		t.Fatalf("accept requests = %d, want 1", accepts)
-	}
-}
-
-func TestExpiredConfirmationNeverReachesTheSocket(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-	if _, err := s.ctl.Trigger(ctx, ActionProposalAccept, Target{ProposalID: "p-unroute-1"}); err != nil {
-		t.Fatal(err)
-	}
-	s.clock.Advance(61 * time.Second)
-	if _, err := s.ctl.Confirm(ctx); !errors.Is(err, ErrNoPending) {
-		t.Fatalf("confirm after expiry = %v", err)
-	}
-	if s.caller.countOp(control.OpProposalsAccept) != 0 {
-		t.Fatal("an expired confirmation reached the socket")
+		t.Fatal("click did not send the selected rule id")
 	}
 }
 
@@ -419,31 +305,24 @@ func TestProposalActionsNeverPutDestinationsInOutcomeText(t *testing.T) {
 		view := s.ctl.View()
 		texts = append(texts, view.LastAction)
 	}
-	step := func(action Action, target Target, confirm bool) {
+	step := func(action Action, target Target) {
 		t.Helper()
 		res, err := s.ctl.Trigger(ctx, action, target)
 		if err != nil {
 			t.Fatalf("%s: %v", action, err)
 		}
 		texts = append(texts, res.Message)
-		if confirm {
-			res, err := s.ctl.Confirm(ctx)
-			if err != nil {
-				t.Fatalf("%s confirm: %v", action, err)
-			}
-			texts = append(texts, res.Message)
-		}
 	}
-	step(ActionProposalAccept, Target{ProposalID: "p-d21-accept"}, false)
+	step(ActionProposalAccept, Target{ProposalID: "p-d21-accept"})
 	record()
-	step(ActionProposalReject, Target{ProposalID: "p-d21-reject"}, false)
+	step(ActionProposalReject, Target{ProposalID: "p-d21-reject"})
 	record()
-	step(ActionProposalRecheck, Target{ProposalID: "p-d21-recheck"}, false)
+	step(ActionProposalRecheck, Target{ProposalID: "p-d21-recheck"})
 	waitFor(t, "recheck job", func() bool { return s.ctl.View().Job == nil })
 	record()
-	step(ActionProposalAccept, Target{ProposalID: "p-d21-unroute"}, true)
+	step(ActionProposalAccept, Target{ProposalID: "p-d21-unroute"})
 	record()
-	step(ActionProposalsClear, Target{}, true)
+	step(ActionProposalsClear, Target{})
 	record()
 
 	for _, note := range s.notifier.all() {
@@ -502,17 +381,16 @@ func TestProposalGroupingSeparatesPendingFromDecided(t *testing.T) {
 	}
 }
 
-func TestConcurrentProposalConfirmAndRefresh(t *testing.T) {
+func TestConcurrentProposalActionAndRefresh(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
 	ctx := context.Background()
-	if _, err := s.ctl.Trigger(ctx, ActionProposalAccept, Target{ProposalID: "p-unroute-1"}); err != nil {
-		t.Fatal(err)
-	}
 	var wg sync.WaitGroup
+	start := make(chan struct{})
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			<-start
 			if i%2 == 0 {
 				_ = s.ctl.RefreshLists(ctx)
 				return
@@ -520,22 +398,24 @@ func TestConcurrentProposalConfirmAndRefresh(t *testing.T) {
 			_ = s.ctl.View()
 		}(i)
 	}
-	var confirmed error
+	var acceptErr error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_, confirmed = s.ctl.Confirm(ctx)
+		<-start
+		_, acceptErr = s.ctl.Trigger(ctx, ActionProposalAccept, Target{ProposalID: "p-unroute-1"})
 	}()
+	close(start)
 	wg.Wait()
-	if confirmed != nil && !errors.Is(confirmed, ErrNoPending) {
-		t.Fatalf("confirm = %v", confirmed)
+	if acceptErr != nil {
+		t.Fatalf("accept = %v", acceptErr)
 	}
 	if got := s.caller.countOp(control.OpProposalsAccept); got != 1 {
 		t.Fatalf("accept requests = %d, want exactly 1", got)
 	}
 	for _, req := range s.caller.requests() {
 		if req.Op == control.OpProposalsAccept && req.ID != "p-unroute-1" {
-			t.Fatalf("concurrent confirm accepted %q", req.ID)
+			t.Fatalf("concurrent accept used %q", req.ID)
 		}
 	}
 }

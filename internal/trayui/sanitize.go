@@ -117,8 +117,8 @@ func stableKeyPart(s string) string {
 	return "h" + hex.EncodeToString(sum[:6])
 }
 
-// shortID is the safe, bounded id shown in a confirmation label. It never
-// includes the full operand, so a confirmation label cannot leak a destination.
+// shortID is the safe, bounded id shown in menu labels and details. It never
+// includes the full operand, so a label cannot leak a destination.
 func shortID(s string) string {
 	key := stableKeyPart(s)
 	if len(key) > 10 {
@@ -156,8 +156,6 @@ func errorKindLabel(err error) string {
 		return "busy"
 	case errors.Is(err, ErrBlocked):
 		return "blocked"
-	case errors.Is(err, ErrNoPending):
-		return "no pending confirmation"
 	case errors.Is(err, ErrNoLifecycle):
 		return "lifecycle unavailable"
 	case errors.Is(err, ErrNoTerminal):

@@ -104,7 +104,6 @@ var (
 	ErrUnavailable = errors.New("the engine is unavailable")
 	ErrBusy        = errors.New("another job is already running")
 	ErrBlocked     = errors.New("the action is not available in this state")
-	ErrNoPending   = errors.New("there is no pending confirmation")
 	ErrNoLifecycle = errors.New("the lifecycle channel is not configured")
 
 	// ErrNoTerminal means none of the allowlisted terminals is on PATH; the
@@ -358,7 +357,6 @@ func (c *Controller) storeUnavailableLocked(detail string) {
 	c.snap.Doctor = nil
 	c.snap.ListsKnown = false
 	c.snap.Env = EnvView{Reason: detail}
-	c.pending = nil
 	c.interruptLocked()
 }
 
@@ -503,8 +501,7 @@ func (c *Controller) RefreshLists(ctx context.Context) error {
 }
 
 // RefreshDesktop re-reads the expensive desktop-proxy status. It is called at
-// start, after an action and before a Stop/Restart/Quit confirmation, not by
-// the polling loop.
+// start, after an action and before a plain Quit, not by the polling loop.
 func (c *Controller) RefreshDesktop(ctx context.Context) error {
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()
