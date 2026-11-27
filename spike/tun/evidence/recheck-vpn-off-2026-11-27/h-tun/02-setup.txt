@@ -1,0 +1,32 @@
+
+$ SUDO_UID=1500 routelatch --json tun setup --socks 127.0.0.1:8318
+{"schema_version":1,"ok":true,"command":"tun setup","data":{"allowed_uid":1500,"binary":"/usr/libexec/routelatch/tun-service","changed":true,"config":"/etc/routelatch/tun.json","managed":true,"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}
+
+[exit 0]
+
+$ stat ...
+root root 644 /etc/systemd/system/routelatch-tun.service
+root root 644 /etc/systemd/system/routelatch-tun.socket
+root root 644 /etc/routelatch/tun.json
+root root 644 /etc/tmpfiles.d/routelatch-tun.conf
+root root 755 /usr/libexec/routelatch/tun-service
+rl root 755 /run/routelatch-tun
+rl rl 600 /run/routelatch-tun/control.sock
+
+$ socket/runtime
+active
+755 1500 0
+
+$ helper unit limits
+BindsTo=routelatch-tun.socket
+StartLimitIntervalSec=300
+StartLimitBurst=20
+StartLimitAction=none
+
+$ second setup
+{"schema_version":1,"ok":true,"command":"tun setup","data":{"allowed_uid":1500,"binary":"/usr/libexec/routelatch/tun-service","changed":false,"config":"/etc/routelatch/tun.json","managed":true,"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}
+[exit 0]
+
+$ env -u SUDO_UID routelatch tun setup
+{"schema_version":1,"ok":false,"command":"tun setup","error":{"kind":"policy_denied","path":"local","message":"refusing to install the TUN helper for root; run 'sudo routelatch tun setup' as the user that runs RouteLatch","detail":{"exit_code":9}}}
+[exit 9]

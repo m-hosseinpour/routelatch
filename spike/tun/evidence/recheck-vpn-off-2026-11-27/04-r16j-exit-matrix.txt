@@ -1,0 +1,23 @@
+date: 2026-11-27T13:06:43Z
+fixture: R16-J run_all.py, docker --network none, loopback only
+xray: Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+sing-box: sing-box version 1.14.4
+
+{"ok": true, "len": 10, "rtt_ms": 1.05, "test": "socks5_exit_udp"}
+{"ok": true, "len": 10, "rtt_ms": 1.86, "test": "xray_socks_outbound_udp"}
+{"ok": true, "len": 10, "rtt_ms": 1.55, "test": "vless_udp"}
+{"ok": true, "len": 10, "rtt_ms": 1.2, "test": "trojan_udp"}
+{"ok": true, "len": 10, "rtt_ms": 7.37, "test": "hysteria2_udp"}
+{"ok": true, "len": 1200, "rtt_ms": 0.85, "test": "vless_size_1200"}
+{"ok": true, "len": 1400, "rtt_ms": 0.81, "test": "vless_size_1400"}
+{"test": "vless_size_8192", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "vless_size_60000", "ok": false, "error": "TimeoutError: timed out"}
+{"ok": true, "len": 1200, "rtt_ms": 1.53, "test": "hysteria2_size_1200"}
+{"ok": true, "len": 1400, "rtt_ms": 0.85, "test": "hysteria2_size_1400"}
+{"test": "hysteria2_size_8192", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "hysteria2_size_60000", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "vless_netem", "ok": false, "sent": 50, "received": 48, "p50_ms": 163.2, "p95_ms": 164.1, "max_ms": 410.0}
+{"test": "hysteria2_netem", "ok": false, "sent": 50, "received": 48, "p50_ms": 122.7, "p95_ms": 123.6, "max_ms": 124.0}
+{"test": "socks5_netem", "ok": false, "sent": 50, "received": 47, "p50_ms": 81.4, "p95_ms": 81.8, "max_ms": 81.9}
+
+exit: 0

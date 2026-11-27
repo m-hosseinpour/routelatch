@@ -1,0 +1,35 @@
+date: 2026-11-27T13:06:21Z
+== peer log (start)
+{"event": "listening", "port": 9000}
+== start relay
+== start xray tun
+== link/routes
+rl-r16j0         UNKNOWN        198.18.0.1/15 fc00::1/64 fe80::c739:86e7:b795:3ea7/64 
+0.0.0.0/1 dev rl-r16j0 metric 1 
+128.0.0.0/1 dev rl-r16j0 metric 1 
+198.18.0.0/15 dev rl-r16j0 proto kernel scope link src 198.18.0.1 
+::/1 dev rl-r16j0 metric 1 pref medium
+fc00::/64 dev rl-r16j0 proto kernel metric 256 pref medium
+fe80::/64 dev rl-r16j0 proto kernel metric 256 pref medium
+8000::/1 dev rl-r16j0 metric 1 pref medium
+== force app destination through TUN
+172.31.90.20 dev rl-r16j0 src 198.18.0.1 uid 0 
+    cache 
+== app UDP through TUN (live relay)
+{"label": "tun-live-1", "ok": true, "rtt_ms": 205.5}
+{"label": "tun-live-2", "ok": true, "rtt_ms": 205.9}
+== peer count
+2
+== kill relay (simulated dead pool)
+== app UDP through TUN (dead relay)
+{"label": "tun-dead-1", "ok": false, "error": "TimeoutError"}
+== peer count after dead relay (must stay 2)
+2
+== stop xray and check cleanup
+Device "rl-r16j0" does not exist.
+== relay log
++0000 2026-11-27 13:06:23 [31mERROR[0m network: missing default interface
+
+== cleanup
+0
+0

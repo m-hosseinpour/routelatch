@@ -1,0 +1,34 @@
+
+start: exec /work/dist/routelatch-linux-amd64 --data-dir /home/rl/data run --headless >>/home/rl/engine.out 2>&1
+pid=21087 ready=True
+2026-11-27T13:03:41.086Z info    service.init: mode=targeted policy=1
+2026-11-27T13:03:41.222Z info    listeners.start: http=127.0.0.1:8317 socks=127.0.0.1:8318 mode=targeted
+RouteLatch listening: http 127.0.0.1:8317, socks 127.0.0.1:8318 (mode targeted, policy 1)
+
+start: exec /work/dist/routelatch-linux-amd64 --data-dir /home/rl/data run --headless >>/home/rl/engine.out 2>&1
+pid=21845 ready=True
+2026-11-27T13:03:50.989Z info    service.init: mode=stopped policy=9
+RouteLatch is stopped; management is available at /home/rl/data/run/control.sock
+
+start: exec /work/dist/routelatch-linux-amd64 --data-dir /home/rl/data run --headless >>/home/rl/engine.out 2>&1
+pid=22199 ready=True
+2026-11-27T13:04:04.001Z info    service.init: mode=targeted policy=11
+2026-11-27T13:04:04.001Z info    tun.bypass: interface=eth0
+2026-11-27T13:04:04.003Z info    tun.adopt: existing coverage is healthy
+2026-11-27T13:04:04.003Z info    listeners.start: http=127.0.0.1:8317 socks=127.0.0.1:8318 mode=targeted
+RouteLatch listening: http 127.0.0.1:8317, socks 127.0.0.1:8318 (mode targeted, policy 11)
+
+start: exec /work/dist/routelatch-linux-amd64 --data-dir /home/rl/data run --headless >>/home/rl/engine.out 2>&1
+pid=24311 ready=True
+2026-11-27T13:04:15.819Z info    service.init: mode=targeted policy=11
+2026-11-27T13:04:15.819Z info    tun.bypass: interface=eth0
+2026-11-27T13:04:15.833Z info    listeners.start: http=127.0.0.1:8317 socks=127.0.0.1:8318 mode=targeted
+RouteLatch listening: http 127.0.0.1:8317, socks 127.0.0.1:8318 (mode targeted, policy 11)
+
+start: exec /work/dist/routelatch-linux-amd64 --data-dir /home/rl/data run --headless >>/home/rl/engine.out 2>&1
+pid=26855 ready=True
+2026-11-27T13:04:47.442Z info    service.init: mode=targeted policy=11
+2026-11-27T13:04:47.443Z info    tun.bypass: interface=eth0
+2026-11-27T13:04:47.444Z warning tun.start_failed: TUN coverage stays off: TUN helper is not installed
+2026-11-27T13:04:47.444Z info    listeners.start: http=127.0.0.1:8317 socks=127.0.0.1:8318 mode=targeted
+RouteLatch listening: http 127.0.0.1:8317, socks 127.0.0.1:8318 (mode targeted, policy 11)

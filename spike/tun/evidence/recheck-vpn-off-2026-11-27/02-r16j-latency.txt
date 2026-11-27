@@ -1,0 +1,12 @@
+date: 2026-11-27T13:06:06Z
+xray: Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+sing-box: sing-box version 1.14.4
+
+== sniff enabled (shipped config)
+{"label": "sniff-on-1", "ok": true, "rtt_ms": 205.5}
+{"label": "sniff-on-2", "ok": true, "rtt_ms": 203.8}
+{"label": "sniff-on-3", "ok": true, "rtt_ms": 205.0}
+== sniff disabled
+{"label": "sniff-off-1", "ok": true, "rtt_ms": 1.4}
+{"label": "sniff-off-2", "ok": true, "rtt_ms": 1.6}
+{"label": "sniff-off-3", "ok": true, "rtt_ms": 1.6}

@@ -1,0 +1,66 @@
+date: 2026-11-27T13:02:00Z
+image: sha256:cbf0ea967ebe733c1072a3ba64e0816e609098b8e1dd98108d083ef9f909c13a
+
+== create dedicated isolated bridge (--internal, no NAT egress)
+cb06534cdd0c109744873343e352e551f7b4c4a429a6255d31581ce85db2e9e0
+
+== start peer B and client A
+455bd949bdb181604169d0aab04ce1792435757bd28c865d7b83b818eb77c61b
+b7bcb7a1b997c315418fa44532350886b6bef3c57b325cfba81a5dbc461bb238
+
+== B: links/addresses
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+eth0@if335       UP             66:11:e3:ca:57:5b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if335       UP             172.31.91.20/24 fd00:91::20/64 fe80::6411:e3ff:feca:575b/64 
+172.31.91.0/24 dev eth0 proto kernel scope link src 172.31.91.20 
+fd00:91::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+
+== A: links / addresses / routes / rules (what the container inherited)
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+eth0@if336       UP             62:a7:d8:95:4c:2e <BROADCAST,MULTICAST,UP,LOWER_UP> 
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if336       UP             172.31.91.10/24 fd00:91::10/64 fe80::60a7:d8ff:fe95:4c2e/64 
+---v4
+172.31.91.0/24 dev eth0 proto kernel scope link src 172.31.91.10 
+---v6
+fd00:91::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+---rules
+0:	from all lookup local
+32766:	from all lookup main
+32767:	from all lookup default
+0:	from all lookup local
+32766:	from all lookup main
+
+== A: host VPN/tailscale interface or route inherited?
+tailscale0: Device "tailscale0" does not exist.
+rl-tun0: Device "rl-tun0" does not exist.
+tun/tap devices: none
+100.64/10 route: none
+host LAN 192.168.1.0/24 route: none
+default v4 route: none
+default v6 route: none
+
+== A: local peer connectivity over the bridge
+peer_http_status 200 bytes 983
+peer_tcp_connect ok
+
+== A: no public exit (internal bridge has no default route)
+1.1.1.1:443/tcp blocked: OSError: [Errno 101] Network is unreachable
+93.184.216.34:80/tcp blocked: OSError: [Errno 101] Network is unreachable
+8.8.8.8:53/udp blocked: OSError: [Errno 101] Network is unreachable
+
+== host default route used for NAT-bridge container egress
+1.1.1.1 via 192.168.1.1 dev wlp0s20f3 src 192.168.1.104 uid 1000 
+    cache 
+host tailscale: Tailscale is stopped.
+
+== post-run cleanup verification
+remaining rl-recheck containers: WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+0
+remaining rl-recheck networks: WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+0
+host rl-tun0: Device "rl-tun0" does not exist.
+host default: default via 192.168.1.1 dev wlp0s20f3 proto dhcp src 192.168.1.104 metric 600 

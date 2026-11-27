@@ -1,0 +1,21 @@
+date: 2026-11-27T13:09:09Z
+repo HEAD: 234315b80b49f146a6c0eff0e67747d41b600dba
+repo changed paths: 1
+?? spike/tun/evidence/recheck-vpn-off-2026-11-27/
+
+host rl-tun0: Device "rl-tun0" does not exist.
+host TUN routes (198.18/fc00/rl-tun0): 0
+host default: default via 192.168.1.1 dev wlp0s20f3 proto dhcp src 192.168.1.104 metric 600 
+tailscale: Tailscale is stopped.
+
+containers:
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+networks:
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+bridge bridge
+host host
+none null
+leftover recheck/h/i/j containers: WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+0
+leftover recheck/h/i/j networks: WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+0

@@ -682,6 +682,10 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   clean/on بود)، Login/autostart auto-enable NOT RUN، tray TUN-active واقعی
   نیازمند نصب helper (مجاز نبود)، Wayland/GNOME، public/off-link، DNS-through-
   pool و UDP (R16-I/J)، R-28 فقط on-link، D21 debug caveat، arm64 runtime.
+- **بازبینی ۲۰۲۶-۱۱-۲۷ (VPN هاست خاموش):** ایزوله‌بودن کانتینر (بدون
+  interface/route وابسته به VPN) و H 158/158، R16-I DoH/fail-closed و R16-J
+  latency/exit دوباره تأیید شدند؛ هیچ نتیجهٔ قبلی تغییر نکرد. شاهد:
+  `spike/tun/VPN-OFF-RECHECK.md` + `spike/tun/evidence/recheck-vpn-off-2026-11-27/`.
 - **انتشار (۲۰۲۶-۱۱-۲۷):** تگ annotated `v1.2.0` (object
   `cda1fe352a2b1144633415f8b3071b2dcf542382`) روی `a8ee4d3` در هر دو remote
   push شد؛ CI `a8ee4d3` (attempt 2) سبز؛ `Release` `45985695347` موفق؛ Release

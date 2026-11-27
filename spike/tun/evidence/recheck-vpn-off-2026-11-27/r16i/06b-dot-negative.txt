@@ -1,0 +1,10 @@
+=== dot A (expected failure; no 853 listener) ===
+{"error": "timed out", "ms": 3002, "ok": false, "stage": "dns"}
+
+$ docker exec rl-r16i-<run>-b sh -c ss\ -lnt\ \|\ grep\ \":853\ \"\ \|\|\ echo\ no-853-listener\;\ tail\ -10\ /work/logs/socks.log
+no-853-listener
+{"addr": "0.0.0.0:1080", "event": "listening"}
+{"atyp": 1, "event": "connect", "first_ascii": "....f...b..CcP .7....K.5.@...5..F.A........ %...Y!..k...3.......", "first_hex": "1603010766010007620303436350209f378fbcc8a64be635ce40d991d235921c461d41021fb5c803f2b7f62025f4919b5921f0a86bffe0e333ed98b0cdc4d894", "first_len": 64, "peer": "172.31.77.10:58652", "port": 8443, "target": "172.31.77.20", "ts": 1795784724.0254548}
+{"atyp": 4, "event": "connect", "first_ascii": "....f...b...e.1.....RB'....`.#..f7J........ .<...];g.4...i]...Ou", "first_hex": "16030107660100076203030a65ef31cfd9d7e99c524227b8c3e11660f923088566374ac0efa685e090011220193cc0f0975d3b67c134e1dd1d695de5dbe34f75", "first_len": 64, "peer": "172.31.77.10:37148", "port": 8443, "target": "fd00:77::20", "ts": 1795784725.9993849}
+{"atyp": 1, "event": "connect", "first_ascii": ".).............tcp.canary-r16i.invalid.....", "first_hex": "0029000101000001000000000000037463700b63616e6172792d7231366907696e76616c69640000010001", "first_len": 43, "peer": "172.31.77.10:37162", "port": 5353, "target": "172.31.77.20", "ts": 1795784727.547476}
+{"atyp": 1, "event": "connect", "first_ascii": ".).............tcp.canary-r16i.invalid.....", "first_hex": "0029000201000001000000000000037463700b63616e6172792d7231366907696e76616c696400001c0001", "first_len": 43, "peer": "172.31.77.10:37178", "port": 5353, "target": "172.31.77.20", "ts": 1795784727.6912816}

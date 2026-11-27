@@ -1,0 +1,48 @@
+
+$ reset rate counter before the bounded sequence
+active
+
+$ systemctl restart sequence
+attempt 1: restart_exit=0 active=active failed=active
+attempt 2: restart_exit=0 active=active failed=active
+attempt 3: restart_exit=0 active=active failed=active
+attempt 4: restart_exit=0 active=active failed=active
+attempt 5: restart_exit=0 active=active failed=active
+attempt 6: restart_exit=0 active=active failed=active
+attempt 7: restart_exit=0 active=active failed=active
+attempt 8: restart_exit=0 active=active failed=active
+attempt 9: restart_exit=0 active=active failed=active
+attempt 10: restart_exit=0 active=active failed=active
+attempt 11: restart_exit=0 active=active failed=active
+attempt 12: restart_exit=0 active=active failed=active
+attempt 13: restart_exit=0 active=active failed=active
+attempt 14: restart_exit=0 active=active failed=active
+attempt 15: restart_exit=0 active=active failed=active
+attempt 16: restart_exit=0 active=active failed=active
+attempt 17: restart_exit=0 active=active failed=active
+attempt 18: restart_exit=0 active=active failed=active
+attempt 19: restart_exit=0 active=active failed=active
+attempt 20: restart_exit=0 active=active failed=active
+attempt 21: restart_exit=1 active=failed failed=failed
+
+$ state after limit
+Result=start-limit-hit
+NRestarts=0
+Nov 27 13:04:30 rl-h-<run>-a tun-service[25778]: routelatch-tun: 2026/11/27 13:04:30 restart lease requests coverage rebuild
+Nov 27 13:04:30 rl-h-<run>-a tun-service[25778]: routelatch-tun: 2026/11/27 13:04:30 coverage is on
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: Stopping routelatch-tun.service - RouteLatch TUN coverage helper...
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: Stopped routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: routelatch-tun.service: Start request repeated too quickly.
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: routelatch-tun.service: Failed with result 'start-limit-hit'.
+Nov 27 13:04:30 rl-h-<run>-a systemd[1]: Failed to start routelatch-tun.service - RouteLatch TUN coverage helper.
+
+tun status after limit: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+
+$ tun on while limit is hit
+{"schema_version":1,"ok":false,"command":"tun on","error":{"kind":"unsupported","path":"local","message":"TUN helper is not installed","detail":{"reason":"tun_helper_unavailable"}}}
+[exit 7]
+
+$ routelatch tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:04:31.888617723Z","state":"on","udp":"blocked"}}
+[exit 0]

@@ -1,0 +1,20 @@
+Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+A unified platform for anti-censorship.
+
+$ docker exec rl-r16i-<run>-a sh -c uname\ -a\;\ /work/xray\ version\;\ cat\ /etc/os-release\ \|\ head\ -4\;\ ip\ -V
+Linux rl-r16i-<run>-a 7.0.0-44-generic #44-Ubuntu SMP PREEMPT_DYNAMIC Fri Nov  6 02:38:04 UTC 2026 x86_64 GNU/Linux
+Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+A unified platform for anti-censorship.
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="26.04"
+VERSION="26.04.1 LTS (Resolute Raccoon)"
+ip utility, iproute2-6.19.0, libbpf 1.6.3
+
+$ docker exec rl-r16i-<run>-b sh -c uname\ -a\;\ /work/xray\ version\ 2\>/dev/null\ \|\|\ true\;\ ss\ -lnt\ \|\ grep\ -E\ \":\(1080\|8443\|5353\)\ \"\ \|\|\ true
+Linux rl-r16i-<run>-b 7.0.0-44-generic #44-Ubuntu SMP PREEMPT_DYNAMIC Fri Nov  6 02:38:04 UTC 2026 x86_64 GNU/Linux
+Xray 26.11.9 (Xray, Penetrates Everything.) Custom (go1.27.4 linux/amd64)
+A unified platform for anti-censorship.
+LISTEN 0      128           0.0.0.0:1080       0.0.0.0:*   
+LISTEN 0      4096                *:8443             *:*   
+LISTEN 0      4096                *:5353             *:*   
