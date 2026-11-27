@@ -16,6 +16,15 @@ import (
 // back as a phantom health row.
 var errUsageExitGone = errors.New("usage evidence for a removed exit")
 
+// egressFailureTTL bounds how long a recent approved-egress dial failure stays
+// visible in status. The signal is in-memory only and does not cool, rerank or
+// take an exit out of service (docs/contracts.md R-28).
+const egressFailureTTL = 60 * time.Second
+
+// egressFailureWarning is fixed text: the signal deliberately carries no exit,
+// destination, URL or engine detail (D21).
+const egressFailureWarning = "recent approved egress dial failed; traffic remains fail-closed with no direct fallback"
+
 // usagePool observes real user connections so positive egress evidence reaches
 // health (docs/contracts.md §5.3, §6.2). Probes use the unwrapped dialer: their
 // results already update health and must not be counted twice.
@@ -29,11 +38,50 @@ var _ contract.PoolDialer = (*usagePool)(nil)
 func (p *usagePool) DialPool(ctx context.Context, req contract.PoolDialRequest) (contract.PoolDialResult, error) {
 	started := p.svc.now()
 	res, err := p.inner.DialPool(ctx, req)
-	if err != nil || res.Conn == nil || res.Exit == "" {
+	if err != nil {
+		p.svc.recordEgressFailure(err)
 		return res, err
 	}
+	if res.Conn == nil || res.Exit == "" {
+		return res, err
+	}
+	// The approved dial reached the exit; clear an earlier failure signal.
+	p.svc.clearEgressFailure()
 	res.Conn = &usageConn{Conn: res.Conn, exit: res.Exit, started: started, now: p.svc.now, record: p.svc.recordUsage}
 	return res, nil
+}
+
+// recordEgressFailure keeps a recent approved-egress dial failure visible to
+// status without touching pool health, ranking or the data path. Only the
+// existing transport-failure classes count (the exit's own transport, its
+// handshake or the dial deadline); destination and policy failures never set
+// the warning (docs/contracts.md R-28).
+func (s *Service) recordEgressFailure(err error) {
+	var f *contract.Failure
+	if !errors.As(err, &f) || !pool.IsTransportFailure(f.Kind) {
+		return
+	}
+	now := s.now().UTC()
+	s.egressMu.Lock()
+	s.egressFailedAt = now
+	s.egressMu.Unlock()
+}
+
+// clearEgressFailure drops the signal after a successful approved dial. The
+// write is in-memory only; no persisted state changes.
+func (s *Service) clearEgressFailure() {
+	s.egressMu.Lock()
+	s.egressFailedAt = time.Time{}
+	s.egressMu.Unlock()
+}
+
+// egressFailureRecent reports whether an approved-egress dial failure happened
+// within egressFailureTTL. Expiry needs no timer or watcher: the next status
+// read simply stops reporting it.
+func (s *Service) egressFailureRecent(now time.Time) bool {
+	s.egressMu.Lock()
+	defer s.egressMu.Unlock()
+	return !s.egressFailedAt.IsZero() && now.Sub(s.egressFailedAt) < egressFailureTTL
 }
 
 // usageConn reports the first downlink byte as positive egress evidence: bytes

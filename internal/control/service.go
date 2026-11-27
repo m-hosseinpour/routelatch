@@ -166,6 +166,12 @@ type Service struct {
 	usageMu sync.Mutex
 	usageAt map[contract.ExitID]time.Time
 
+	// egressMu guards the in-memory timestamp of the last approved-egress dial
+	// failure. It is never persisted and never feeds health or ranking; status
+	// only reports it for a bounded TTL (docs/contracts.md R-28).
+	egressMu       sync.Mutex
+	egressFailedAt time.Time
+
 	logger  *serviceLogger
 	logPath string
 	logErr  error

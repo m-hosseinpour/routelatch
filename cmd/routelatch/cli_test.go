@@ -259,6 +259,23 @@ func TestPrintStatusMarksClosedListeners(t *testing.T) {
 	}
 }
 
+// TestPrintStatusPrintsEgressWarning keeps the R-28 warning on the documented
+// stderr channel instead of mixing it into the status body.
+func TestPrintStatusPrintsEgressWarning(t *testing.T) {
+	const warning = "recent approved egress dial failed; traffic remains fail-closed with no direct fallback"
+	var out, errOut bytes.Buffer
+	c := &cli{stdout: &out, stderr: &errOut}
+	c.printStatus(map[string]any{
+		"mode": "targeted", "policy_version": 1, "warnings": []any{warning},
+	})
+	if !strings.Contains(errOut.String(), "warning: "+warning) {
+		t.Fatalf("stderr = %q, want the egress warning", errOut.String())
+	}
+	if strings.Contains(out.String(), warning) {
+		t.Fatalf("stdout = %q, warnings must stay on stderr", out.String())
+	}
+}
+
 func TestOfflineDoctorAndCorruptStateExit(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "rlcli")
 	if err != nil {

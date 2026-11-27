@@ -125,6 +125,9 @@ func (s *Service) status(ctx context.Context) (StatusData, error) {
 	tun := s.tunStatus(ctx, snap)
 	out.Tun = &tun
 	out.Warnings = statusWarnings(snap, now, s.listenersOpen, s.stopped, resumeRequiresRestart, warmTransports)
+	if s.egressFailureRecent(now) {
+		out.Warnings = append(out.Warnings, egressFailureWarning)
+	}
 	out.Warnings = append(out.Warnings, tunWarnings(out.Tun, snap.State.Mode, snap.State.Desktop.Applied)...)
 	return out, nil
 }
