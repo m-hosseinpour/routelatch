@@ -52,13 +52,17 @@ func (p *usagePool) DialPool(ctx context.Context, req contract.PoolDialRequest) 
 }
 
 // recordEgressFailure keeps a recent approved-egress dial failure visible to
-// status without touching pool health, ranking or the data path. Only the
-// existing transport-failure classes count (the exit's own transport, its
-// handshake or the dial deadline); destination and policy failures never set
-// the warning (docs/contracts.md R-28).
+// status without touching pool health, ranking or the data path. Only
+// exit_unreachable counts: it is the one class the pool dial path attributes to
+// the exit's own transport before a destination connection exists. The broader
+// pool.IsTransportFailure set is deliberately not reused: handshake_rejected
+// also covers SOCKS5 reply 0x03/0x04 (network/host unreachable reported by the
+// exit), and timeout can be a destination-side stall that expires the exit
+// handshake deadline. Neither proves the exit transport failed, so they stay a
+// request error but never raise the warning (docs/contracts.md R-28).
 func (s *Service) recordEgressFailure(err error) {
 	var f *contract.Failure
-	if !errors.As(err, &f) || !pool.IsTransportFailure(f.Kind) {
+	if !errors.As(err, &f) || f.Kind != contract.ExitUnreachable {
 		return
 	}
 	now := s.now().UTC()

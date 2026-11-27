@@ -153,6 +153,36 @@ func TestDestinationFailuresDoNotSetEgressWarning(t *testing.T) {
 	}
 }
 
+// TestOverBroadTransportKindsDoNotSetEgressWarning is the regression for the
+// review finding: SOCKS5 replies 0x03/0x04 (network/host unreachable) surface
+// as HandshakeRejected, and Timeout can come from a destination-side stall that
+// expires the exit handshake deadline. Neither is evidence that the exit's own
+// transport failed, so neither may raise the R-28 warning (docs/contracts.md R-28).
+func TestOverBroadTransportKindsDoNotSetEgressWarning(t *testing.T) {
+	ctx := context.Background()
+	for _, kind := range []contract.ErrorKind{
+		contract.HandshakeRejected, contract.Timeout,
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			st, paths := newServiceStore(t)
+			svc := newTestService(t, st, paths)
+			svc.now = time.Now
+
+			p := &usagePool{svc: svc, inner: &usageFakePool{err: egressFailure(kind, "a.invalid")}}
+			if _, err := p.DialPool(ctx, contract.PoolDialRequest{}); err == nil {
+				t.Fatal("the fake failure was not returned")
+			}
+			status, err := svc.status(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if warningsContain(status.Warnings, egressFailureWarning) {
+				t.Fatalf("warnings=%v, want no egress warning for %s", status.Warnings, kind)
+			}
+		})
+	}
+}
+
 // TestEgressFailureDoesNotMutateHealth keeps the signal observational: no
 // record is cooled, no health row appears and the persisted state is untouched.
 func TestEgressFailureDoesNotMutateHealth(t *testing.T) {
