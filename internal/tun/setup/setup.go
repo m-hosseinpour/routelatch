@@ -62,6 +62,16 @@ const (
 	// does not silently change the boot-time layout.
 	runtimeDirMode = 0o755
 	socketWait     = 5 * time.Second
+
+	// startLimitIntervalSec/startLimitBurst bound automatic restarts without
+	// disabling the helper under a realistic burst of user actions. The H
+	// acceptance run reached the old 5-per-30s limit with five starts in about
+	// 30s (first enable, manual restart, SIGKILL restart, toggle, quit), after
+	// which both units stayed failed until reset-failed. Twenty starts in five
+	// minutes covers that sequence and ordinary quick toggling, while a crash
+	// loop still stops after at most 20 attempts instead of restarting forever.
+	startLimitIntervalSec = 300
+	startLimitBurst       = 20
 )
 
 // tmpfilesName is the single boot-time directory entry setup owns. /run is
@@ -620,9 +630,17 @@ func (m *Manager) serviceUnit(uid int) ([]byte, error) {
 	b.WriteString(OwnershipMarker + "\n")
 	b.WriteString("[Unit]\n")
 	b.WriteString("Description=RouteLatch TUN coverage helper\n")
-	b.WriteString("After=network.target\n")
-	b.WriteString("StartLimitIntervalSec=30\n")
-	b.WriteString("StartLimitBurst=5\n")
+	b.WriteString("After=network.target routelatch-tun.socket\n")
+	// The service is socket-activated. BindsTo makes a documented
+	// `systemctl stop routelatch-tun.socket` stop the activated service, whose
+	// shutdown removes rl-tun0/routes; the socket cannot be unlinked while the
+	// service keeps host coverage (docs/contracts.md §10.4).
+	b.WriteString("BindsTo=routelatch-tun.socket\n")
+	b.WriteString("StartLimitIntervalSec=" + strconv.Itoa(startLimitIntervalSec) + "\n")
+	b.WriteString("StartLimitBurst=" + strconv.Itoa(startLimitBurst) + "\n")
+	// A start-limit hit must stop coverage, not reboot or restart the host;
+	// the documented reset-failed step is the only recovery.
+	b.WriteString("StartLimitAction=none\n")
 	b.WriteString("\n[Service]\n")
 	b.WriteString("Type=simple\n")
 	b.WriteString("User=" + strconv.Itoa(uid) + "\n")

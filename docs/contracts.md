@@ -1145,7 +1145,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
 | `tun status` | `tun{desired,state,interface,since?,dns,udp,ipv6,helper,last_error?,detail?}` | 0، 1، 3 | «TUN coverage» |
 | `tun on` | همان `tun` | 0، 1، 3، 6، 7 | «TUN coverage» |
-| `tun off` | همان `tun` | 0، 1، 3 | «TUN coverage» |
+| `tun off` | همان `tun` | 0، 1، 3، 6 | «TUN coverage» |
 | `tun setup\|uninstall` | `unit, socket_unit, config, binary, tmpfiles, changed, managed, removed?, allowed_uid?` | 0، 1، 2، 6، 7، 9 | — |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
@@ -2030,8 +2030,12 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 
 - TUN یک لایهٔ پوشش روی modeهای موجود است، نه یک `Mode` تازه. `Mode` همچنان
   `targeted|all-proxy|all-direct|stopped` است و هیچ مقدار TUN به آن اضافه نمی‌شود.
-- `tun enable` فقط وقتی مجاز است که mode غیر `stopped` باشد. `tun disable` همیشه
-  مجاز است. `mode stopped`، Quit و `tun uninstall` **اول** TUN را می‌بندند و بعد
+- `tun enable` فقط وقتی مجاز است که mode غیر `stopped` باشد. `tun disable`
+  برای پوشش همین engine یا پوشش کهنه‌ای که listener آن دیگر زنده نیست همیشه
+  مجاز است؛ اگر target یک listener زندهٔ engine دیگر باشد، `tun disable` با
+  `state_locked`/`tun_conflict` رد می‌شود، پوشش و bypass آن engine دست‌نخورده
+  می‌ماند، ولی خواست `tun_enabled=false` همین instance همچنان ذخیره می‌شود
+  (§۱۰.۴). `mode stopped`، Quit و `tun uninstall` **اول** TUN را می‌بندند و بعد
   listenerها/process را؛ شکست بستن TUN باید توقف را متوقف کند (fail-closed).
 - `mode stopped` مقدار `tun_enabled` را پاک نمی‌کند ولی TUN را می‌بندد و تا
   انتخاب یک mode غیر stopped اجازهٔ فعال‌شدن نمی‌دهد؛ Quit هم همین preference
@@ -2117,7 +2121,7 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 | --- | --- | --- | --- |
 | `tun.status` | — | `StatusData.tun` | `internal` |
 | `tun.enable` | — | `tun.state=starting\|on` | `stopped`, `unsupported`, `state_locked`, `internal` |
-| `tun.disable` | — | `tun.state=off`؛ یا `unavailable`/`tun_conflict` وقتی helper ناشنوا/`unavailable` است و disable موفق نمی‌شود | `internal` |
+| `tun.disable` | — | `tun.state=off`؛ یا `unavailable`/`tun_conflict` وقتی helper ناشنوا/`unavailable` است و disable موفق نمی‌شود؛ یا `state=on` با `desired=false` و `tun_conflict` وقتی پوشش زندهٔ engine دیگر است | `internal`, `state_locked` |
 
 - `tun.enable` ورودی دلخواه (interface/route/domain) ندارد؛ listener هدف از
   config همان instance گرفته می‌شود و سرویس TUN فقط `127.0.0.1:port` یا
@@ -2166,11 +2170,16 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 - دلیل امن در `error.detail.reason` می‌آید و پیام خطا برای هر دلیل متن ثابت است،
   نه متن آزاد runtime. دلیلی که در allowlist نیست حذف می‌شود و `unsupported`/
   `state_locked` بدون دلیل پایدار به `internal` تبدیل می‌شود. `tun.disable`
-  همیشه مجاز است و خطاهای مجازش فقط `internal`اند؛ هر خروجی دیگری از runtime در
-  disable (از جمله تعارض یا unsupported) به `internal` نگاشت می‌شود تا جدول بالا
-  نشکند. شکست ذخیرهٔ `tun_enabled` (config store) هم برای هر دو op
-  `internal`/`1` است، نه kind ذخیره‌سازی.
-- `tun.disable` در همهٔ حالت‌ها خواست `tun_enabled=false` را پاک می‌کند. نبود
+  برای پوشش خودی/کهنه مجاز است و خطاهای runtime آن فقط `internal`اند؛ هر خروجی
+  دیگری از runtime در disable (از جمله تعارض یا unsupported) به `internal`
+  نگاشت می‌شود. استثنای واحد، تعارض پوشش یک engine دیگر است که control خودش
+  قبل از هر disable تشخیص می‌دهد و `state_locked`/`6` با دلیل `tun_conflict`
+  برمی‌گرداند (§۱۰.۴)، در حالی که خواست `tun_enabled=false` را ذخیره می‌کند و
+  پوشش/bypass آن engine را دست نمی‌زند؛ شکست ذخیرهٔ `tun_enabled` (config store)
+  هم برای هر دو op `internal`/`1` است، نه kind ذخیره‌سازی.
+- `tun.disable` در همهٔ حالت‌ها خواست `tun_enabled=false` را پاک می‌کند، از جمله
+  وقتی پوشش زندهٔ engine دیگر باقی می‌ماند و پاسخ `state_locked`/`tun_conflict`
+  است. نبود
   helper یا runtime ناشنوا/`unavailable` op را موفق/idempotent می‌کند (نه
   `internal`)، ولی bypass موتور فقط با `state=off` اثبات‌شده یا helper غایب
   آزاد می‌شود؛ در حالت ناشنوا/`unavailable` bypass می‌ماند، coverage
@@ -2179,7 +2188,10 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   می‌ماند (با حفظ bypass) و `off` اعلام نمی‌شود. پس از آن، `desired=false` با
   `state=on` در status به‌صورت `tun_conflict` دیده می‌شود (§۱۰.۲). `tun.disable`
   موفق (nil) همیشه `state=off` برمی‌گرداند، حتی اگر probe بعدی ناشنوا یا کهنه
-  باشد؛ `unavailable`/`tun_conflict` فقط نتیجهٔ تلاش ناموفق disable است. شکست
+  باشد؛ `unavailable` نتیجهٔ تلاش ناموفق disable است و `tun_conflict` هم نتیجهٔ
+  آن یا (بدون disable) گزارش پوشش زندهٔ engine دیگر با `state_locked` است؛ در
+  حالت دوم `state=on` با `desired=false` می‌ماند و پوشش/bypass آن engine دست
+  نمی‌خورد. شکست
   ذخیرهٔ خواست در همان تلاش ناموفق، `internal` پایداری runtime را حفظ می‌کند و
   snapshot قبلی (desired=true) را برای status نگه می‌دارد.
 - در R16-B که runtime واقعی وجود ندارد: `tun.status` مقدار `off` (یا با
@@ -2258,8 +2270,37 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   تازه TUN خودکار ساخته نمی‌شود؛ engine بر اساس `tun_enabled` آن را درخواست
   می‌کند.
 - یک TUN در هر host: نام `rl-tun0` و lock سراسری؛ instance دوم/`--data-dir`
-  دوم با `state_locked`/`tun_conflict` رد می‌شود. unit نصب‌شده بخشی از بسته
-  نیست (D26).
+  دوم با `state_locked`/`tun_conflict` رد می‌شود. **تشخیص مالکیت (R16-H):**
+  هر مسیر خودکار (startup/adopt، `mode stopped`، listener bind failure، Quit) و
+  `tun off` پیش از هر disable با یک live-target check تصمیم می‌گیرد: target
+  گزارش‌شده باید listener همین engine باشد (listener باز، یا targetی که دیگر
+  زنده نیست و پوشش کهنهٔ خودی است)؛ targetی که روی loopback هنوز اتصال می‌پذیرد
+  و متعلق به این engine نیست، پوشش زندهٔ engine دیگر است و هرگز disable نمی‌شود.
+  در این حالت startup با bypass فعال و `tun_conflict` ادامه می‌دهد (listenerها
+  باز می‌مانند تا dialهای خودش loop نشوند)، `tun off` با
+  `state_locked`/`6` رد می‌شود ولی خواست `tun_enabled=false` همین instance را
+  ذخیره می‌کند (پوشش/bypass engine دیگر دست‌نخورده)، `tun on` با
+  `state_locked`/`6` رد می‌شود، `mode stopped` و Quit فقط پوشش خود را می‌بندند،
+  و stopped-start پوشش engine دیگر را رها می‌کند. target خالی (helper ناسازگار)
+  پوشش کهنه/legacy شمرده می‌شود؛ target غیرقابل‌تجزیه هرگز امن فرض نمی‌شود.
+- unit سرویس `BindsTo=routelatch-tun.socket` دارد (و `After=...`) و socket
+  همچنان سرویس را فعال می‌کند: `systemctl stop routelatch-tun.socket`
+  سرویس فعال‌شده را هم متوقف می‌کند تا shutdown، `rl-tun0`/routeها را پاک
+  کند. نبود socket تنها وقتی «helper غایب» شمرده
+  می‌شود که `rl-tun0` هم وجود نداشته باشد؛ socket غایب + link موجود
+  `unavailable`/`tun_conflict` است و bypass موتور را آزاد نمی‌کند (§۱۰.۲،
+  §۱۰.۶). unit نصب‌شده بخشی از بسته نیست (D26).
+- unit سرویس یک rate limit کران‌دار دارد: `StartLimitIntervalSec=300`،
+  `StartLimitBurst=20` و `StartLimitAction=none` همراه با `Restart=on-failure`
+  (حداکثر ۲۰ start در ۵ دقیقه). این بودجه توالی واقعی H (enable اولیه، restart
+  دستی، restart پس از SIGKILL، toggle و quit: پنج start در حدود ۳۰ ثانیه) و
+  toggleهای سریع عادی را پوشش می‌دهد، ولی crash loop را پس از حداکثر ۲۰ تلاش
+  متوقف می‌کند و هیچ reboot/restart خودکار host یا bypass بی‌صدا ندارد. اگر
+  limit پر شود، هر دو unit `failed` می‌شوند و `tun on`/auto-enable تا
+  پاک‌شدن شمارنده helper را unavailable گزارش می‌کند؛ recovery مستند
+  `systemctl reset-failed routelatch-tun.socket routelatch-tun.service` و سپس
+  `systemctl start routelatch-tun.socket` است و پوشش در این فاصله fail-closed
+  می‌ماند (نه direct).
 
 ### ۱۰.۵ کانفیگ سرویس TUN (ثابت، تولیدشده)
 
@@ -2305,8 +2346,11 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   کشف می‌شود و kernel < 5.7 پیش از enable `unsupported` می‌دهد).
 - sidecar sing-box در حالت TUN `route.default_interface` (یا
   `auto_detect_interface`) به interface فیزیکی می‌گیرد؛ این مقدار از کانفیگ
-  تولیدی ما می‌آید و از import پذیرفته نمی‌شود. اگر نسخهٔ pin‌شده این فیلد را
-  پشتیبانی نکند، exitهای hysteria2 در حالت TUN با `unsupported`/دلیل
+  تولیدی ما می‌آید و از import پذیرفته نمی‌شود. interface در همان enable
+  (حتی وقتی هیچ exit hysteria2 وجود ندارد) در runtime sidecar ذخیره می‌شود و
+  هر `Sync` بعدی، از جمله `AddExit` پس از فعال‌شدن TUN، آن را اعمال می‌کند تا
+  exit تازه بدون bypass به TUN نرود. اگر نسخهٔ pin‌شده این فیلد را پشتیبانی
+  نکند، exitهای hysteria2 در حالت TUN با `unsupported`/دلیل
   `sidecar_loop_risk` کنار گذاشته می‌شوند، نه اینکه loop کنند.
 - اگر kernel < 5.7 یا bind شکست بخورد، TUN باید fail کند (`unsupported`)، نه
   اینکه loop/blackhole یا direct نشت کند.
@@ -2334,10 +2378,14 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   و هیچ rule/pool مستقل در سرویس TUN مجاز نیست.
 - اگر engine در دسترس نیست و باید TUN فوراً برداشته شود، مسیر recovery
   `sudo routelatch tun uninstall` است؛ معادل دستی مستند
-  `systemctl stop routelatch-tun.socket` و سپس `systemctl stop
-  routelatch-tun.service` است تا socket فعال، service را از lease دوباره
-  بالا نیاورد. `tun off` عادی از management socket استفاده می‌کند و در نبود
-  engine کافی نیست. این مسیر در README/deploy/doctor آمده است.
+  `systemctl stop routelatch-tun.socket` است (unit سرویس با
+  `BindsTo=routelatch-tun.socket` متوقف می‌شود و shutdown، link/routeها را پاک
+  می‌کند)؛ `systemctl stop routelatch-tun.service` پس از آن برای unitهای
+  قدیمی/بدون BindsTo بی‌خطر است. `tun off` عادی از management socket استفاده
+  می‌کند و در نبود engine کافی نیست. این مسیر در README/deploy/doctor آمده است.
+  اگر start-limit unit پر شده باشد، پیش از start دوباره
+  `systemctl reset-failed routelatch-tun.socket routelatch-tun.service` لازم
+  است؛ پوشش تا آن زمان خاموش و fail-closed می‌ماند.
 
 ### ۱۰.۸ نگاشت پذیرش
 
@@ -2353,8 +2401,8 @@ DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و 
 verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
 جدید در همین سند است، نه تغییر خاموش A17.
 
-**قدم بعد:** R16-B/C/D (مدل داده، سرویس، اتصال engine و bypass) و R16-E (CLI،
-layout/معنای setup و uninstall با fake paths/systemctl) پیاده و تست شده‌اند، ولی
-این پوشش هنوز فعال یا نصب‌شده نیست: tray (F)، نصب واقعی/readiness/rollback،
-بسته‌بندی و مستندات کاربر (G) و پذیرش A17 (H) باز است. R16-A فقط پس از مجوز
-صریح؛ ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.
+**قدم بعد:** R16-B/C/D (مدل داده، سرویس، اتصال engine و bypass)، R16-E (CLI،
+layout/معنای setup و uninstall با fake paths/systemctl)، R16-F (tray) و R16-G
+(نصب/readiness/rollback، بسته‌بندی و مستندات کاربر) پیاده، تست و commit شده‌اند
+(`c575d6d`، `5144cbf`). تنها پذیرش A17 (H) باز است؛ R16-A فقط پس از مجوز
+صریح و ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.

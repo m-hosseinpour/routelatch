@@ -120,6 +120,11 @@ func TestInstallWritesOwnedHelperAndIsIdempotent(t *testing.T) {
 	for _, want := range []string{
 		OwnershipMarker, "User=1000\n", "AmbientCapabilities=CAP_NET_ADMIN\n",
 		"CapabilityBoundingSet=CAP_NET_ADMIN\n", "NoNewPrivileges=yes\n",
+		"BindsTo=routelatch-tun.socket\n",
+		// 20 starts per five minutes covers the H acceptance sequence and
+		// ordinary quick toggles; a crash loop still stops at the burst.
+		"StartLimitIntervalSec=300\n", "StartLimitBurst=20\n",
+		"StartLimitAction=none\n", "Restart=on-failure\n",
 		"RuntimeDirectory=routelatch-tun\n", "RuntimeDirectoryPreserve=yes\n",
 		"PrivateDevices=no\n", "ExecStart=" + m.Paths.Binary + " __tun-service --config " + m.Paths.Config + "\n",
 	} {

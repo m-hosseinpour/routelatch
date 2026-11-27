@@ -1923,9 +1923,10 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-G در ۲۰۲۶-۱۱-۲۷ انجام و
-   بازبینی شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs، بدون commit)؛
-   verdict R16-A برابر `Ready` است و R16-H قدم بعد است. R16-I/J
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-G در ۲۰۲۶-۱۱-۲۷ انجام،
+   بازبینی و commit شدند (F: کد/KDE گیت‌شده `c575d6d`؛ G: setup/packaging/docs
+   `5144cbf`)؛ verdict R16-A برابر `Ready` است و R16-H (پذیرش A17) قدم بعد است.
+   R16-I/J
    (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
    می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:

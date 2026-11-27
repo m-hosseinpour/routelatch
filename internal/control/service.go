@@ -76,6 +76,16 @@ type Options struct {
 	// egress.DiscoverInterface and egress.KernelSupported.
 	PhysicalInterface func() (string, error)
 	TunBindingCheck   func() error
+	// TunTargetLive reports whether a loopback listener is accepting on an
+	// already-sanitized host:port. It is the live-target check that keeps one
+	// engine from disabling coverage a different instance is serving
+	// (docs/contracts.md §10.4). Nil dials the target with a short timeout.
+	TunTargetLive func(target string) bool
+	// TunLinkPresent reports whether the pinned rl-tun0 link exists. A missing
+	// control socket alone is not proof that no overlay survives, so startup
+	// and Quit keep the engine bypass unless the link is also absent. Nil checks
+	// the pinned interface name (§10.4).
+	TunLinkPresent func() bool
 	// PreserveTunOnShutdown keeps an active TUN service/routes when this
 	// process exits for a supervisor-managed engine restart. Supervisor Quit
 	// writes TunShutdownMarker first, which turns the ordinary disable path
@@ -114,6 +124,12 @@ type Service struct {
 	// discoverInterface and bindingCheck are the TUN bypass feasibility seams.
 	discoverInterface func() (string, error)
 	bindingCheck      func() error
+	// tunTargetLive and tunLinkPresent distinguish coverage owned by another
+	// engine from crash-left coverage this one may remove (§10.4). The link
+	// check also keeps a missing socket from being read as proof of no
+	// coverage while rl-tun0 still holds routes.
+	tunTargetLive  func(target string) bool
+	tunLinkPresent func() bool
 	// preserveTunOnShutdown and tunShutdownMarker distinguish a supervisor
 	// restart (keep coverage fail-closed) from Quit (disable first).
 	preserveTunOnShutdown bool
@@ -196,6 +212,14 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	if bindingCheck == nil {
 		bindingCheck = egress.KernelSupported
 	}
+	targetLive := opts.TunTargetLive
+	if targetLive == nil {
+		targetLive = tunTargetListening
+	}
+	linkPresent := opts.TunLinkPresent
+	if linkPresent == nil {
+		linkPresent = tunLinkExists
+	}
 	// Subscription fetches are engine egress too: they must leave through the
 	// physical interface while TUN is active (§10.6).
 	fetcher := imports.NewFetcherWithDialer(func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -228,6 +252,8 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 		bypass:                bypass,
 		discoverInterface:     discoverInterface,
 		bindingCheck:          bindingCheck,
+		tunTargetLive:         targetLive,
+		tunLinkPresent:        linkPresent,
 		preserveTunOnShutdown: opts.PreserveTunOnShutdown,
 		tunShutdownMarker:     opts.TunShutdownMarker,
 		httpListen:            snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,

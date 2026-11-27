@@ -30,6 +30,8 @@ func newTunEngineService(t *testing.T, rt contract.TunRuntime, tunEnabled bool) 
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -272,6 +274,8 @@ func TestRestoreToStoppedDisablesCoverageFirst(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -318,6 +322,8 @@ func TestRestoreToStoppedAbortsWhenDisableFails(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -358,6 +364,8 @@ func TestTunStartupKeepsBypassWhenCrashCoverageCannotClose(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -407,6 +415,8 @@ func TestTunStartupAbortsOnlyWhenNoBypassIsPossible(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return errors.New("kernel 5.6") },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -437,6 +447,8 @@ func TestTunUnreachableHelperDoesNotFailProxy(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -487,7 +499,8 @@ func TestTunStoppedStartAbortsOnDisableFailure(t *testing.T) {
 		status:     contract.TunStatus{State: contract.TunOn, Helper: contract.TunHelperInstalled},
 		disableErr: &contract.TunError{Kind: contract.StateLocked, Reason: contract.TunReasonConflict},
 	}
-	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt})
+	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt,
+		TunTargetLive: func(string) bool { return false }, TunLinkPresent: func() bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,6 +540,8 @@ func TestTunStartupFailureKeepsStableReason(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -591,7 +606,8 @@ func TestTunDoctorStoppedReportsActualState(t *testing.T) {
 				}
 			}
 			rt := &fakeTun{status: tc.status, statusErr: tc.statusErr}
-			svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt})
+			svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt,
+				TunTargetLive: func(string) bool { return false }, TunLinkPresent: func() bool { return false }})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -621,6 +637,8 @@ func TestTunSidecarLoopRiskKeepsStableReason(t *testing.T) {
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)

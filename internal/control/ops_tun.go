@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"syscall"
+	"time"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/egress"
@@ -45,16 +47,21 @@ func (s *Service) tunStatus(ctx context.Context, snap contract.Snapshot) contrac
 				// service is stopped) is never a healthy "on": say so.
 				status.LastError = contract.TunReasonConflict
 				status.Detail = "TUN coverage is on although coverage is not requested; stop or disable it"
-			} else if !snap.Config.TunEnabled && s.tunCoverageUncertain && status.State != contract.TunOff {
+			} else if s.tunCoverageUncertain && status.State != contract.TunOff {
+				// Startup or off could not prove that coverage is gone. Even
+				// when coverage was requested, an overlay that may belong to
+				// another live engine is not a healthy "on" (§10.4).
 				status.LastError = contract.TunReasonConflict
 				status.Detail = "TUN coverage could not be verified off; the engine keeps its own dials outside it"
 			}
 			return s.applyTunBypassTruth(status, snap)
 		}
 		if !snap.Config.TunEnabled {
-			if s.tunCoverageUncertain {
-				// The helper is unreachable and the startup could not prove that
-				// crash-left coverage is gone. Report that instead of a quiet off.
+			if s.tunCoverageUncertain || s.tunLinkWitnessed() {
+				// The helper is unreachable and either startup could not prove
+				// that crash-left coverage is gone or rl-tun0 still exists. A
+				// missing socket is not proof of off: report the conflict and
+				// keep the bypass instead of a quiet off (§10.4).
 				st.State = contract.TunUnavailable
 				st.LastError = contract.TunReasonConflict
 				st.Detail = "the TUN helper did not answer; coverage could not be verified off"
@@ -67,6 +74,11 @@ func (s *Service) tunStatus(ctx context.Context, snap contract.Snapshot) contrac
 			return st
 		}
 		st.State = contract.TunUnavailable
+		if s.tunLinkWitnessed() {
+			st.LastError = contract.TunReasonConflict
+			st.Detail = "the TUN helper did not answer; coverage could not be verified off"
+			return s.applyTunBypassTruth(st, snap)
+		}
 		st.LastError = contract.TunReasonServiceUnavailable
 		st.Detail = "TUN service did not report its state"
 		return s.applyTunBypassTruth(st, snap)
@@ -174,6 +186,84 @@ func sameLoopbackTarget(a, b string) bool {
 	return ap == bp && aip.Unmap() == bip.Unmap()
 }
 
+const (
+	// tunTargetProbeTimeout bounds the loopback liveness check. The target is
+	// always a loopback IP literal, so this never reaches a destination.
+	tunTargetProbeTimeout = 250 * time.Millisecond
+	// tunInterfaceName is the pinned host-wide interface (contracts §10.4).
+	tunInterfaceName = "rl-tun0"
+)
+
+// tunTargetListening is the production live-target check. Only an immediate
+// refusal proves that nothing is served there; a timeout or any other failure
+// is uncertainty and is treated as a live (foreign) listener.
+func tunTargetListening(target string) bool {
+	if target == "" {
+		return false
+	}
+	conn, err := net.DialTimeout("tcp", target, tunTargetProbeTimeout)
+	if err != nil {
+		return !errors.Is(err, syscall.ECONNREFUSED)
+	}
+	_ = conn.Close()
+	return true
+}
+
+// tunLinkExists is the production coverage witness when the control socket is
+// gone: the pinned link can still hold routes and capture host traffic.
+func tunLinkExists() bool {
+	_, err := net.InterfaceByName(tunInterfaceName)
+	return err == nil
+}
+
+// tunLinkWitnessed is a nil-safe call to the injected link check.
+func (s *Service) tunLinkWitnessed() bool {
+	return s.tunLinkPresent != nil && s.tunLinkPresent()
+}
+
+// tunCoverageOwnedBy reports whether a positively active overlay belongs to
+// this engine. A target match is not enough on its own: before our listeners
+// bind, a different live process on that target is another engine. Only a
+// target match with our listener open, or with nothing listening there
+// (crash-left coverage from a previous run), is ours (§10.4).
+func (s *Service) tunCoverageOwnedBy(st contract.TunStatus) bool {
+	if st.SocksAddress == "" || !s.tunTargetMatches(st) {
+		return false
+	}
+	if s.listenersOpen {
+		return true
+	}
+	target := sanitizeTunTarget(st.SocksAddress)
+	return target != "" && !s.tunTargetLive(target)
+}
+
+// tunCoverageHeldByPeer reports active coverage that a different engine is
+// serving right now: a loopback target this engine does not own and that still
+// accepts connections. Such coverage must never be disabled by this engine.
+func (s *Service) tunCoverageHeldByPeer(st contract.TunStatus) bool {
+	if st.SocksAddress == "" || s.tunCoverageOwnedBy(st) {
+		return false
+	}
+	target := sanitizeTunTarget(st.SocksAddress)
+	return target != "" && s.tunTargetLive(target)
+}
+
+// tunCoverageSafeToDisable reports whether removing the overlay cannot steal
+// live coverage. It allows this engine's own coverage and stale coverage whose
+// listener is gone. An unreported target is treated as a legacy/test overlay:
+// the installed helper always reports its target while on, so this cannot hide
+// a live peer. A malformed target is never assumed safe.
+func (s *Service) tunCoverageSafeToDisable(st contract.TunStatus) bool {
+	if s.tunCoverageOwnedBy(st) {
+		return true
+	}
+	if st.SocksAddress == "" {
+		return true
+	}
+	target := sanitizeTunTarget(st.SocksAddress)
+	return target != "" && !s.tunTargetLive(target)
+}
+
 // tunTargetMatches reports whether the reported target is the current listener
 // or unknown. An empty target is not proof of a mismatch, so it stays usable.
 func (s *Service) tunTargetMatches(st contract.TunStatus) bool {
@@ -254,12 +344,27 @@ func (s *Service) tunEnable(ctx context.Context) (contract.TunStatus, error) {
 		return s.tunStatus(ctx, snap), err
 	}
 	pre, statusErr := s.tun.Status(ctx)
-	if statusErr == nil && pre.State == contract.TunOn && !s.tunTargetMatches(pre) {
-		// A changed SOCKS listener requires an explicit disable/re-enable; the
-		// service must not retarget live flows silently (§10.3).
-		if err := s.tun.Disable(ctx); err != nil {
-			s.clearTunBypassIfOff(ctx)
-			return s.tunStatus(ctx, snap), tunOpError("tun.enable", err, true)
+	if statusErr == nil && pre.State == contract.TunOn {
+		if !s.tunCoverageSafeToDisable(pre) {
+			// The reported listener is live and not this engine: another
+			// instance owns the host-wide coverage. Never disable it to
+			// retarget this one (§10.4); keep the bypass active.
+			status := s.tunStatus(ctx, snap)
+			status.LastError = contract.TunReasonConflict
+			status.Detail = "TUN coverage is served by another live listener; stop that engine before enabling coverage here"
+			return status, &OpError{
+				Kind:    contract.StateLocked,
+				Message: tunReasonMessage(contract.TunReasonConflict),
+				Detail:  map[string]any{"reason": string(contract.TunReasonConflict)},
+			}
+		}
+		if !s.tunTargetMatches(pre) {
+			// A changed SOCKS listener requires an explicit disable/re-enable;
+			// the service must not retarget live flows silently (§10.3).
+			if err := s.tun.Disable(ctx); err != nil {
+				s.clearTunBypassIfOff(ctx)
+				return s.tunStatus(ctx, snap), tunOpError("tun.enable", err, true)
+			}
 		}
 	}
 	if err := s.tun.Enable(ctx); err != nil {
@@ -289,10 +394,36 @@ func (s *Service) tunDisable(ctx context.Context) (contract.TunStatus, error) {
 	disableOK := false
 	if s.tun == nil {
 		s.clearTunBypass()
-	} else if st, statusErr := s.tun.Status(ctx); statusErr != nil && tunRuntimeMissing(statusErr) {
+	} else if st, statusErr := s.tun.Status(ctx); statusErr != nil && s.tunRuntimeMissing(statusErr) {
 		// A missing helper/socket can hold no overlay: there is nothing to
-		// disable. This must not block the explicit off (§10.1).
+		// disable. This must not block the explicit off (§10.1). The link
+		// check inside tunRuntimeMissing keeps a socket-only stop fail-closed.
 		s.clearTunBypass()
+	} else if statusErr == nil && tunCoverageReportedActive(st, statusErr) && !s.tunCoverageSafeToDisable(st) {
+		// Another engine is serving this host-wide overlay. `tun off` must not
+		// steal its live coverage; report the documented conflict. The explicit
+		// wish is still cleared so a later restart does not request coverage
+		// here again (§10.1, §10.3). If this process has not bound its own
+		// dials yet, do so before returning so it cannot enter the peer's
+		// coverage.
+		if !s.bypass.Active() {
+			_ = s.prepareTunBypass(ctx)
+		}
+		if snap.Config.TunEnabled {
+			updated, err := s.setTunDesiredLocked(ctx, false)
+			if err != nil {
+				return s.tunStatus(ctx, snap), tunPersistError("tun.disable", err)
+			}
+			snap = updated
+		}
+		status := s.tunStatus(ctx, snap)
+		status.LastError = contract.TunReasonConflict
+		status.Detail = "TUN coverage is served by another live listener; stop that engine before disabling coverage"
+		return status, &OpError{
+			Kind:    contract.StateLocked,
+			Message: tunReasonMessage(contract.TunReasonConflict),
+			Detail:  map[string]any{"reason": string(contract.TunReasonConflict)},
+		}
 	} else if err := s.tun.Disable(ctx); err != nil {
 		switch {
 		case tunCoverageReportedActive(st, statusErr):
@@ -373,10 +504,18 @@ func (s *Service) stopTunForModeStopped(ctx context.Context) error {
 	// hold an overlay. `unavailable`, `error` and a generic failed status probe
 	// are not proof that no overlay exists, so they take the fail-closed
 	// Disable path; Disable must be idempotent (§10.1, §10.2).
-	if st, err := s.tun.Status(ctx); err == nil && st.State == contract.TunOff {
-		s.clearTunBypass()
-		return nil
-	} else if err != nil && tunRuntimeMissing(err) {
+	if st, err := s.tun.Status(ctx); err == nil {
+		if st.State == contract.TunOff {
+			s.clearTunBypass()
+			return nil
+		}
+		if !s.tunCoverageSafeToDisable(st) {
+			// This engine is not serving that overlay; its listener is about to
+			// close, so leave the peer's live coverage untouched (§10.4).
+			s.logger.Logf(levelWarning, "tun.mode_stop_peer", "TUN coverage belongs to another live listener; it was left running")
+			return nil
+		}
+	} else if s.tunRuntimeMissing(err) {
 		s.clearTunBypass()
 		return nil
 	}
@@ -441,7 +580,7 @@ func (s *Service) clearTunBypassIfOff(ctx context.Context) bool {
 			if st.State != contract.TunOff {
 				return false
 			}
-		} else if !tunRuntimeMissing(err) {
+		} else if !s.tunRuntimeMissing(err) {
 			return false
 		}
 	}
@@ -463,16 +602,18 @@ func (s *Service) clearTunBypass() {
 
 // setSidecarDefaultInterface applies route.default_interface to the sidecar
 // runtime. The value can only come from generated options, never an import
-// (§10.6). A runtime that cannot express it is refused while hysteria2 exits
-// exist, so those exits never loop through TUN.
+// (§10.6). It is stored even when no hysteria2 exit exists yet, so a later
+// AddExit regenerates with the active interface instead of losing the bypass.
+// A runtime that cannot express it is refused while hysteria2 exits exist, so
+// those exits never loop through TUN.
 func (s *Service) setSidecarDefaultInterface(name string) error {
-	if s.sidecar == nil || !s.hasSidecarExits() {
+	if s.sidecar == nil {
 		return nil
 	}
 	if setter, ok := s.sidecar.(interface{ SetDefaultInterface(string) error }); ok {
 		return setter.SetDefaultInterface(name)
 	}
-	if name == "" {
+	if name == "" || !s.hasSidecarExits() {
 		return nil
 	}
 	return &contract.Failure{
@@ -500,12 +641,22 @@ func (s *Service) startTunCoverageLocked(ctx context.Context) error {
 	}
 	pre, statusErr := s.tun.Status(ctx)
 	if statusErr == nil && pre.State == contract.TunOn {
+		if !s.tunCoverageSafeToDisable(pre) {
+			// Another live engine serves this host-wide overlay. Do not remove
+			// it to adopt a new target; keep the bypass and report conflict.
+			return &OpError{
+				Kind:    contract.StateLocked,
+				Message: tunReasonMessage(contract.TunReasonConflict),
+				Detail:  map[string]any{"reason": string(contract.TunReasonConflict)},
+			}
+		}
 		if s.tunTargetMatches(pre) {
 			s.logger.Logf(levelInfo, "tun.adopt", "existing coverage is healthy")
 			return nil
 		}
-		// Crash-left coverage points at another listener. It must be removed
-		// before a new target can be requested; never retarget silently.
+		// Crash-left coverage points at a listener that is no longer live. It
+		// must be removed before a new target can be requested; never retarget
+		// live flows silently.
 		if err := s.tun.Disable(ctx); err != nil {
 			return tunOpError("control.tun_adopt", err, true)
 		}
@@ -538,8 +689,15 @@ func (s *Service) reconcileUnwantedTun(ctx context.Context) bool {
 	if err == nil && st.State == contract.TunOff {
 		return false
 	}
-	if err != nil && tunRuntimeMissing(err) {
+	if err != nil && s.tunRuntimeMissing(err) {
 		return false
+	}
+	if err == nil && !s.tunCoverageSafeToDisable(st) {
+		// The overlay belongs to a different live engine. Leaving it is the
+		// only safe choice: disabling it would send host traffic direct.
+		s.tunBypassReason = contract.TunReasonConflict
+		s.logger.Logf(levelWarning, "tun.peer_coverage", "TUN coverage belongs to another live listener; it was left running")
+		return true
 	}
 	if derr := s.tun.Disable(ctx); derr != nil {
 		s.tunBypassReason = contract.TunReasonConflict
@@ -552,7 +710,7 @@ func (s *Service) reconcileUnwantedTun(ctx context.Context) bool {
 		s.clearTunBypass()
 		return false
 	}
-	if afterErr != nil && tunRuntimeMissing(afterErr) {
+	if afterErr != nil && s.tunRuntimeMissing(afterErr) {
 		s.clearTunBypass()
 		return false
 	}
@@ -572,8 +730,21 @@ func (s *Service) stopTunForStoppedStart(ctx context.Context) error {
 	if err == nil && st.State == contract.TunOff {
 		return nil
 	}
-	if err != nil && tunRuntimeMissing(err) {
+	if err != nil && s.tunRuntimeMissing(err) {
 		return nil
+	}
+	if err == nil && !s.tunCoverageSafeToDisable(st) {
+		if s.tunCoverageHeldByPeer(st) {
+			// This stopped instance has no listener to serve the overlay and
+			// must not close another engine's live coverage (§10.4).
+			s.logger.Logf(levelWarning, "tun.stopped_peer", "TUN coverage belongs to another live listener; it was left running")
+			return nil
+		}
+		return &OpError{
+			Kind:    contract.StateLocked,
+			Message: tunReasonMessage(contract.TunReasonConflict),
+			Detail:  map[string]any{"reason": string(contract.TunReasonConflict)},
+		}
 	}
 	if derr := s.tun.Disable(ctx); derr != nil {
 		s.tunBypassReason = contract.TunReasonConflict
@@ -589,6 +760,12 @@ func (s *Service) stopTunForStoppedStart(ctx context.Context) error {
 // a secondary disable failure is logged as the recovery path.
 func (s *Service) stopTunAfterListenerFailure(ctx context.Context) {
 	if s.tun == nil {
+		return
+	}
+	if st, err := s.tun.Status(ctx); err == nil && !s.tunCoverageSafeToDisable(st) {
+		// The listener that failed to bind is not the target this overlay is
+		// served by; leave the other engine's coverage alone (§10.4).
+		s.logger.Logf(levelWarning, "tun.listener_failure_peer", "TUN coverage belongs to another live listener; it was left running")
 		return
 	}
 	if err := s.tun.Disable(ctx); err != nil {
@@ -615,12 +792,20 @@ func (s *Service) stopTunForShutdown(ctx context.Context) error {
 		s.clearTunBypass()
 		return nil
 	}
-	if err != nil && tunRuntimeMissing(err) {
+	if err != nil && s.tunRuntimeMissing(err) {
 		// No helper/socket can be holding an overlay. Treating that as a stop
 		// failure would make every Quit fail on machines without the optional
 		// helper; the documented missing-helper behavior is warning + off, not
-		// a failed proxy (§10.2).
+		// a failed proxy (§10.2). A still-present rl-tun0 keeps this branch
+		// fail-closed through tunRuntimeMissing.
 		s.clearTunBypass()
+		return nil
+	}
+	if err == nil && !s.tunCoverageSafeToDisable(st) {
+		// Quit of a second instance must not tear down coverage another live
+		// engine is serving (§10.4). Leave the bypass bound while this process
+		// finishes; host traffic keeps its current path.
+		s.logger.Logf(levelWarning, "tun.shutdown_peer", "TUN coverage belongs to another live listener; it was left running")
 		return nil
 	}
 	if err := s.tun.Disable(ctx); err != nil {
@@ -679,9 +864,15 @@ func tunWarnings(tun *contract.TunStatus, mode contract.Mode, desktopApplied boo
 }
 
 // tunRuntimeMissing reports whether a status failure proves the optional helper
-// is not installed (a missing socket). A refused/crashed service is not proof
-// that no overlay survives, so it stays fail-closed.
-func tunRuntimeMissing(err error) bool {
+// is not installed (a missing socket) and no coverage can survive. A missing
+// socket is not proof on its own: if rl-tun0 still exists, the activated
+// service may be holding the link and routes after the documented
+// `systemctl stop routelatch-tun.socket` recovery. That case stays fail-closed.
+// A refused/crashed service is likewise not proof that no overlay survives.
+func (s *Service) tunRuntimeMissing(err error) bool {
+	if s.tunLinkPresent != nil && s.tunLinkPresent() {
+		return false
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return true
 	}

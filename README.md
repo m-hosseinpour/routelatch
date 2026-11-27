@@ -117,6 +117,22 @@ lease. `tun uninstall` disables the socket before the service and removes only
 the files and runtime lease/socket it owns; it never deletes rules, pool data,
 config, state or backups.
 
+The helper unit allows 20 starts per five minutes
+(`StartLimitIntervalSec=300`, `StartLimitBurst=20`, `StartLimitAction=none`).
+That covers an initial enable, manual restarts, a crash restart and a quick
+toggle without hitting the limit, while a persistent crash loop still stops
+after 20 attempts instead of restarting forever. If the limit is ever reached,
+both `routelatch-tun.socket` and `routelatch-tun.service` show `failed` and
+`tun on`/saved-desire auto-enable reports the helper unavailable; coverage stays
+off and does not fall back to direct. Clear the counter and restart the socket:
+
+```sh
+sudo systemctl reset-failed routelatch-tun.socket routelatch-tun.service
+sudo systemctl start routelatch-tun.socket
+```
+
+A later `tun on` or auto-enable can then use the helper again.
+
 ## Install
 
 The current published release, `v1.1.0`, has 17 unsigned assets on the

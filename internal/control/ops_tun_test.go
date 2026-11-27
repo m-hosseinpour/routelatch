@@ -104,6 +104,8 @@ func newTunService(t *testing.T, rt contract.TunRuntime) (*Service, *store.Store
 		Bypass:            egress.NewController(),
 		PhysicalInterface: func() (string, error) { return "eth0", nil },
 		TunBindingCheck:   func() error { return nil },
+		TunTargetLive:     func(string) bool { return false },
+		TunLinkPresent:    func() bool { return false },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -293,7 +295,8 @@ func TestTunEnableRejectsStoppedMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt := &fakeTun{status: contract.TunStatus{State: contract.TunOff, Helper: contract.TunHelperInstalled}}
-	svc, err := NewService(ctx, Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt})
+	svc, err := NewService(ctx, Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt,
+		TunTargetLive: func(string) bool { return false }, TunLinkPresent: func() bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}

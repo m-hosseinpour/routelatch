@@ -81,6 +81,18 @@ sudo systemctl stop routelatch-tun.service
 runtime lease/socket it owns. It never deletes rules, pool data, config, state or
 backups.
 
+The helper unit allows 20 starts per five minutes
+(`StartLimitIntervalSec=300`, `StartLimitBurst=20`, `StartLimitAction=none`), so
+the normal setup/restart/SIGKILL/toggle sequence and quick manual toggles do not
+exhaust it; a crash loop still stops after 20 attempts. If the limit is reached,
+both units report `failed`, `tun on` and auto-enable report the helper
+unavailable, and coverage stays off (no direct fallback). Recover with:
+
+```sh
+sudo systemctl reset-failed routelatch-tun.socket routelatch-tun.service
+sudo systemctl start routelatch-tun.socket
+```
+
 ## Desktop app and foreground mode
 
 ```sh
