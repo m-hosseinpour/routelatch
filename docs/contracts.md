@@ -2021,8 +2021,9 @@ adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tu
 `/run/routelatch-tun` پس از boot، سخت‌گیری mode/owner، readiness واقعی socket
 `0600` و rollback؛ بسته همچنان هیچ unit/tmpfiles/helper/postinst ندارد و
 `tun setup` تنها سازندهٔ آن‌هاست. R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت؛
-TUN-active واقعی روی هاست، KDE فعال/panel contrast و Wayland/GNOME آزمون‌نشده
-می‌مانند و نصب واقعی فقط در محیط authorized/gated انجام می‌شود.
+TUN-active واقعی روی هاست و Wayland/GNOME آزمون‌نشده می‌مانند؛ panel contrast
+در BreezeDark PASS شد و فقط محدودیت light-theme دارد. نصب واقعی فقط در محیط
+authorized/gated انجام می‌شود.
 production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
 socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
 نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
