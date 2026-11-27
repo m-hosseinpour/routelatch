@@ -2171,13 +2171,23 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    محدودیت‌های R15-H (بدون اسکرین‌شات؛ Wayland/GNOME، desktop set/restore و
    autostart اجرانشده؛ proposal accept/recheck/clear و pool remove/test فقط با
    تست واحد؛ non-amd64 runtime-untested) در
-   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD هنگام انتشار
-   `d90e17a` است (شامل شاهد post-release `d36361b`) و آخرین کد محصول `2d4da2a`
-   است؛ CI/`Release` `v1.2.0` روی `a8ee4d3` و `v1.2.1` روی `d90e17a`
-   سبز/موفق بودند و `v1.2.1` عمومی است.
-   flakiness گاه‌به‌گاه step `Test` در CI دیده شد؛
-   `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` اصلاح شد و
-   اجراهای بعدی سبزند.
+   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. آخرین commit پیش از
+   این به‌روزرسانی مستندات `902959f` است؛ پس از انتشار `v1.2.1` (روی `d90e17a`)
+   شاهد host TUN-active در `39c6c4f`
+   (اجرای محصول روی `6f51554`) اضافه شد و در `bc7428e` مستند شد، و رفع test-only
+   رقابت قفل `TestLaunchTrayUnavailable` در `902959f` انجام شد؛ CI آن
+   (run `46069056473`) سبز است. **آخرین کد محصول همچنان `2d4da2a` است** و پس از
+   `v1.2.1` هیچ کد محصولی تغییر نکرده؛ CI/`Release` `v1.2.0` روی `a8ee4d3` و
+   `v1.2.1` روی `d90e17a` سبز/موفق بودند و `v1.2.1` عمومی است.
+   flakiness گاه‌به‌گاه step `Test` در CI دیده شد. دو رفع test-only جدا ثبت
+   شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و
+   `TestLaunchTrayUnavailable` در `902959f` که روی `bc7428e` در دو تلاش با
+   `app.lock is still locked: resource temporarily unavailable` شکست خورد. علت:
+   `Launch` روی رویداد `error` سوپروایزر برمی‌گردد و `abortStartup` این رویداد را
+   پیش از `closeStartupHandles` (آزادکردن `app.lock`) می‌فرستد؛ قفل چند
+   میکروثانیه بعد آزاد می‌شود و نشت نیست. رفع فقط تست را با
+   `assertUnlockedEventually` (poll ۱۰ms، مهلت ۵s) به انتظار شرط تغییر داد؛
+   رفتار محصول تغییر نکرد.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -2202,7 +2212,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و `v1.2.0` منتشر شد.
    رفع post-release R-28 (`cd1c848`+`2d4da2a`) و شاهد `d36361b` در `d90e17a`
    منتشر شدند و patch `v1.2.1` عمومی است؛ TUN-active واقعی روی یک هاست Plasma/X11
-   با helper/tray/restore/uninstall PASS شد (`39c6c4f`)؛
+   با helper/tray/restore/uninstall PASS شد (`39c6c4f`، مستند در `bc7428e`) و
+   رقابت قفل تست `TestLaunchTrayUnavailable` در `902959f` رفع شد (CI
+   `46069056473` سبز)؛
    هیچ کار پیاده‌سازی باز نمانده و بعدی فقط R16-I-1/J-1 (design-only،
    شروع‌نشده) است.
    موارد آزمون‌نشده (Wayland/GNOME،

@@ -188,6 +188,16 @@ unverified. Evidence: `spike/tun/H-TRAY-HOST.md` and
 `spike/tun/evidence/h-tray-host-2026-11-27/`. This note changes no release ID or
 asset.
 
+Post-release CI note: the docs commit `bc7428e` failed in CI twice (attempts 1
+and 2) in `internal/app` at `TestLaunchTrayUnavailable`
+(`app.lock is still locked: resource temporarily unavailable`). `Launch` returns
+on the supervisor `error` event, which `abortStartup` emits before
+`closeStartupHandles` releases `app.lock`; the lock is released within
+microseconds, not leaked. The test-only fix `902959f` waits for that observable
+condition (`assertUnlockedEventually`, 10 ms polls, 5 s deadline, and a genuinely
+held lock still fails); CI run `46069056473` on `902959f` is green. This is a
+test-condition fix, not a product change, and it changes no release ID or asset.
+
 ## v1.1.0 — tray control surface (2026-11-26)
 
 Tag `v1.1.0` is an annotated tag (tag object
