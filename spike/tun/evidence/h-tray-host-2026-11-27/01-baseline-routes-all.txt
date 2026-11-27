@@ -1,0 +1,29 @@
+default via 192.168.1.1 dev wlp0s20f3 proto dhcp src 192.168.1.104 metric 600
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 metric 425 linkdown
+172.18.0.0/16 dev br-e92db0637722 proto kernel scope link src 172.18.0.1 metric 426 linkdown
+192.168.1.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.1.104 metric 600
+192.168.122.0/24 dev virbr0 proto kernel scope link src 192.168.122.1 metric 427 linkdown
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 172.17.0.1 dev docker0 table local proto kernel scope host src 172.17.0.1
+broadcast 172.17.255.255 dev docker0 table local proto kernel scope link src 172.17.0.1 linkdown
+local 172.18.0.1 dev br-e92db0637722 table local proto kernel scope host src 172.18.0.1
+broadcast 172.18.255.255 dev br-e92db0637722 table local proto kernel scope link src 172.18.0.1 linkdown
+local 192.168.1.104 dev wlp0s20f3 table local proto kernel scope host src 192.168.1.104
+broadcast 192.168.1.255 dev wlp0s20f3 table local proto kernel scope link src 192.168.1.104
+local 192.168.122.1 dev virbr0 table local proto kernel scope host src 192.168.122.1
+broadcast 192.168.122.255 dev virbr0 table local proto kernel scope link src 192.168.122.1 linkdown
+fe80::/64 dev tailscale0 proto kernel metric 256 pref medium
+fe80::/64 dev docker0 proto kernel metric 256 linkdown pref medium
+fe80::/64 dev wlp0s20f3 proto kernel metric 1024 pref medium
+local ::1 dev lo table local proto kernel metric 0 pref medium
+anycast fe80:: dev tailscale0 table local proto kernel metric 0 pref medium
+anycast fe80:: dev docker0 table local proto kernel metric 0 pref medium
+anycast fe80:: dev wlp0s20f3 table local proto kernel metric 0 pref medium
+local fe80::3489:e0ff:fe5f:9d12 dev docker0 table local proto kernel metric 0 pref medium
+local fe80::5811:4468:1561:86b7 dev wlp0s20f3 table local proto kernel metric 0 pref medium
+local fe80::f9cd:a743:8536:63bf dev tailscale0 table local proto kernel metric 0 pref medium
+multicast ff00::/8 dev tailscale0 table local proto kernel metric 256 pref medium
+multicast ff00::/8 dev docker0 table local proto kernel metric 256 linkdown pref medium
+multicast ff00::/8 dev wlp0s20f3 table local proto kernel metric 256 pref medium

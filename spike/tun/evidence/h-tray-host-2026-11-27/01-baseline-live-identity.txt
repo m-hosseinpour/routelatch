@@ -1,0 +1,4 @@
+pid=2970371 exe=/usr/bin/routelatch start=2026-11-27 23:25:50.650457603 +0330
+pid=2970384 exe=/usr/bin/routelatch start=2026-11-27 23:25:50.682457906 +0330
+pid=2970399 exe=/usr/bin/sing-box start=2026-11-27 23:25:50.760458648 +0330
+pid=2970416 exe=/usr/bin/routelatch start=2026-11-27 23:25:50.936460320 +0330

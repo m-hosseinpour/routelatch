@@ -1,0 +1,9 @@
+base=<tmp>/h-tray-host-2026-11-27/run-20261127T201223Z
+data=<tmp>/h-tray-host-2026-11-27/run-20261127T201223Z/data
+http=35675
+socks=45691
+supervisor=2974067
+tray=2974115
+bus=org.freedesktop.StatusNotifierItem-2974115-1
+binary=<tmp>/h-tray-host-2026-11-27/bin/routelatch
+head=6f515544e8f51e77fad7f4448dd12cf76cb982a2

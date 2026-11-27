@@ -1,0 +1,9 @@
+QThreadStorage: entry 7 destroyed before end of thread 0x5ab3bbbe9080
+QThreadStorage: entry 2 destroyed before end of thread 0x5ab3bbbe9080
+QThreadStorage: entry 1 destroyed before end of thread 0x5ab3bbbe9080
+plasmashell 6.6.7
+QThreadStorage: entry 1 destroyed before end of thread 0x5581d398edc0
+QThreadStorage: entry 0 destroyed before end of thread 0x5581d398edc0
+kwin 6.6.4
+Error: org.freedesktop.DBus.Error.Failed
+Error: ReferenceError: workspace is not defined at line 1

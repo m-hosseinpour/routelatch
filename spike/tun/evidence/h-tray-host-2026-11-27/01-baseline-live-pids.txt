@@ -1,0 +1,4 @@
+2970371    1847 mahdi    Fri Nov 27 23:25:49 2026       09:09 /usr/bin/routelatch __app-supervisor
+2970384 2970371 mahdi    Fri Nov 27 23:25:50 2026       09:09 /usr/bin/routelatch run --headless
+2970399 2970384 mahdi    Fri Nov 27 23:25:50 2026       09:09 /usr/bin/sing-box run -c <home>/.local/state/routelatch/sidecar/sing-box.json
+2970416 2970371 mahdi    Fri Nov 27 23:25:50 2026       09:09 /usr/bin/routelatch __app-tray

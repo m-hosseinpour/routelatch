@@ -1,0 +1,1 @@
+{"schema_version":1,"ok":true,"command":"tun setup","data":{"allowed_uid":1000,"binary":"/usr/libexec/routelatch/tun-service","changed":true,"config":"/etc/routelatch/tun.json","managed":true,"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}

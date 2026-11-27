@@ -1,0 +1,4 @@
+::/1 metric 1 pref medium
+fc00::/64 proto kernel metric 256 pref medium
+fe80::/64 proto kernel metric 256 pref medium
+8000::/1 metric 1 pref medium

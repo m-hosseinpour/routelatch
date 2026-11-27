@@ -1,0 +1,15 @@
+Corrected reading of results.txt (no host change, no product change)
+
+The raw run output in results.txt is preserved. One check line used the wrong
+JSON path: `routelatch ... tun status --json` returns the TunStatus object
+directly under data (data.state, data.desired), unlike the top-level `status`
+command, which nests it under data.tun. The saved raw file
+05-off-tun-status.json contains state=off and desired=false, and
+04-active-tun-status.json contains state=on, desired=true, helper=installed and
+interface=rl-tun0. The run-host.sh parser was fixed after the run; this run was
+not repeated because the raw evidence is conclusive and repeating it would
+create a second host-wide TUN window for no new information.
+
+The active window: coverage since 2026-11-27T23:42:28.289+03:30
+(2026-11-27T20:12:28Z); tray disable confirmed at 20:12:29Z; rl-tun0 present
+for about one second. See 04-active-window.txt.

@@ -1,0 +1,6 @@
+pid=4099
+ls: cannot access '/proc/4099/cwd': No such file or directory
+pid=4112
+ls: cannot access '/proc/4112/cwd': No such file or directory
+pid=4329
+ls: cannot access '/proc/4329/cwd': No such file or directory

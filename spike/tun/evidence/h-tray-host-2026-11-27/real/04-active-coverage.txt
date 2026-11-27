@@ -1,0 +1,10 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: on · desired on
+11|false|true|||Helper: installed
+12|false|true|||Interface: rl-tun0
+13|true|true|||Warnings (2)
+74|false|true|||DNS: plain DNS goes direct, not through the pool
+75|false|true|||UDP/QUIC: non-DNS UDP is blocked
+15|false|true|||Enable system-wide coverage…
+73|false|true|||Unavailable: coverage is already on
+16|true|true|||Disable system-wide coverage…

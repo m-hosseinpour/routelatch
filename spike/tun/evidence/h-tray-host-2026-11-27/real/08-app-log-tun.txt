@@ -1,0 +1,2 @@
+2026-11-27T20:12:28.288Z info    tun.bypass: interface=wlp0s20f3
+2026-11-27T20:12:28.288Z info    tun.bypass: interface=wlp0s20f3

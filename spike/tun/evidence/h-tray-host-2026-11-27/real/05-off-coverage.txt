@@ -1,0 +1,9 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: off · desired off
+11|false|true|||Helper: installed
+12|false|true|||Interface: rl-tun0
+13|true|true|||Warnings (refreshing)
+82|false|true|||Coverage warnings refreshing…
+15|true|true|||Enable system-wide coverage…
+16|false|true|||Disable system-wide coverage…
+81|false|true|||Unavailable: coverage is already off

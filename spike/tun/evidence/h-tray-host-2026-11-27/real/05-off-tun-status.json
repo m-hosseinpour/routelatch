@@ -1,0 +1,1 @@
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}

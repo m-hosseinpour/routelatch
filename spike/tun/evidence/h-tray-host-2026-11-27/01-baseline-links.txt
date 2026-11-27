@@ -1,0 +1,7 @@
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>
+enp0s31f6        DOWN           84:ba:59:0a:81:07 <NO-CARRIER,BROADCAST,MULTICAST,UP>
+wlp0s20f3        UP             6c:f6:da:e1:03:ed <BROADCAST,MULTICAST,UP,LOWER_UP>
+docker0          DOWN           36:89:e0:5f:9d:12 <NO-CARRIER,BROADCAST,MULTICAST,UP>
+br-e92db0637722  DOWN           52:eb:f1:87:17:3c <NO-CARRIER,BROADCAST,MULTICAST,UP>
+tailscale0       UNKNOWN        <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP>
+virbr0           DOWN           da:e5:c4:ff:62:40 <NO-CARRIER,BROADCAST,MULTICAST,UP>

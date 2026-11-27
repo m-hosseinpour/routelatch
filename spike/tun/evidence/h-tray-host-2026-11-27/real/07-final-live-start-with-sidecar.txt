@@ -1,0 +1,4 @@
+2970371 Fri Nov 27 23:25:49 2026 /usr/bin/routelatch __app-supervisor
+2970384 Fri Nov 27 23:25:50 2026 /usr/bin/routelatch run --headless
+2970399 Fri Nov 27 23:25:50 2026 /usr/bin/sing-box run -c <home>/.local/state/routelatch/sidecar/sing-box.json
+2970416 Fri Nov 27 23:25:50 2026 /usr/bin/routelatch __app-tray

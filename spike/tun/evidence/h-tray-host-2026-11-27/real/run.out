@@ -1,0 +1,3 @@
+RouteLatch app started (pid 2974067)
+listeners: http 127.0.0.1:35675, socks 127.0.0.1:45691
+log: <tmp>/h-tray-host-2026-11-27/run-20261127T201223Z/data/log/routelatch.log

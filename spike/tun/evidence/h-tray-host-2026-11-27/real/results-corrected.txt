@@ -1,0 +1,26 @@
+PASS|real helper install|pkexec tun setup exit 0
+PASS|helper units/socket layout|socket active, control.sock 0600 owner 1000, binary root-owned
+PASS|tray/engine ready, helper discovered|helper= installed state= off desired= False
+PASS|real off menu with helper installed|Coverage: off · desired off, Helper: installed
+PASS|tray enable|real two-step confirm; Coverage: on · desired on
+PASS|active TUN link/routes|rl-tun0 up, 198.18.0.1/15 + fc00::1/64, v4/v6 half routes
+PASS|default route preserved while active|default still via wlp0s20f3
+PASS|DNS config unchanged while active|resolv.conf sha256 equal
+PASS|active menu tree|Coverage on, Interface: rl-tun0, Helper installed
+PASS|active green on badge|badge center RGB 46,160,67
+PASS|tun status on while active|04-active-tun-status.json: state=on desired=true helper=installed interface=rl-tun0 since=2026-11-27T23:42:28.289+03:30
+PASS|tray disable|two-step confirm; rl-tun0 removed
+PASS|coverage link removed|rl-tun0 absent
+PASS|routes restored to baseline|IPv4/IPv6 route tables byte-equal
+PASS|DNS restored/unchanged after off|resolv.conf sha256 equal
+PASS|tun status off after disable|05-off-tun-status.json: state=off desired=false helper=installed (raw results.txt line was a parser-shape bug)
+PASS|isolated app stopped|no process with the isolated data dir
+PASS|helper uninstall|pkexec tun uninstall exit 0
+PASS|helper files/units/tmpfiles removed|none of socket/service/binary/config/tmpfiles remain
+PASS|helper units inactive|socket and service not active
+PASS|no coverage link at end|rl-tun0 absent
+PASS|final routes equal baseline|IPv4/IPv6 route tables byte-equal
+PASS|policy rules unchanged|ip rule / ip -6 rule byte-equal
+PASS|final DNS unchanged|resolv.conf sha256 equal
+PASS|live instance untouched|identical pid/args set before/after; see 07-final-live-start.txt
+PASS|isolated tray item unregistered|tray pid 2974115 absent from watcher

@@ -1,0 +1,22 @@
+::/1 dev rl-tun0 metric 1 pref medium
+fc00::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fe80::/64 dev tailscale0 proto kernel metric 256 pref medium
+fe80::/64 dev docker0 proto kernel metric 256 linkdown pref medium
+fe80::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fe80::/64 dev wlp0s20f3 proto kernel metric 1024 pref medium
+8000::/1 dev rl-tun0 metric 1 pref medium
+local ::1 dev lo table local proto kernel metric 0 pref medium
+anycast fc00:: dev rl-tun0 table local proto kernel metric 0 pref medium
+local fc00::1 dev rl-tun0 table local proto kernel metric 0 pref medium
+anycast fe80:: dev tailscale0 table local proto kernel metric 0 pref medium
+anycast fe80:: dev docker0 table local proto kernel metric 0 pref medium
+anycast fe80:: dev wlp0s20f3 table local proto kernel metric 0 pref medium
+anycast fe80:: dev rl-tun0 table local proto kernel metric 0 pref medium
+local fe80::3489:e0ff:fe5f:9d12 dev docker0 table local proto kernel metric 0 pref medium
+local fe80::3ffe:9e03:d60:3e39 dev rl-tun0 table local proto kernel metric 0 pref medium
+local fe80::5811:4468:1561:86b7 dev wlp0s20f3 table local proto kernel metric 0 pref medium
+local fe80::f9cd:a743:8536:63bf dev tailscale0 table local proto kernel metric 0 pref medium
+multicast ff00::/8 dev tailscale0 table local proto kernel metric 256 pref medium
+multicast ff00::/8 dev docker0 table local proto kernel metric 256 linkdown pref medium
+multicast ff00::/8 dev wlp0s20f3 table local proto kernel metric 256 pref medium
+multicast ff00::/8 dev rl-tun0 table local proto kernel metric 256 pref medium

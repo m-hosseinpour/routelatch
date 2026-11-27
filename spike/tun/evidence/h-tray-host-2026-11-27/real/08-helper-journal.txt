@@ -1,0 +1,12 @@
+Nov 27 23:42:27 <host> systemd[1]: Starting routelatch-tun.socket - RouteLatch TUN control socket...
+Nov 27 23:42:27 <host> systemd[1]: Listening on routelatch-tun.socket - RouteLatch TUN control socket.
+Nov 27 23:42:27 <host> systemd[1]: Started routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 23:42:28 <host> tun-service[2974092]: routelatch-tun: 2026/11/27 20:12:28 coverage is on
+Nov 27 23:42:29 <host> tun-service[2974092]: routelatch-tun: 2026/11/27 20:12:29 coverage is off
+Nov 27 23:42:29 <host> systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 23:42:29 <host> systemd[1]: Started routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 23:42:35 <host> systemd[1]: Stopping routelatch-tun.service - RouteLatch TUN coverage helper...
+Nov 27 23:42:35 <host> systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 23:42:35 <host> systemd[1]: Stopped routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 23:42:35 <host> systemd[1]: routelatch-tun.socket: Deactivated successfully.
+Nov 27 23:42:35 <host> systemd[1]: Closed routelatch-tun.socket - RouteLatch TUN control socket.

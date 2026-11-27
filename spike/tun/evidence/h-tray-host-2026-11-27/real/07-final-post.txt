@@ -1,0 +1,35 @@
+date=2026-11-27T20:20:35Z
+== units ==
+none
+== unit files ==
+ls: cannot access '/etc/systemd/system/routelatch-tun.socket': No such file or directory
+ls: cannot access '/etc/systemd/system/routelatch-tun.service': No such file or directory
+ls: cannot access '/etc/systemd/system/sockets.target.wants/routelatch-tun.socket': No such file or directory
+== artifacts ==
+ls: cannot access '/usr/libexec/routelatch': No such file or directory
+ls: cannot access '/etc/routelatch': No such file or directory
+ls: cannot access '/run/routelatch-tun': No such file or directory
+ls: cannot access '/etc/tmpfiles.d/routelatch-tun.conf': No such file or directory
+== link ==
+Device "rl-tun0" does not exist.
+== route4 ==
+default via 192.168.1.1 dev wlp0s20f3 proto dhcp src 192.168.1.104 metric 600
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 metric 425 linkdown
+172.18.0.0/16 dev br-e92db0637722 proto kernel scope link src 172.18.0.1 metric 426 linkdown
+192.168.1.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.1.104 metric 600
+192.168.122.0/24 dev virbr0 proto kernel scope link src 192.168.122.1 metric 427 linkdown
+== route6 ==
+fe80::/64 dev tailscale0 proto kernel metric 256 pref medium
+fe80::/64 dev docker0 proto kernel metric 256 linkdown pref medium
+fe80::/64 dev wlp0s20f3 proto kernel metric 1024 pref medium
+== resolv ==
+ebdf560272a77357195c39e98340b77e18c8a8ce2025ee950e9e0c7b01467ab8  /etc/resolv.conf
+== live ==
+2970371 Fri Nov 27 23:25:49 2026 /usr/bin/routelatch __app-supervisor
+2970384 Fri Nov 27 23:25:50 2026 /usr/bin/routelatch run --headless
+2970399 Fri Nov 27 23:25:50 2026 /usr/bin/sing-box run -c <home>/.local/state/routelatch/sidecar/sing-box.json
+2970416 Fri Nov 27 23:25:50 2026 /usr/bin/routelatch __app-tray
+== tray items ==
+(<[':1.51/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4016-1/StatusNotifierItem', ':1.12936/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-2970416-1/StatusNotifierItem']>,)
+== isolated listeners (ports 35675/45691) ==
+none

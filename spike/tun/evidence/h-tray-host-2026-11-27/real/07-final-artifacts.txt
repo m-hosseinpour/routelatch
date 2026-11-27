@@ -1,0 +1,16 @@
+== systemctl is-active ==
+inactive
+inactive
+== unit files ==
+ls: cannot access '/etc/systemd/system/routelatch-tun.socket': No such file or directory
+ls: cannot access '/etc/systemd/system/routelatch-tun.service': No such file or directory
+== helper binary ==
+ls: cannot access '/usr/libexec/routelatch/tun-service': No such file or directory
+== config ==
+ls: cannot access '/etc/routelatch/tun.json': No such file or directory
+== tmpfiles ==
+ls: cannot access '/etc/tmpfiles.d/routelatch-tun.conf': No such file or directory
+== runtime dir ==
+ls: cannot access '/run/routelatch-tun': No such file or directory
+== control socket ==
+ls: cannot access '/run/routelatch-tun/control.sock': No such file or directory

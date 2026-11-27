@@ -1,0 +1,39 @@
+== systemctl is-active ==
+active
+inactive
+== systemctl status socket ==
+● routelatch-tun.socket - RouteLatch TUN control socket
+     Loaded: loaded (/etc/systemd/system/routelatch-tun.socket; enabled; preset: enabled)
+     Active: active (listening) since Fri 2026-11-27 23:42:27 +0330; 42ms ago
+ Invocation: 7ebfb88b02bf4915bed435a99f4885d1
+   Triggers: ● routelatch-tun.service
+     Listen: /run/routelatch-tun/control.sock (Stream)
+      Tasks: 0 (limit: 32096)
+     Memory: 252K (peak: 256K)
+        CPU: 997us
+     CGroup: /system.slice/routelatch-tun.socket
+
+Nov 27 23:42:27 <host> systemd[1]: Starting routelatch-tun.socket - RouteLatch TUN control socket...
+Nov 27 23:42:27 <host> systemd[1]: Listening on routelatch-tun.socket - RouteLatch TUN control socket.
+== systemctl status service ==
+○ routelatch-tun.service - RouteLatch TUN coverage helper
+     Loaded: loaded (/etc/systemd/system/routelatch-tun.service; disabled; preset: enabled)
+     Active: inactive (dead)
+TriggeredBy: ● routelatch-tun.socket
+== unit files ==
+-rw-r--r-- 1 root root 1208 Nov 27 23:42 /etc/systemd/system/routelatch-tun.service
+-rw-r--r-- 1 root root  242 Nov 27 23:42 /etc/systemd/system/routelatch-tun.socket
+== binary ==
+-rwxr-xr-x 1 root root 53296233 Nov 27 23:42 /usr/libexec/routelatch/tun-service
+== config ==
+-rw-r--r-- 1 root root 55 Nov 27 23:42 /etc/routelatch/tun.json
+== tmpfiles ==
+-rw-r--r-- 1 root root 145 Nov 27 23:42 /etc/tmpfiles.d/routelatch-tun.conf
+== runtime dir ==
+drwxr-xr-x 2 mahdi root 60 Nov 27 23:42 /run/routelatch-tun
+== control socket ==
+/run/routelatch-tun/control.sock mode=600 uid=1000 gid=1000 type=socket
+== unit limits ==
+BindsTo=routelatch-tun.socket
+StartLimitIntervalUSec=5min
+StartLimitBurst=20

@@ -1,0 +1,1 @@
+(<[':1.51/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-4016-1/StatusNotifierItem', ':1.12936/StatusNotifierItem', 'org.freedesktop.StatusNotifierItem-2970416-1/StatusNotifierItem']>,)
