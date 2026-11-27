@@ -186,6 +186,27 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	}
 	s.logf("supervisor.start pid=%d data_dir=%s", os.Getpid(), absData)
 
+	// Install signal handling before any startup work that can be observed as
+	// ready. `run` returns as soon as the ready event is written, so a SIGTERM
+	// immediately after that can arrive before loop is entered; without this
+	// handler the default action would kill the supervisor and strand the
+	// marker and children. Cancellation then reaches every startup wait and
+	// takes the same clean shutdown path as a signal during normal operation.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	sigCh := make(chan os.Signal, 4)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case sig := <-sigCh:
+			s.logf("supervisor.signal signal=%s", sig)
+			cancelRun()
+		case <-runCtx.Done():
+		}
+	}()
+	ctx = runCtx
+
 	// 1. app.lock decides singleton. A held lock goes through the second-run
 	// rules, which never take over a live marker.
 	lock, lockErr := AcquireAppLock(s.paths.AppLock)
@@ -232,6 +253,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	// missing tray's unsupported/7.
 	free, err := ProbeEngineLock(s.opts.Paths.Lock)
 	if err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(conflictExit(contract.ExitConflict, "app.preflight", "the engine lock path is invalid; refusing to start", "engine_lock_invalid", err))
 	}
 	if !free {
@@ -239,6 +263,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 			"a headless RouteLatch engine is running for this data dir; stop it first or use 'routelatch run --headless'", "headless_running", nil))
 	}
 	if err := s.checkTray(); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(unsupportedTray(err))
 	}
 
@@ -246,6 +273,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	// supervisor death even without PR_SET_PDEATHSIG.
 	fd, err := pidfdOpen(os.Getpid(), 0)
 	if err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(unsupportedPIDFD(err))
 	}
 	s.selfPidfd = os.NewFile(uintptr(fd), "supervisor-pidfd")
@@ -258,9 +288,15 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	// 5. Engine first, then tray, then readiness. A failure stops whatever was
 	// already started with the same bounded teardown.
 	if err := s.spawnEngine(); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(err)
 	}
 	if err := s.waitEngineReady(ctx); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		var repair *repairError
 		if errors.As(err, &repair) {
 			return s.failClosed(repair.err)
@@ -268,9 +304,15 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		return s.abortStartup(s.mapChildExit("engine", err))
 	}
 	if err := s.spawnTray(); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(err)
 	}
 	if err := s.waitTrayReady(ctx); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		var repair *repairError
 		if errors.As(err, &repair) {
 			return s.failClosed(repair.err)
@@ -278,6 +320,9 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		return s.abortStartup(s.mapChildExit("tray", err))
 	}
 	if err := s.writeState(MarkerReady); err != nil {
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
+		}
 		return s.abortStartup(markerWriteFailed(err))
 	}
 	s.phase = MarkerReady
@@ -288,10 +333,6 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 }
 
 func (s *supervisor) loop(ctx context.Context) error {
-	sigCh := make(chan os.Signal, 4)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	defer signal.Stop(sigCh)
-
 	repair := time.NewTicker(s.opts.RepairInterval)
 	defer repair.Stop()
 
@@ -306,9 +347,6 @@ func (s *supervisor) loop(ctx context.Context) error {
 		}
 		select {
 		case <-ctx.Done():
-			return s.shutdown(0, nil)
-		case sig := <-sigCh:
-			s.logf("supervisor.signal signal=%s", sig)
 			return s.shutdown(0, nil)
 		case code := <-s.engine.wait:
 			if s.quitRequested {
@@ -328,6 +366,11 @@ func (s *supervisor) loop(ctx context.Context) error {
 		case code := <-s.trayWait():
 			if s.quitRequested {
 				continue
+			}
+			if _, quit := drainTrayQuit(s.tray, 500*time.Millisecond); quit {
+				s.quitRequested = true
+				s.logf("supervisor.quit requested=tray")
+				return s.shutdown(0, nil)
 			}
 			if err := s.trayDied(code, ""); err != nil {
 				return err
@@ -958,6 +1001,47 @@ func (s *supervisor) stopTrayOnly() error {
 	return err
 }
 
+// drainTrayQuit drains the control lines a tray generation wrote before its
+// exit status was observed. The wait channel and the control pipe are separate,
+// so the exit can win the select while "ready" and "quit" are still queued.
+// The child's write end is closed, so its reader reaches EOF; inspect every
+// line that reader delivers before discarding the generation. An explicit quit
+// always wins over the exit status.
+func drainTrayQuit(tray *childProc, timeout time.Duration) (ready, quit bool) {
+	if tray == nil || tray.msgs == nil {
+		return false, false
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case msg := <-tray.msgs:
+			switch msg {
+			case "ready":
+				ready = true
+			case "quit":
+				return ready, true
+			}
+		case <-tray.readerDone:
+			for {
+				select {
+				case msg := <-tray.msgs:
+					switch msg {
+					case "ready":
+						ready = true
+					case "quit":
+						return ready, true
+					}
+				default:
+					return ready, false
+				}
+			}
+		case <-deadline.C:
+			return ready, false
+		}
+	}
+}
+
 func (s *supervisor) waitEngineReady(ctx context.Context) error {
 	return s.waitEngineStatus(ctx, nil, func(p statusProbe) bool { return p.Ready })
 }
@@ -1034,6 +1118,17 @@ func (s *supervisor) waitTrayReady(ctx context.Context) error {
 	for {
 		select {
 		case code := <-wait:
+			ready, quit := drainTrayQuit(tray, 500*time.Millisecond)
+			if quit {
+				if ready {
+					// The item registered before this explicit Quit. Report
+					// readiness so the launcher sees the successful startup,
+					// then let the loop process the queued quit.
+					s.pendingTrayMsgs = append(s.pendingTrayMsgs, "quit")
+					return nil
+				}
+				return &childExit{name: "tray", code: 0, quit: true}
+			}
 			return &childExit{name: "tray", code: code}
 		case <-deadline.C:
 			return &childExit{name: "tray", code: -2, timeout: true}

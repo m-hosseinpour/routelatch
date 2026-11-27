@@ -1030,6 +1030,48 @@ func assertLocked(t *testing.T, path string) {
 	}
 }
 
+// assertLockedEventually waits for path to hold a flock. The documented repair
+// order is create->write->flock->write, so a recreated marker can publish its
+// record before the flock is taken; a test that observes the record must wait
+// for the observable condition instead of demanding the lock at that instant.
+func assertLockedEventually(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		locked, err := lockedPath(path)
+		if err == nil && locked {
+			return
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("%s is still not locked after %s", path, timeout)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// lockedPath reports whether another descriptor holds path's flock. A missing
+// file is reported as os.ErrNotExist so repair callers can keep waiting for
+// the recreated inode.
+func lockedPath(path string) (bool, error) {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err == nil {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return false, nil
+	}
+	if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		return true, nil
+	}
+	return false, err
+}
+
 // TestTrayRestartContainsStaleControlMessages is the regression for the shared
 // tray channel: eight generations queue lost just before exiting while the
 // next generation stays in starting. A stale message must never abort the new
@@ -1244,7 +1286,7 @@ func TestDeletedMarkerIsRecreatedLockedWhileReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitMarkerState(t, paths.AppOwner, MarkerReady, 5*time.Second)
-	assertLocked(t, paths.AppOwner)
+	assertLockedEventually(t, paths.AppOwner, 5*time.Second)
 	second, err := launchFake(t, data, "normal", 2*time.Second)
 	if err != nil || !second.AlreadyRunning || second.PID != result.PID {
 		t.Fatalf("second run after live repair = %+v, %v", second, err)
