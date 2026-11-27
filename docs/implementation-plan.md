@@ -254,8 +254,12 @@ Quit ساده با desktop proxy applied/unknown پیشنهاد نمی‌شود 
 `internal/app` (launch cancellation) داد که ۲۰ بار ایزوله سبز شد و به این تغییر
 مربوط نیست. **بازبینی مستقل:** دو دور بازبینی و دو دور رفع؛ verdict نهایی
 **Ready with findings** با هیچ یافتهٔ مسدودکننده/مادی (دو یافتهٔ مادی اولیهٔ
-مستندات عمومی و race تست رفع شدند؛ nitهای باقی‌مانده هم اعمال شدند). **قدم بعدی:** push همین batch طبق `AGENTS.md`؛
-release فقط پس از سبزشدن CI روی commit و رفع CI جاری سشن دیگر/دروازه‌های انتشار.
+مستندات عمومی و race تست رفع شدند؛ nitهای باقی‌مانده هم اعمال شدند).
+**تحویل:** commit `7b25e14` روی `main` به هر دو remote push شد. release فعلاً
+انجام نشد: دروازهٔ CI سبز روی commit تگ‌شده هنوز احراز نشده و سشن دیگر هم
+مشکل CI/flake را در یک worktree جدا follow-up می‌کند. **قدم بعدی:** پس از
+سبزشدن CI روی `7b25e14` (یا commit مستندات بعدی) و بسته‌شدن رفع CI جاری،
+batch واجد شرایط release را طبق دروازه‌های `AGENTS.md` تگ/منتشر کن.
 
 ### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
