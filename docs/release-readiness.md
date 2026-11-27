@@ -10,15 +10,19 @@ tarballs, Debian packages and RPM packages. **v0.1.2** patched the desktop-proxy
 the same 17-asset layout. **v1.0.0** shipped the D26 app/tray runtime,
 `autostart`, the opt-in `service` and unit-free packages; its evidence is in
 "v1.0.0 release (historical)" below. **v1.0.1** was the first release built and
-published by the CI pipeline. **v1.1.0**, the current release, adds the R15 tray
-control surface, `status.resume_requires_restart` and the process-level restart
-lifecycle; its evidence is in "v1.1.0 — tray control surface (2026-11-26)"
-below, and the v1.0.1 evidence is in "v1.0.1 — first CI-built release
-(2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections, the
-history scan, name check and dependency audit remain historical evidence; they
-are not repeated here. The tags, pushes and releases were authorized by the
-project owner (v1.1.0 under the standing authorization recorded in `AGENTS.md`
-on 2026-11-26).
+published by the CI pipeline. **v1.1.0** added the R15 tray control surface,
+`status.resume_requires_restart` and the process-level restart lifecycle; its
+evidence is in "v1.1.0 — tray control surface (2026-11-26)" below. **v1.2.0**,
+the current public release, adds opt-in TUN coverage (A17 = Accepted with
+limits); its evidence is in "v1.2.0 — opt-in TUN coverage (2026-11-27)" below.
+A **v1.2.1 patch candidate** (the R-28 status warning) is prepared at `2d4da2a`
+with evidence at `d36361b`; its tag, CI run and Release are **pending**, so it
+is not a public release. The v1.0.1 evidence is in "v1.0.1 — first CI-built
+release (2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections,
+the history scan, name check and dependency audit remain historical evidence;
+they are not repeated here. The tags, pushes and releases were authorized by
+the project owner (v1.2.0 under the standing authorization recorded in
+`AGENTS.md` on 2026-11-26).
 
 **CI release pipeline (D27, 2026-11-24).** From `v1.0.1` on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
@@ -43,6 +47,90 @@ old tag was deleted locally and on both remotes and **v1.0.1** was recreated on
 the fixed, CI-green commit; attempt 4 published the release (see the v1.0.1
 section). The v1.0.1 and earlier release sections below remain evidence of the
 local build/upload process used for `v0.1.0`–`v1.0.0`.
+
+## v1.2.0 — opt-in TUN coverage (2026-11-27)
+
+Tag `v1.2.0` is an annotated tag (tag object
+`cda1fe352a2b1144633415f8b3071b2dcf542382`) on `main` commit `a8ee4d3`, pushed
+to both remotes. The release adds opt-in TUN coverage (D29/A17) on top of the
+v1.1.0 tray control surface. Routing policy, the approved list and the
+fail-closed path are unchanged; DNS remains direct and non-DNS UDP/QUIC remains
+blocked (D30/D31/D32).
+
+`CI` push run `45984462533` on `a8ee4d3` (attempt 2) was green before the tag
+push. `Release` run `45985695347` (tag push) succeeded. The public GitHub
+Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0> (release id
+`460485888`, title `v1.2.0`, neither a draft nor a prerelease). It carries
+exactly 17 assets: four `routelatch-v1.2.0-linux-<arch>.tar.gz` tarballs, four
+`routelatch_1.2.0_<debarch>.deb` packages, four `routelatch-<rpmarch>.spec`
+files, four `routelatch-1.2.0-1.<rpmarch>.rpm` binary RPMs and `SHA256SUMS`.
+Its body starts "RouteLatch v1.2.0 — opt-in TUN coverage" (the annotated tag
+message).
+
+The release carries the A14 licensing/source-offer/package evidence already
+established for the CI pipeline (Apache-2.0 `LICENSE`, `NOTICE`,
+`THIRD-PARTY-NOTICES.md`, the MPL-2.0/GPL source offer, and checksummed
+tarball/`.deb`/spec/RPM assets). The v1.2.1 candidate carries the same evidence.
+This record does not claim a new security review.
+
+Known limits carried from the R16-H acceptance record:
+`spike/tun/H-ACCEPTANCE.md` and
+`spike/tray/evidence/r15h-acceptance-2026-11-26.md`. TUN runtime was exercised
+on `amd64` only; Wayland/GNOME, a real TUN-active host tray/toggle, panel
+contrast, Login/autostart auto-enable and `arm64` runtime remain unverified.
+The R-28 off-link path and the start-limit recovery were verified after the
+release (see the v1.2.1 candidate record).
+
+## v1.2.1 — candidate patch (pending tag/CI/Release; not public)
+
+**This version is not released.** The candidate patch is prepared at
+`2d4da2a` (with `cd1c848`) and its verification evidence is `d36361b`;
+`v1.2.0` remains the current public release until the candidate is tagged and
+published.
+
+The fix closes the R-28 status-visibility gap found after v1.2.0: an approved
+egress dial that fails with kind `exit_unreachable` records an in-memory
+timestamp, and top-level `status.warnings` then reports the fixed sentence
+`recent approved egress dial failed; traffic remains fail-closed with no direct fallback`
+for 60 seconds. The first successful approved pool dial clears it. There is no
+change to health, ranking, cooldown, routing or persistence, and
+`tun status`/the tray remain coverage-only, so they do not show this warning.
+`handshake_rejected` and `timeout` are deliberately excluded because a
+destination-side failure or stall can produce them. A genuine exit-dial timeout
+is indistinguishable from a destination stall and is therefore unrecorded.
+
+The independent review passed after the signal was restricted to
+`exit_unreachable`; the earlier broader class set was the review finding.
+Focused tests cover the warning's appearance and 60 s TTL, clear-on-success,
+the excluded destination/transport classes, no health or persisted-state
+mutation, and the CLI text rendering
+(`TestStatusReportsRecentApprovedEgressDialFailure`,
+`TestSuccessfulApprovedDialClearsEgressFailure`,
+`TestEgressFailureWarningExpires`,
+`TestDestinationFailuresDoNotSetEgressWarning`,
+`TestOverBroadTransportKindsDoNotSetEgressWarning`,
+`TestEgressFailureDoesNotMutateHealth`,
+`TestPrintStatusPrintsEgressWarning`). No CI run exists for the candidate yet.
+
+Post-fix off-link runtime verification at `2d4da2a`: **36 PASS / 0 FAIL /
+0 NOTRUN**. The warning appeared after the failed approved dial, was absent at
+62.1 s, cleared on the first successful approved dial (429 ms), survived
+`tun off/on` inside the TTL, and the approved path stayed fail-closed with no
+direct fallback, no loop and no exit CONNECT. The H addendum rerun with the
+host VPN off reported **14 PASS / 2 NOTRUN**; IPv6 DNS/53 and the package
+checks passed, and start-limit recovery is a recorded PASS (deterministic
+20/300 then `start-limit-hit`, recovered by `reset-failed` plus socket start).
+Fail-open in-gap status visibility remains **NOT RUN**: status calls block or
+time out inside the gap, and no false `on` was observed.
+
+Limits: synthetic local fixtures only; one break shape (`default → dummy0`),
+one architecture (`amd64`) and a headless run, so no tray icon was observed;
+the warning is process-local and is not expected to survive a restart; one TTL
+observation only. Evidence:
+`spike/tun/POST-RELEASE-VERIFICATION.md` and
+`spike/tun/evidence/post-v1.2.0-verification-2026-11-27/`. The tag, `CI` run and
+`Release` for v1.2.1 are still pending.
 
 ## v1.1.0 — tray control surface (2026-11-26)
 
@@ -93,7 +181,7 @@ deleted through the API (HTTP 204) and the tag was deleted locally and on both
 remotes. `git tag -l v0.1.4` is empty, neither remote lists the tag, both `main`
 heads point at `79c0e53`, and `v0.1.0`–`v0.1.3` are unchanged. That batch was
 pushed only; **`v1.0.0` was the current release until `v1.0.1`, which
-`v1.1.0` has since superseded.**
+`v1.1.0` and then `v1.2.0` superseded.**
 
 ## v1.0.1 — first CI-built release (2026-11-25)
 
