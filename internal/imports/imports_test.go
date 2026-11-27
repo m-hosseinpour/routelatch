@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -833,5 +834,25 @@ func TestAuditCountsDroppedMuxAndQuery(t *testing.T) {
 	}
 	if audit.DroppedKeys != 1 {
 		t.Fatalf("mux dropped=%d", audit.DroppedKeys)
+	}
+}
+
+func TestFetcherUsesInjectedDialer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "vless://ok")
+	}))
+	defer server.Close()
+	called := 0
+	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+		called++
+		var d net.Dialer
+		return d.DialContext(ctx, network, address)
+	}
+	src := contract.Source{Kind: contract.SourceSubscription, Origin: server.URL}
+	if _, err := NewFetcherWithDialer(dial).FetchSource(context.Background(), src); err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if called == 0 {
+		t.Fatal("the injected dialer was not used")
 	}
 }

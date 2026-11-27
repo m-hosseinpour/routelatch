@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C انجام شدند؛ R16-D بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D انجام شدند؛ R16-E بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -471,6 +471,23 @@ SIGKILL→lease rebuild، disable cleanup؛ بدون تغییر هاست).
 **check:** unit/fake برای enable/stop/quit/restart/persistence؛ gated TUN
 end-to-end با loopback pool/direct/probe/refresh؛ شمارندهٔ loop=0؛ no orphan
 TUN پس از Quit/SIGTERM.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-D — انجام شد):** runtime واقعی C در control
+wire شد: startup با bypass→TUN→listener، stop/Quit/mode disable-first،
+adoption/marker supervisor، egress controller مشترک برای direct/probe/fetch/
+resolver و embedded-Xray pool، sidecar `DefaultInterface` فقط از config تولیدی،
+status/doctor واقعی و stale-target. fail-closed: پوشش crash-left که خاموش‌شدنش
+اثبات نمی‌شود، با bypass فعال و warning باز می‌شود؛ abort فقط در stopped یا وقتی
+bypass هم ممکن نیست. بودجهٔ opهای tun/mode ۶۰s و client ۶۵s با ctx کامل.
+**checkها:** gofmt/vet/build سبز؛ full `go test -count=1 ./...` سبز (acceptance
+~۱۱۸s)؛ `-race` control/tun/egress/engine/app/cmd؛ gated
+`RL_TUN_TEST=1 RL_TUN_ISOLATED_NETNS=1` در کانتینر دورانداختنی **PASS**
+(TUN before listeners، non-loopback peer + gated refresh، pool loop counter ۰،
+Quit/SIGTERM بدون orphan؛ بدون تغییر هاست). بازبینی مستقل **Ready with
+findings**؛ هشت یافته + دامنهٔ fail-closed startup رفع و با تأیید متمرکز بسته
+شدند. **معوق/محدود:** R-28 (تغییر interface در runtime) بدون watcher؛
+socket/unit و `tun setup` در G؛ helper/unit نصب واقعی gated در G/H؛ helper
+گیرکرده به‌صورت `unavailable`+`tun_conflict` گزارش می‌شود. **next:** R16-E.
 
 #### R16-E — CLI و Terminal menu
 
@@ -1825,10 +1842,10 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A، R16-B و R16-C در ۲۰۲۶-۱۱-۲۷
-   انجام و بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-D قدم بعد است.
-   R16-I/J (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H
-   شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-D در ۲۰۲۶-۱۱-۲۷ انجام و
+   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-E قدم بعد است. R16-I/J
+   (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
+   می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1870,7 +1887,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B/C انجام شدند و R16-D قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C/D انجام شدند و R16-E قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

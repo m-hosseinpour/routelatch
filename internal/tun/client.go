@@ -56,15 +56,33 @@ func (c *Client) call(ctx context.Context, cmd string) (contract.TunStatus, erro
 	conn, err := dialer.DialContext(dialCtx, "unix", c.Path)
 	if err != nil {
 		// A missing socket means the helper is not installed/available. Status
-		// failures are already reported as service_unavailable by the
-		// management layer; enable keeps the documented unsupported reason.
+		// keeps the documented service_unavailable reason; a refused or broken
+		// socket proves nothing about coverage, so callers keep the fail-closed
+		// path for it.
 		if cmd == "status" {
 			return contract.TunStatus{}, &contract.TunError{Kind: contract.Internal, Reason: contract.TunReasonServiceUnavailable, Err: err}
 		}
 		return contract.TunStatus{}, &contract.TunError{Kind: contract.Unsupported, Reason: contract.TunReasonHelperUnavailable, Err: err}
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(timeout))
+	deadline := time.Now().Add(timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	_ = conn.SetDeadline(deadline)
+	// The whole exchange is bounded by the caller's context as well as the
+	// client timeout. A context cancellation must interrupt a read that has
+	// already started, not only the dial: otherwise a slow but successful
+	// operation can outlive its caller and be reported late (§10.3).
+	exchangeDone := make(chan struct{})
+	defer close(exchangeDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.SetDeadline(time.Now())
+		case <-exchangeDone:
+		}
+	}()
 
 	req, err := json.Marshal(controlRequest{Cmd: cmd})
 	if err != nil {
@@ -77,6 +95,9 @@ func (c *Client) call(ctx context.Context, cmd string) (contract.TunStatus, erro
 	dec := json.NewDecoder(io.LimitReader(conn, maxControlResponse))
 	if err := dec.Decode(&resp); err != nil {
 		return contract.TunStatus{}, &contract.TunError{Kind: contract.Internal, Err: err}
+	}
+	if resp.SocksAddress != "" {
+		resp.Status.SocksAddress = resp.SocksAddress
 	}
 	if !resp.OK {
 		return resp.Status, serviceFailure(resp.Error, resp.Reason)

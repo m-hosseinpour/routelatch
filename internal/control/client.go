@@ -61,6 +61,10 @@ func (c *Client) Call(ctx context.Context, req Request) (contract.Envelope, erro
 		timeout = 65 * time.Second
 	case OpDesktopSet, OpDesktopRestore, OpBackup, OpRestore:
 		timeout = 30 * time.Second
+	case OpTunEnable, OpTunDisable, OpMode:
+		// Must outlive the server's TUN/mode budget so a slow but successful
+		// enable/disable is not reported as a client timeout (§10.3).
+		timeout = 65 * time.Second
 	}
 	d := net.Dialer{Timeout: timeout}
 	conn, err := d.DialContext(ctx, "unix", c.Path)

@@ -125,9 +125,10 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		opts.RepairInterval = 10 * time.Second
 	}
 	if opts.TermWait <= 0 {
-		// Engine shutdown closes listeners and in-flight connections with its
-		// own 15s bound; give it that long before SIGKILL.
-		opts.TermWait = 15 * time.Second
+		// Engine shutdown closes TUN first; that operation can take the TUN
+		// service's 30s budget plus a sidecar re-sync. Give the child the
+		// documented shutdown budget before SIGKILL (§10.3).
+		opts.TermWait = 60 * time.Second
 	}
 	if opts.KillWait <= 0 {
 		opts.KillWait = 3 * time.Second
@@ -216,6 +217,14 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 	}
 	if err := owner.Lock(3, 50*time.Millisecond); err != nil {
 		return s.abortStartup(markerWriteFailed(err))
+	}
+	// Only the owning supervisor may clear a stale Quit intent. Removing it
+	// before the app.lock/ownership checks let a concurrent `run` delete the
+	// live marker while this supervisor was already quitting. A previous
+	// supervisor may have exited mid-Quit, so a stale file is removed here;
+	// each real stop writes a fresh marker in stopChildren.
+	if err := s.clearStaleTunShutdownIntent(); err != nil {
+		s.logf("supervisor.tun_intent_clear_failed err=%s", err)
 	}
 
 	// 3. Preflight the engine lock before the tray probe: a headless engine is
@@ -517,12 +526,52 @@ func (s *supervisor) reportError(err error) {
 }
 
 func (s *supervisor) stopChildren() error {
+	// Every caller of stopChildren is a real stop (Quit, signal, startup abort,
+	// fail-closed or terminal child failure), never a restart. The marker tells
+	// the supervised engine to close TUN before its listeners; restartEngineChild
+	// bypasses this path so coverage stays fail-closed for the replacement.
+	// A marker write failure is reported after the children are stopped: the
+	// engine may then keep coverage, so the teardown is not reported as clean.
+	intentErr := s.writeTunShutdownIntent()
 	trayErr := s.stopTrayOnly()
 	engineErr := s.stopEngineOnly()
-	if trayErr != nil {
-		return trayErr
+	switch {
+	case trayErr != nil:
+		return errors.Join(trayErr, intentErr)
+	case engineErr != nil:
+		return errors.Join(engineErr, intentErr)
 	}
-	return engineErr
+	return intentErr
+}
+
+func (s *supervisor) writeTunShutdownIntent() error {
+	dir := s.opts.Paths.RuntimeDir
+	if dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		s.logf("supervisor.tun_intent_failed err=%s", err)
+		return err
+	}
+	path := TunShutdownIntentPath(dir)
+	if err := os.WriteFile(path, []byte("stop\n"), 0o600); err != nil {
+		s.logf("supervisor.tun_intent_failed err=%s", err)
+		return err
+	}
+	return nil
+}
+
+// clearStaleTunShutdownIntent removes an intent left by a supervisor that
+// exited mid-Quit. It runs only after this process owns app.lock and app.owner.
+func (s *supervisor) clearStaleTunShutdownIntent() error {
+	dir := s.opts.Paths.RuntimeDir
+	if dir == "" {
+		return nil
+	}
+	if err := os.Remove(TunShutdownIntentPath(dir)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (s *supervisor) stopEngineOnly() error {

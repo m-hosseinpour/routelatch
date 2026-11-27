@@ -26,12 +26,24 @@ type HTTPFetcher struct {
 
 // NewFetcher builds the v1 fetcher with the contract limits.
 func NewFetcher() *HTTPFetcher {
-	transport := &http.Transport{
-		Proxy: nil, // never inherit HTTP(S)_PROXY/ALL_PROXY (contract §5.6)
-		DialContext: (&net.Dialer{
+	return NewFetcherWithDialer(nil)
+}
+
+// NewFetcherWithDialer builds the same fetcher with an explicit dial function.
+// The engine uses it to bind subscription fetches to the physical interface
+// while TUN coverage is active (docs/contracts.md §10.6); nil keeps the
+// ordinary direct dial.
+func NewFetcherWithDialer(dial func(ctx context.Context, network, address string) (net.Conn, error)) *HTTPFetcher {
+	if dial == nil {
+		dialer := &net.Dialer{
 			Timeout:   contract.SourceConnectTimeout,
 			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		}
+		dial = dialer.DialContext
+	}
+	transport := &http.Transport{
+		Proxy:                 nil, // never inherit HTTP(S)_PROXY/ALL_PROXY (contract §5.6)
+		DialContext:           dial,
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout:   contract.SourceConnectTimeout,
 		ResponseHeaderTimeout: contract.SourceTotalTimeout,

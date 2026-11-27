@@ -173,7 +173,7 @@ func TestAllDirectKeepsListenerAndStoppedClosesIt(t *testing.T) {
 	st, paths := newServiceStore(t)
 	svc := newTestService(t, st, paths)
 	pl := &fakePool{}
-	direct := &countingDirect{inner: newDirectDialer(nil)}
+	direct := &countingDirect{inner: newDirectDialer(nil, nil)}
 	attachFrontend(t, svc, pl, direct)
 	echoAddr, stopEcho := startEcho(t)
 	defer stopEcho()
@@ -227,7 +227,7 @@ func TestEmptyPoolDirectWorksApprovedFailsWithoutDirectDial(t *testing.T) {
 	}
 	svc := newTestService(t, st, paths)
 	pl := &fakePool{}
-	direct := &countingDirect{inner: newDirectDialer(nil)}
+	direct := &countingDirect{inner: newDirectDialer(nil, nil)}
 	attachFrontend(t, svc, pl, direct)
 	echoAddr, stopEcho := startEcho(t)
 	defer stopEcho()
@@ -400,7 +400,7 @@ func TestStartNetworkWithEmptyPoolServesDirectOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	direct := &countingDirect{inner: newDirectDialer([]uint16{portOf(t, httpAddr), portOf(t, socksAddr)})}
+	direct := &countingDirect{inner: newDirectDialer([]uint16{portOf(t, httpAddr), portOf(t, socksAddr)}, nil)}
 	svc, err := NewService(context.Background(), Options{Store: st, Paths: paths, Direct: direct, LogOutput: io.Discard})
 	if err != nil {
 		t.Fatal(err)

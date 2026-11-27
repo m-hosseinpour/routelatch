@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -71,6 +72,11 @@ func TestControlEnableStatusDisable(t *testing.T) {
 	st, err = client.Status(context.Background())
 	if err != nil || st.State != contract.TunOn || !st.Desired {
 		t.Fatalf("status after enable=%+v err=%v", st, err)
+	}
+	// The private target must survive the socket round-trip; stale-target
+	// detection in the engine depends on it and must not regress silently.
+	if st.SocksAddress != "127.0.0.1:1080" {
+		t.Fatalf("socks target over the socket=%q, want the configured listener", st.SocksAddress)
 	}
 	if err := client.Disable(context.Background()); err != nil {
 		t.Fatalf("disable: %v", err)
@@ -328,5 +334,43 @@ func TestServiceFailureMapping(t *testing.T) {
 		if !errors.As(err, &te) || te.Kind != tc.kind || te.Reason != tc.want {
 			t.Fatalf("%s/%s -> %#v", tc.code, tc.reason, err)
 		}
+	}
+}
+
+// TestClientHonorsContextDuringExchange pins that cancellation interrupts the
+// whole exchange, not only the dial. A service that accepts but never answers
+// must not hold the caller until the client timeout (the 30s operation budget
+// would otherwise look like a local hang).
+func TestClientHonorsContextDuringExchange(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "control.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	client := &Client{Path: path, Timeout: 10 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err = client.Status(ctx)
+	if err == nil {
+		t.Fatal("status succeeded without a response")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("cancellation took %s; the exchange ignored the context", elapsed)
+	}
+	var te *contract.TunError
+	if !errors.As(err, &te) {
+		t.Fatalf("err=%v, want a typed TUN error", err)
 	}
 }

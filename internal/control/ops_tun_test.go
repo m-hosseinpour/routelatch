@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/egress"
 	"routelatch/internal/store"
 )
 
@@ -25,6 +26,9 @@ type fakeTun struct {
 	disables   int
 	onEnable   func()
 	onDisable  func()
+	// enableTarget, when set, updates the reported SOCKS target on Enable. It
+	// models a service whose configured listener is the current one.
+	enableTarget string
 }
 
 func (f *fakeTun) Status(context.Context) (contract.TunStatus, error) {
@@ -50,6 +54,9 @@ func (f *fakeTun) Enable(context.Context) error {
 		f.status.State = contract.TunOn
 		f.status.Helper = contract.TunHelperInstalled
 		f.status.IPv6 = true
+	}
+	if f.enableTarget != "" {
+		f.status.SocksAddress = f.enableTarget
 	}
 	return nil
 }
@@ -87,7 +94,12 @@ func newTunService(t *testing.T, rt contract.TunRuntime) (*Service, *store.Store
 	t.Helper()
 	ctx := context.Background()
 	st, paths := newServiceStore(t)
-	svc, err := NewService(ctx, Options{Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt})
+	svc, err := NewService(ctx, Options{
+		Store: st, Paths: paths, LogOutput: io.Discard, Tun: rt,
+		Bypass:            egress.NewController(),
+		PhysicalInterface: func() (string, error) { return "eth0", nil },
+		TunBindingCheck:   func() error { return nil },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,6 +233,9 @@ func TestTunStatusNormalizesRuntimeFields(t *testing.T) {
 		Detail: "fixed\x1b[2J text",
 	}}
 	svc, _, _, ctx := newTunService(t, rt)
+	if _, err := svc.setTunDesiredLocked(ctx, true); err != nil {
+		t.Fatal(err)
+	}
 	status, err := svc.status(ctx)
 	if err != nil {
 		t.Fatal(err)

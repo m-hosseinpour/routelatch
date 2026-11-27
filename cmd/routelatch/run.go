@@ -18,11 +18,18 @@ import (
 	"routelatch/internal/control"
 	"routelatch/internal/instance"
 	"routelatch/internal/store"
+	"routelatch/internal/tun"
 )
 
 // run is the documented split from docs/contracts.md §7.5: plain run is the
 // detached app/tray launcher, while --headless keeps the foreground engine
 // behavior (A13/A15).
+//
+// shutdownBudget covers a full TUN disable (the service's 30s operation plus a
+// possible sidecar restart) with headroom, so a slow-but-successful stop is
+// never cut off and reported as a timeout (§10.3).
+const shutdownBudget = 60 * time.Second
+
 func (c *cli) run(ctx context.Context, args []string) int {
 	fs := c.newFlags("run")
 	headless := fs.Bool("headless", false, "run the engine in the foreground without the tray")
@@ -128,6 +135,9 @@ func (c *cli) runHeadless(ctx context.Context) int {
 	svc, err := control.NewService(ctx, control.Options{
 		Store: st, Paths: c.paths, LogOutput: c.serviceLogOutput(),
 		TrayProbe: appTrayProbe, PIDFDProbe: appPIDFDProbe,
+		Tun:                   &tun.Client{Path: tun.ControlSocketPath},
+		PreserveTunOnShutdown: supervised,
+		TunShutdownMarker:     app.TunShutdownIntentPath(c.paths.RuntimeDir),
 	})
 	if err != nil {
 		return c.runFailure(err, false)
@@ -160,10 +170,47 @@ func (c *cli) runHeadless(ctx context.Context) int {
 	defer stop()
 	<-sigCtx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// Coverage disable can take the TUN service's 30s operation budget plus a
+	// sidecar re-sync, so the shutdown bound must cover the whole operation
+	// rather than the old 15s (docs/contracts.md §10.3). A fresh context is
+	// used for every retry: a long wait for the second signal must not leave an
+	// already-expired deadline.
+	newShutdownContext := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), shutdownBudget)
+	}
+	// TUN coverage closes before management/listeners. A failure aborts the
+	// stop so the host is not left redirected into a dead listener; the process
+	// keeps serving until another signal retries or the supervisor tears it
+	// down. A supervisor restart has no shutdown marker and keeps coverage for
+	// the replacement engine to adopt.
+	shutdownCtx, cancel := newShutdownContext()
+	stopErr := svc.StopCoverage(shutdownCtx)
+	cancel()
+	if stopErr != nil {
+		fmt.Fprintln(c.stderr, "shutdown:", stopErr.Error())
+		if c.jsonOut {
+			_ = c.print(control.EnvelopeFor("run", nil, stopErr))
+		}
+		retrySig := make(chan os.Signal, 1)
+		signal.Notify(retrySig, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(retrySig)
+		select {
+		case <-retrySig:
+		case <-ctx.Done():
+			return c.runFailure(stopErr, false)
+		}
+		shutdownCtx, cancel = newShutdownContext()
+		stopErr = svc.StopCoverage(shutdownCtx)
+		cancel()
+		if stopErr != nil {
+			fmt.Fprintln(c.stderr, "shutdown:", stopErr.Error())
+			return c.runFailure(stopErr, false)
+		}
+	}
 	_ = server.Close()
+	shutdownCtx, cancel = newShutdownContext()
 	closeErr := svc.Close(shutdownCtx)
+	cancel()
 	if closeErr != nil {
 		fmt.Fprintln(c.stderr, "shutdown:", closeErr.Error())
 	}

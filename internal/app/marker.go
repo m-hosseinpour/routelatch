@@ -42,6 +42,14 @@ func validState(state string) bool {
 	return state == MarkerStarting || state == MarkerReady || state == MarkerStopping
 }
 
+// TunShutdownIntentPath is the runtime marker the supervisor writes before a
+// real Quit/stop. A supervised engine that receives SIGTERM without this marker
+// is being replaced by a restart, so it leaves TUN coverage fail-closed for the
+// replacement to adopt. The file carries no destination or state (D21).
+func TunShutdownIntentPath(runtimeDir string) string {
+	return filepath.Join(runtimeDir, "tun-shutdown.intent")
+}
+
 // EncodeRecord is compact JSON plus exactly one newline.
 func EncodeRecord(r Record) ([]byte, error) {
 	body, err := json.Marshal(r)

@@ -1048,6 +1048,13 @@ func TestEngineDeathRestartsAndHidesStaleReady(t *testing.T) {
 				if second.PID != first.PID {
 					t.Fatalf("restart changed the supervisor pid: %d -> %d", first.PID, second.PID)
 				}
+				// A restart is not a stop: the shutdown intent that tells the
+				// engine to disable TUN must not exist after the replacement
+				// became ready (coverage stays for it to adopt).
+				intent := TunShutdownIntentPath(pathsFor(t, data).RuntimeDir)
+				if _, err := os.Stat(intent); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("engine restart wrote a shutdown intent: %v", err)
+				}
 				return
 			}
 		} else if err != nil {

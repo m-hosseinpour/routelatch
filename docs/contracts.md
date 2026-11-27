@@ -1979,13 +1979,13 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B و سرویس R16-C پیاده‌شده؛ اتصال engine/CLI/tray نه)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
-فیلدهای config/status، opهای management و seam تزریق‌شدنی) و سرویس جداگانهٔ R16-C
-(`internal/tun` و `__tun-service`) پیاده شده‌اند؛ اما helper/unit (R16-G)، اتصال
-engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production هنوز runtime TUN
-را به management وصل نمی‌کند: status مقدار `off`/`unavailable` را صادقانه گزارش
-می‌کند، `tun.enable` با `unsupported` رد می‌شود و هیچ ادعای پوشش فعال مجاز نیست.
-نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-C به بعد
-الزام‌آورند.
+فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
+(`internal/tun` و `__tun-service`) و اتصال engine در R16-D (`start/stop`، ماندگاری،
+adoption و bypass ترافیک خود RouteLatch) پیاده شده‌اند؛ helper/unit (R16-G) و
+CLI/tray (R16-E/F) هنوز وجود ندارند. production runtime را از طریق کلاینت
+`internal/tun` به control وصل می‌کند؛ نبود socket/helper فقط warning و `off`
+می‌دهد و listener عادی را از کار نمی‌اندازد. نام‌ها و شکل‌های زیر برای بخش
+پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
 
 ### ۱۰.۱ مدل و مرز
 
@@ -2023,11 +2023,15 @@ engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production 
   `interface` (مثلاً `rl-tun0`)، `since`، `dns` (`direct`)، `udp` (`blocked`)،
   `ipv6` (bool)، `helper` (`installed|missing|incompatible`)،
   `last_error` (کد/دلیل امن، بدون متن آزاد حاوی مقصد) و `detail` کوتاه.
+  target SOCKSِ سرویس در status عمومی منتشر نمی‌شود؛ R16-D آن را فقط روی socket
+  خصوصی سرویس می‌خواند تا target کهنه را تشخیص دهد (بدون مقصد/دامنه).
 - `dns`/`udp` مقادیر ثابت فاز اول‌اند، نه انتخاب runtime: `dns` همیشه `direct`
   و `udp` همیشه `blocked` است (§۱۰.۵، D30). هر مقدار دیگر runtime به همین دو
   مقدار pin می‌شود تا نشانی resolver یا متن آزاد از این فیلدها بیرون بماند.
 - `last_error` فقط از دلیل‌های خطای TUN (`tun_helper_unavailable`،
-  `tun_platform_unsupported`، `tun_conflict`، `tun_service_unavailable`) است؛
+  `tun_platform_unsupported`، `tun_conflict`، `tun_service_unavailable`،
+  `sidecar_loop_risk`) است؛ `sidecar_loop_risk` فقط وقتی گزارش می‌شود که
+  sidecar نتواند interface فیزیکی را bind کند و پوشش عمداً روشن نشده است.
   شناسه‌های warning واژگان جدا دارند. هر مقدار دیگر runtime حذف می‌شود.
   `last_error`/`detail` وقتی خالی‌اند حذف می‌شوند و `detail` متن ثابت امن است؛
   `interface`/`detail` از control-character پاک می‌شوند.
@@ -2043,7 +2047,12 @@ engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production 
   نشان می‌دهند.
 - `status.ready` همچنان فقط management/listener را می‌سنجد؛ `tun.desired=true`
   با `tun.state!=on` یک warning و نشانگر tray است، اما proxy عادی را از کار
-  نمی‌اندازد. `run`/`service` فقط بعد از listener readiness برمی‌گردند.
+  نمی‌اندازد. `run`/`service` فقط بعد از listener readiness برمی‌گردند. helper
+  غایب/ناشنوا بدون پوشش فعال اثبات‌شده فقط warning و `off`/`unavailable` می‌دهد.
+  اگر پوشش جامانده نتواند اثباتاً خاموش شود، egress bypass فعال می‌ماند و
+  listenerها با خطای status/doctor باز می‌شوند؛ فقط وقتی bypass قابل برقراری
+  نیست (احتمال loop) یا mode برابر stopped است و disable شکست می‌خورد، آمادگی
+  قبل از listenerها متوقف می‌شود (§۱۰.۱، §۱۰.۶).
 - `warnings` نسخهٔ TUN شامل این شناسه‌های ثابت است: `tun_dns_direct`،
   `tun_udp_blocked`، `tun_helper_missing`، `tun_service_unavailable`،
   `tun_domain_unavailable` (در صورت نیاز)، `tun_desktop_proxy_overlap`،
@@ -2067,8 +2076,13 @@ engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production 
   عبور نمی‌کنند، در tray آیتم مستقیم ندارند و در `Terminal menu` فقط راهنما/دستور
   نشان داده می‌شود (D28).
 - اگر آدرس SOCKS فعال با config جدید فرق کند (تغییر listener + restart)، engine
-  اول TUN را disable و با آدرس جدید enable می‌کند؛ سرویس target flowهای زنده را
-  بی‌صدا عوض نمی‌کند. active بودن سرویس با target کهنه `state_locked`/خطاست.
+  اول TUN را disable می‌کند و سپس enable را با همان کانفیگ سرویس امتحان می‌کند؛
+  آدرس هدف فقط در `/etc/routelatch/tun.json` (root-owned) است و R16-D آن را
+  بازنویسی نمی‌کند. اگر هدف هنوز کهنه باشد، engine دوباره disable می‌کند و
+  `state_locked`/`tun_conflict` برمی‌گرداند تا کاربر `tun setup` (R16-G) را با
+  آدرس جدید اجرا کند؛ سرویس target flowهای زنده را بی‌صدا عوض نمی‌کند. بودجهٔ
+  درخواست management و shutdown (`run`/supervisor) بزرگ‌تر از عملیات ۳۰ثانیه‌ای
+  سرویس به‌علاوهٔ re-sync جانبی است تا disable کند اما موفق به timeout تبدیل نشود.
 - `tun setup` با sudo اجرا می‌شود؛ idempotent است؛ unit/config مالک خود را
   می‌شناسد و فایل غیرمالک را بدون `--force` بازنویسی نمی‌کند. `tun uninstall`
   فقط unit/config/lease مالک را حذف می‌کند و اگر TUN فعال است اول disable می‌کند.
@@ -2178,7 +2192,9 @@ engine (R16-D) و CLI/tray (R16-E/F) هنوز وجود ندارند. production 
   `SO_BINDTODEVICE` از Linux 5.7 برای کاربر غیرroot مجاز است. loopback مستثناست.
 - dialهای pool داخل core با یک controller ثبت‌شده در start که فقط در حالت TUN
   bind می‌کند bypass می‌شوند؛ این registration یک‌بار در هر process است و نباید
-  بعد از disable روی dialهای عادی اثر بگذارد.
+  بعد از disable روی dialهای عادی اثر بگذارد (R16-D: یک controller مشترک با
+  flag فعال/غیرفعال؛ interface فیزیکی از default route به‌جز `rl-tun0` و loopback
+  کشف می‌شود و kernel < 5.7 پیش از enable `unsupported` می‌دهد).
 - sidecar sing-box در حالت TUN `route.default_interface` (یا
   `auto_detect_interface`) به interface فیزیکی می‌گیرد؛ این مقدار از کانفیگ
   تولیدی ما می‌آید و از import پذیرفته نمی‌شود. اگر نسخهٔ pin‌شده این فیلد را

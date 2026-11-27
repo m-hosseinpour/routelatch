@@ -144,6 +144,9 @@ func (s *Service) statusLocked() contract.TunStatus {
 		Helper:    contract.TunHelperInstalled,
 		LastError: s.lastErr,
 		Detail:    safeText(s.detail),
+		// The loopback target is reported so the engine can detect a stale
+		// listener instead of silently retargeting live flows (§10.6).
+		SocksAddress: s.cfg.SocksAddress,
 	}
 	if !s.since.IsZero() {
 		st.Since = s.since

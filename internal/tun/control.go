@@ -32,6 +32,10 @@ type controlResponse struct {
 	Error  string             `json:"error,omitempty"`
 	Reason contract.TunReason `json:"reason,omitempty"`
 	Status contract.TunStatus `json:"status"`
+	// SocksAddress is private to the service<->engine socket. It is the
+	// loopback listener target, not a destination, and never reaches public
+	// status (D21).
+	SocksAddress string `json:"socks_address,omitempty"`
 }
 
 func (s *Service) handle(conn net.Conn) {
@@ -49,7 +53,7 @@ func (s *Service) handle(conn net.Conn) {
 	if uid != s.cfg.AllowedUID {
 		// The rejection is reported by code only; the peer uid is not a
 		// destination and never reaches status.
-		_ = json.NewEncoder(conn).Encode(controlResponse{OK: false, Error: "peer_uid_rejected", Status: s.currentStatus()})
+		_ = json.NewEncoder(conn).Encode(controlResponse{OK: false, Error: "peer_uid_rejected", Status: s.currentStatus(), SocksAddress: s.cfg.SocksAddress})
 		return
 	}
 
@@ -57,7 +61,7 @@ func (s *Service) handle(conn net.Conn) {
 	dec := json.NewDecoder(io.LimitReader(conn, maxControlRequest))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		_ = json.NewEncoder(conn).Encode(controlResponse{OK: false, Error: "bad_request", Status: s.currentStatus()})
+		_ = json.NewEncoder(conn).Encode(controlResponse{OK: false, Error: "bad_request", Status: s.currentStatus(), SocksAddress: s.cfg.SocksAddress})
 		return
 	}
 
@@ -78,7 +82,7 @@ func (s *Service) handle(conn net.Conn) {
 	st := s.statusLocked()
 	s.mu.Unlock()
 
-	resp := controlResponse{OK: opErr == nil, Status: st}
+	resp := controlResponse{OK: opErr == nil, Status: st, SocksAddress: s.cfg.SocksAddress}
 	if opErr != nil {
 		if errors.Is(opErr, errUnknownCommand) {
 			resp.Error = "unknown_command"

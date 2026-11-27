@@ -27,6 +27,7 @@ import (
 	"routelatch/internal/conns"
 	"routelatch/internal/contract"
 	"routelatch/internal/diagnostics"
+	"routelatch/internal/egress"
 	"routelatch/internal/engine"
 	"routelatch/internal/frontend"
 	"routelatch/internal/imports"
@@ -63,11 +64,25 @@ type Options struct {
 	// operation.
 	TrayProbe  func(context.Context) error
 	PIDFDProbe func() error
-	// Tun is the optional TUN control seam. Production leaves it nil until
-	// R16-C/D: status then reports off (or unavailable when desired) and
-	// enable fails with unsupported. Tests and the future service inject a
-	// contract.TunRuntime here.
+	// Tun is the TUN control seam. Production passes the internal/tun client;
+	// a nil runtime keeps the honest R16-B fallback (off/unavailable, enable
+	// unsupported) and the TUN lifecycle becomes a no-op.
 	Tun contract.TunRuntime
+	// Bypass is the process dial controller that binds RouteLatch's own
+	// non-loopback dials to the physical interface while TUN is active. Nil
+	// uses egress.Default.
+	Bypass *egress.Controller
+	// PhysicalInterface and TunBindingCheck are injectable for tests. Nil uses
+	// egress.DiscoverInterface and egress.KernelSupported.
+	PhysicalInterface func() (string, error)
+	TunBindingCheck   func() error
+	// PreserveTunOnShutdown keeps an active TUN service/routes when this
+	// process exits for a supervisor-managed engine restart. Supervisor Quit
+	// writes TunShutdownMarker first, which turns the ordinary disable path
+	// back on. A direct engine (run --headless without supervisor) leaves this
+	// false so Quit always closes coverage.
+	PreserveTunOnShutdown bool
+	TunShutdownMarker     string
 }
 
 // Service implements Handler and owns the in-process runtime.
@@ -90,9 +105,26 @@ type Service struct {
 	// sidecar is the runtime for hysteria2 exits. It is nil when no executable
 	// is configured, in which case the engine fails those exits closed.
 	sidecar contract.SidecarRuntime
-	// tun is nil until a TUN runtime is wired; the R16-B operations remain
-	// callable and report unavailable/off rather than claiming activation.
+	// tun is nil when no runtime is wired; the R16-B operations remain callable
+	// and report unavailable/off rather than claiming activation.
 	tun contract.TunRuntime
+	// bypass binds RouteLatch's own dials to the physical interface while TUN
+	// is active. The same controller is registered with the pinned core once.
+	bypass *egress.Controller
+	// discoverInterface and bindingCheck are the TUN bypass feasibility seams.
+	discoverInterface func() (string, error)
+	bindingCheck      func() error
+	// preserveTunOnShutdown and tunShutdownMarker distinguish a supervisor
+	// restart (keep coverage fail-closed) from Quit (disable first).
+	preserveTunOnShutdown bool
+	tunShutdownMarker     string
+	// tunBypassReason records a failed engine-egress bypass so status can tell
+	// the truth even when the service itself is off.
+	tunBypassReason contract.TunReason
+	// tunCoverageUncertain is set when a startup could not prove that crash-left
+	// coverage is off. It keeps the egress bypass active and makes status/doctor
+	// say so instead of claiming a clean off state.
+	tunCoverageUncertain bool
 
 	snap   atomic.Pointer[contract.Snapshot]
 	policy atomic.Pointer[routing.Policy]
@@ -152,6 +184,23 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	bypass := opts.Bypass
+	if bypass == nil {
+		bypass = egress.Default
+	}
+	discoverInterface := opts.PhysicalInterface
+	if discoverInterface == nil {
+		discoverInterface = egress.DiscoverInterface
+	}
+	bindingCheck := opts.TunBindingCheck
+	if bindingCheck == nil {
+		bindingCheck = egress.KernelSupported
+	}
+	// Subscription fetches are engine egress too: they must leave through the
+	// physical interface while TUN is active (§10.6).
+	fetcher := imports.NewFetcherWithDialer(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return bypass.Dialer(contract.SourceConnectTimeout).DialContext(ctx, network, address)
+	})
 	snap, err := opts.Store.Load(ctx)
 	if err != nil {
 		return nil, withResidueNote(err, opts.Store.Residue())
@@ -168,15 +217,20 @@ func NewService(ctx context.Context, opts Options) (*Service, error) {
 	props := proposals.New(opts.Now)
 	reg := conns.New()
 	reg.SetPolicyVersion(snap.State.PolicyVersion)
-	refresher := imports.NewRefresher(opts.Store, nil)
+	refresher := imports.NewRefresher(opts.Store, fetcher)
 	refresher.BuildCheck = buildCheck
 	s := &Service{
 		store: opts.Store, paths: opts.Paths, now: opts.Now,
 		reg: reg, props: props,
-		refresher:  refresher,
-		direct:     opts.Direct,
-		tun:        opts.Tun,
-		httpListen: snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,
+		refresher:             refresher,
+		direct:                opts.Direct,
+		tun:                   opts.Tun,
+		bypass:                bypass,
+		discoverInterface:     discoverInterface,
+		bindingCheck:          bindingCheck,
+		preserveTunOnShutdown: opts.PreserveTunOnShutdown,
+		tunShutdownMarker:     opts.TunShutdownMarker,
+		httpListen:            snap.Config.HTTPListen, socksListen: snap.Config.SOCKSListen,
 		stopped:   snap.State.Mode == contract.ModeStopped,
 		trayProbe: opts.TrayProbe, pidfdProbe: opts.PIDFDProbe,
 	}
@@ -279,11 +333,24 @@ func (s *Service) startNetworkLockedHeld(ctx context.Context) error {
 
 func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	if s.stopped {
-		return nil
+		// A process that starts stopped must not leave crash coverage pointing
+		// at no listener. A missing helper is a warning, but a coverage state
+		// that is active/unknown and cannot be closed aborts readiness (§10.1).
+		return s.stopTunForStoppedStart(ctx)
 	}
 	snap := s.Snapshot()
 	if err := (platform.Targets{HTTPListen: snap.Config.HTTPListen, SOCKSListen: snap.Config.SOCKSListen}).Validate(); err != nil {
 		return err
+	}
+	// Engine egress must be outside TUN before any listener or TUN service can
+	// capture a dial. A failure disables TUN start, never the proxy (A15).
+	bypassReady := false
+	if snap.Config.TunEnabled {
+		if err := s.prepareTunBypass(ctx); err != nil {
+			s.logger.Logf(levelWarning, "tun.bypass_unavailable", "TUN coverage stays off: %s", err.Error())
+		} else {
+			bypassReady = true
+		}
 	}
 	records := dialableRecords(snap.State)
 	eng, err := engine.Start(engine.Options{
@@ -291,6 +358,7 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 		Sidecar: s.sidecar,
 	})
 	if err != nil {
+		s.clearTunBypass()
 		return err
 	}
 	s.engine = eng
@@ -332,9 +400,53 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 
 	direct := s.direct
 	if direct == nil {
-		direct = newDirectDialer(selfPorts(snap.Config))
+		direct = newDirectDialer(selfPorts(snap.Config), s.bypass)
 	}
 	s.direct = &diagnosticDialer{inner: direct, svc: s}
+
+	// A TUN service that cannot start must not block listener readiness; the
+	// status/doctor surface reports the safe reason instead (§10.2). The
+	// failure reason is recorded so status does not fall back to a generic
+	// service_unavailable or advise reinstalling a healthy helper.
+	if bypassReady {
+		if err := s.startTunCoverageLocked(ctx); err != nil {
+			s.tunBypassReason = tunReasonFromError(err)
+			s.logger.Logf(levelWarning, "tun.start_failed", "TUN coverage stays off: %s", err.Error())
+			if !s.clearTunBypassIfOff(ctx) {
+				// Coverage may still be active. The bypass was active before the
+				// attempt, so the engine cannot loop; keep it and tell status.
+				s.tunCoverageUncertain = true
+				if s.tunBypassReason == "" {
+					s.tunBypassReason = contract.TunReasonConflict
+				}
+			}
+		}
+	} else {
+		// A missing or unusable helper must not take the normal proxy down. The
+		// best-effort disable removes crash-left coverage; if that cannot be
+		// proven, keep the engine's own dials outside TUN and open listeners
+		// with a truthful warning. Abort only when a possible loop cannot be
+		// avoided at all (§10.1, §10.2).
+		uncertain := s.reconcileUnwantedTun(ctx)
+		if uncertain {
+			if !s.bypass.Active() {
+				if err := s.prepareTunBypass(ctx); err != nil {
+					_ = eng.Stop(ctx)
+					return &contract.Failure{
+						Kind:    contract.StateLocked,
+						Path:    contract.PathLocal,
+						Op:      "control.tun_startup",
+						Message: "TUN coverage may still be active and the engine cannot keep its own dials outside it; traffic listeners stay closed to avoid an unbound loop",
+						Err:     err,
+					}
+				}
+			}
+			s.tunCoverageUncertain = true
+			// prepareTunBypass clears the reason on entry; restore the
+			// uncertainty reason now that the bypass is active.
+			s.tunBypassReason = contract.TunReasonConflict
+		}
+	}
 
 	// Only the frontend sees real user traffic; the prober keeps the unwrapped
 	// dialer because ApplyProbe already records its positive evidence.
@@ -343,10 +455,16 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 		ReportExitFailure: s.recordTunnelFailure,
 	})
 	if err != nil {
+		s.stopTunAfterListenerFailure(ctx)
+		s.clearTunBypassIfOff(ctx)
 		_ = eng.Stop(ctx)
 		return err
 	}
 	if err := fe.Start(snap.Config.HTTPListen, snap.Config.SOCKSListen); err != nil {
+		// TUN is active but no listener can serve it: remove coverage before
+		// returning so the host is not left blackholed (§10.1).
+		s.stopTunAfterListenerFailure(ctx)
+		s.clearTunBypassIfOff(ctx)
 		_ = eng.Stop(ctx)
 		// The addresses stay in the operational log: EnvelopeFor truncates
 		// dynamic text to contract.MaxNodeNameRunes, and a long loopback IPv6
@@ -386,6 +504,11 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 		FirstByte:          contract.ProbeFirstByte,
 		QueueLimit:         snap.Config.Diagnostics.QueueLimit,
 		HealthConcurrent:   2, DiagnosticConcurrent: 1,
+		// Probe dials are engine egress: bind to the physical interface while
+		// TUN is active so a probe never enters coverage (§10.6).
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return s.bypass.Dialer(0).DialContext(ctx, network, address)
+		},
 	})
 	s.prober = prober
 	s.diag = diagnostics.New(diagnostics.Options{
@@ -400,10 +523,16 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 	return nil
 }
 
-// Close stops the network stack in the documented order: listeners and
-// registry first (so copy loops see Canceled), then probe work, then the engine.
+// Close stops the network stack in the documented order: TUN coverage first
+// (so the host is never left redirected into a dead listener), then listeners
+// and registry (so copy loops see Canceled), then probe work, then the engine.
+// A failed TUN disable aborts the close and leaves the listeners serving; the
+// caller reports the error instead of pretending the stop completed (§10.1).
 func (s *Service) Close(ctx context.Context) error {
 	s.logger.Logf(levelInfo, "service.close", "shutting down")
+	if err := s.stopTunForShutdown(ctx); err != nil {
+		return err
+	}
 	defer s.logger.Close()
 	s.stopProbeLoop()
 	if s.diag != nil {
@@ -420,6 +549,16 @@ func (s *Service) Close(ctx context.Context) error {
 		return s.engine.Stop(ctx)
 	}
 	return nil
+}
+
+// StopCoverage closes TUN before a Quit/stop while keeping management and the
+// listeners alive. It is the retryable first step for the run command, so a
+// disable failure aborts the stop instead of leaving a blackhole. It preserves
+// the tun_enabled preference, exactly like `mode stopped`.
+func (s *Service) StopCoverage(ctx context.Context) error {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	return s.stopTunForShutdown(ctx)
 }
 
 // StartProbeLoop starts automatic rotation; safe to call once.
@@ -809,14 +948,16 @@ func (p *fencedPool) completedUnderCurrentPolicy(ctx context.Context, dst contra
 type directDialer struct {
 	selfPorts map[uint16]struct{}
 	dialer    net.Dialer
+	bypass    *egress.Controller
 }
 
-func newDirectDialer(ports []uint16) *directDialer {
+func newDirectDialer(ports []uint16, bypass *egress.Controller) *directDialer {
 	set := make(map[uint16]struct{}, len(ports))
 	for _, p := range ports {
 		set[p] = struct{}{}
 	}
-	return &directDialer{selfPorts: set, dialer: net.Dialer{Timeout: contract.DirectDialDeadline}}
+	d := &directDialer{selfPorts: set, dialer: net.Dialer{Timeout: contract.DirectDialDeadline}, bypass: bypass}
+	return d
 }
 
 func (d *directDialer) DialDirect(ctx context.Context, dst contract.Destination) (net.Conn, error) {
@@ -824,6 +965,11 @@ func (d *directDialer) DialDirect(ctx context.Context, dst contract.Destination)
 	address := net.JoinHostPort(hostOf(dst), port)
 	dialer := d.dialer
 	dialer.Control = func(network, address string, c syscall.RawConn) error {
+		if d.bypass != nil {
+			if err := d.bypass.Control(network, address, c); err != nil {
+				return err
+			}
+		}
 		host, p, err := net.SplitHostPort(address)
 		if err != nil {
 			return err

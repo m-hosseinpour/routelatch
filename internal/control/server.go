@@ -292,6 +292,13 @@ func requestTimeout(op string) time.Duration {
 		return 60 * time.Second
 	case OpDesktopSet, OpDesktopRestore, OpBackup, OpRestore:
 		return 30 * time.Second
+	case OpTunEnable, OpTunDisable, OpMode:
+		// The TUN service allows a 30s operation, the client outlives that
+		// exchange, and disable also re-syncs the sidecar (start+stop). A mode
+		// change can run the same disable before committing stopped. The 5s
+		// default would report a successful coverage change as a timeout
+		// (docs/contracts.md §10.3).
+		return 60 * time.Second
 	default:
 		return 5 * time.Second
 	}

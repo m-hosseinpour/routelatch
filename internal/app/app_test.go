@@ -631,3 +631,44 @@ func TestRepairPublishesReadyOnlyWhileReadinessHolds(t *testing.T) {
 		t.Fatalf("restored ready marker = %+v, %v", got, err)
 	}
 }
+
+// TestTunShutdownIntentLifecycle pins the marker contract used to distinguish
+// a restart (keep coverage) from a real Quit (disable first): a stop writes it
+// 0600, and a stale one is removed by an owner before its first restart.
+func TestTunShutdownIntentLifecycle(t *testing.T) {
+	runtimeDir := t.TempDir()
+	paths := store.Paths{RuntimeDir: runtimeDir}
+	s := &supervisor{opts: SupervisorOptions{Paths: paths}}
+	path := TunShutdownIntentPath(runtimeDir)
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("intent exists before a stop: %v", err)
+	}
+	if err := s.writeTunShutdownIntent(); err != nil {
+		t.Fatalf("write intent: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "stop\n" {
+		t.Fatalf("intent body=%q", body)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("intent mode=%v err=%v, want 0600", info.Mode().Perm(), err)
+	}
+	// A stale intent (a supervisor died mid-Quit) is removed by the new owner
+	// before it can affect this process's first engine restart.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.clearStaleTunShutdownIntent(); err != nil {
+		t.Fatalf("clear stale intent: %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale intent survived: %v", err)
+	}
+	// Clearing an absent marker is not an error.
+	if err := s.clearStaleTunShutdownIntent(); err != nil {
+		t.Fatalf("clear absent intent: %v", err)
+	}
+}

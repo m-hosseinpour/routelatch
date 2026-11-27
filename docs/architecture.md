@@ -289,7 +289,7 @@ interface فیزیکی پیاده شده است؛ اتصال آن به engine (R
 (R16-G) هنوز پیاده نشده‌اند و E/F باز است. بنابراین TUN هنوز end-to-end اجرا یا
 پشتیبانی نمی‌شود و ادعای پشتیبانی آن در v1.x وجود ندارد.
 
-## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle پیاده، اتصال engine و نصب باز)
+## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass پیاده، نصب باز)
 
 **مرز.** TUN یک **حالت پنجم نیست**؛ یک لایهٔ پوشش روی `targeted`/`all-proxy`/
 `all-direct` است. جدول تصمیم §۳، فهرست تأییدشده، انتخاب exit، registry، D11 و
@@ -336,7 +336,10 @@ state موقت را پاک می‌کند. جزئیات قراردادی در `co
   مسیر direct، probe، fetch اشتراک و resolver سفارشی است.
 - dialهای pool از داخل core با یک controller ثبت‌شده در start (که فقط وقتی TUN
   active است bind می‌کند) یا معادل منظم آن bypass می‌شوند؛ controller یک‌بار در
-  هر process ثبت می‌شود و هیچ state سراسری را دوباره‌نویسی نمی‌کند.
+  هر process ثبت می‌شود و هیچ state سراسری را دوباره‌نویسی نمی‌کند. R16-D این
+  controller مشترک را پیاده کرده و interface فیزیکی را از default route
+  (به‌جز `rl-tun0`/loopback) کشف می‌کند؛ نبود kernel ≥ 5.7 یا bind شکست‌خورده
+  `unsupported`/خطاست، نه dial بدون bind.
 - sidecar sing-box با `route.default_interface`/`auto_detect_interface` به همان
   interface bind می‌شود؛ این فیلد از کانفیگ تولیدی ما می‌آید، نه از لینک import.
 - خود سرویس TUN فقط به loopback SOCKS و برای DNS به interface فیزیکی dial
@@ -371,7 +374,13 @@ log/state نوشته نمی‌شود (D21).
 
 **چرخهٔ عمر و fail-closed.** `tun on` فقط در mode غیر stopped مجاز است. توقف
 (`mode stopped`)، Quit و uninstall اول TUN را می‌بندند و بعد listenerها را؛ اگر
-بستن TUN شکست بخورد، توقف fail می‌شود تا سیستم در حالت blackhole رها نشود. با
+بستن TUN شکست بخورد، توقف fail می‌شود تا سیستم در حالت blackhole رها نشود. در
+آمادگی startup، پوشش جاماندهٔ نامعلوم یا disableنشده با فعال نگه‌داشتن bypass
+engine همراه است و listenerها با warning باز می‌شوند؛ اگر bypass قابل برقراری
+نباشد (احتمال loop) یا mode برابر stopped باشد و disable شکست بخورد، آمادگی
+قبل از listenerها متوقف می‌شود. نبود helper فقط warning و TUN خاموش است، نه
+شکست proxy. بودجهٔ request/shutdown از عملیات ۳۰ثانیه‌ای سرویس و re-sync
+جانبی بزرگ‌تر است تا disable موفق به timeout کاذب تبدیل نشود. با
 مرگ/ crash خود engine، سرویس TUN و routeها می‌مانند و SOCKS در دسترس نیست، پس
 اتصال‌ها refuse/blackhole می‌شوند (fail-closed). restart engine همان TUN را دوباره
 پیدا می‌کند. اگر خود سرویس TUN از کار بیفتد یا restart شود، تا بازسازی TUN یک

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"routelatch/internal/contract"
 )
@@ -31,6 +32,17 @@ type hugeHandler struct{}
 
 func (hugeHandler) Handle(context.Context, Request) (any, error) {
 	return map[string]string{"blob": strings.Repeat("x", contract.MaxManagementResponse)}, nil
+}
+
+type deadlineHandler struct {
+	remaining time.Duration
+}
+
+func (h *deadlineHandler) Handle(ctx context.Context, _ Request) (any, error) {
+	if dl, ok := ctx.Deadline(); ok {
+		h.remaining = time.Until(dl)
+	}
+	return nil, nil
 }
 
 func testServer(t *testing.T, opts ServerOptions) (*Server, string) {
@@ -232,5 +244,23 @@ func TestStaleSocketIsReplacedOnlyByItsOwner(t *testing.T) {
 	if err := second.Start(context.Background()); err == nil {
 		_ = second.Close()
 		t.Fatal("a second server replaced a live management socket")
+	}
+}
+
+// TestTunAndModeBudgetsCoverTheFullOperation pins the request budget for the
+// operations that can disable TUN: the former 5s default cut a slow but
+// successful enable/disable (30s service budget plus sidecar re-sync) into a
+// misleading timeout (docs/contracts.md §10.3).
+func TestTunAndModeBudgetsCoverTheFullOperation(t *testing.T) {
+	for _, op := range []string{OpTunEnable, OpTunDisable, OpMode} {
+		handler := &deadlineHandler{}
+		_, path := testServer(t, ServerOptions{Handler: handler})
+		client := &Client{Path: path, Timeout: 65 * time.Second}
+		if _, err := client.Call(context.Background(), Request{Op: op}); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		if handler.remaining < 45*time.Second {
+			t.Fatalf("%s deadline=%s, want it to cover the 30s TUN operation plus sidecar re-sync", op, handler.remaining)
+		}
 	}
 }

@@ -43,6 +43,10 @@ type Runtime struct {
 	waitCh   <-chan error
 	handoffs map[string]contract.SidecarHandoff
 	healthy  bool
+	// exits is the last successfully generated exit set. It is kept so a TUN
+	// enable can regenerate route.default_interface without inventing policy
+	// or losing the current exits (docs/contracts.md §10.6).
+	exits []contract.SidecarExit
 }
 
 var _ contract.SidecarRuntime = (*Runtime)(nil)
@@ -70,6 +74,7 @@ func (r *Runtime) Sync(ctx context.Context, exits []contract.SidecarExit) error 
 	r.stopLocked(context.Background())
 
 	if len(exits) == 0 {
+		r.exits = nil
 		return nil
 	}
 	gen, err := Generate(exits, GenerateOptions{DefaultInterface: r.opts.DefaultInterface})
@@ -110,7 +115,30 @@ func (r *Runtime) Sync(ctx context.Context, exits []contract.SidecarExit) error 
 	r.waitCh = waitCh
 	r.handoffs = gen.Handoffs
 	r.healthy = true
+	r.exits = append(r.exits[:0], exits...)
 	return nil
+}
+
+// SetDefaultInterface applies the TUN bypass to an already-running sidecar.
+// The value comes only from RouteLatch's generated options, never from an
+// imported link (docs/contracts.md §10.6). It regenerates the process with the
+// same exits; an empty name clears the field. It is a no-op when there are no
+// sidecar exits yet, because the next Sync uses the stored option.
+func (r *Runtime) SetDefaultInterface(name string) error {
+	r.mu.Lock()
+	if r.opts.DefaultInterface == name {
+		r.mu.Unlock()
+		return nil
+	}
+	r.opts.DefaultInterface = name
+	exits := append([]contract.SidecarExit(nil), r.exits...)
+	r.mu.Unlock()
+	if len(exits) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultStartTimeout+defaultStopTimeout)
+	defer cancel()
+	return r.Sync(ctx, exits)
 }
 
 // Handoff returns the endpoint of one explicit tag. An unknown tag is never a

@@ -97,7 +97,14 @@ type socksFixture struct {
 
 func startSocksFixture(t *testing.T) (*socksFixture, string) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	return startSocksFixtureOn(t, "127.0.0.1:0")
+}
+
+// startSocksFixtureOn binds the fixture to an explicit address so a gated test
+// can use a non-loopback peer and exercise the egress bypass for real.
+func startSocksFixtureOn(t *testing.T, address string) (*socksFixture, string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		t.Fatal(err)
 	}

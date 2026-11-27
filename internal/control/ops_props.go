@@ -444,6 +444,14 @@ func (s *Service) restore(ctx context.Context, ref string) (RestoreData, error) 
 	if wasStopped && backupState.Mode != contract.ModeStopped && s.stoppedByThisProcess {
 		return RestoreData{}, &OpError{Kind: contract.StateLocked, Exit: contract.ExitConflict, Message: "service is stopped; restart it before restoring an active state"}
 	}
+	// Restoring a stopped state closes TUN before listeners/engine, exactly
+	// like a mode-stopped change. A disable failure aborts before the backup is
+	// committed, so the host is never left redirected into a dead listener.
+	if !wasStopped && backupState.Mode == contract.ModeStopped {
+		if err := s.stopTunForModeStopped(ctx); err != nil {
+			return RestoreData{}, err
+		}
+	}
 	before := s.Snapshot()
 	after, err := s.store.RestorePath(ctx, ref)
 	if err != nil {

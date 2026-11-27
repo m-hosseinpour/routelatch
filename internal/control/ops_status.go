@@ -364,6 +364,64 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		add("pidfd_available", "ok", "pidfd_open is allowed", "")
 	}
 
+	tun := s.tunStatus(ctx, snap)
+	tunStale := tun.State == contract.TunOn && tun.SocksAddress != "" && !s.tunTargetMatches(tun)
+	switch {
+	case snap.State.Mode == contract.ModeStopped:
+		// A stopped service suppresses normal TUN warnings, so doctor must
+		// inspect the actual state instead of always claiming coverage is off.
+		switch tun.State {
+		case contract.TunOff:
+			add("tun", "ok", "service is stopped; TUN coverage is off (the saved preference is kept)", "")
+		case contract.TunOn:
+			add("tun", "warn", "service is stopped but TUN coverage is still on", "run 'routelatch tun off' or stop routelatch-tun.service, then retry the stop")
+		default:
+			add("tun", "warn", "service is stopped and TUN coverage could not be verified off: state="+string(tun.State), "stop routelatch-tun.service if coverage is still active, then retry")
+		}
+	case tun.State == contract.TunOn:
+		detail := "coverage is on: DNS stays direct and non-DNS UDP is blocked"
+		fix := ""
+		if snap.State.Mode == contract.ModeDirectAll {
+			detail += "; all-direct mode still blocks UDP but gains nothing from the pool"
+		}
+		if !tun.Desired {
+			detail += "; coverage is on although it is not requested"
+			fix = "run 'routelatch tun off' to close the unwanted coverage"
+		} else if tunStale {
+			detail += "; the running service targets a different SOCKS listener"
+			fix = "disable and re-enable TUN after the listener change"
+		}
+		if tun.LastError == contract.TunReasonConflict && !tunStale && tun.Desired {
+			detail += "; a TUN conflict was reported"
+		}
+		if fix != "" {
+			add("tun", "warn", detail, fix)
+		} else {
+			add("tun", "ok", detail, "")
+		}
+	case tun.Helper == contract.TunHelperIncompatible:
+		add("tun", "warn", "the installed TUN helper is incompatible with this build", "reinstall the helper with 'routelatch tun setup'")
+	case tun.Desired:
+		fix := "install the optional helper with 'routelatch tun setup'"
+		switch tun.LastError {
+		case contract.TunReasonServiceUnavailable:
+			fix = "start the TUN service or reinstall it with 'routelatch tun setup'"
+		case contract.TunReasonPlatformUnsupported:
+			fix = "TUN needs Linux 5.7 or newer with a physical default route; keep coverage off on this system"
+		case contract.TunReasonConflict:
+			fix = "disable and re-enable TUN after the listener change; if coverage is stuck, stop routelatch-tun.service"
+		case contract.TunReasonSidecarLoopRisk:
+			fix = "remove the hysteria2 exit or update the pinned sidecar so it can bind route.default_interface"
+		}
+		add("tun", "warn", "TUN coverage is requested but not active: "+string(tun.LastError), fix)
+	case tun.LastError == contract.TunReasonConflict:
+		// The helper did not confirm a clean off at startup. This is not a
+		// healthy default: crash-left coverage may still capture traffic.
+		add("tun", "warn", "TUN coverage could not be verified off; the helper did not confirm a clean stop", "stop routelatch-tun.service or run 'routelatch tun off'; the engine keeps its own dials outside coverage meanwhile")
+	default:
+		add("tun", "ok", "TUN coverage is off; the proxy listeners work normally", "")
+	}
+
 	var conflicts []string
 	if snap.State.Desktop.Applied && !s.listenersOpen {
 		conflicts = append(conflicts, "desktop proxy is applied while no listener is running")
