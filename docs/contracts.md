@@ -1262,6 +1262,15 @@ RouteLatch
   Mode ▸
     Targeted | All proxy | All direct            radio
     Stop listening…                              pending confirmation
+  Coverage ▸
+    Coverage: <state> · desired <on|off>         disabled
+    Interface: <local interface>                 disabled
+    Helper: <installed|missing|incompatible>     disabled
+    Error: <stable reason>                       disabled
+    Warnings (N) ▸
+      <dns/udp/conflict/all-direct/desktop overlap>  disabled
+    Enable system-wide coverage…                 pending confirmation
+    Disable system-wide coverage…                pending confirmation
   Proposals (N) ▸
     <pending proposal> ▸
       Accept | Reject | Recheck
@@ -1311,6 +1320,20 @@ RouteLatch
     Restore desktop proxy and quit…              pending confirmation
     Quit and keep desktop proxy…                 pending confirmation
 ```
+
+**Coverage (R16-F).** زیرمنوی Coverage فقط نمای `status.tun` و دو op
+`tun.enable`/`tun.disable` است؛ هیچ state، route، helper یا setup مستقلی در tray
+نیست. state/desired/helper/DNS/UDP/آخرین خطای امن و warningهای TUN نمایش داده
+می‌شوند و «Enable/Disable system-wide coverage…» هر دو تأیید دو مرحله‌ای دارند
+(enable تغییر پوشش کل host و disable کاهش پوشش است). Enable فقط با engine
+Ready، mode غیر stopped، helper `installed` و وقتی coverage در on/starting/
+stopping نیست فعال است و برای retry در off/error/unavailable باز می‌ماند؛
+Disable در هر mode از جمله stopped فعال است مگر اینکه coverage قطعاً off و
+desired=false باشد. آیتم غیرقابل‌اجرا با دلیل کوتاه disabled می‌شود، نه حذف.
+`tun setup|uninstall` در tray آیتم ندارند (فقط CLI/`Terminal menu`). labelها
+هیچ مقصد/URL/credential ندارند و interface فقط با شکل نام مجاز نمایش داده
+می‌شود. آیکن، TUN active/error/desired-off را جدا از حالت‌های engine نشان
+می‌دهد (§۱۰.۲، D29).
 
 هدر وضعیت کوتاه است: `Targeted · 156 usable · 3 open`،
 `All direct · 3 open`، `Stopped · listeners closed` یا
@@ -1981,15 +2004,18 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D و CLI R16-E پیاده‌شده؛ نصب واقعی/tray/packaging باز)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E و tray Coverage/آیکن R16-F پیاده‌شده؛ بررسی واقعی KDE/Wayland و نصب/packaging در G/H باز)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
 فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
 (`internal/tun` و `__tun-service`)، اتصال engine در R16-D (`start/stop`، ماندگاری،
 adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tun status|on|off`
-و `tun setup|uninstall` privileged) پیاده شده‌اند. نصب واقعی/readiness/rollback
-helper در R16-G، tray در R16-F و بسته‌بندی/مستندات کاربر در R16-G باز است؛ منطق
-setup در E فقط CLI-only و unit-testable است و هیچ نصب میزبان انجام نمی‌دهد.
+و `tun setup|uninstall` privileged) پیاده شده‌اند. tray Coverage (منو،
+`tun.enable`/`tun.disable` با تأیید دو مرحله‌ای و آیکن active/error/desired-off)
+در R16-F پیاده شده است؛ بررسی واقعی KDE/Wayland گیت‌شده و نصب
+واقعی/readiness/rollback helper و بسته‌بندی/مستندات کاربر در R16-G/H باز
+است؛ منطق setup در E فقط CLI-only و unit-testable است و هیچ نصب میزبان انجام
+نمی‌دهد.
 production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
 socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
 نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"routelatch/internal/contract"
 )
 
 // This file is the rendering seam between the pure menu model and a concrete
@@ -42,13 +44,45 @@ type MenuItem struct {
 }
 
 // Tray is the status-notifier item itself. Icon is a semantic token
-// (TrayIcon); the backend maps it to its own artwork. Tooltip is sanitized and
+// (TrayIcon); Tun is a separate semantic token for the coverage layer so a
+// backend can show both without parsing either. Tooltip is sanitized and
 // bounded.
 type Tray struct {
 	Title   string
 	Tooltip string
 	Icon    string
 	Engine  EngineState
+	Tun     string
+}
+
+// TunIcon returns the semantic coverage token for the tray icon:
+// "on", "error", "off", "pending" or "" when the engine did not report TUN.
+// Desired is the user's preference, so coverage that is on without a request,
+// or requested but not active, is an error state, not a quiet off
+// (docs/contracts.md §10.1–10.2).
+func TunIcon(t TunView) string {
+	if !t.Known {
+		return ""
+	}
+	if t.LastError == contract.TunReasonConflict {
+		return "error"
+	}
+	switch t.State {
+	case contract.TunOn:
+		if t.Desired {
+			return "on"
+		}
+		return "error"
+	case contract.TunStarting, contract.TunStopping:
+		return "pending"
+	case contract.TunOff:
+		if t.Desired {
+			return "error"
+		}
+		return "off"
+	default:
+		return "error"
+	}
 }
 
 // TrayIcon returns the semantic status icon token for an engine state. The
@@ -319,7 +353,30 @@ func trayFor(view View) Tray {
 			break
 		}
 	}
-	return Tray{Title: title, Tooltip: tooltip, Icon: TrayIcon(view.Engine), Engine: view.Engine}
+	if suffix := tunTooltipSuffix(view.Tun); suffix != "" {
+		tooltip = SanitizeHeader(tooltip + " · " + suffix)
+	}
+	return Tray{
+		Title: title, Tooltip: tooltip, Icon: TrayIcon(view.Engine),
+		Engine: view.Engine, Tun: TunIcon(view.Tun),
+	}
+}
+
+// tunTooltipSuffix adds the coverage state to the safe status tooltip. It uses
+// fixed state words only, never last_error/detail or any dynamic text.
+func tunTooltipSuffix(t TunView) string {
+	switch TunIcon(t) {
+	case "on":
+		return "TUN on"
+	case "off":
+		return "TUN off"
+	case "error":
+		return "TUN error"
+	case "pending":
+		return "TUN " + tunStateWord(t.State)
+	default:
+		return ""
+	}
 }
 
 // buildTree copies the controller tree into the binder's immutable type and

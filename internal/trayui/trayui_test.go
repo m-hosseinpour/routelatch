@@ -136,17 +136,20 @@ func (a *fakeAutostart) Disable(context.Context) (autostart.Status, error) {
 // ---------- fixture ----------
 
 type fixture struct {
-	status    map[string]any
-	rules     []control.RuleView
-	pool      []pool.Row
-	counts    pool.Counts
-	proposals []control.ProposalView
-	desktop   control.DesktopData
-	config    contract.Config
-	paths     control.ConfigPathData
-	env       control.EnvData
-	doctor    control.DoctorData
-	backup    string
+	status      map[string]any
+	tun         contract.TunStatus
+	tunOpResult *contract.TunStatus
+	noTun       bool
+	rules       []control.RuleView
+	pool        []pool.Row
+	counts      pool.Counts
+	proposals   []control.ProposalView
+	desktop     control.DesktopData
+	config      contract.Config
+	paths       control.ConfigPathData
+	env         control.EnvData
+	doctor      control.DoctorData
+	backup      string
 }
 
 func newFixture() fixture {
@@ -178,7 +181,11 @@ func newFixture() fixture {
 		},
 		desktop: desktop,
 		config:  cfg,
-		paths:   control.ConfigPathData{Config: "/data/config.json", State: "/data/state.json", Socket: "/data/run/control.sock"},
+		tun: contract.TunStatus{
+			Desired: false, State: contract.TunOff, DNS: contract.TunDNSDirect,
+			UDP: contract.TunUDPBlocked, Helper: contract.TunHelperInstalled,
+		},
+		paths: control.ConfigPathData{Config: "/data/config.json", State: "/data/state.json", Socket: "/data/run/control.sock"},
 		env: control.EnvData{
 			HTTPProxy: "http://127.0.0.1:18080", HTTPSProxy: "http://127.0.0.1:18080",
 			ALLProxy: "socks5://127.0.0.1:18081", NoProxy: "localhost,127.0.0.1,::1",
@@ -303,7 +310,31 @@ func (f *fixtureCaller) serve(req control.Request) (contract.Envelope, error) {
 	}
 	switch req.Op {
 	case control.OpStatus:
-		return ok(fx.status)
+		status := make(map[string]any, len(fx.status)+1)
+		for k, v := range fx.status {
+			status[k] = v
+		}
+		if !fx.noTun {
+			status["tun"] = fx.tun
+		}
+		return ok(status)
+	case control.OpTunStatus:
+		return ok(fx.tun)
+	case control.OpTunEnable, control.OpTunDisable:
+		f.mu.Lock()
+		st := f.fx.tun
+		st.Desired = req.Op == control.OpTunEnable
+		if st.Desired {
+			st.State = contract.TunOn
+		} else {
+			st.State = contract.TunOff
+		}
+		if f.fx.tunOpResult != nil {
+			st = *f.fx.tunOpResult
+		}
+		f.fx.tun = st
+		f.mu.Unlock()
+		return ok(st)
 	case control.OpRulesList:
 		return ok(control.RulesListData{Rules: fx.rules})
 	case control.OpPoolList:
@@ -390,6 +421,12 @@ func (f *fixtureCaller) setFail(op string, kind contract.ErrorKind, msg string) 
 func (f *fixtureCaller) setDesktop(d control.DesktopData) {
 	f.mu.Lock()
 	f.fx.desktop = d
+	f.mu.Unlock()
+}
+
+func (f *fixtureCaller) setTun(st contract.TunStatus) {
+	f.mu.Lock()
+	f.fx.tun = st
 	f.mu.Unlock()
 }
 

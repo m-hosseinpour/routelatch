@@ -480,9 +480,12 @@ func firstErr(a, b error) error {
 }
 
 // trayStatusIcon draws the 22px status icon for one semantic tray state. The
-// colour and inner mark both change so the state is distinguishable without a
-// tooltip; the tray never loads theme icons that may not exist.
-func trayStatusIcon(state string) image.Image {
+// colour and inner mark change with the engine state, and a bottom-right badge
+// shows the TUN layer without relying on a tooltip: green for active, orange
+// "!" for an error or desired-vs-actual mismatch, blue for a transition, and a
+// near-white ring for desired-off. The badge position and shape are fixed so
+// it cannot be confused with the engine marks (docs/contracts.md §10.2, D29).
+func trayStatusIcon(t trayui.Tray) image.Image {
 	type iconStyle struct {
 		fill color.RGBA
 	}
@@ -494,6 +497,7 @@ func trayStatusIcon(state string) image.Image {
 		"restarting":  {color.RGBA{R: 0xa3, G: 0x71, B: 0xf7, A: 0xff}},
 		"unavailable": {color.RGBA{R: 0xf8, G: 0x51, B: 0x49, A: 0xff}},
 	}
+	state := t.Icon
 	style, ok := styles[state]
 	if !ok {
 		style = styles["loading"]
@@ -544,7 +548,64 @@ func trayStatusIcon(state string) image.Image {
 			img.Set(14-i, 7+i, white)
 		}
 	}
+	drawTunBadge(img, t.Tun, white)
 	return img
+}
+
+// drawTunBadge paints the fixed bottom-right coverage badge. "off" is a hollow
+// ring so an explicitly disabled layer stays visible but quiet; no token (an
+// engine that does not report TUN) leaves the engine artwork unchanged.
+func drawTunBadge(img *image.RGBA, tun string, white color.RGBA) {
+	const cx, cy, r = 17, 17, 4
+	inside := func(x, y, radius int) bool {
+		dx, dy := x-cx, y-cy
+		return dx*dx+dy*dy <= radius*radius
+	}
+	switch tun {
+	case "on":
+		fill := color.RGBA{R: 0x2e, G: 0xa0, B: 0x43, A: 0xff}
+		for y := cy - r; y <= cy+r; y++ {
+			for x := cx - r; x <= cx+r; x++ {
+				if inside(x, y, r) {
+					img.Set(x, y, fill)
+				}
+			}
+		}
+	case "error":
+		fill := color.RGBA{R: 0xdb, G: 0x6d, B: 0x28, A: 0xff}
+		for y := cy - r; y <= cy+r; y++ {
+			for x := cx - r; x <= cx+r; x++ {
+				if inside(x, y, r) {
+					img.Set(x, y, fill)
+				}
+			}
+		}
+		for _, y := range []int{cy - 2, cy - 1, cy + 1} {
+			img.Set(cx, y, white)
+		}
+	case "pending":
+		fill := color.RGBA{R: 0x58, G: 0xa6, B: 0xff, A: 0xff}
+		for y := cy - r; y <= cy+r; y++ {
+			for x := cx - r; x <= cx+r; x++ {
+				if inside(x, y, r) {
+					img.Set(x, y, fill)
+				}
+			}
+		}
+		img.Set(cx-1, cy, white)
+		img.Set(cx, cy, white)
+		img.Set(cx+1, cy, white)
+	case "off":
+		ring := color.RGBA{R: 0xf0, G: 0xf6, B: 0xfc, A: 0xff}
+		for y := cy - r; y <= cy+r; y++ {
+			for x := cx - r; x <= cx+r; x++ {
+				dx, dy := x-cx, y-cy
+				if d := dx*dx + dy*dy; d <= r*r && d >= (r-1)*(r-1) {
+					img.Set(x, y, ring)
+				}
+			}
+		}
+	}
 }
 
 // TrayOptionsFromEnv is the hidden command's environment contract.

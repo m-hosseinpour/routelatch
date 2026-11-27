@@ -60,7 +60,7 @@ func newDeedlesOps(t trayui.Tray) (menuOps, error) {
 	item, err := tray.New(
 		tray.ItemID("routelatch"),
 		tray.ItemTitle(t.Title),
-		tray.ItemIconPixmap(trayStatusIcon(t.Icon)),
+		tray.ItemIconPixmap(trayStatusIcon(t)),
 		tray.ItemToolTip("", nil, t.Title, t.Tooltip),
 		tray.ItemIsMenu(true),
 	)
@@ -124,7 +124,7 @@ func (o *deedlesOps) SetTray(t trayui.Tray) error {
 	return o.item.SetProps(
 		tray.ItemTitle(t.Title),
 		tray.ItemToolTip("", nil, t.Title, t.Tooltip),
-		tray.ItemIconPixmap(trayStatusIcon(t.Icon)),
+		tray.ItemIconPixmap(trayStatusIcon(t)),
 	)
 }
 

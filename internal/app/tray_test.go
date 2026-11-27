@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"image"
 	"image/color"
 	"net"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"routelatch/internal/trayui"
 )
 
 // A cancelled context must abort the probe before it dials the session bus.
@@ -127,19 +130,54 @@ func TestTrayStatusIconDistinguishesStates(t *testing.T) {
 	states := []string{"ready", "starting", "loading", "stopped", "restarting", "unavailable"}
 	seen := make(map[color.RGBA]bool)
 	for _, state := range states {
-		img := trayStatusIcon(state)
+		img := trayStatusIcon(trayui.Tray{Icon: state})
 		bounds := img.Bounds()
 		if bounds.Dx() != 22 || bounds.Dy() != 22 {
 			t.Fatalf("%s bounds = %v", state, bounds)
 		}
-		fill := color.RGBAModel.Convert(img.At(11, 11)).(color.RGBA)
-		if state == "ready" || state == "restarting" || state == "unavailable" {
-			// The centre carries the white mark; sample the coloured rim.
-			fill = color.RGBAModel.Convert(img.At(1, 11)).(color.RGBA)
-		}
+		fill := color.RGBAModel.Convert(img.At(1, 11)).(color.RGBA)
 		seen[fill] = true
 	}
 	if len(seen) < 5 {
 		t.Fatalf("status icons share too many colours: %v", seen)
+	}
+}
+
+// Every distinct engine artwork/TUN combination must be distinct: the coverage
+// badge cannot collide with an engine mark or another coverage state. loading
+// and starting intentionally share the pre-existing grey artwork, so only one
+// of those two identical bases is used here.
+func TestTrayStatusIconTunBadgesDoNotCollide(t *testing.T) {
+	states := []string{"ready", "starting", "stopped", "restarting", "unavailable"}
+	tun := []string{"on", "error", "off", "pending", ""}
+	seen := make(map[string]string)
+	for _, state := range states {
+		for _, layer := range tun {
+			img := trayStatusIcon(trayui.Tray{Icon: state, Tun: layer})
+			rgba, ok := img.(*image.RGBA)
+			if !ok {
+				t.Fatalf("%s/%q is not RGBA", state, layer)
+			}
+			sig := string(rgba.Pix)
+			if prev, dup := seen[sig]; dup {
+				t.Fatalf("%s/%q collides with %s", state, layer, prev)
+			}
+			seen[sig] = state + "/" + layer
+		}
+	}
+	if len(seen) != len(states)*len(tun) {
+		t.Fatalf("signatures = %d, want %d", len(seen), len(states)*len(tun))
+	}
+
+	// The loading base is unchanged and identical to starting; its TUN badges
+	// must still be distinct from each other.
+	loading := map[string]bool{}
+	for _, layer := range tun {
+		img := trayStatusIcon(trayui.Tray{Icon: "loading", Tun: layer})
+		sig := string(img.(*image.RGBA).Pix)
+		if loading[sig] {
+			t.Fatalf("loading/%q collides with another loading badge", layer)
+		}
+		loading[sig] = true
 	}
 }

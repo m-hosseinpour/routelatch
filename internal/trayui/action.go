@@ -16,6 +16,8 @@ const (
 	ActionModeAllDirect
 	ActionStopListening
 	ActionRestartEngine
+	ActionTunEnable
+	ActionTunDisable
 	ActionProposalAccept
 	ActionProposalReject
 	ActionProposalRecheck
@@ -55,6 +57,8 @@ var allActions = []Action{
 	ActionModeAllDirect,
 	ActionStopListening,
 	ActionRestartEngine,
+	ActionTunEnable,
+	ActionTunDisable,
 	ActionProposalAccept,
 	ActionProposalReject,
 	ActionProposalRecheck,
@@ -100,6 +104,10 @@ func (a Action) String() string {
 		return "mode.stop"
 	case ActionRestartEngine:
 		return "restart"
+	case ActionTunEnable:
+		return "tun.enable"
+	case ActionTunDisable:
+		return "tun.disable"
 	case ActionProposalAccept:
 		return "proposal.accept"
 	case ActionProposalReject:
@@ -203,7 +211,8 @@ func kindOf(a Action) actionKind {
 		ActionProposalAccept, ActionProposalReject, ActionProposalRecheck, ActionProposalsClear,
 		ActionRuleRemove, ActionPoolSelectAuto, ActionPoolSelect, ActionPoolRemove,
 		ActionPoolRefresh, ActionPoolRerank, ActionPoolTest, ActionPoolTestFirst20,
-		ActionDesktopRefresh, ActionDesktopSet, ActionDesktopRestore, ActionBackup, ActionDoctor:
+		ActionDesktopRefresh, ActionDesktopSet, ActionDesktopRestore, ActionBackup, ActionDoctor,
+		ActionTunEnable, ActionTunDisable:
 		return kindRequest
 	case ActionRestartEngine:
 		return kindRestartJob
@@ -234,6 +243,10 @@ func requestFor(a Action, t Target) (control.Request, bool) {
 		return control.Request{Op: control.OpMode, Mode: string(contract.ModeDirectAll)}, true
 	case ActionStopListening:
 		return control.Request{Op: control.OpMode, Mode: string(contract.ModeStopped)}, true
+	case ActionTunEnable:
+		return control.Request{Op: control.OpTunEnable}, true
+	case ActionTunDisable:
+		return control.Request{Op: control.OpTunDisable}, true
 	case ActionProposalAccept:
 		return control.Request{Op: control.OpProposalsAccept, ID: string(t.ProposalID)}, true
 	case ActionProposalReject:
@@ -280,6 +293,10 @@ func jobName(a Action) (string, bool) {
 	switch a {
 	case ActionRestartEngine:
 		return "restart engine", true
+	case ActionTunEnable:
+		return "tun enable", true
+	case ActionTunDisable:
+		return "tun disable", true
 	case ActionQuitRestoreDesktop:
 		return "quit and restore desktop proxy", true
 	case ActionPoolRefresh:
@@ -310,7 +327,7 @@ func (c *Controller) requiresConfirmationLocked(a Action, t Target) bool {
 	switch a {
 	case ActionStopListening, ActionRestartEngine, ActionProposalsClear,
 		ActionRuleRemove, ActionPoolRemove, ActionDesktopSet, ActionDesktopRestore,
-		ActionQuitRestoreDesktop, ActionQuitKeepDesktop:
+		ActionQuitRestoreDesktop, ActionQuitKeepDesktop, ActionTunEnable, ActionTunDisable:
 		return true
 	case ActionProposalAccept:
 		if p, ok := c.proposalByIDLocked(t.ProposalID); ok {
@@ -333,6 +350,10 @@ func (c *Controller) actionLabelLocked(a Action, t Target) string {
 		label = "Stop listening" + c.desktopCutWarningLocked()
 	case ActionRestartEngine:
 		label = "Restart engine" + c.desktopCutWarningLocked()
+	case ActionTunEnable:
+		label = "Enable system-wide coverage (all host traffic)"
+	case ActionTunDisable:
+		label = "Disable system-wide coverage"
 	case ActionProposalsClear:
 		label = "Clear decided/expired proposals"
 	case ActionRuleRemove:

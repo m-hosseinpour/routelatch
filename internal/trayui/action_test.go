@@ -38,6 +38,8 @@ func TestActionRequestTable(t *testing.T) {
 		{ActionModeAllProxy, control.Request{Op: control.OpMode, Mode: string(contract.ModeProxyAll)}},
 		{ActionModeAllDirect, control.Request{Op: control.OpMode, Mode: string(contract.ModeDirectAll)}},
 		{ActionStopListening, control.Request{Op: control.OpMode, Mode: string(contract.ModeStopped)}},
+		{ActionTunEnable, control.Request{Op: control.OpTunEnable}},
+		{ActionTunDisable, control.Request{Op: control.OpTunDisable}},
 		{ActionProposalAccept, control.Request{Op: control.OpProposalsAccept, ID: string(id)}},
 		{ActionProposalReject, control.Request{Op: control.OpProposalsReject, ID: string(id)}},
 		{ActionProposalRecheck, control.Request{Op: control.OpProposalsRecheck, ID: string(id)}},
@@ -99,6 +101,8 @@ func TestActionRequestTable(t *testing.T) {
 func TestActionClassificationAndJobs(t *testing.T) {
 	wantJobs := map[Action]string{
 		ActionRestartEngine:      "restart engine",
+		ActionTunEnable:          "tun enable",
+		ActionTunDisable:         "tun disable",
 		ActionQuitRestoreDesktop: "quit and restore desktop proxy",
 		ActionPoolRefresh:        "pool refresh",
 		ActionPoolTest:           "pool test",
@@ -140,6 +144,8 @@ func TestActionConfirmationTable(t *testing.T) {
 		{ActionPoolRemove, Target{ExitID: "x-1"}, true},
 		{ActionDesktopSet, Target{}, true},
 		{ActionDesktopRestore, Target{}, true},
+		{ActionTunEnable, Target{}, true},
+		{ActionTunDisable, Target{}, true},
 		{ActionQuitRestoreDesktop, Target{}, true},
 		{ActionQuitKeepDesktop, Target{}, true},
 		{ActionProposalAccept, Target{ProposalID: "p-route-1"}, false},

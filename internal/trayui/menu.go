@@ -103,6 +103,7 @@ func (c *Controller) buildMenuLocked(engine EngineState) Node {
 	}
 
 	root = append(root, c.modeMenuLocked(engine))
+	root = append(root, c.coverageMenuLocked())
 	root = append(root, c.proposalsMenuLocked(engine))
 	root = append(root, c.rulesMenuLocked(engine))
 	root = append(root, c.poolMenuLocked(engine))
@@ -179,6 +180,139 @@ func (c *Controller) modeNode(key, label string, action Action, mode contract.Mo
 		n.Check = CheckRadio
 	}
 	return n
+}
+
+// coverageMenuLocked renders the TUN overlay. It is a view over status.tun and
+// the two documented management operations; it never reads config, owns no TUN
+// state and offers no privileged setup action (docs/contracts.md §7.3, §10.3).
+func (c *Controller) coverageMenuLocked() Node {
+	t := c.snap.Status.Tun
+	children := []Node{disabledItem("coverage.summary", tunSummaryLabel(t))}
+	if t.Known {
+		children = append(children, disabledItem("coverage.helper", tunHelperLabel(t.Helper)))
+		if t.Interface != "" {
+			children = append(children, disabledItem("coverage.interface", "Interface: "+t.Interface))
+		}
+		if t.LastError != "" {
+			children = append(children, disabledItem("coverage.error", tunErrorLabel(t.LastError)))
+		}
+	}
+
+	// Only known, destination-free warning identifiers reach this submenu. The
+	// raw status strings remain under Diagnostics -> Warnings. A TUN action
+	// response has no warning set, so the pre-refresh view says refreshing
+	// rather than claiming that no warnings exist (§10.2).
+	warnChildren := make([]Node, 0, len(t.Warnings)+1)
+	warnTitle := "Warnings"
+	switch {
+	case !t.Known:
+		warnChildren = append(warnChildren, disabledItem("coverage.warnings.unknown", "Coverage status unknown"))
+	case !t.WarningsKnown:
+		warnTitle = "Warnings (refreshing)"
+		warnChildren = append(warnChildren, disabledItem("coverage.warnings.refreshing", "Coverage warnings refreshing…"))
+	case len(t.Warnings) == 0:
+		warnTitle = "Warnings (0)"
+		warnChildren = append(warnChildren, disabledItem("coverage.warnings.empty", "No coverage warnings"))
+	default:
+		warnTitle = fmt.Sprintf("Warnings (%d)", len(t.Warnings))
+		for i, w := range t.Warnings {
+			warnChildren = append(warnChildren, disabledItem(fmt.Sprintf("coverage.warning.%d", i), tunWarningLabel(w)))
+		}
+	}
+	children = append(children, submenu("coverage.warnings", warnTitle, warnChildren...))
+
+	enable := c.actionItem("coverage.enable", "Enable system-wide coverage…", ActionTunEnable, Target{})
+	disable := c.actionItem("coverage.disable", "Disable system-wide coverage…", ActionTunDisable, Target{})
+	children = append(children, enable)
+	if reason := c.tunActionBlockedReasonLocked(ActionTunEnable); reason != "" {
+		children = append(children, disabledItem("coverage.enable.reason", "Unavailable: "+reason))
+	}
+	children = append(children, disable)
+	if reason := c.tunActionBlockedReasonLocked(ActionTunDisable); reason != "" {
+		children = append(children, disabledItem("coverage.disable.reason", "Unavailable: "+reason))
+	}
+	return submenu("coverage", "Coverage", children...)
+}
+
+func tunSummaryLabel(t TunView) string {
+	if !t.Known {
+		return "Coverage: unknown · status not reported"
+	}
+	desired := "off"
+	if t.Desired {
+		desired = "on"
+	}
+	label := fmt.Sprintf("Coverage: %s · desired %s", tunStateWord(t.State), desired)
+	switch {
+	case t.Desired && t.State != contract.TunOn && t.State != contract.TunStarting && t.State != contract.TunStopping:
+		label += " · not active"
+	case !t.Desired && t.State == contract.TunOn:
+		label += " · active without request"
+	}
+	return SanitizeLabel(label)
+}
+
+func tunStateWord(s contract.TunState) string {
+	switch s {
+	case contract.TunOff, contract.TunStarting, contract.TunOn, contract.TunStopping,
+		contract.TunStateError, contract.TunUnavailable:
+		return string(s)
+	default:
+		return "unknown"
+	}
+}
+
+func tunHelperLabel(h contract.TunHelper) string {
+	switch h {
+	case contract.TunHelperInstalled:
+		return "Helper: installed"
+	case contract.TunHelperMissing:
+		return "Helper: missing · run 'sudo routelatch tun setup' in a terminal"
+	case contract.TunHelperIncompatible:
+		return "Helper: incompatible · rerun 'sudo routelatch tun setup'"
+	default:
+		return "Helper: unknown"
+	}
+}
+
+func tunErrorLabel(reason contract.TunReason) string {
+	switch reason {
+	case contract.TunReasonHelperUnavailable:
+		return "Error: TUN helper unavailable"
+	case contract.TunReasonPlatformUnsupported:
+		return "Error: platform or kernel unsupported"
+	case contract.TunReasonConflict:
+		return "Error: coverage conflict"
+	case contract.TunReasonServiceUnavailable:
+		return "Error: TUN service unavailable"
+	case contract.TunReasonSidecarLoopRisk:
+		return "Error: sidecar cannot bind outside TUN"
+	default:
+		return "Error: coverage error"
+	}
+}
+
+func tunWarningLabel(w contract.TunWarning) string {
+	switch w {
+	case contract.TunWarningDNSDirect:
+		return "DNS: plain DNS goes direct, not through the pool"
+	case contract.TunWarningUDPBlocked:
+		return "UDP/QUIC: non-DNS UDP is blocked"
+	case contract.TunWarningHelperMissing:
+		return "Helper: missing or not usable"
+	case contract.TunWarningServiceUnavailable:
+		return "Service: coverage is not running"
+	case contract.TunWarningDomainUnavailable:
+		return "Domain: unavailable for some traffic; IP/CIDR rules apply"
+	case contract.TunWarningDesktopProxyOverlap:
+		return "Desktop proxy: apps using it bypass TUN"
+	case contract.TunWarningAllDirect:
+		return "All direct: pool is unused; non-DNS UDP stays blocked"
+	case contract.TunWarningConflict:
+		return "Conflict: coverage could not be applied or verified"
+	default:
+		return "Warning: coverage warning"
+	}
 }
 
 func (c *Controller) proposalsMenuLocked(engine EngineState) Node {

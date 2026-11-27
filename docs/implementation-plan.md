@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E انجام شدند؛ R16-F بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F انجام شدند (F: کد؛ KDE گیت‌شده)؛ R16-G بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -543,6 +543,28 @@ config مشتق کند. **next:** R16-F.
 
 **check:** `go test ./internal/trayui/... ./internal/app/...`؛ gated واقعی KDE
 روی محیط مجاز؛ اسکرین‌شات/رفتار icon و toggle.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-F — انجام شد (کد؛ KDE گیت‌شده)):** `Status.Tun`
+از `StatusData.Tun` (state/desired/helper/dns/udp/ipv6/last_error/detail و
+warningهای شناخته‌شده) با `Known=false` برای payload قدیمی و fingerprint شامل آن؛
+زیرمنوی **Coverage** با state/desired/helper/interface/خطای امن و زیرمنوی
+warnings (DNS direct، UDP blocked، conflict، all-direct، desktop overlap، …)؛
+`ActionTunEnable`/`ActionTunDisable` به `tun.enable`/`tun.disable` با تأیید
+دو مرحله‌ای و job، disabled با دلیل برای stopped/engine نامعتبر/helper
+missing/incompatible/state فعال یا درحال‌گذار (disable در stopped و برای
+پاک‌کردن wish باز می‌ماند)؛ label/notification بدون مقصد/URL (interface فقط با
+شکل نام مجاز). آیکن ۲۲px badge مستقل TUN active/error/pending/desired-off با
+رنگ/علامت و tooltip امن (`TUN on|off|error`) دارد؛ تغییر TUN بدون rebuild روی
+دادهٔ یکسان، tray را به‌روز می‌کند. `go test ./internal/trayui/... ./internal/app/...`
+سبز؛ full `go test -count=1 ./...` سبز (acceptance ۱۱۷.۵s)؛ `-race` trayui/app
+سبز؛ `-count=20` trayui سبز. `-count=20` app یک‌بار در cleanup یک تست lifecycle
+(بدون ارتباط با tray) با `TempDir ... bad file descriptor` شکست خورد؛ همان الگو
+(به‌همراه شکست‌های process-teardown) روی کپی تمیز HEAD `c678f20` هم بازتولید شد،
+پس به این milestone نسبت داده نمی‌شود. **اجرانشده/گیت:** KDE واقعی، اسکرین‌شات
+icon و toggle میزبان اجرا نشد (مجوز این جلسه نبود)؛ R-16
+(GNOME/Wayland/tray host) بدون تغییر. بازبینی مستقل F **Ready with findings**
+بود؛ یافته‌های docs/controller/warnings/app/test رفع و با تأیید متمرکز بسته
+شدند (به‌جز KDE که گیت محیطی است). **next:** R16-G (setup امن/packaging/docs).
 
 #### R16-G — setup ممتاز، packaging و مستندات
 
@@ -1860,8 +1882,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-E در ۲۰۲۶-۱۱-۲۷ انجام و
-   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-F قدم بعد است. R16-I/J
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-F در ۲۰۲۶-۱۱-۲۷ انجام و
+   بازبینی شدند (F: کد؛ KDE گیت‌شده)؛ verdict R16-A برابر `Ready` است و R16-G
+   قدم بعد است. R16-I/J
    (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
    می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
@@ -1905,7 +1928,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B/C/D/E انجام شدند و R16-F قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C/D/E/F انجام شدند (F: کد؛ KDE گیت‌شده) و R16-G قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

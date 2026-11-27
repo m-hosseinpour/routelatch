@@ -85,7 +85,36 @@ type Status struct {
 	Pool                  PoolCounts
 	ConnectionsOpen       int
 	DiagnosticsEnabled    bool
-	Warnings              []string
+	// Tun is the additive status.tun object. Known=false means the engine did
+	// not send it (an older payload) and must be treated as unknown, not off
+	// (docs/contracts.md §10.2).
+	Tun      TunView
+	Warnings []string
+}
+
+// TunView is the display-ready copy of status.tun. It never carries a
+// destination, domain, URL or credential (D21); Interface and Detail are
+// sanitized because status fields are still untrusted input at this boundary.
+type TunView struct {
+	Known     bool
+	Desired   bool
+	State     contract.TunState
+	Interface string
+	Since     time.Time
+	DNS       contract.TunDNSMode
+	UDP       contract.TunUDPMode
+	IPv6      bool
+	Helper    contract.TunHelper
+	LastError contract.TunReason
+	Detail    string
+	// Warnings are the known TUN warning identifiers emitted by status. The
+	// raw status warnings stay in Status.Warnings for Diagnostics; this copy is
+	// the coverage-only view and drops unknown identifiers.
+	Warnings []contract.TunWarning
+	// WarningsKnown is true only when Warnings came from a status response. A
+	// TUN action response carries no warning set, so the menu must say
+	// "refreshing" until the next status read instead of claiming zero.
+	WarningsKnown bool
 }
 
 // PoolCounts mirrors the documented status/list counters.
@@ -231,6 +260,12 @@ func statusFromData(d control.StatusData) Status {
 			warnings = append(warnings, clean)
 		}
 	}
+	tun := TunView{}
+	if d.Tun != nil {
+		tun = tunFromStatus(*d.Tun)
+		tun.Warnings = tunWarningsFromStatus(d.Warnings)
+		tun.WarningsKnown = true
+	}
 	return Status{
 		Ready:                 d.Ready,
 		ListenersOpen:         d.ListenersOpen,
@@ -243,8 +278,64 @@ func statusFromData(d control.StatusData) Status {
 		},
 		ConnectionsOpen:    d.Connections.Open,
 		DiagnosticsEnabled: d.Diagnostics.Enabled,
+		Tun:                tun,
 		Warnings:           warnings,
 	}
+}
+
+// tunFromStatus copies the wire object into the menu view. The runtime enums
+// are kept verbatim: the controller does not invent a second TUN state model,
+// and an unknown value still renders as an explicit unknown state.
+func tunFromStatus(st contract.TunStatus) TunView {
+	return TunView{
+		Known:     true,
+		Desired:   st.Desired,
+		State:     st.State,
+		Interface: tunInterfaceName(st.Interface),
+		Since:     st.Since,
+		DNS:       st.DNS,
+		UDP:       st.UDP,
+		IPv6:      st.IPv6,
+		Helper:    st.Helper,
+		LastError: st.LastError,
+		Detail:    SanitizeLabel(st.Detail),
+	}
+}
+
+// tunInterfaceName keeps only a Linux interface-name-shaped value. The field is
+// a local interface, never a destination, and this also stops a malformed
+// runtime from smuggling arbitrary text (including a URL) into a label.
+func tunInterfaceName(s string) string {
+	if s == "" || len(s) > 15 {
+		return ""
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			continue
+		}
+		return ""
+	}
+	return s
+}
+
+// tunWarningsFromStatus keeps only the documented warning identifiers. A
+// status string that is not one of them belongs to the general warnings list,
+// not the coverage view; dropping unknown text also keeps arbitrary server
+// text out of the coverage labels (D21).
+func tunWarningsFromStatus(warnings []string) []contract.TunWarning {
+	var out []contract.TunWarning
+	for _, raw := range warnings {
+		switch w := contract.TunWarning(raw); w {
+		case contract.TunWarningDNSDirect, contract.TunWarningUDPBlocked,
+			contract.TunWarningHelperMissing, contract.TunWarningServiceUnavailable,
+			contract.TunWarningDomainUnavailable, contract.TunWarningDesktopProxyOverlap,
+			contract.TunWarningAllDirect, contract.TunWarningConflict:
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 func rulesFromData(d control.RulesListData) []Rule {

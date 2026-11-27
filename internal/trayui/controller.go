@@ -99,10 +99,14 @@ type View struct {
 	Root        Node
 	Fingerprint string
 	Engine      EngineState
-	Pending     *Pending
-	Job         *Job
-	LastAction  string
-	Loaded      bool
+	// Tun is the coverage state for the tray icon and tooltip. The menu nodes
+	// carry the same data; this copy avoids a second traversal and is immutable
+	// like Root.
+	Tun        TunView
+	Pending    *Pending
+	Job        *Job
+	LastAction string
+	Loaded     bool
 }
 
 // Controller owns pending confirmations, the single job slot, restart event
@@ -163,6 +167,7 @@ func (c *Controller) Snapshot() Snapshot {
 func copySnapshot(s Snapshot) Snapshot {
 	out := s
 	out.Status.Warnings = append([]string(nil), s.Status.Warnings...)
+	out.Status.Tun.Warnings = append([]contract.TunWarning(nil), s.Status.Tun.Warnings...)
 	if s.Status.ResumeRequiresRestart != nil {
 		v := *s.Status.ResumeRequiresRestart
 		out.Status.ResumeRequiresRestart = &v
@@ -195,6 +200,7 @@ func (c *Controller) View() View {
 		Root:        c.cachedRoot,
 		Fingerprint: fp,
 		Engine:      engine,
+		Tun:         copyTunView(c.snap.Status.Tun),
 		Pending:     copyPending(c.pending),
 		Job:         copyJob(c.job),
 		LastAction:  c.lastAction,
@@ -211,6 +217,12 @@ func copyPending(p *Pending) *Pending {
 	}
 	out := *p
 	return &out
+}
+
+func copyTunView(v TunView) TunView {
+	out := v
+	out.Warnings = append([]contract.TunWarning(nil), v.Warnings...)
+	return out
 }
 
 func copyJob(j *job) *Job {
@@ -490,6 +502,10 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 		if !c.desktopRestoreAllowedLocked() {
 			return ErrBlocked
 		}
+	case ActionTunEnable, ActionTunDisable:
+		if c.tunActionBlockedReasonLocked(action) != "" {
+			return ErrBlocked
+		}
 	}
 	return nil
 }
@@ -497,7 +513,7 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 func stoppedActionAllowed(action Action) bool {
 	switch action {
 	case ActionModeTargeted, ActionModeAllProxy, ActionModeAllDirect,
-		ActionDesktopRefresh, ActionDesktopRestore, ActionBackup:
+		ActionDesktopRefresh, ActionDesktopRestore, ActionBackup, ActionTunDisable:
 		return true
 	default:
 		// Pool/probe/rules mutation, proposals and diagnostics do not run while
@@ -539,6 +555,66 @@ func (c *Controller) desktopSetAllowedLocked() bool {
 func (c *Controller) desktopRestoreAllowedLocked() bool {
 	d := c.snap.Desktop
 	return d.Known && !d.Err && d.Supported
+}
+
+// tunActionBlockedReasonLocked is the one rule behind both the disabled menu
+// item and a rejected click. It returns a short, destination-free reason, or ""
+// when the action may run. Enabling needs a ready, non-stopped engine, a known
+// TUN view, a usable helper and no coverage already active or in transition;
+// disabling is always allowed except when it is a proven no-op.
+func (c *Controller) tunActionBlockedReasonLocked(action Action) string {
+	if c.job != nil {
+		return "another job is running"
+	}
+	switch c.snap.Engine {
+	case EngineLoading:
+		return "TUN status is loading"
+	case EngineStarting:
+		return "the engine is starting"
+	case EngineUnavailable:
+		return "the engine is unavailable"
+	case EngineRestarting:
+		return "the engine is restarting"
+	case EngineStopped:
+		if action == ActionTunEnable {
+			return "listening is stopped; choose a mode first"
+		}
+	}
+	t := c.snap.Status.Tun
+	if !t.Known {
+		return "TUN status is unavailable from this engine"
+	}
+	if action == ActionTunDisable {
+		// Disable is idempotent and allowed in every mode (§10.3). Only a
+		// proven off+unrequested state is a no-op; stopping must remain
+		// actionable so a transition cannot strand the user.
+		if t.State == contract.TunOff && !t.Desired {
+			return "coverage is already off"
+		}
+		return ""
+	}
+	switch t.State {
+	case contract.TunOn:
+		return "coverage is already on"
+	case contract.TunStarting:
+		return "coverage is starting"
+	case contract.TunStopping:
+		return "coverage is stopping"
+	case contract.TunOff, contract.TunStateError, contract.TunUnavailable:
+		// Off, failed or unavailable is a safe retry target.
+	default:
+		return "the coverage state is unknown"
+	}
+	switch t.Helper {
+	case contract.TunHelperInstalled:
+		return ""
+	case contract.TunHelperMissing:
+		return "helper is missing; run 'sudo routelatch tun setup'"
+	case contract.TunHelperIncompatible:
+		return "helper is incompatible; rerun 'sudo routelatch tun setup'"
+	default:
+		return "the helper state is unknown"
+	}
 }
 
 func (c *Controller) startJobLocked(action Action, target Target, name string) *job {
@@ -965,6 +1041,33 @@ func (c *Controller) jobRequest(ctx context.Context, action Action, target Targe
 		return fmt.Sprintf("Pool test finished (%d results)", len(data.Results)), nil
 	case ActionProposalRecheck:
 		return "Proposal rechecked", nil
+	case ActionTunEnable, ActionTunDisable:
+		var data contract.TunStatus
+		if err := decodeData(env, &data); err != nil {
+			return "", err
+		}
+		c.applyTun(tunFromStatus(data))
+		if action == ActionTunDisable {
+			// A successful disable normally reports off, but the contract also
+			// allows an unresolved helper to leave coverage unavailable. Never
+			// turn that into an "off" claim.
+			switch data.State {
+			case contract.TunOff:
+				return "System-wide coverage off", nil
+			case contract.TunStopping:
+				return "System-wide coverage stopping", nil
+			default:
+				return "System-wide coverage not confirmed off", nil
+			}
+		}
+		switch data.State {
+		case contract.TunOn:
+			return "System-wide coverage on", nil
+		case contract.TunStarting:
+			return "System-wide coverage starting", nil
+		default:
+			return "System-wide coverage not active", nil
+		}
 	case ActionBackup:
 		return "Backup created", nil
 	default:

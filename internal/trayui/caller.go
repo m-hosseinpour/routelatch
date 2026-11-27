@@ -536,6 +536,17 @@ func (c *Controller) applyDesktop(v DesktopView) {
 	c.snap.Desktop = v
 }
 
+// applyTun stores the TUN object returned by tun.enable/tun.disable so the
+// coverage view reacts immediately. The warning set is cleared and marked
+// stale until the next status poll, which is the sole owner of the derived
+// warning set; showing the previous state's warnings (or "no warnings") would
+// be worse than showing "refreshing".
+func (c *Controller) applyTun(v TunView) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.snap.Status.Tun = v
+}
+
 func (c *Controller) applyDesktopError() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

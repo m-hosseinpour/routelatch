@@ -26,7 +26,7 @@ func TestDeterministicMenuTreeMatchesContract(t *testing.T) {
 		t.Fatalf("root = %+v", view.Root)
 	}
 	wantKeys := []string{
-		"status", "mode", "proposals", "rules", "pool", "desktop", "diagnostics",
+		"status", "mode", "coverage", "proposals", "rules", "pool", "desktop", "diagnostics",
 		"data", "settings", "advanced", "last_action", "quit",
 	}
 	if got := rootKeys(view.Root); !reflect.DeepEqual(got, wantKeys) {
@@ -41,6 +41,18 @@ func TestDeterministicMenuTreeMatchesContract(t *testing.T) {
 	}
 	if stop, _ := findNode(view.Root, "mode.stop"); stop.Label != "Stop listening…" {
 		t.Fatalf("stop = %+v", stop)
+	}
+	if summary, _ := findNode(view.Root, "coverage.summary"); summary.Label != "Coverage: off · desired off" {
+		t.Fatalf("coverage summary = %q", summary.Label)
+	}
+	if helper, _ := findNode(view.Root, "coverage.helper"); helper.Label != "Helper: installed" {
+		t.Fatalf("coverage helper = %q", helper.Label)
+	}
+	if enable, _ := findNode(view.Root, "coverage.enable"); !enable.Enabled {
+		t.Fatalf("enable coverage = %+v", enable)
+	}
+	if disable, _ := findNode(view.Root, "coverage.disable"); disable.Enabled {
+		t.Fatalf("disable coverage = %+v", disable)
 	}
 	if n, _ := findNode(view.Root, "proposals"); n.Label != "Proposals (3)" {
 		t.Fatalf("proposals = %q", n.Label)
