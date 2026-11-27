@@ -607,6 +607,27 @@ func assertUnlocked(t *testing.T, path string) {
 	}
 }
 
+// assertUnlockedEventually waits for path to hold no flock. Launch returns as
+// soon as the supervisor emits its error event, but abortStartup emits that
+// event (reportError) before it releases app.lock (closeStartupHandles). Under
+// scheduling load the release can trail the event by milliseconds, so a
+// startup-failure test must wait for the observable condition instead of
+// asserting the lock state at the instant Launch returns.
+func assertUnlockedEventually(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		err := unlockedPath(path)
+		if err == nil {
+			return
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("lock still held after %s: %v", timeout, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // unlockedPath reports whether path holds no flock. A missing file counts as
 // unlocked: the supervisor publishes the starting marker before the preflight
 // that creates state.lock, and the marker is readable before its fsync returns.
@@ -678,7 +699,7 @@ func TestLaunchTrayUnavailable(t *testing.T) {
 		t.Fatalf("failure = %+v, want 7/tray_unavailable", f)
 	}
 	paths := pathsFor(t, data)
-	assertUnlocked(t, paths.AppLock)
+	assertUnlockedEventually(t, paths.AppLock, 5*time.Second)
 	if _, err := os.Stat(paths.Socket); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("tray failure started an engine: socket exists")
 	}
