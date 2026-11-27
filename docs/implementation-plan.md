@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد؛ R16-I/J research: `Ready for decision`)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -690,7 +690,8 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   <https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0>.
   body با «RouteLatch v1.2.0 — opt-in TUN coverage» شروع می‌شود. انتشار طبق
   مجوز ایستادهٔ `AGENTS.md` و پس از CI/package gates انجام شد.
-- **next:** R16-I/J تحقیقات بعدی (DNS-through-pool و UDP).
+- **next:** R16-I/J research انجام شد (`Ready for decision`)؛ تصمیم implementation
+  و قرارداد جدید لازم است.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -724,6 +725,20 @@ verified` ثبت شود؛ پیاده‌سازی ناقص یا fallback مستق�
 **check:** گزارش verdict، transport/exit matrix، تست DNS با pool سالم/مرده،
 switch off/on، عدم تغییر DNS سیستم، no loop/leak، صفر مقصد در log/state.
 
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-I — research انجام شد؛ verdict `Ready for decision`):**
+DoH از مسیر exit موجود با Xray pin کار می‌کند (A/AAAA و IPv4/IPv6 upstream؛ exit فقط
+TLS می‌بیند) و با exit مرده fail-closed و بدون direct fallback است. DoT در Xray
+pin‌شده client-native نیست؛ DNS-over-TCP کار می‌کند ولی query در exit plaintext
+است. **گپ اصلی:** policy فعلی `targeted` resolver تأییدنشده را direct می‌فرستد؛
+switch به exception صریح DNS-egress در engine نیاز دارد. systemd-resolved/
+`127.0.0.53`، DoH مرورگر، captive portal و split DNS بدون تغییر system DNS (که
+ممنوع است) پوشش داده نمی‌شوند. D21: `logLevel: none` الزامی می‌ماند. شاهد:
+`spike/tun/R16-I-DNS-RESEARCH.md` + `spike/tun/evidence/r16i-2026-11-27/`.
+**تصمیم‌های لازم:** scope (approved-only/all)، pool DNS در all-direct، resolver
+trust/bootstrap (پیشنهاد IP-literal DoH از کاربر، بدون default)، exception
+engine، live-switch vs `tun off/on`، wording پوشش. implementation تا تصمیم/
+قرارداد جدید شروع نمی‌شود.
+
 #### R16-J — پوشش UDP/QUIC (تحقیق؛ بعد از H)
 
 **وابستگی:** R16-A/H و D30. **بخشی از A17 نیست** و تا verdict، UDP غیرDNS
@@ -744,6 +759,21 @@ switch off/on، عدم تغییر DNS سیستم، no loop/leak، صفر مقص�
 **check:** verdict با شواهد منبع/اجرا، matrix exitها، تست fixture UDP/QUIC در
 صورت امکان، صفر leak/direct در pool خراب، و تصمیم صریح برای ادامه یا توقف.
 اگر نتیجه مثبت بود، contract/acceptance جدید پیش از کد نوشته شود.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-J — research انجام شد؛ verdict `Ready for decision`):**
+توصیه: non-DNS UDP در خط فعلی بلاک بماند؛ این research مجوز implementation نیست.
+matrix کنترل‌شده: hysteria2، Trojan، VLESS (cone→XUDP؛ Vision UDP/443 را رد
+می‌کند) و SOCKS5 UDP datagram را حمل کردند؛ 1200/1400B OK و 8192/60000B timeout؛
+هزینه/رفتار متفاوت (VLESS/Trojan UDP-over-TCP با HOL و setup RTT؛ hysteria2
+QUIC-native ولی burstier). TUN UDP flow منبع‌محور/cone-ish، queue 1024 در flow،
+idle 300s، dual-stack؛ dead relay fail-closed با صفر direct. **finding جدید:**
+sniffing فعلی TUN حدود ۲۰۳–۲۰۵ms به هر UDP flow جدید (حتی DNS/53) اضافه می‌کند؛
+QUIC SNI برای v1/v2/draft29 قابل sniff است ولی ECH، Vision/443 و domain-only
+policy باز است. real-pool UDP failure rate **Not verified** و engine UDP path
+ندارد. شاهد: `spike/tun/R16-J-UDP-RESEARCH.md` + `evidence/r16j-udp-2026-11-27/`.
+**تصمیم‌های لازم:** pursue/keep blocked؛ اگر pursue: separate opt-in vs bundled،
+pilot، domain-only rule، QUIC sniff/ECH، 200ms sniff fix، Vision `-udp443`/XUDP،
+real-pool sample، caps/D13/status contract.
 
 #### ترتیب، موازی‌کاری و دروازه‌ها
 
@@ -1959,8 +1989,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده؛ G: setup/packaging/docs؛
    code fixes `7ff128c`؛ H `a8ee4d3`). tag annotated `v1.2.0` (object
    `cda1fe35…`)، CI `a8ee4d3` attempt 2 سبز، `Release` `45985695347` و Release
-   عمومی id `460485888` با ۱۷ دارایی. R16-I/J (DNS-through-pool و UDP) فقط task
-   تحقیقی تعریف‌شده‌اند.** `v1.1.0` سطح کنترل tray (R15)،
+   عمومی id `460485888` با ۱۷ دارایی. R16-I/J research انجام شد
+   (`Ready for decision`)؛ implementation هر کدام تصمیم/قرارداد جدید می‌خواهد.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز

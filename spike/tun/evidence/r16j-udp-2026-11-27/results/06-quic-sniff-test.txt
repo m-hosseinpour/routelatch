@@ -1,0 +1,72 @@
+=== RUN   TestSniffQUIC
+--- PASS: TestSniffQUIC (0.00s)
+=== RUN   TestSniffQUICComplex
+=== RUN   TestSniffQUICComplex/EmptyPacket
+=== RUN   TestSniffQUICComplex/NTP_Packet_Client
+=== RUN   TestSniffQUICComplex/NTP_Packet_Server
+=== RUN   TestSniffQUICComplex/DNS_Packet_Client
+=== RUN   TestSniffQUICComplex/DNS_Packet_Client#01
+=== RUN   TestSniffQUICComplex/DNS_Packet_Server
+=== RUN   TestSniffQUICComplex/DNS_Packet_Server#01
+=== RUN   TestSniffQUICComplex/QUIC,_NonHandshake_Packet
+=== RUN   TestSniffQUICComplex/QUIC,_NonHandshake_Packet#01
+=== RUN   TestSniffQUICComplex/QUIC,_NonHandshake_Packet#02
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[1];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[1];_packet_1_-_2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1-3
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1-3
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[4];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[4];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[5];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[5];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[6];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[6];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1-2
+=== RUN   TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1-3
+--- PASS: TestSniffQUICComplex (0.00s)
+    --- PASS: TestSniffQUICComplex/EmptyPacket (0.00s)
+    --- PASS: TestSniffQUICComplex/NTP_Packet_Client (0.00s)
+    --- PASS: TestSniffQUICComplex/NTP_Packet_Server (0.00s)
+    --- PASS: TestSniffQUICComplex/DNS_Packet_Client (0.00s)
+    --- PASS: TestSniffQUICComplex/DNS_Packet_Client#01 (0.00s)
+    --- PASS: TestSniffQUICComplex/DNS_Packet_Server (0.00s)
+    --- PASS: TestSniffQUICComplex/DNS_Packet_Server#01 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC,_NonHandshake_Packet (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC,_NonHandshake_Packet#01 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC,_NonHandshake_Packet#02 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[1];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[1];_packet_1_-_2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[2];_packet_1-3 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[3];_packet_1-3 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[4];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[4];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[5];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[5];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[6];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[6];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1-2 (0.00s)
+    --- PASS: TestSniffQUICComplex/QUIC_Chromebook_Handshake[7];_packet_1-3 (0.00s)
+=== RUN   TestSniffQUICIncompleteServerName
+--- PASS: TestSniffQUICIncompleteServerName (0.00s)
+=== RUN   TestSniffQUICPacketNumberLength4
+--- PASS: TestSniffQUICPacketNumberLength4 (0.00s)
+=== RUN   TestSniffQUICv2
+--- PASS: TestSniffQUICv2 (0.00s)
+=== RUN   TestSniffFakeQUICPacketWithInvalidPacketNumberLength
+--- PASS: TestSniffFakeQUICPacketWithInvalidPacketNumberLength (0.00s)
+=== RUN   TestSniffFakeQUICPacketWithTooShortData
+--- PASS: TestSniffFakeQUICPacketWithTooShortData (0.00s)
+=== RUN   TestSniffQUICTrailingZeroPadding
+--- PASS: TestSniffQUICTrailingZeroPadding (0.00s)
+PASS
+ok  	github.com/xtls/xray-core/common/protocol/quic	0.007s

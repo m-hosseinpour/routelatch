@@ -1,0 +1,568 @@
+fixture source: <repo>/spike/tun/r16i/dnssrv/main.go, <repo>/spike/tun/r16i/socks_peek.py
+xray configs: <work>/xray-*.json (copied below)
+--- <work>/xray-dead.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-dns",
+      "protocol": "dns",
+      "settings": {}
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-dns"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "https://172.31.77.20:8443/dns-query",
+        "timeoutMs": 3000
+      }
+    ],
+    "disableFallback": true,
+    "queryStrategy": "UseIP"
+  }
+}--- <work>/xray-direct.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    },
+    {
+      "tag": "rl-direct",
+      "protocol": "freedom"
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-direct"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  }
+}--- <work>/xray-doh6.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-dns",
+      "protocol": "dns",
+      "settings": {}
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-dns"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "https://[fd00:77::20]:8443/dns-query",
+        "timeoutMs": 3000
+      }
+    ],
+    "disableFallback": true,
+    "queryStrategy": "UseIP"
+  }
+}--- <work>/xray-doh.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-dns",
+      "protocol": "dns",
+      "settings": {}
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-dns"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "https://172.31.77.20:8443/dns-query",
+        "timeoutMs": 3000
+      }
+    ],
+    "disableFallback": true,
+    "queryStrategy": "UseIP"
+  }
+}--- <work>/xray-dot.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-dns",
+      "protocol": "dns",
+      "settings": {}
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-dns"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "tls://172.31.77.20:853",
+        "timeoutMs": 3000
+      }
+    ],
+    "disableFallback": true,
+    "queryStrategy": "UseIP"
+  }
+}--- <work>/xray-tcp.json
+{
+  "log": {
+    "logLevel": "none",
+    "access": "none",
+    "error": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "rl-tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-tun0",
+        "mtu": 1500,
+        "gateway": [
+          "198.18.0.1/15",
+          "fc00::1/64"
+        ],
+        "autoSystemRoutingTable": [
+          "0.0.0.0/1",
+          "128.0.0.0/1",
+          "::/1",
+          "8000::/1"
+        ],
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "routeOnly": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "rl-block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "rl-dns",
+      "protocol": "dns",
+      "settings": {}
+    },
+    {
+      "tag": "rl-exit",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "172.31.77.20",
+            "port": 1080
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": "rl-dns"
+      },
+      {
+        "type": "field",
+        "network": "tcp",
+        "outboundTag": "rl-exit"
+      },
+      {
+        "type": "field",
+        "network": "udp",
+        "outboundTag": "rl-block"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "rl-block"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "tcp://172.31.77.20:5353",
+        "timeoutMs": 3000
+      }
+    ],
+    "disableFallback": true,
+    "queryStrategy": "UseIP"
+  }
+}

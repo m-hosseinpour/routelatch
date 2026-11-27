@@ -1,0 +1,46 @@
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+== peer log (start)
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"event": "listening", "port": 9000}
+== start relay
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+== start xray tun
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+== link/routes
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+rl-r16j0         UNKNOWN        198.18.0.1/15 fc00::1/64 fe80::6092:d15d:16bc:f95/64 
+0.0.0.0/1 dev rl-r16j0 metric 1 
+128.0.0.0/1 dev rl-r16j0 metric 1 
+198.18.0.0/15 dev rl-r16j0 proto kernel scope link src 198.18.0.1 
+::/1 dev rl-r16j0 metric 1 pref medium
+fc00::/64 dev rl-r16j0 proto kernel metric 256 pref medium
+fe80::/64 dev rl-r16j0 proto kernel metric 256 pref medium
+8000::/1 dev rl-r16j0 metric 1 pref medium
+== force app destination through TUN
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+172.31.90.20 dev rl-r16j0 src 198.18.0.1 uid 0 
+    cache 
+== app UDP through TUN (live relay)
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"label": "tun-live-1", "ok": true, "len": 10}
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"label": "tun-live-2", "ok": true, "len": 10}
+== peer count
+2
+== kill relay (simulated dead pool)
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+== app UDP through TUN (dead relay)
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"label": "tun-dead-1", "ok": false, "error": "TimeoutError"}
+== peer count after dead relay (must stay 2)
+2
+== stop xray and check cleanup
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+Device "rl-r16j0" does not exist.
+== relay log
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
++0000 2026-11-27 12:25:17 [31mERROR[0m network: missing default interface

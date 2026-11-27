@@ -1,0 +1,35 @@
+=== direct A ===
+{"answers": ["203.0.113.201"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+=== direct AAAA ===
+{"answers": ["2001:db8::201"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+=== direct v6 UDP ===
+{"answers": ["203.0.113.201"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+=== direct v6 TCP ===
+{"answers": ["203.0.113.201"], "ms": 2, "ok": true, "rcode": 0, "stage": "dns"}
+
+$ docker exec rl-r16i-<run>-a sh -c ip\ -br\ addr\ show\ rl-tun0\;\ ip\ route\ \|\ grep\ rl-tun0\;\ ip\ -6\ route\ \|\ grep\ rl-tun0
+rl-tun0          UNKNOWN        198.18.0.1/15 fc00::1/64 fe80::453f:f834:b889:f337/64 
+0.0.0.0/1 dev rl-tun0 metric 1 
+128.0.0.0/1 dev rl-tun0 metric 1 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+::/1 dev rl-tun0 metric 1 pref medium
+fc00::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fe80::/64 dev rl-tun0 proto kernel metric 256 pref medium
+8000::/1 dev rl-tun0 metric 1 pref medium
+
+$ docker exec rl-r16i-<run>-b sh -c tail\ -30\ /work/logs/direct-dns.log
+Nov 27 12:16:01 dnsmasq[19]: started, version 2.92 cachesize 150
+Nov 27 12:16:01 dnsmasq[19]: compile time options: IPv6 GNU-getopt DBus no-UBus i18n IDN2 DHCP DHCPv6 no-Lua TFTP conntrack ipset nftset auth DNSSEC loop-detect inotify dumpfile
+Nov 27 12:16:01 dnsmasq[19]: warning: no upstream servers configured
+Nov 27 12:16:01 dnsmasq[19]: cleared cache
+Nov 27 12:16:08 dnsmasq[19]: query[A] direct.canary-r16i.invalid from 172.31.77.10
+Nov 27 12:16:08 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+Nov 27 12:16:08 dnsmasq[19]: query[AAAA] direct.canary-r16i.invalid from 172.31.77.10
+Nov 27 12:16:08 dnsmasq[19]: config direct.canary-r16i.invalid is 2001:db8::201
+Nov 27 12:16:09 dnsmasq[19]: query[A] direct.canary-r16i.invalid from fd00:77::10
+Nov 27 12:16:09 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+Nov 27 12:16:09 dnsmasq[19]: query[A] direct.canary-r16i.invalid from fd00:77::10
+Nov 27 12:16:09 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+
+$ docker exec rl-r16i-<run>-a sh -c timeout\ 3\ getent\ hosts\ canary-r16i.invalid\ \|\|\ echo\ system-dns-unavailable
+system-dns-unavailable

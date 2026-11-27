@@ -1,0 +1,27 @@
+=== dead pool A ===
+{"error": "timed out", "ms": 6005, "ok": false, "stage": "dns"}
+=== direct resolver log (must not contain dead name) ===
+
+$ docker exec rl-r16i-<run>-b sh -c grep\ -c\ \"canary-r16i-dead\"\ /work/logs/direct-dns.log\ 2\>/dev/null\ \|\|\ true\;\ tail\ -20\ /work/logs/direct-dns.log\;\ tail\ -20\ /work/logs/doh.log
+0
+Nov 27 12:16:01 dnsmasq[19]: started, version 2.92 cachesize 150
+Nov 27 12:16:01 dnsmasq[19]: compile time options: IPv6 GNU-getopt DBus no-UBus i18n IDN2 DHCP DHCPv6 no-Lua TFTP conntrack ipset nftset auth DNSSEC loop-detect inotify dumpfile
+Nov 27 12:16:01 dnsmasq[19]: warning: no upstream servers configured
+Nov 27 12:16:01 dnsmasq[19]: cleared cache
+Nov 27 12:16:08 dnsmasq[19]: query[A] direct.canary-r16i.invalid from 172.31.77.10
+Nov 27 12:16:08 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+Nov 27 12:16:08 dnsmasq[19]: query[AAAA] direct.canary-r16i.invalid from 172.31.77.10
+Nov 27 12:16:08 dnsmasq[19]: config direct.canary-r16i.invalid is 2001:db8::201
+Nov 27 12:16:09 dnsmasq[19]: query[A] direct.canary-r16i.invalid from fd00:77::10
+Nov 27 12:16:09 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+Nov 27 12:16:09 dnsmasq[19]: query[A] direct.canary-r16i.invalid from fd00:77::10
+Nov 27 12:16:09 dnsmasq[19]: config direct.canary-r16i.invalid is 203.0.113.201
+{"addr":":8443","event":"doh_listen","ts":"2026-11-27T12:16:01.149337973Z"}
+{"event":"doh_query","name":"doh.canary-r16i.invalid","proto":"HTTP/2.0","qtype":1,"remote":"172.31.77.20:45090","ts":"2026-11-27T12:16:13.698803707Z"}
+{"event":"doh_query","name":"doh.canary-r16i.invalid","proto":"HTTP/2.0","qtype":28,"remote":"172.31.77.20:45090","ts":"2026-11-27T12:16:13.840220108Z"}
+{"event":"doh_query","name":"doh6.canary-r16i.invalid","proto":"HTTP/2.0","qtype":1,"remote":"[fd00:77::20]:37974","ts":"2026-11-27T12:16:15.826404115Z"}
+{"event":"doh_query","name":"doh6.canary-r16i.invalid","proto":"HTTP/2.0","qtype":28,"remote":"[fd00:77::20]:37974","ts":"2026-11-27T12:16:16.120845104Z"}
+
+$ docker exec rl-r16i-<run>-b sh -c nohup\ python3\ /work/socks_peek.py\ --listen\ 0.0.0.0\ --port\ 1080\ --log\ /work/logs/socks.log\ \>/work/logs/socks.out\ 2\>\&1\ \&\ sleep\ 0.5
+=== recovered A ===
+{"answers": ["203.0.113.201"], "ms": 58, "ok": true, "rcode": 0, "stage": "dns"}

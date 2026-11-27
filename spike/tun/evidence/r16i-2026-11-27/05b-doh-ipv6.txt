@@ -1,0 +1,16 @@
+=== doh6 A v4 query ===
+{"answers": ["203.0.113.201"], "ms": 79, "ok": true, "rcode": 0, "stage": "dns"}
+=== doh6 AAAA v6 resolver destination ===
+{"answers": ["2001:db8::201"], "ms": 2, "ok": true, "rcode": 0, "stage": "dns"}
+
+$ docker exec rl-r16i-<run>-b sh -c cat\ /work/logs/doh.log\;\ echo\ ---socks---\;\ tail\ -10\ /work/logs/socks.log\;\ echo\ \"direct_hits=\$\(grep\ -c\ \"doh6\\.\"\ /work/logs/direct-dns.log\ 2\>/dev/null\ \|\|\ true\)\"
+{"addr":":8443","event":"doh_listen","ts":"2026-11-27T12:16:01.149337973Z"}
+{"event":"doh_query","name":"doh.canary-r16i.invalid","proto":"HTTP/2.0","qtype":1,"remote":"172.31.77.20:45090","ts":"2026-11-27T12:16:13.698803707Z"}
+{"event":"doh_query","name":"doh.canary-r16i.invalid","proto":"HTTP/2.0","qtype":28,"remote":"172.31.77.20:45090","ts":"2026-11-27T12:16:13.840220108Z"}
+{"event":"doh_query","name":"doh6.canary-r16i.invalid","proto":"HTTP/2.0","qtype":1,"remote":"[fd00:77::20]:37974","ts":"2026-11-27T12:16:15.826404115Z"}
+{"event":"doh_query","name":"doh6.canary-r16i.invalid","proto":"HTTP/2.0","qtype":28,"remote":"[fd00:77::20]:37974","ts":"2026-11-27T12:16:16.120845104Z"}
+---socks---
+{"addr": "0.0.0.0:1080", "event": "listening"}
+{"atyp": 1, "event": "connect", "first_ascii": "....f...b.........p.mZn`. F.;...E..x.G7n3.' ..%9D{,\\.k....$...%.", "first_hex": "1603010766010007620303cfe80a078cd31170846d5a6e609c20461a3b0fdace4589f578f947376e33c12720a1e92539447b2c5cef6b17fb17ee24e018c42515", "first_len": 64, "peer": "172.31.77.10:49634", "port": 8443, "target": "172.31.77.20", "ts": 1795781773.6759412}
+{"atyp": 4, "event": "connect", "first_ascii": "....f...b.....vn[/...&%{...h.7..1H.W..n<i.u .v.......!.WIv..R.W.", "first_hex": "1603010766010007620303e7c0c4766e5b2fd7c50a26257be0b31068ae37a8033148fb57e09f6e3c69077520f876fbe7e9b0eafbf7210b57497683d6528b57c3", "first_len": 64, "peer": "172.31.77.10:48966", "port": 8443, "target": "fd00:77::20", "ts": 1795781775.790272}
+direct_hits=0

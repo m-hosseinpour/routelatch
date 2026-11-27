@@ -1,0 +1,44 @@
+R16-J source locators
+=====================
+
+Pinned Xray: github.com/xtls/xray-core
+  v1.260327.1-0.20261109052709-676eaf66f8f0
+  commit 676eaf66f8f05d4d558ee7a74b4736623d3feeb9 (runtime 26.11.9)
+
+TUN UDP flow / NAT / limits
+  proxy/tun/udp_fullcone.go:40-60      map keyed by source address:port
+  proxy/tun/udp_fullcone.go:110-120    per-packet destination rewrite (full cone)
+  proxy/tun/udp_fullcone.go:167-168    udpQueueLimit = 1024 per flow, no global cap
+  proxy/tun/stack.go:39,390-444        StackOptions.IdleTimeout; UDP packet path
+  proxy/tun/handler.go:171             IdleTimeout set from policy; never read in stack
+  features/policy/policy.go:131        ConnectionIdle default 300 s
+  proxy/tun/handler.go:246             info-level destination log (suppressed by "none")
+
+SOCKS / exits
+  proxy/socks/client.go:106-160        UDP ASSOCIATE, UDPWriter/UDPReader
+  proxy/socks/protocol.go:419-424      UDPWriter honors per-packet b.UDP destination
+  common/xudp/xudp.go:111-121          XUDP writer carries the per-packet destination
+  proxy/vless/outbound/outbound.go:215-216  VLESS UDP command
+  proxy/vless/outbound/outbound.go:246-258  Vision UDP/443 rejection
+  proxy/vless/outbound/outbound.go:303-320  XUDP/cone path
+  proxy/trojan/client.go:111-143       Trojan UDP PacketWriter/PacketReader
+  proxy/freedom/freedom.go:75-87,165-180    private/documentation destination block
+
+Sniffing / QUIC
+  app/dispatcher/sniffer.go:42          QUIC sniffer registered for UDP
+  app/dispatcher/default.go:324-375     DispatchLink sniffs before routing
+  app/dispatcher/default.go:391,419     200 ms cache deadline / two attempts
+  common/protocol/quic/sniff.go:69      SniffQUIC (v1/v2/draft29)
+  core/xray.go:195-196                  cone default unless xray.cone.disabled=true
+
+Product (revision c1b8454)
+  internal/frontend/socks.go:69-79      UDP ASSOCIATE/BIND refused 0x07
+  internal/tun/xrayconfig.go:113-125    DNS/53 direct; TCP->SOCKS; non-DNS UDP -> block
+  internal/contract/tun.go:37-41        TunUDPBlocked = "blocked"
+  internal/control/ops_tun.go:129-136   status.udp pinned to blocked
+  internal/engine/config.go:305-309     only xtls-rprx-vision flow accepted
+
+Docs
+  docs/contracts.md §10.1, §10.5, §10.7
+  docs/architecture.md §9
+  docs/requirements.md A12, A17, D29, D30

@@ -1,0 +1,21 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "listen": "127.0.0.1",
+      "port": 10008,
+      "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "trojan-out",
+      "protocol": "trojan",
+      "settings": {
+        "servers": [ { "address": "127.0.0.1", "port": 10007, "password": "r16j-test-pass" } ]
+      }
+    }
+  ]
+}

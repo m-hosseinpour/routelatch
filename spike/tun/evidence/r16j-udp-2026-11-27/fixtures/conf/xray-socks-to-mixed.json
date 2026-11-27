@@ -1,0 +1,19 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "listen": "127.0.0.1",
+      "port": 10006,
+      "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "socks-out",
+      "protocol": "socks",
+      "settings": { "servers": [ { "address": "127.0.0.1", "port": 10003 } ] }
+    }
+  ]
+}

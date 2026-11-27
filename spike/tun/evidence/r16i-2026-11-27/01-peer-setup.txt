@@ -1,0 +1,6 @@
+
+$ docker exec rl-r16i-<run>-b sh -c $'\nset -e\nip addr add 203.0.113.53/32 dev eth0 2>/dev/null || true\nip -6 addr add 2001:db8::53/128 dev eth0 2>/dev/null || true\nmkdir -p /work/logs\nnohup python3 /work/socks_peek.py --listen 0.0.0.0 --port 1080 --log /work/logs/socks.log >/work/logs/socks.out 2>&1 &\nnohup /work/dnssrv -mode doh -addr :8443 -cert /work/cert.pem -key /work/key.pem -log /work/logs/doh.log >/work/logs/doh.out 2>&1 &\nnohup /work/dnssrv -mode tcp -addr :5353 -log /work/logs/dnstcp.log >/work/logs/dnstcp.out 2>&1 &\nnohup dnsmasq --no-daemon --no-resolv --no-hosts --bind-interfaces \\\n  --listen-address=203.0.113.53 --listen-address=2001:db8::53 \\\n  --address=/canary-r16i.invalid/203.0.113.201 \\\n  --address=/canary-r16i.invalid/2001:db8::201 \\\n  --log-queries --log-facility=/work/logs/direct-dns.log >/work/logs/dnsmasq.out 2>&1 &\nsleep 1\nss -lnt | grep -E ":(1080|8443|5353) " || true\nss -lun | grep -E ":(53) " || true\n'
+LISTEN 0      128          0.0.0.0:1080       0.0.0.0:*   
+LISTEN 0      4096               *:8443             *:*   
+LISTEN 0      4096               *:5353             *:*   
+UNCONN 0      0       203.0.113.53:53         0.0.0.0:*   

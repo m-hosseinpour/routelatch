@@ -1,0 +1,9 @@
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"phase": "clean-loopback"}
+{"test": "vless_clean", "sequential_ok": 200, "sequential_sent": 200, "p50_ms": 0.2, "p95_ms": 0.4, "burst_unique_replies": 200, "burst_sent": 200}
+{"test": "hysteria2_clean", "sequential_ok": 200, "sequential_sent": 200, "p50_ms": 0.4, "p95_ms": 0.6, "burst_unique_replies": 200, "burst_sent": 200}
+{"test": "socks5_clean", "sequential_ok": 200, "sequential_sent": 200, "p50_ms": 0.1, "p95_ms": 0.1, "burst_unique_replies": 200, "burst_sent": 200}
+{"phase": "netem-20ms-1pct"}
+{"test": "vless_netem", "sequential_ok": 190, "sequential_sent": 200, "p50_ms": 121.5, "p95_ms": 122.2, "burst_unique_replies": 190, "burst_sent": 200}
+{"test": "hysteria2_netem", "sequential_ok": 183, "sequential_sent": 200, "p50_ms": 121.9, "p95_ms": 122.6, "burst_unique_replies": 121, "burst_sent": 200}
+{"test": "socks5_netem", "sequential_ok": 185, "sequential_sent": 200, "p50_ms": 80.9, "p95_ms": 81.2, "burst_unique_replies": 194, "burst_sent": 200}

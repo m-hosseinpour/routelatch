@@ -1,0 +1,32 @@
+{
+  "log": { "loglevel": "none", "access": "none", "error": "none" },
+  "inbounds": [
+    {
+      "tag": "tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "rl-r16j0",
+        "mtu": 1500,
+        "gateway": [ "198.18.0.1/15", "fc00::1/64" ],
+        "autoSystemRoutingTable": [ "0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1" ],
+        "autoOutboundsInterface": "eth0",
+        "autoSystemDnsToGateway": false
+      },
+      "sniffing": { "enabled": false, "destOverride": [], "routeOnly": false }
+    }
+  ],
+  "outbounds": [
+    { "tag": "block", "protocol": "blackhole" },
+    { "tag": "dns", "protocol": "freedom" },
+    { "tag": "socks", "protocol": "socks", "settings": { "servers": [ { "address": "127.0.0.1", "port": 10003 } ] } }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      { "type": "field", "network": "tcp,udp", "port": "53", "outboundTag": "dns" },
+      { "type": "field", "inboundTag": [ "tun-in" ], "network": "tcp", "outboundTag": "socks" },
+      { "type": "field", "network": "udp", "outboundTag": "socks" },
+      { "type": "field", "network": "tcp,udp", "outboundTag": "block" }
+    ]
+  }
+}

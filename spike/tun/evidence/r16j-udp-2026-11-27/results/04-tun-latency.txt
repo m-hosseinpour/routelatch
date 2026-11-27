@@ -1,0 +1,8 @@
+== sniff enabled (shipped config)
+{"label": "sniff-on-1", "ok": true, "rtt_ms": 205.0}
+{"label": "sniff-on-2", "ok": true, "rtt_ms": 203.9}
+{"label": "sniff-on-3", "ok": true, "rtt_ms": 202.9}
+== sniff disabled
+{"label": "sniff-off-1", "ok": true, "rtt_ms": 3.1}
+{"label": "sniff-off-2", "ok": true, "rtt_ms": 1.7}
+{"label": "sniff-off-3", "ok": true, "rtt_ms": 1.5}

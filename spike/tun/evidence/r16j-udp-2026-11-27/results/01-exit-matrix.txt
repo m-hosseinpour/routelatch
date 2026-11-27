@@ -1,0 +1,17 @@
+WARNING: Error loading config file: open <home>/.docker/config.json: permission denied
+{"ok": true, "len": 10, "rtt_ms": 1.23, "test": "socks5_exit_udp"}
+{"ok": true, "len": 10, "rtt_ms": 2.33, "test": "xray_socks_outbound_udp"}
+{"ok": true, "len": 10, "rtt_ms": 1.61, "test": "vless_udp"}
+{"ok": true, "len": 10, "rtt_ms": 1.76, "test": "trojan_udp"}
+{"ok": true, "len": 10, "rtt_ms": 15.51, "test": "hysteria2_udp"}
+{"ok": true, "len": 1200, "rtt_ms": 1.6, "test": "vless_size_1200"}
+{"ok": true, "len": 1400, "rtt_ms": 1.07, "test": "vless_size_1400"}
+{"test": "vless_size_8192", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "vless_size_60000", "ok": false, "error": "TimeoutError: timed out"}
+{"ok": true, "len": 1200, "rtt_ms": 1.81, "test": "hysteria2_size_1200"}
+{"ok": true, "len": 1400, "rtt_ms": 1.68, "test": "hysteria2_size_1400"}
+{"test": "hysteria2_size_8192", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "hysteria2_size_60000", "ok": false, "error": "TimeoutError: timed out"}
+{"test": "vless_netem", "ok": false, "sent": 50, "received": 47, "p50_ms": 162.8, "p95_ms": 163.5, "max_ms": 163.7}
+{"test": "hysteria2_netem", "ok": false, "sent": 50, "received": 46, "p50_ms": 122.5, "p95_ms": 123.2, "max_ms": 123.8}
+{"test": "socks5_netem", "ok": false, "sent": 50, "received": 48, "p50_ms": 81.4, "p95_ms": 81.7, "max_ms": 82.1}
