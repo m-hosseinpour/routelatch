@@ -285,11 +285,13 @@ TUN در D29 (۲۰۲۶-۱۱-۲۶) از «مرحلهٔ بعدی مبهم» به �
 شد و طراحی آن در §۹ آمده است. UDP از pool همچنان تصمیم/پیاده‌سازی جدا می‌خواهد؛
 فاز اول TUN فقط UDP غیرDNS را بلاک می‌کند. در R16-C سرویس جداگانهٔ TUN
 (`internal/tun` و `__tun-service`) با lifecycle، lease، control socket و seam
-interface فیزیکی پیاده شده است؛ اتصال آن به engine (R16-D) و unit/socket نصب‌شده
-(R16-G) هنوز پیاده نشده‌اند و E/F باز است. بنابراین TUN هنوز end-to-end اجرا یا
+interface فیزیکی، در R16-D اتصال engine/bypass و در R16-E سطح CLI
+(`tun status|on|off` و `tun setup|uninstall`) پیاده شده‌اند. tray (F) و نصب
+واقعی/readiness/بسته‌بندی (G) باز است؛ setup فعلی فقط با fake paths/systemctl
+آزمون شده و هیچ نصب میزبان انجام نداده است. بنابراین TUN هنوز end-to-end اجرا یا
 پشتیبانی نمی‌شود و ادعای پشتیبانی آن در v1.x وجود ندارد.
 
-## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass پیاده، نصب باز)
+## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI پیاده؛ نصب/tray باز)
 
 **مرز.** TUN یک **حالت پنجم نیست**؛ یک لایهٔ پوشش روی `targeted`/`all-proxy`/
 `all-direct` است. جدول تصمیم §۳، فهرست تأییدشده، انتخاب exit، registry، D11 و

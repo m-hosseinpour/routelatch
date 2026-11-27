@@ -1123,8 +1123,9 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
   "closed": { "count": 4, "pending": 1 }, "kept": 2, "duration_ms": 12 }
 ```
 
-> فرمان‌های `tun ...` (D29/R16) در جدول فعلی نیستند؛ قرارداد آیندهٔ آن‌ها در §۱۰
-> است و تا پایان R16 در CLI وجود ندارند.
+> فرمان‌های `tun status|on|off|setup|uninstall` در R16-E اضافه شدند؛ معنای opها،
+> خطاها و exitها در §۱۰.۳ و قرارداد helper/unit در §۱۰.۴ است. `setup|uninstall`
+> privileged و فقط CLI هستند و از management socket عبور نمی‌کنند.
 >
 > شیء `tun` در `data` یک افزودهٔ schema 1 است: payload قدیمی آن را ندارد و
 > مصرف‌کننده آن را nil/unknown می‌بیند. `since`/`last_error`/`detail` وقتی مقدار
@@ -1138,6 +1139,10 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `version` | `version, commit, build_date` | 0 | — |
 | `status` | `mode, ready, listeners_open, resume_requires_restart (R15), policy_version, selected_exit, listeners, pool{total,usable,healthy,cooling}, connections{open,dialing,proofs{confirmed,accepted}}, diagnostics, tun{desired,state,interface,since?,dns,udp,ipv6,helper,last_error?,detail?}, warnings` | 0، 3، 10 | «وضعیت» |
 | `mode <mode>` | `mode, policy_version, closed{count,pending}, kept` | 0، 3، 6، 7 | «تغییر حالت» |
+| `tun status` | `tun{desired,state,interface,since?,dns,udp,ipv6,helper,last_error?,detail?}` | 0، 1، 3 | «TUN coverage» |
+| `tun on` | همان `tun` | 0، 1، 3، 6، 7 | «TUN coverage» |
+| `tun off` | همان `tun` | 0، 1، 3 | «TUN coverage» |
+| `tun setup\|uninstall` | `unit, socket_unit, config, binary, allowed_uid, changed, managed, removed?` | 0، 1، 2، 6، 7، 9 | — |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
 | `rules remove <id>` | `removed, closed` | 0، 3، 5، 6 | «حذف مقصد» |
@@ -1976,16 +1981,18 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B و سرویس R16-C پیاده‌شده؛ اتصال engine/CLI/tray نه)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D و CLI R16-E پیاده‌شده؛ نصب واقعی/tray/packaging باز)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
 فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
-(`internal/tun` و `__tun-service`) و اتصال engine در R16-D (`start/stop`، ماندگاری،
-adoption و bypass ترافیک خود RouteLatch) پیاده شده‌اند؛ helper/unit (R16-G) و
-CLI/tray (R16-E/F) هنوز وجود ندارند. production runtime را از طریق کلاینت
-`internal/tun` به control وصل می‌کند؛ نبود socket/helper فقط warning و `off`
-می‌دهد و listener عادی را از کار نمی‌اندازد. نام‌ها و شکل‌های زیر برای بخش
-پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
+(`internal/tun` و `__tun-service`)، اتصال engine در R16-D (`start/stop`، ماندگاری،
+adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tun status|on|off`
+و `tun setup|uninstall` privileged) پیاده شده‌اند. نصب واقعی/readiness/rollback
+helper در R16-G، tray در R16-F و بسته‌بندی/مستندات کاربر در R16-G باز است؛ منطق
+setup در E فقط CLI-only و unit-testable است و هیچ نصب میزبان انجام نمی‌دهد.
+production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
+socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
+نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
 
 ### ۱۰.۱ مدل و مرز
 
@@ -2086,6 +2093,9 @@ CLI/tray (R16-E/F) هنوز وجود ندارند. production runtime را از 
 - `tun setup` با sudo اجرا می‌شود؛ idempotent است؛ unit/config مالک خود را
   می‌شناسد و فایل غیرمالک را بدون `--force` بازنویسی نمی‌کند. `tun uninstall`
   فقط unit/config/lease مالک را حذف می‌کند و اگر TUN فعال است اول disable می‌کند.
+  `tun setup --socks HOST:PORT` فقط listener لوپ‌بک engine را می‌پذیرد (پیش‌فرض
+  `127.0.0.1:8318`) و `--force` تنها برای unit/config غیرمالکِ غیرفعال است؛
+  setup هرگز یک unit فعال غیرمالک یا binary غیرمالک را جایگزین نمی‌کند.
 - codeهای خروج از همان جدول §۷.۲ می‌آیند؛ ErrorKind تازه ساخته نمی‌شود.
   نبود helper/kernel/systemd → `unsupported`/`7` با دلیل پایدار
   `tun_helper_unavailable` یا `tun_platform_unsupported`؛ تعارض instance →
@@ -2243,9 +2253,8 @@ DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و 
 verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
 جدید در همین سند است، نه تغییر خاموش A17.
 
-**قدم بعد:** R16-B (مدل داده، status/config و opهای management) و سرویس R16-C
-(`internal/tun`، ساخت TUN/route، مسیر TCP→SOCKS، DNS مستقیم و UDP غیرDNS بلاک،
-control socket و lease) پیاده و تست شده‌اند، ولی این پوشش هنوز فعال نیست:
-helper/unit (G)، اتصال engine (D) و CLI/tray (E/F) وجود ندارند و production
-runtime را وصل نمی‌کند. R16-A فقط پس از مجوز صریح؛ ادعای پشتیبانی TUN در v1.1.0
-وجود ندارد.
+**قدم بعد:** R16-B/C/D (مدل داده، سرویس، اتصال engine و bypass) و R16-E (CLI،
+layout/معنای setup و uninstall با fake paths/systemctl) پیاده و تست شده‌اند، ولی
+این پوشش هنوز فعال یا نصب‌شده نیست: tray (F)، نصب واقعی/readiness/rollback،
+بسته‌بندی و مستندات کاربر (G) و پذیرش A17 (H) باز است. R16-A فقط پس از مجوز
+صریح؛ ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.

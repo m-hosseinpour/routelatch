@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D انجام شدند؛ R16-E بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E انجام شدند؛ R16-F بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -506,6 +506,24 @@ socket/unit و `tun setup` در G؛ helper/unit نصب واقعی gated در G/H
 
 **check:** `go test ./cmd/routelatch/...`؛ run واقعی `--json` روی محیط مجاز؛
 help/usage؛ no secret/destination.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-E — انجام شد):** `routelatch tun status|on|off`
+روی opهای موجود با JSON/exit مستند §۷.۲؛ `tun setup|uninstall` فقط CLI/ممتاز با
+root+SUDO_UID، marker/ownership، `--force`، پیام‌های kernel/systemd/`/dev/net/tun`،
+unit/socket/config و کپی root-owned در `/usr/libexec/routelatch/`، idempotent و
+stop-before-delete؛ منوی TUN با status/on/off/help و نمایش فقط دستور setup
+(D28)؛ usage/help. اجرای واقعی ایزوله: status exit 0 (`off`، helper missing)،
+`on` exit 7 `tun_helper_unavailable`، setup غیرroot exit 9؛ بدون تغییر هاست.
+**checkها:** gofmt/vet/build؛ `go test ./cmd/routelatch/...` ۲.۳۵s؛ full
+`go test -count=1 ./...` سبز (acceptance ۱۱۸.۶s)؛ `-race` بسته‌های تغییرکرده.
+بازبینی مستقل **Ready with findings**؛ E-scope بدون blocking. **معوق به G:**
+`/run` socket dir بعد از boot (DirectoryMode/root:root 0700)، سخت‌گیری
+mode&022/owner و converge، `/proc/self/exe` به‌جای path، `LookPath` برای
+systemctl، و تأیید نصب/readiness/boot واقعی. **معوق به D/G قبل از F/H:** `tun off`
+با helper غایب باید wish را پاک کند (اکنون internal/1). `reason:tun_setup_not_root`
+باید typed/مستند شود یا حذف؛ پیام/uid uninstall و docs §۱۰.۴ force semantics
+اصلاح شوند. `--socks` (پیش‌فرض `127.0.0.1:8318`) پذیرفته شد؛ G می‌تواند از
+config مشتق کند. **next:** R16-F.
 
 #### R16-F — tray: Coverage menu و آیکن رنگ‌دار
 
@@ -1842,8 +1860,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-D در ۲۰۲۶-۱۱-۲۷ انجام و
-   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-E قدم بعد است. R16-I/J
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-E در ۲۰۲۶-۱۱-۲۷ انجام و
+   بازبینی شدند؛ verdict R16-A برابر `Ready` است و R16-F قدم بعد است. R16-I/J
    (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
    می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
@@ -1887,7 +1905,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B/C/D انجام شدند و R16-E قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C/D/E انجام شدند و R16-F قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

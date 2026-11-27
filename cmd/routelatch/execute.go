@@ -58,6 +58,12 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if rest[0] == "__tun-service" {
 		return c.tunService(ctx, rest[1:])
 	}
+	// The TUN helper installer is privileged CLI-only and never uses instance
+	// paths or the management socket. Intercept it before ResolvePaths so sudo's
+	// root home cannot choose a data directory (docs/contracts.md §10.3–§10.4).
+	if rest[0] == "tun" && len(rest) > 1 && (rest[1] == "setup" || rest[1] == "uninstall") {
+		return c.tunPrivileged(ctx, rest[1:])
+	}
 	paths, err := store.ResolvePaths(c.dataDir)
 	if err != nil {
 		return c.localFailure(rest[0], err)
@@ -113,6 +119,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) int {
 		return c.menu(ctx)
 	case "status":
 		return c.call(ctx, control.Request{Op: control.OpStatus})
+	case "tun":
+		return c.tunCmd(ctx, rest)
 	case "mode":
 		return c.mode(ctx, rest)
 	case "rules":
@@ -307,6 +315,9 @@ func (c *cli) human(env contract.Envelope) {
 				if ref, ok := env.Error.Detail["source_id"]; ok {
 					fmt.Fprintln(c.stderr, "source:", ref)
 				}
+				if reason, ok := env.Error.Detail["reason"]; ok && strings.HasPrefix(env.Command, "tun ") {
+					fmt.Fprintln(c.stderr, "reason:", reason)
+				}
 			}
 		} else {
 			fmt.Fprintln(c.stderr, "error: command failed")
@@ -325,6 +336,28 @@ func (c *cli) human(env contract.Envelope) {
 			if closed, ok := d["closed"].(map[string]any); ok {
 				fmt.Fprintf(c.stdout, "closed: %v live, %v pending; kept: %v; %vms\n",
 					closed["count"], closed["pending"], d["kept"], d["duration_ms"])
+			}
+			return
+		}
+	case "tun status", "tun on", "tun off":
+		if d, ok := env.Data.(map[string]any); ok {
+			c.printTun(d)
+			return
+		}
+	case "tun setup":
+		if d, ok := env.Data.(map[string]any); ok {
+			fmt.Fprintf(c.stdout, "TUN helper installed for uid %v (changed: %v)\n", d["allowed_uid"], yesNo(d["changed"]))
+			fmt.Fprintf(c.stdout, "unit: %v\nsocket: %v\nconfig: %v\nbinary: %v\n",
+				d["unit"], d["socket_unit"], d["config"], d["binary"])
+			return
+		}
+	case "tun uninstall":
+		if d, ok := env.Data.(map[string]any); ok {
+			fmt.Fprintf(c.stdout, "TUN helper removed (changed: %v)\n", yesNo(d["changed"]))
+			if removed, ok := d["removed"].([]any); ok {
+				for _, item := range removed {
+					fmt.Fprintf(c.stdout, "removed: %v\n", item)
+				}
 			}
 			return
 		}
@@ -638,6 +671,25 @@ func (c *cli) printStatus(d map[string]any) {
 	}
 }
 
+func (c *cli) printTun(d map[string]any) {
+	fmt.Fprintf(c.stdout, "tun: %v (desired: %v, helper: %v)\n",
+		control.SanitizeTerminal(fmt.Sprint(d["state"])), yesNo(d["desired"]),
+		control.SanitizeTerminal(fmt.Sprint(d["helper"])))
+	if iface, _ := d["interface"].(string); iface != "" {
+		fmt.Fprintf(c.stdout, "interface: %v\n", control.SanitizeTerminal(iface))
+	}
+	fmt.Fprintf(c.stdout, "dns: %v, udp: %v, ipv6: %v\n", d["dns"], d["udp"], yesNo(d["ipv6"]))
+	if since, _ := d["since"].(string); since != "" {
+		fmt.Fprintf(c.stdout, "since: %v\n", control.SanitizeTerminal(since))
+	}
+	if last, _ := d["last_error"].(string); last != "" {
+		fmt.Fprintf(c.stdout, "last error: %v\n", control.SanitizeTerminal(last))
+	}
+	if detail, _ := d["detail"].(string); detail != "" {
+		fmt.Fprintf(c.stdout, "detail: %v\n", control.SanitizeTerminal(detail))
+	}
+}
+
 func nested(m map[string]any, keys ...string) any {
 	var cur any = m
 	for _, key := range keys {
@@ -705,6 +757,8 @@ Usage: routelatch [--json] [--data-dir DIR] <command> [args]
   version                   show build version, commit and date
   status                    show mode, listeners, pool and connections
   mode <mode>               targeted | all-proxy | all-direct | stopped
+  tun status|on|off         system-wide TUN coverage (needs 'sudo routelatch tun setup')
+  tun setup|uninstall       install/remove the privileged TUN helper (CLI only, sudo)
   rules list|add|remove     manage approved destinations
   pool list|add|remove|refresh|test|select|rerank
   import link|file|subscription|v2rayn <input>

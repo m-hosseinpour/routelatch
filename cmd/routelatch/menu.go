@@ -22,6 +22,7 @@ func menuChoices() []menuChoice {
 		{"run.headless", "Start headless (foreground)"},
 		{"status", "Status"},
 		{"mode", "Change mode"},
+		{"tun", "TUN coverage (system-wide)"},
 		{"rules.list", "List approved destinations"},
 		{"rules.add", "Add an approved destination"},
 		{"rules.remove", "Remove an approved destination"},
@@ -72,6 +73,8 @@ func menuCommand(key, operand, kind, note string) ([]string, bool) {
 		return []string{"status"}, true
 	case "mode":
 		return []string{"mode", operand}, true
+	case "tun":
+		return []string{"tun", operand}, true
 	case "rules.list":
 		return []string{"rules", "list"}, true
 	case "rules.add":
@@ -178,6 +181,20 @@ func (c *cli) menuArgs(ctx context.Context, key string) ([]string, bool) {
 			return nil, false
 		}
 		return menuCommand(key, mode, "", "")
+	case "tun":
+		// D28: coverage control is a thin alias for the same CLI ops. Helper
+		// installation is only shown as the sudo command; it is never run from
+		// the menu and asks for no text input.
+		var action string
+		if err := c.selectPrompt(ctx, "TUN coverage", []huh.Option[string]{
+			huh.NewOption("Status", "status"),
+			huh.NewOption("Turn on (system-wide)", "on"),
+			huh.NewOption("Turn off", "off"),
+			huh.NewOption("Help and helper installation", "help"),
+		}, &action); err != nil {
+			return nil, false
+		}
+		return menuCommand(key, action, "", "")
 	case "rules.add":
 		var host string
 		if err := c.input(ctx, "Hostname, IP or CIDR", &host); err != nil || strings.TrimSpace(host) == "" {
