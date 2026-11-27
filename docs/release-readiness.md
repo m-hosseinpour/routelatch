@@ -77,11 +77,12 @@ This record does not claim a new security review.
 Known limits carried from the R16-H acceptance record:
 `spike/tun/H-ACCEPTANCE.md` and
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md`. TUN runtime was exercised
-on `amd64` only; Wayland/GNOME, a real TUN-active host tray/toggle,
-Login/autostart auto-enable and `arm64` runtime remain unverified. Panel
-contrast was verified after the release on BreezeDark with a light-theme limit
-(see the v1.2.1 record below). The R-28 off-link path and the start-limit
-recovery were verified after the release (see the v1.2.1 record).
+on `amd64` only. Wayland/GNOME, Login/autostart auto-enable and `arm64` runtime
+remain unverified; the real TUN-active host tray/toggle was verified after the
+release on one Plasma/X11 host (see below). Panel contrast was verified after
+the release on BreezeDark with a light-theme limit (see the v1.2.1 record below).
+The R-28 off-link path and the start-limit recovery were verified after the
+release (see the v1.2.1 record).
 
 ## v1.2.1 — R-28 status warning (2026-11-27)
 
@@ -163,6 +164,29 @@ the blue body (white-vs-blue 3.75:1, ring-vs-blue 3.44:1). No real Breeze-Light
 rendering, translucency, hover or theme recolouring was tested, and there was no
 product change. Evidence: `spike/tun/PANEL-CONTRAST.md` and
 `spike/tun/evidence/panel-contrast-2026-11-27/`.
+
+Post-release host TUN-active verification at product `6f51554` (evidence commit
+`39c6c4f`): **PASS with limits** on one Plasma 6.6.7/X11 host. `tun setup`
+installed the root-owned units/binary/config/tmpfiles, the socket was active
+`0600` owned by uid 1000 and `tun status` reported `helper=installed`. The real
+tray's `Enable…` plus confirmation produced `Coverage: on · desired on` with
+`rl-tun0` (`198.18.0.1/15`, `fc00::1/64` and the v4/v6 half routes), a green
+`46,160,67` badge, the `TUN on` tooltip and active `state=on/desired=true`; the
+Wi-Fi default route and DNS hash stayed unchanged and the active window was
+about one second. `Disable…` plus confirmation removed the link
+(`state=off/desired=false`, off icon). IPv4/IPv6 routes, `ip rule` and the
+`/etc/resolv.conf` sha256 returned byte-identical to the baseline. `tun
+uninstall` plus `pkexec rmdir` removed the helper units/files/tmpfiles/socket,
+the link and the now-empty `/etc/routelatch` and `/usr/libexec/routelatch`. The
+live RouteLatch instance was untouched (new PIDs `2970371/2970384/2970399/2970416`
+identical before and after; the old PIDs had restarted externally before any
+host change). Limits: the menu actions were D-Bus events, not physical
+pointer/panel clicks; no panel screenshot was taken in this run; one host and
+one session; no public traffic was sent, so this is not end-to-end public
+coverage. Wayland/GNOME, Login/autostart auto-enable and `arm64` runtime remain
+unverified. Evidence: `spike/tun/H-TRAY-HOST.md` and
+`spike/tun/evidence/h-tray-host-2026-11-27/`. This note changes no release ID or
+asset.
 
 ## v1.1.0 — tray control surface (2026-11-26)
 

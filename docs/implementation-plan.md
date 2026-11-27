@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -672,7 +672,8 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   helper-missing/off/error و `tun on` exit 7؛ fake-status (visual-only)
   active/starting/conflict/incompatible/unknown، confirmation/cancel/stale،
   D21، آیکن/رنگ‌ها. **آزمون‌نشده:** TUN-active واقعی روی هاست (نصب helper مجاز
-  نبود)، Wayland/GNOME، pointer/hover؛ **panel contrast بعداً (۲۰۲۶-۱۱-۲۷) روی
+  نبود؛ بعداً در ۲۰۲۶-۱۱-۲۷ روی یک هاست Plasma/X11 PASS شد — H-TRAY-HOST)،
+  Wayland/GNOME، pointer/hover؛ **panel contrast بعداً (۲۰۲۶-۱۱-۲۷) روی
   BreezeDark PASS شد** و فقط محدودیت light-theme باز است (پایین را ببینید).
 - checkها: `go build`/`go vet`/`go test -count=1 ./...` روی `7ff128c`؛ package
   checks در isolated DIST (هیچ unit/tmpfiles/helper/postinst) و gated tests؛
@@ -683,7 +684,8 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
 - **limits (ثبت‌شده و به‌روزشده ۲۰۲۶-۱۱-۲۷):** fail-open error/icon visibility
   NOT RUN (در بازبینی VPN-خاموش، status در gap فقط block/timeout شد و on جعلی
   نداد)، Login/autostart auto-enable NOT RUN، tray TUN-active واقعی نیازمند نصب
-  helper (مجاز نبود)، Wayland/GNOME، DNS-through-pool و UDP (R16-I/J)، D21 debug
+  helper بود (بعداً در ۲۰۲۶-۱۱-۲۷ روی یک هاست Plasma/X11 PASS شد — H-TRAY-HOST)،
+  Wayland/GNOME، DNS-through-pool و UDP (R16-I/J)، D21 debug
   caveat، arm64 runtime. **panel contrast در ۲۰۲۶-۱۱-۲۷ روی BreezeDark PASS شد**
   و فقط محدودیت light-theme دارد (به‌روزرسانی panel contrast را ببینید). R-28
   on-link و off-link (با warning) تأیید شد؛ start-limit recovery هم PASS است.
@@ -746,6 +748,33 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   body با «RouteLatch v1.2.1 — R-28 status warning» شروع می‌شود. رفع روی
   `cd1c848`+`2d4da2a` با شاهد `d36361b` است و `v1.2.0` تاریخی است.
 
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (H-TRAY-HOST — انجام شد؛ TUN-active واقعی روی هاست PASS با limits):**
+- **نصب helper واقعی (`pkexec … tun setup --socks 127.0.0.1:45691`): PASS.** unitها،
+  باینری، config و tmpfiles با مالک root ساخته شدند؛ socket فعال `0600` با uid
+  1000 و `tun status` مقدار `helper=installed` داد.
+- **tray واقعی `Enable…` + confirm: PASS.** `Coverage: on · desired on`،
+  `Interface: rl-tun0`، badge سبز RGB `46,160,67` و tooltip `TUN on`؛ وضعیت فعال
+  `state=on/desired=true`؛ `rl-tun0` با `198.18.0.1/15` و `fc00::1/64` و
+  نیم‌مسیرهای v4/v6؛ default route و DNS hash وای‌فای بدون تغییر؛ پنجرهٔ فعال ≈۱s
+  و هیچ ترافیک عمومی.
+- **tray واقعی `Disable…` + confirm: PASS.** link حذف شد، `state=off/desired=false`
+  و آیکن off.
+- **Restore: PASS.** routeهای IPv4/IPv6 و `ip rule` بایت‌به‌بایت برابر baseline؛
+  sha256 `/etc/resolv.conf` بدون تغییر.
+- **Uninstall: PASS.** unitها/فایل‌ها/tmpfiles/socket/link حذف شدند؛
+  `/etc/routelatch` و `/usr/libexec/routelatch` خالی با `pkexec rmdir` هم حذف شدند.
+- **ایزولاسیون:** instance زندهٔ RouteLatch دست‌نخورده ماند (PIDهای جدید
+  `2970371/2970384/2970399/2970416` پیش و پس یکسان؛ PIDهای قدیمی پیش از هر تغییر
+  میزبان به‌صورت خارجی restart شده بودند).
+- **limits (ثبت‌شده):** رویدادهای منو از طریق D-Bus ارسال شدند، نه کلیک فیزیکی
+  pointer/panel؛ در این اجرا screenshot پنل گرفته نشد؛ یک هاست/یک session؛ هیچ
+  ترافیک عمومی نه فرستاده شد و نه اثبات شد؛ Wayland/GNOME، Login/autostart و
+  runtime arm64 همچنان آزمون‌نشده‌اند.
+- **شاهد:** `spike/tun/H-TRAY-HOST.md` و
+  `spike/tun/evidence/h-tray-host-2026-11-27/`؛ evidence commit `39c6c4f`
+  (اجرای محصول روی `6f51554`). این commit فقط مستندات است.
+- **check این جلسه:** docs-only؛ `git diff --check`؛ هیچ تست محصول اجرا نشد.
+
 **به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (panel contrast — انجام شد؛ BreezeDark PASS، محدودیت light-theme):**
 - **BreezeDark واقعی (Plasma 6.6.7/X11، scale 1.25، Papirus-Dark، پنل `#202326`): PASS.**
   کمترین contrast هستهٔ آیکن **4.21:1** (بدنهٔ آبی)، white mark **15.79:1**،
@@ -763,9 +792,10 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
 - **شاهد:** `spike/tun/PANEL-CONTRAST.md` و
   `spike/tun/evidence/panel-contrast-2026-11-27/`؛ commits `3616d11` (اولیه) و
   `9f89518` (addendum مصنوعی light-panel). این commit فقط مستندات است.
-- **backlog:** «contrast پنل» با همین محدودیت بسته شد؛ بقیهٔ موارد backlog
-  (TUN-active واقعی host، Wayland/GNOME، Login/autostart، fail-open in-gap،
-  arm64، D21 debug) باز و آزمون‌نشده‌اند.
+- **backlog:** «contrast پنل» با همین محدودیت بسته شد؛ TUN-active واقعی host
+  بعداً در همان تاریخ روی یک هاست Plasma/X11 PASS شد (H-TRAY-HOST بالا)؛ بقیهٔ
+  موارد backlog (Wayland/GNOME، Login/autostart، fail-open in-gap، arm64،
+  D21 debug) باز و آزمون‌نشده‌اند.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -880,11 +910,13 @@ real-pool sample، caps/D13/status contract.
   IPv6، idle/teardown، soak منابع، نمونه‌گیری واقعی از pool با مجوز جدا، و یک
   acceptance جدید. دروازه: بازبینی مستقل + تأیید کاربر؛ ضعیف‌کردن بی‌صدای
   سیاست no-UDP مجاز نیست.
-- **Verification backlog (باز، شروع‌نشده؛ به‌روزشده ۲۰۲۶-۱۱-۲۷):** TUN-active
-  واقعی روی host با tray/toggle (نصب helper مجوز جدا می‌خواهد)، Wayland/GNOME،
+- **Verification backlog (باز، شروع‌نشده؛ به‌روزشده ۲۰۲۶-۱۱-۲۷):** Wayland/GNOME،
   دیده‌شدن fail-open در status/آیکن (in-gap calls فقط block/timeout می‌شوند)،
   Login/autostart auto-enable، runtime arm64 (تعویق کاربر)، caveat D21 debug؛ نرخ
-  شکست UDP روی pool واقعی (در دامنهٔ R16-J-1). **panel contrast دیگر باز نیست:**
+  شکست UDP روی pool واقعی (در دامنهٔ R16-J-1). **TUN-active واقعی host دیگر باز
+  نیست:** روی یک هاست Plasma/X11 با tray/آیکن/route/restore/uninstall PASS شد، با
+  محدودیت رویدادهای D-Bus به‌جای کلیک فیزیکی panel و نبود ترافیک عمومی
+  (`spike/tun/H-TRAY-HOST.md`). **panel contrast هم باز نیست:**
   روی BreezeDark PASS شد و محدودیت light-theme (synthetic) ثبت است؛ شاهد
   `spike/tun/PANEL-CONTRAST.md` و commits `3616d11`/`9f89518`. H addendum rerun
   انجام شد (۱۴ PASS / ۲ NOTRUN)؛ **R-28 off-link و start-limit recovery دیگر باز
@@ -2169,11 +2201,13 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    R16-A/B/C/D/E/F/G/H انجام شدند (A17 = Accepted with limits؛ F: کد؛ KDE
    گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و `v1.2.0` منتشر شد.
    رفع post-release R-28 (`cd1c848`+`2d4da2a`) و شاهد `d36361b` در `d90e17a`
-   منتشر شدند و patch `v1.2.1` عمومی است؛ بعدی فقط R16-I-1/J-1 (design-only،
+   منتشر شدند و patch `v1.2.1` عمومی است؛ TUN-active واقعی روی یک هاست Plasma/X11
+   با helper/tray/restore/uninstall PASS شد (`39c6c4f`)؛
+   هیچ کار پیاده‌سازی باز نمانده و بعدی فقط R16-I-1/J-1 (design-only،
    شروع‌نشده) است.
    موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
-   pool remove/test، runtime غیر-amd64، TUN-active host tray/toggle و service
+   pool remove/test، runtime غیر-amd64، Login/autostart و service
    install) فقط با مجوز/محیط جدا انجام می‌شوند و کار باز R15 نیستند.
 
 ### مسائل و حدود مجوز

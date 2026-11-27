@@ -6,6 +6,16 @@
 > service, autostart or desktop-setting change. This covers the R16-F tray
 > surface only; it is not the full A17 acceptance and not a release decision.
 
+> **Addendum 2026-11-27.** The real TUN-active gap recorded below is now covered
+> by [`H-TRAY-HOST.md`](H-TRAY-HOST.md) and
+> `evidence/h-tray-host-2026-11-27/`: with the helper installed, the real tray
+> enabled and disabled coverage, the active icon/state/routes were real, and the
+> host routes/DNS were restored byte-identically before `tun uninstall`. That
+> run used D-Bus menu events (no physical pointer/panel click) on one Plasma/X11
+> host and sent no public traffic; Wayland/GNOME remain untested. The `7ff128c`
+> results and the original untested notes below are kept as the historical
+> record.
+
 **Status: on `7ff128c` the real helper-missing/off/error path passes at the
 D-Bus/host-protocol level. Active, starting, conflict, incompatible and unknown
 states were rendered by the unchanged product tray against a fake status peer and

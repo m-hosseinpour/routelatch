@@ -293,8 +293,9 @@ interface فیزیکی، در R16-D اتصال engine/bypass، در R16-E سطح
 uninstall) آزموده شد، نه روی هاست؛ R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت
 (شاهد در `spike/tun/H-ACCEPTANCE.md` و `H-TRAY.md`). TUN در v1.2.0 (release
 `460485888`) به‌صورت opt-in منتشر شد؛ بستهٔ منتشرشده همچنان هیچ
-unit/tmpfiles/helper ندارد و TUN-active واقعی روی هاست/Wayland/GNOME
-آزمون‌نشده می‌ماند.
+unit/tmpfiles/helper ندارد و TUN-active واقعی روی یک هاست Plasma/X11 با نصب/حذف
+helper و رویدادهای D-Bus منوی tray تأیید شد (کلیک فیزیکی pointer/panel و
+Wayland/GNOME آزمون‌نشده‌اند؛ `spike/tun/H-TRAY-HOST.md`).
 
 ## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray، R16-G: setup/packaging/docs و R16-H: پذیرش؛ A17 = Accepted with limits)
 

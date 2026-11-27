@@ -2008,7 +2008,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E، tray Coverage/آیکن R16-F، setup ممتاز/packaging/docs R16-G پیاده‌شده؛ R16-H انجام شد و A17 در ۲۰۲۶-۱۱-۲۷ با limits پذیرفته شد؛ TUN-active tray واقعی/Wayland/GNOME و چند limit محیطی باز)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E، tray Coverage/آیکن R16-F، setup ممتاز/packaging/docs R16-G پیاده‌شده؛ R16-H انجام شد و A17 در ۲۰۲۶-۱۱-۲۷ با limits پذیرفته شد؛ TUN-active tray روی یک هاست Plasma/X11 تأیید شد؛ Wayland/GNOME و چند limit محیطی باز)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
 فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
@@ -2021,9 +2021,11 @@ adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tu
 `/run/routelatch-tun` پس از boot، سخت‌گیری mode/owner، readiness واقعی socket
 `0600` و rollback؛ بسته همچنان هیچ unit/tmpfiles/helper/postinst ندارد و
 `tun setup` تنها سازندهٔ آن‌هاست. R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت؛
-TUN-active واقعی روی هاست و Wayland/GNOME آزمون‌نشده می‌مانند؛ panel contrast
-در BreezeDark PASS شد و فقط محدودیت light-theme دارد. نصب واقعی فقط در محیط
-authorized/gated انجام می‌شود.
+TUN-active واقعی روی یک هاست Plasma/X11 با نصب/حذف helper و رویدادهای D-Bus منوی
+tray تأیید شد (enable/disable، آیکن/وضعیت/route فعال، restore و uninstall)؛ کلیک
+فیزیکی pointer/panel و Wayland/GNOME آزمون‌نشده می‌مانند و در آن اجرا هیچ ترافیک
+عمومی نبود؛ panel contrast در BreezeDark PASS شد و فقط محدودیت light-theme دارد.
+نصب واقعی فقط در محیط authorized/gated انجام می‌شود.
 production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
 socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
 نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.

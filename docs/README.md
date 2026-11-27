@@ -28,7 +28,11 @@ tray و setup ممتاز پیاده شده‌اند و v1.2.0 (release `46048588
 `contracts.md §۱۰` و taskها/دروازه‌ها در `implementation-plan.md` (R16) هستند.
 setup فقط از CLI و با sudo اجرا می‌شود، unit/helper را در بسته نمی‌گذارد، پس از
 boot دایرکتوری `/run` را با tmpfiles بازمی‌سازد و برای socket `0600`/uid مجاز
-آمادگی را می‌سنجد. DNS-through-pool و UDP (D30/R16-I/J): تحقیق هر دو انجام شد و
+آمادگی را می‌سنجد. **TUN-active واقعی روی هاست (۲۰۲۶-۱۱-۲۷):** روی یک هاست
+Plasma/X11 با نصب/حذف helper و رویدادهای D-Bus منوی tray PASS شد — enable/disable،
+آیکن/وضعیت/route فعال، restore و uninstall؛ کلیک فیزیکی pointer/panel، ترافیک
+عمومی، Wayland/GNOME، Login/autostart و runtime arm64 آزمون‌نشده‌اند (شاهد:
+`spike/tun/H-TRAY-HOST.md`). DNS-through-pool و UDP (D30/R16-I/J): تحقیق هر دو انجام شد و
 verdict هر دو `Ready for decision` است؛ D31 مسیر DNS را «design/contract اول،
 بدون کد» و D32 مسیر UDP/QUIC را «pilot جداگانهٔ opt-in با قرارداد/پذیرش جدید»
 تعیین کرد. taskهای بعدی (R16-I-1/J-1) در پلن تعریف شده‌اند و هیچ‌کدام شروع
