@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد؛ v1.2.1 candidate (patch) pending tag/CI/Release؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -700,9 +700,9 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
 - **next:** R16-I/J research انجام شد (`Ready for decision`) و تصمیم مسیر در
   D31/D32 ثبت شد؛ R16-I-1 (design/contract برای DNS) و R16-J-1 (contract/acceptance
   برای pilot UDP) تعریف شده‌اند ولی **شروع نشده‌اند**؛ شروع هر کدام درخواست/تأیید
-  کاربر می‌خواهد و هیچ کد/تست واقعی مجاز نیست.
+  کاربر می‌خواهد و هیچ کد/تست واقعی مجاز نیست. هیچ کار پیاده‌سازی باز نمانده است.
 
-**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-H/R-28 post-release — انجام شد؛ v1.2.1 candidate):**
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-H/R-28 post-release — انجام شد؛ v1.2.1 منتشر شد):**
 - **بازبینی پس از انتشار (rev `899b036`):** R-28 off-link از نظر ایمنی PASS بود
   (fail-closed، بدون direct/loop) ولی `status`/`tun status` همچنان clean و
   `pool list` سالم می‌ماند؛ شکاف نمایش وضعیت ثبت شد.
@@ -734,9 +734,15 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   `spike/tun/POST-RELEASE-VERIFICATION.md` (+
   `spike/tun/evidence/post-v1.2.0-verification-2026-11-27/`).
 - **check این جلسه:** docs-only؛ `git diff --check`؛ هیچ تست محصول اجرا نشد.
-- **انتشار:** `v1.2.0` آخرین ریلیز عمومی است. `v1.2.1` فقط یک **candidate patch**
-  روی `2d4da2a` + شاهد `d36361b` است؛ تگ/CI/`Release` آن هنوز انجام نشده و
-  عمومی نیست.
+- **انتشار (`v1.2.1`، ۲۰۲۶-۱۱-۲۷):** تگ annotated
+  `0361006377656a70af94b4fd40401fadc4c2a7ba` روی `d90e17a` در هر دو remote push
+  شد؛ CI `d90e17a` (run `46037851906`) سبز؛ `Release` `46038540738` موفق؛ Release
+  عمومی `v1.2.1` (id `460876153`، بدون draft/prerelease، منتشرشده در
+  ۲۰۲۶-۱۱-۲۷T۱۷:۱۰:۱۱Z) با ۱۷ دارایی (۴ tarball، ۴ `.deb`، ۴ spec، ۴ RPM و
+  `SHA256SUMS`) منتشر شد:
+  <https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.1>.
+  body با «RouteLatch v1.2.1 — R-28 status warning» شروع می‌شود. رفع روی
+  `cd1c848`+`2d4da2a` با شاهد `d36361b` است و `v1.2.0` تاریخی است.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -859,7 +865,7 @@ real-pool sample، caps/D13/status contract.
   (۱۴ PASS / ۲ NOTRUN)؛ **R-28 off-link و start-limit recovery دیگر باز نیستند**
   (هر دو PASS؛ warning R-28 در `status` دیده می‌شود ولی در `tun status`/tray نه).
 - هیچ پیاده‌سازی یا تست واقعی pool اکنون مجاز نیست؛ رفتار v1.2.0 (DNS مستقیم و
-  UDP غیرDNS بلاک) و candidate `v1.2.1` (فقط warning وضعیت) سیاست را تغییر
+  UDP غیرDNS بلاک) و `v1.2.1` (فقط warning وضعیت) سیاست را تغییر
   نمی‌دهد.
 
 #### ترتیب، موازی‌کاری و دروازه‌ها
@@ -1836,9 +1842,9 @@ user manager/linger، upgrade unit قدیمی، کلیک Quit و پلتفرم‌
 | انتشار `v1.0.1` | **انجام شد — اولین ریلیز ساخته‌شده در CI (۲۰۲۶-۱۱-۲۵):** تگ annotated `4462cc86` روی `d14da10` (هر دو remote)؛ CI سبز `45517940277`؛ `Release` `45521099138` (job انتشار `138895476159`)؛ Release عمومی id `457516096` با ۱۷ دارایی نسخه‌درست، digests منطبق با `SHA256SUMS` (sha256 خود فایل `3f683f70…dab7d8`) و body برابر پیام تگ؛ بدون ساخت/آپلود محلی | A14 (انتشار) | مجوز صریح کاربر ۲۰۲۶-۱۱-۲۵ |
 | انتشار `v1.1.0` | **انجام شد — سطح کنترل tray (۲۰۲۶-۱۱-۲۶):** تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی `532c1697da6140fdfd5258dc98da2c1f7927cc61` (هر دو remote)؛ CI سبز `45796357850`؛ `Release` `45800238447` (plan/build/package/RPM/assemble/publish)؛ Release عمومی id `459257636` با ۱۷ دارایی و body آغازشده با «RouteLatch v1.1.0 — tray control surface»؛ بدون draft/prerelease | A14/A16 (انتشار) | مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ |
 | انتشار `v1.2.0` | **انجام شد — پوشش TUN opt-in (۲۰۲۶-۱۱-۲۷):** تگ annotated `cda1fe352a2b1144633415f8b3071b2dcf542382` روی `a8ee4d3` (هر دو remote)؛ CI `45984462533` (attempt 2) سبز؛ `Release` `45985695347`؛ Release عمومی id `460485888` با ۱۷ دارایی و body آغازشده با «RouteLatch v1.2.0 — opt-in TUN coverage»؛ بدون draft/prerelease | A14/A17 (انتشار) | مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ |
-| candidate `v1.2.1` | **آماده، منتشر نشده (patch):** `cd1c848`+`2d4da2a` (warning وضعیت R-28) با شاهد `d36361b`؛ بازبینی مستقل PASS؛ اجرای off-link ۳۶/۰/۰ و H addendum ۱۴/۲؛ تگ/CI/`Release` هنوز انجام نشده و نسخهٔ عمومی نیست | A14/A17 (انتشار candidate) | pending tag/CI/Release |
+| انتشار `v1.2.1` | **انجام شد — patch هشدار وضعیت R-28 (۲۰۲۶-۱۱-۲۷):** تگ annotated `0361006377656a70af94b4fd40401fadc4c2a7ba` روی `d90e17a` (هر دو remote)؛ CI `46037851906` سبز؛ `Release` `46038540738`؛ Release عمومی id `460876153` با ۱۷ دارایی، بدون draft/prerelease، منتشرشده در ۲۰۲۶-۱۱-۲۷T۱۷:۱۰:۱۱Z و body آغازشده با «RouteLatch v1.2.1 — R-28 status warning»؛ رفع `cd1c848`+`2d4da2a` با شاهد `d36361b`؛ بازبینی مستقل PASS؛ اجرای off-link ۳۶/۰/۰ و H addendum ۱۴/۲ | A14/A17 (انتشار) | مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶ |
 
-**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0`، `v1.0.1`، `v1.1.0` و `v1.2.0` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0 تا R15-H انجام و `v1.1.0` در ۲۰۲۶-۱۱-۲۶ منتشر شد؛ هیچ کار باز R15 نمانده است. R16 در ۲۰۲۶-۱۱-۲۶ تعریف و A..H آن انجام شد؛ `v1.2.0` در ۲۰۲۶-۱۱-۲۷ منتشر شد و candidate patch `v1.2.1` هنوز تگ/CI/Release نشده است.
+**قاعدهٔ انتخاب:** R1–R8 و R10–R14 و انتشار بسته شدند؛ R9 (انتخاب کاربر) وجود ندارد؛ **`v1.0.0`، `v1.0.1`، `v1.1.0`، `v1.2.0` و `v1.2.1` منتشر شدند و R14 (اولین ریلیز ساخته‌شده در CI) کامل شد. هیچ کار باز v1 نمانده است.** R15 یک capability پس از v1 است که در ۲۰۲۶-۱۱-۲۵ تعریف شد؛ R15-0 تا R15-H انجام و `v1.1.0` در ۲۰۲۶-۱۱-۲۶ منتشر شد؛ هیچ کار باز R15 نمانده است. R16 در ۲۰۲۶-۱۱-۲۶ تعریف و A..H آن انجام شد؛ `v1.2.0` و patch `v1.2.1` در ۲۰۲۶-۱۱-۲۷ منتشر شدند؛ هیچ کار پیاده‌سازی باز نمانده و بعدی فقط R16-I-1/J-1 (design-only، شروع‌نشده) است.
 **R12 کاملاً بسته شد:** `.deb` بدون امضا + checksum و اسپک RPM چهار معماری، با نسخهٔ واحد و CIjob ساخت/بازرسی RPM. **هیچ فاز بازی از R12 نمانده است**؛ Windows `exe` تا implementation-ready شدن milestone ویندوز وارد نمیشود. تگ `v0.1.0` / ریلیز GitHub دستنخورده است.
 
 کارهای باز v1 و محدودیت‌های محیط/مجوز در بخش «تفکیک محدودیت‌ها» فهرست شده‌اند؛
@@ -2008,7 +2014,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 | A13 | **مدل D26 پیاده شد (R13-B/C/D)؛ smoke واقعی app/tray روی KDE PASS؛ نصب/rollback واقعی service و reboot آزمون‌نشده** | smoke واقعی با data-dir ایزوله: `run --json` پس از readiness برگشت، `status.ready`/`listeners_open`، tray روی watcher ثبت شد، SIGHUP/بستن pty ادامه داد، SIGTERM/SIGKILL supervisor بدون orphan و با بستن listener؛ گیت‌شدهٔ autostart واقعی PASS. **مدل قبلی (R1 + بررسی ۲۰۲۶-۱۱-۲۰ + corrupt-state ۲۰۲۶-۱۱-۲۱)** شاهد تاریخی است؛ corrupt-state حالا آفلاین با `run --headless` پوشش داده می‌شود. **باقی:** نصب/rollback/linger واقعی user manager و upgrade unit قدیمی `/usr/lib` آزمون‌نشده؛ فقط host/amd64 |
 | A01 | **پذیرفته و بسته (شهادت کاربر، ۲۰۲۶-۱۱-۲۱)** | معیار با شهادت کاربر برآورده شد، نه با اجرای ما: کاربر build محلی را از این ماشین برداشت و `.deb` منتشرشدهٔ `v0.1.2` را روی آن نصب کرد و طبق انتظار کار کرد. ما محیط پاک را نیازمودیم و ادعای آزمون آن را نمی‌کنیم؛ شاهدهای محلی همچنان مسیر نصب واقعی/launch (R1)، metadata/payload `.deb`، اسپک RPM و اجرای payload `0.1.2.8.g42b9e4e`/amd64 در container یک‌بارمصرف‌اند. آزمون آیندهٔ VPS به تصمیم کاربر است و کار باز پذیرش شمرده نمی‌شود |
 | A11 | **اثبات واقعی روی KDE (R2)** | set/restore با diff OS، مالکیت، ویرایش کاربر، crash recovery؛ **GNOME به‌تعویق‌افتاد (اولویت پایین، تصمیم کاربر ۲۰۲۶-۱۱-۲۱):** نشست واقعی GNOME آزموده نشده و این یک محدودیت شناخته‌شده است، نه کار معلق این چرخه |
-| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیزهای `v0.1.1`، `v0.1.2`، `v0.1.3`، `v1.0.0`، `v1.0.1`، `v1.1.0` و `v1.2.0` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند؛ `v1.0.1`، `v1.1.0` و `v1.2.0` در CI ساخته و منتشر شدند. source offer/بسته/licensing در `v1.2.0` منتشر شده و در candidate `v1.2.1` هم حمل می‌شود (بدون ادعای بازبینی امنیتی جدید) |
+| A14 | **مجوز/ممیزی/بسته (R3+R8+R12)** | Apache-2.0، ممیزی ۶۸ ماژول (چهار معماری cross-build)، tarball/`.deb`/اسپک RPM با `SHA256SUMS` و نسخهٔ واحد؛ R12 `.deb` و اسپکها را محلی تأیید کرد؛ jobCI ساخت/بازرسی RPM اضافه شد (اجرای سبز `44682457124`)؛ ریلیزهای `v0.1.1`، `v0.1.2`، `v0.1.3`، `v1.0.0`، `v1.0.1`، `v1.1.0`، `v1.2.0` و `v1.2.1` هر کدام با ۱۷ دارایی شامل RPM باینری منتشر و تأیید شدند؛ `v1.0.1`، `v1.1.0`، `v1.2.0` و `v1.2.1` در CI ساخته و منتشر شدند. source offer/بسته/licensing در `v1.2.0` منتشر شده و در `v1.2.1` هم حمل می‌شود (بدون ادعای بازبینی امنیتی جدید) |
 | A15 | **پیاده‌سازی شد (R13-A..E)؛ smoke واقعی app/tray و package checks pass؛ نصب واقعی service/autostart login و کلیک Quit در tray آزمون‌نشده** | `run` پیش‌فرض detached/tray/readiness، `--headless` foreground، autostart و service idempotent، حذف unit/autostart/postinst از بسته، fail صریح نبود tray/pidfd؛ fake-tray/child و package checks برای idempotency/rollback؛ smoke واقعی KDE (readiness، tray registration، SIGHUP، SIGTERM/SIGKILL بدون orphan) و گیت‌شدهٔ autostart PASS. **باقی:** نصب/rollback/linger واقعی و Quit با کلیک منو؛ GNOME/SSH واقعی؛ pidfd ENOSYS/EPERM؛ runtime غیر-amd64 |
 | `.deb` توزیع (R12 فاز ۱) | **ساخت/اعتبارسنجی محلی** | چهار معماری (`amd64`، `arm64`، `riscv64`، `ppc64el`)؛ `check-package.sh` مجموعهٔ دقیق `SHA256SUMS`، control بدون maintainer script، مجموعهٔ دقیق payload، mode/owner و اعتبار نام معماری Debian را میسنجد؛ تکرار بایتیکسان؛ تستهای منفی حذف خط checksum/postinst/فایل اضافه/mode غلط همه fail شدند؛ `arm64` runtime-untested و `riscv64`/`ppc64le` فقط cross-build |
 | اسپک/باینری RPM (R12 فاز ۲) | **اسپک: ساخت/اعتبارسنجی محلی؛ باینری: ساخت/بازرسی و اجرای payload روی amd64** | چهار اسپک (`x86_64`، `aarch64`، `riscv64`، `ppc64le`) با Version برابر `.deb`، منبع pin‌شده با SHA256، `%files` شامل LICENSE/NOTICE در `/usr/share/licenses/routelatch/` و بقیه اسناد در `/usr/share/doc/routelatch/`، بدون scriptlet/فعال‌سازی سرویس؛ تست منفی ۷ حالت fail کرد؛ rpmbuild/rpm/rpmspec به‌صورت سیستمی نصب نشدند؛ rpm 6.0.1 استخراج‌شده باینری‌های `0.1.1` را ساخت/بازرسی کرد؛ payload `x86_64` نسخهٔ `0.1.2.8.g42b9e4e` (HEAD `42b9e4e`، پس از تگ v0.1.2) در container یک‌بارمصرف نصب و اجرا شد؛ jobCI `rpm-packages` در اجرای `44682457124` سبز شد |
@@ -2073,17 +2079,19 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای تاریخ capability و R14 برای تاریخ انتشار) را
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۷): **`v1.2.0` آخرین ریلیز عمومی است و R1–R16 از نظر
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۷): **`v1.2.1` آخرین ریلیز عمومی است (patch هشدار
+   R-28؛ `v1.2.0` پوشش TUN opt-in) و R1–R16 از نظر
    پیاده‌سازی/پذیرش بسته‌اند؛ هیچ کار باز R16 یا v1 در آن دامنه نمانده است.**
    **R16-A تا R16-H انجام، بازبینی و پذیرفته
    شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده؛ G: setup/packaging/docs؛
    code fixes `7ff128c`؛ H `a8ee4d3`). tag annotated `v1.2.0` (object
    `cda1fe35…`)، CI `45984462533` (attempt 2) سبز، `Release` `45985695347` و
    Release عمومی id `460485888` با ۱۷ دارایی. **آخرین کد محصول `2d4da2a` است**
-   (warning وضعیت R-28؛ commits `cd1c848`+`2d4da2a`) و **HEAD فعلی/شاهد
+   (warning وضعیت R-28؛ commits `cd1c848`+`2d4da2a`) و **شاهد
    post-release `d36361b`** است؛ بازبینی مستقل رفع PASS شد و اجرای off-link روی
-   `2d4da2a` ۳۶/۰/۰ داد. یک **candidate patch `v1.2.1`** از همین revision آماده
-   است، ولی **تگ/CI/`Release` آن انجام نشده و عمومی نیست**. R16-I/J research
+   `2d4da2a` ۳۶/۰/۰ داد. patch `v1.2.1` از همین revision با تگ annotated
+   `03610063…` روی `d90e17a`، CI `46037851906`، `Release` `46038540738` و
+   Release عمومی id `460876153` (۱۷ دارایی) منتشر شد. R16-I/J research
    انجام شد (`Ready for decision`)؛ D31/D32 مسیر را تعیین کردند و R16-I-1/J-1
    فقط design-only تعریف شده‌اند و **شروع نشده‌اند**؛ implementation هر کدام
    قرارداد/پذیرش و تأیید جدا می‌خواهد. `v1.1.0` سطح کنترل tray (R15)،
@@ -2104,9 +2112,10 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    محدودیت‌های R15-H (بدون اسکرین‌شات؛ Wayland/GNOME، desktop set/restore و
    autostart اجرانشده؛ proposal accept/recheck/clear و pool remove/test فقط با
    تست واحد؛ non-amd64 runtime-untested) در
-   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD فعلی `d36361b`
-   (شاهد post-release) و آخرین کد محصول `2d4da2a` است؛ CI/`Release` `v1.2.0` روی
-   `a8ee4d3` سبزند و candidate `v1.2.1` هنوز تگ/CI/`Release` ندارد.
+   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD هنگام انتشار
+   `d90e17a` است (شامل شاهد post-release `d36361b`) و آخرین کد محصول `2d4da2a`
+   است؛ CI/`Release` `v1.2.0` روی `a8ee4d3` و `v1.2.1` روی `d90e17a`
+   سبز/موفق بودند و `v1.2.1` عمومی است.
    flakiness گاه‌به‌گاه step `Test` در CI دیده شد؛
    `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` اصلاح شد و
    اجراهای بعدی سبزند.
@@ -2132,8 +2141,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
    R16-A/B/C/D/E/F/G/H انجام شدند (A17 = Accepted with limits؛ F: کد؛ KDE
    گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و `v1.2.0` منتشر شد.
-   رفع post-release R-28 (`cd1c848`+`2d4da2a`) و شاهد `d36361b` آماده‌اند؛
-   candidate `v1.2.1` هنوز تگ/CI/`Release` نشده است.
+   رفع post-release R-28 (`cd1c848`+`2d4da2a`) و شاهد `d36361b` در `d90e17a`
+   منتشر شدند و patch `v1.2.1` عمومی است؛ بعدی فقط R16-I-1/J-1 (design-only،
+   شروع‌نشده) است.
    موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64، TUN-active host tray/toggle و service

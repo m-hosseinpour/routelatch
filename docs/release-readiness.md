@@ -12,17 +12,17 @@ the same 17-asset layout. **v1.0.0** shipped the D26 app/tray runtime,
 "v1.0.0 release (historical)" below. **v1.0.1** was the first release built and
 published by the CI pipeline. **v1.1.0** added the R15 tray control surface,
 `status.resume_requires_restart` and the process-level restart lifecycle; its
-evidence is in "v1.1.0 — tray control surface (2026-11-26)" below. **v1.2.0**,
-the current public release, adds opt-in TUN coverage (A17 = Accepted with
-limits); its evidence is in "v1.2.0 — opt-in TUN coverage (2026-11-27)" below.
-A **v1.2.1 patch candidate** (the R-28 status warning) is prepared at `2d4da2a`
-with evidence at `d36361b`; its tag, CI run and Release are **pending**, so it
-is not a public release. The v1.0.1 evidence is in "v1.0.1 — first CI-built
+evidence is in "v1.1.0 — tray control surface (2026-11-26)" below. **v1.2.0**
+added opt-in TUN coverage (A17 = Accepted with limits); its evidence is in
+"v1.2.0 — opt-in TUN coverage (2026-11-27)" below. **v1.2.1**, the current
+public release, is a patch that adds the R-28 fail-closed status warning; its
+evidence is in "v1.2.1 — R-28 status warning (2026-11-27)" below. The v1.0.1
+evidence is in "v1.0.1 — first CI-built
 release (2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections,
 the history scan, name check and dependency audit remain historical evidence;
 they are not repeated here. The tags, pushes and releases were authorized by
-the project owner (v1.2.0 under the standing authorization recorded in
-`AGENTS.md` on 2026-11-26).
+the project owner (v1.2.0 and v1.2.1 under the standing authorization recorded
+in `AGENTS.md` on 2026-11-26).
 
 **CI release pipeline (D27, 2026-11-24).** From `v1.0.1` on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
@@ -71,7 +71,7 @@ message).
 The release carries the A14 licensing/source-offer/package evidence already
 established for the CI pipeline (Apache-2.0 `LICENSE`, `NOTICE`,
 `THIRD-PARTY-NOTICES.md`, the MPL-2.0/GPL source offer, and checksummed
-tarball/`.deb`/spec/RPM assets). The v1.2.1 candidate carries the same evidence.
+tarball/`.deb`/spec/RPM assets). The v1.2.1 patch carries the same evidence.
 This record does not claim a new security review.
 
 Known limits carried from the R16-H acceptance record:
@@ -80,18 +80,31 @@ Known limits carried from the R16-H acceptance record:
 on `amd64` only; Wayland/GNOME, a real TUN-active host tray/toggle, panel
 contrast, Login/autostart auto-enable and `arm64` runtime remain unverified.
 The R-28 off-link path and the start-limit recovery were verified after the
-release (see the v1.2.1 candidate record).
+release (see the v1.2.1 record).
 
-## v1.2.1 — candidate patch (pending tag/CI/Release; not public)
+## v1.2.1 — R-28 status warning (2026-11-27)
 
-**This version is not released.** The candidate patch is prepared at
-`2d4da2a` (with `cd1c848`) and its verification evidence is `d36361b`;
-`v1.2.0` remains the current public release until the candidate is tagged and
-published.
+Tag `v1.2.1` is an annotated tag (tag object
+`0361006377656a70af94b4fd40401fadc4c2a7ba`) on `main` commit `d90e17a`, pushed
+to both remotes. The patch closes the R-28 status-visibility gap found after
+v1.2.0. The fix itself is `cd1c848` + `2d4da2a` with verification evidence at
+`d36361b`; the release commit `d90e17a` records the preparation and evidence.
+Routing policy, the approved list and the fail-closed path are unchanged.
 
-The fix closes the R-28 status-visibility gap found after v1.2.0: an approved
-egress dial that fails with kind `exit_unreachable` records an in-memory
-timestamp, and top-level `status.warnings` then reports the fixed sentence
+`CI` push run `46037851906` on `d90e17a` was green before the tag push.
+`Release` run `46038540738` (tag push) succeeded. The public GitHub Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.1> (release id
+`460876153`, title `v1.2.1`, neither a draft nor a prerelease, published
+2026-11-27T17:10:11Z). It carries exactly 17 assets: four
+`routelatch-v1.2.1-linux-<arch>.tar.gz` tarballs, four
+`routelatch_1.2.1_<debarch>.deb` packages, four `routelatch-<rpmarch>.spec`
+files, four `routelatch-1.2.1-1.<rpmarch>.rpm` binary RPMs and `SHA256SUMS`.
+Its body starts "RouteLatch v1.2.1 — R-28 status warning" (the annotated tag
+message).
+
+The fix records an in-memory timestamp when an approved egress dial fails with
+kind `exit_unreachable`, and top-level `status.warnings` then reports the fixed
+sentence
 `recent approved egress dial failed; traffic remains fail-closed with no direct fallback`
 for 60 seconds. The first successful approved pool dial clears it. There is no
 change to health, ranking, cooldown, routing or persistence, and
@@ -111,7 +124,8 @@ mutation, and the CLI text rendering
 `TestDestinationFailuresDoNotSetEgressWarning`,
 `TestOverBroadTransportKindsDoNotSetEgressWarning`,
 `TestEgressFailureDoesNotMutateHealth`,
-`TestPrintStatusPrintsEgressWarning`). No CI run exists for the candidate yet.
+`TestPrintStatusPrintsEgressWarning`). The pre-tag `CI` run on `d90e17a` covers
+this revision.
 
 Post-fix off-link runtime verification at `2d4da2a`: **36 PASS / 0 FAIL /
 0 NOTRUN**. The warning appeared after the failed approved dial, was absent at
@@ -124,13 +138,14 @@ checks passed, and start-limit recovery is a recorded PASS (deterministic
 Fail-open in-gap status visibility remains **NOT RUN**: status calls block or
 time out inside the gap, and no false `on` was observed.
 
-Limits: synthetic local fixtures only; one break shape (`default → dummy0`),
-one architecture (`amd64`) and a headless run, so no tray icon was observed;
-the warning is process-local and is not expected to survive a restart; one TTL
-observation only. Evidence:
+Limits: the warning is process-local and is not expected to survive a restart;
+only `exit_unreachable` is recorded, so a genuine exit-dial timeout is
+unrecorded; `tun status` and the tray Coverage menu remain coverage-only; the
+verification used synthetic local fixtures, one break shape
+(`default → dummy0`), one architecture (`amd64`) and a headless run, so no tray
+icon was observed; there was one TTL observation only. Evidence:
 `spike/tun/POST-RELEASE-VERIFICATION.md` and
-`spike/tun/evidence/post-v1.2.0-verification-2026-11-27/`. The tag, `CI` run and
-`Release` for v1.2.1 are still pending.
+`spike/tun/evidence/post-v1.2.0-verification-2026-11-27/`.
 
 ## v1.1.0 — tray control surface (2026-11-26)
 
