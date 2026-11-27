@@ -2008,6 +2008,18 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   `stopped` بالا بیاید و TUN فعالی از crash باقی مانده باشد، قبل از اعلام
   readiness آن را disable می‌کند؛ شکست disable خطای status/doctor است، نه
   بازکردن listener روی mode stopped.
+- `tun off` در هر mode (از جمله `stopped`) خواست `tun_enabled=false` را ذخیره
+  می‌کند، حتی وقتی helper نصب نیست یا سرویس پاسخ نمی‌دهد. فقط گزارش مثبت
+  `off` از status، helper اثباتاً غایب (missing)، یا `Disable` موفق (nil) اجازه
+  می‌دهد bypass موتور آزاد شود و پاسخ `off` باشد؛ Disable موفق حتی با probe
+  ناشنوا/کهنه معتبر است. اگر helper ناشنوا/refused/hung یا `unavailable`
+  باشد و disable هم موفق نشود، op موفق و idempotent است (نه `internal`) ولی
+  off اعلام نمی‌شود: bypass فعال می‌ماند، coverage «uncertain» علامت می‌خورد و
+  status `unavailable` با `tun_conflict` می‌دهد (§۱۰.۲، §۱۰.۶). شکست disable
+  روی پوششی که status آن را `on|starting|stopping|error` گزارش کرده
+  `internal` می‌ماند (با حفظ bypass)؛ در آن حالت هم خواست پاک می‌شود تا status
+  تعارض «پوشش روشن بدون درخواست» را نشان دهد. شکست ذخیرهٔ config هم طبق
+  §۱۰.۳ `internal` است.
 - ترافیک TCP پذیرفته‌شده در TUN به SOCKS5 لوپ‌بک همان instance تحویل می‌شود و
   از همان `Router`/registry/`PolicyVersion` عبور می‌کند. سرویس TUN هیچ rule،
   pool، exit selection یا تصمیم مقصدی ندارد.
@@ -2073,11 +2085,16 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 | --- | --- | --- | --- |
 | `tun.status` | — | `StatusData.tun` | `internal` |
 | `tun.enable` | — | `tun.state=starting\|on` | `stopped`, `unsupported`, `state_locked`, `internal` |
-| `tun.disable` | — | `tun.state=off` | `internal` |
+| `tun.disable` | — | `tun.state=off`؛ یا `unavailable`/`tun_conflict` وقتی helper ناشنوا/`unavailable` است و disable موفق نمی‌شود | `internal` |
 
 - `tun.enable` ورودی دلخواه (interface/route/domain) ندارد؛ listener هدف از
   config همان instance گرفته می‌شود و سرویس TUN فقط `127.0.0.1:port` یا
   `[::1]:port` را می‌پذیرد.
+- tray (R16-F) فقط همین دو op را از زیرمنوی Coverage با تأیید دو مرحله‌ای صدا
+  می‌زند؛ enable با mode stopped/helper ناموجود یا ناسازگار/state فعال یا
+  درحال‌گذار disabled است و disable (کاهش پوشش) در هر mode از جمله stopped
+  مجاز می‌ماند. tray هیچ setup/uninstall یا route/interface دلخواهی ندارد و
+  دلیل خطای نمایش‌داده‌شده فقط از واژگان امن §۱۰.۲ است.
 - `routelatch tun status|on|off` معادل همین opهاست. `routelatch tun setup` و
   `routelatch tun uninstall` **privileged CLI-only** هستند، از management socket
   عبور نمی‌کنند، در tray آیتم مستقیم ندارند و در `Terminal menu` فقط راهنما/دستور
@@ -2107,6 +2124,18 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   disable (از جمله تعارض یا unsupported) به `internal` نگاشت می‌شود تا جدول بالا
   نشکند. شکست ذخیرهٔ `tun_enabled` (config store) هم برای هر دو op
   `internal`/`1` است، نه kind ذخیره‌سازی.
+- `tun.disable` در همهٔ حالت‌ها خواست `tun_enabled=false` را پاک می‌کند. نبود
+  helper یا runtime ناشنوا/`unavailable` op را موفق/idempotent می‌کند (نه
+  `internal`)، ولی bypass موتور فقط با `state=off` اثبات‌شده یا helper غایب
+  آزاد می‌شود؛ در حالت ناشنوا/`unavailable` bypass می‌ماند، coverage
+  uncertain علامت می‌خورد و status `unavailable`/`tun_conflict` می‌دهد. شکست
+  disable روی پوششی که status آن را فعال/در حال گذار گزارش کرده `internal`
+  می‌ماند (با حفظ bypass) و `off` اعلام نمی‌شود. پس از آن، `desired=false` با
+  `state=on` در status به‌صورت `tun_conflict` دیده می‌شود (§۱۰.۲). `tun.disable`
+  موفق (nil) همیشه `state=off` برمی‌گرداند، حتی اگر probe بعدی ناشنوا یا کهنه
+  باشد؛ `unavailable`/`tun_conflict` فقط نتیجهٔ تلاش ناموفق disable است. شکست
+  ذخیرهٔ خواست در همان تلاش ناموفق، `internal` پایداری runtime را حفظ می‌کند و
+  snapshot قبلی (desired=true) را برای status نگه می‌دارد.
 - در R16-B که runtime واقعی وجود ندارد: `tun.status` مقدار `off` (یا با
   `tun_enabled=true` مقدار `unavailable`) می‌دهد، `tun.enable` با
   `unsupported`/`tun_helper_unavailable` رد می‌شود و خواست کاربر را ذخیره

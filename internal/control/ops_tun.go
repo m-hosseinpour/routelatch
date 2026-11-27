@@ -285,23 +285,78 @@ func (s *Service) tunDisable(ctx context.Context) (contract.TunStatus, error) {
 	defer s.opMu.Unlock()
 	snap := s.Snapshot()
 	// Disable is allowed in every mode, including stopped.
-	if s.tun != nil {
-		if err := s.tun.Disable(ctx); err != nil {
-			// §10.3 allows only internal for tun.disable: it is always
-			// permitted, so an unexpected runtime outcome must not become
-			// state_locked/unsupported/stopped.
-			return s.tunStatus(ctx, snap), tunOpError("tun.disable", err, false)
+	var runtimeErr error
+	disableOK := false
+	if s.tun == nil {
+		s.clearTunBypass()
+	} else if st, statusErr := s.tun.Status(ctx); statusErr != nil && tunRuntimeMissing(statusErr) {
+		// A missing helper/socket can hold no overlay: there is nothing to
+		// disable. This must not block the explicit off (§10.1).
+		s.clearTunBypass()
+	} else if err := s.tun.Disable(ctx); err != nil {
+		switch {
+		case tunCoverageReportedActive(st, statusErr):
+			// Proven coverage survived the disable. Keep the documented
+			// internal error instead of silently claiming off (§10.3); the
+			// remembered wish is cleared below so the conflict stays visible.
+			runtimeErr = tunOpError("tun.disable", err, false)
+			s.tunCoverageUncertain = true
+		case statusErr == nil && st.State == contract.TunOff:
+			// The probe proved off even though Disable failed. Confirm with a
+			// fresh probe before releasing the bypass (clearTunBypassIfOff).
+			if !s.clearTunBypassIfOff(ctx) {
+				s.tunCoverageUncertain = true
+			}
+		default:
+			// Unknown, unavailable, refused or hung: a failed Disable proves
+			// nothing about coverage. Keep the engine's own dials outside TUN
+			// and report the uncertainty instead of a false off (§10.2,
+			// §10.6); only an explicit off wish is persisted below.
+			s.tunCoverageUncertain = true
 		}
+	} else {
+		// A nil Disable is the runtime's proof that no coverage survives,
+		// even when the earlier status probe failed or was stale (§10.3).
+		s.clearTunBypass()
+		disableOK = true
 	}
-	s.clearTunBypass()
+	// `tun off` always clears the preference, but only after the runtime
+	// outcome is known so a failed store write stays the reported failure.
 	if snap.Config.TunEnabled {
-		var err error
-		snap, err = s.setTunDesiredLocked(ctx, false)
+		updated, err := s.setTunDesiredLocked(ctx, false)
 		if err != nil {
+			if runtimeErr != nil {
+				// The overlay failure is the safety-critical outcome. The
+				// wish is still true because the store write failed, so the
+				// unchanged snapshot keeps the status truthful.
+				return s.tunStatus(ctx, snap), runtimeErr
+			}
 			return contract.TunStatus{}, tunPersistError("tun.disable", err)
 		}
+		snap = updated
 	}
-	return s.tunStatus(ctx, snap), nil
+	status := s.tunStatus(ctx, snap)
+	if disableOK {
+		// The §10.3 success result is off even if a follow-up status probe
+		// is stale/unavailable; Disable already proved coverage is gone.
+		status.State = contract.TunOff
+		status.LastError = ""
+		status.Detail = ""
+	}
+	if runtimeErr != nil {
+		return status, runtimeErr
+	}
+	return status, nil
+}
+
+// tunCoverageReportedActive reports whether the runtime positively answered with
+// a state that may still hold an overlay. A failed probe proves nothing, so only
+// a non-off/non-unavailable report counts as proof of active coverage (§10.3).
+func tunCoverageReportedActive(st contract.TunStatus, statusErr error) bool {
+	if statusErr != nil {
+		return false
+	}
+	return st.State != contract.TunOff && st.State != contract.TunUnavailable
 }
 
 // stopTunForModeStopped closes the overlay before a mode-stopped change touches

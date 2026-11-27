@@ -26,6 +26,9 @@ type fakeTun struct {
 	disables   int
 	onEnable   func()
 	onDisable  func()
+	// disableKeepsState models a runtime whose Disable succeeds while a
+	// follow-up status probe still reports a stale/unavailable state.
+	disableKeepsState bool
 	// enableTarget, when set, updates the reported SOCKS target on Enable. It
 	// models a service whose configured listener is the current one.
 	enableTarget string
@@ -74,7 +77,9 @@ func (f *fakeTun) Disable(context.Context) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.status.State = contract.TunOff
+	if !f.disableKeepsState {
+		f.status.State = contract.TunOff
+	}
 	return nil
 }
 
@@ -463,12 +468,224 @@ func TestTunDisableErrorsStayInternal(t *testing.T) {
 			if strings.Contains(env.Error.Message, "secret.example") {
 				t.Fatalf("runtime message leaked: %q", env.Error.Message)
 			}
-			// A failed disable leaves the explicit wish intact so the
-			// still-running overlay is visible as desired, not forgotten.
-			if snap, err := st.Load(ctx); err != nil || !snap.Config.TunEnabled {
-				t.Fatalf("persisted tun_enabled=%v err=%v, want true", snap.Config.TunEnabled, err)
+			// A failed disable of proven active coverage must not claim off,
+			// but the explicit wish is still cleared so status shows the
+			// conflict instead of forgetting the user's request (§10.1).
+			if snap, err := st.Load(ctx); err != nil || snap.Config.TunEnabled {
+				t.Fatalf("persisted tun_enabled=%v err=%v, want false", snap.Config.TunEnabled, err)
+			}
+			status, _ := svc.tunStatusOp(ctx)
+			if status.State == contract.TunOff {
+				t.Fatalf("failed disable claimed off: %+v", status)
+			}
+			if status.Desired || status.LastError != contract.TunReasonConflict {
+				t.Fatalf("failed disable status=%+v, want not desired with tun_conflict", status)
+			}
+			if !svc.bypass.Active() || !svc.tunCoverageUncertain {
+				t.Fatal("active coverage was reported but the bypass was released")
 			}
 		})
+	}
+}
+
+// TestTunDisableClearsWishWhenHelperMissing pins §10.1: `tun off` clears the
+// preference even when no helper/service exists to talk to, and stays
+// idempotent instead of returning internal. The same holds in stopped mode,
+// where stopTunForModeStopped already skipped the missing runtime.
+func TestTunDisableClearsWishWhenHelperMissing(t *testing.T) {
+	missing := &contract.TunError{
+		Kind: contract.Unsupported, Reason: contract.TunReasonHelperUnavailable,
+		Err: os.ErrNotExist,
+	}
+	setup := func(t *testing.T, stopped bool) (*Service, *store.Store, *fakeTun, context.Context) {
+		t.Helper()
+		rt := &fakeTun{
+			status:    contract.TunStatus{State: contract.TunOff, Helper: contract.TunHelperMissing},
+			statusErr: missing,
+			enableErr: missing,
+		}
+		svc, st, _, ctx := newTunService(t, rt)
+		if _, err := svc.tunEnable(ctx); err == nil {
+			t.Fatal("enable without a helper succeeded")
+		}
+		if snap, err := st.Load(ctx); err != nil || !snap.Config.TunEnabled {
+			t.Fatalf("persisted tun_enabled=%v err=%v, want the enable wish", snap.Config.TunEnabled, err)
+		}
+		if stopped {
+			if _, err := svc.setMode(ctx, "stopped"); err != nil {
+				t.Fatalf("stop with a missing helper: %v", err)
+			}
+		}
+		return svc, st, rt, ctx
+	}
+
+	for _, stopped := range []bool{false, true} {
+		name := "running"
+		if stopped {
+			name = "stopped"
+		}
+		t.Run(name, func(t *testing.T) {
+			svc, st, rt, ctx := setup(t, stopped)
+			status, err := svc.tunDisable(ctx)
+			if err != nil {
+				t.Fatalf("disable with a missing helper: %v", err)
+			}
+			if status.State != contract.TunOff || status.Desired {
+				t.Fatalf("disable status=%+v, want off and not desired", status)
+			}
+			if enables, disables := rt.counts(); enables != 1 || disables != 0 {
+				t.Fatalf("runtime calls enable=%d disable=%d, want no disable attempt", enables, disables)
+			}
+			if snap, err := st.Load(ctx); err != nil || snap.Config.TunEnabled {
+				t.Fatalf("persisted tun_enabled=%v err=%v, want false", snap.Config.TunEnabled, err)
+			}
+			if svc.bypass.Active() {
+				t.Fatal("bypass stayed active although the missing helper proves coverage is off")
+			}
+			// A second off is idempotent and keeps the same answer.
+			again, err := svc.tunDisable(ctx)
+			if err != nil || again.State != contract.TunOff || again.Desired {
+				t.Fatalf("second disable status=%+v err=%v, want off", again, err)
+			}
+		})
+	}
+}
+
+// TestTunDisableUnavailableRuntimeKeepsBypass pins the fail-closed rule shared
+// with clearTunBypassIfOff: an unresponsive, refused or `unavailable` helper
+// proves nothing about coverage. `tun off` still clears the wish, but it must
+// keep the engine bypass active, mark coverage uncertain, and report
+// unavailable/tun_conflict instead of a false off (§10.2, §10.6).
+func TestTunDisableUnavailableRuntimeKeepsBypass(t *testing.T) {
+	unavailable := &contract.TunError{
+		Kind: contract.Internal, Reason: contract.TunReasonServiceUnavailable,
+		Err: errors.New("connection refused"),
+	}
+	cases := []struct {
+		name     string
+		probeErr error
+		state    contract.TunState
+	}{
+		{"probe fails", unavailable, contract.TunOff},
+		{"reports unavailable", nil, contract.TunUnavailable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := &fakeTun{status: contract.TunStatus{State: contract.TunOff, Helper: contract.TunHelperInstalled}}
+			svc, st, _, ctx := newTunService(t, rt)
+			if _, err := svc.tunEnable(ctx); err != nil {
+				t.Fatalf("enable: %v", err)
+			}
+			if !svc.bypass.Active() {
+				t.Fatal("bypass did not activate with TUN")
+			}
+			rt.mu.Lock()
+			rt.status.State = tc.state
+			rt.statusErr = tc.probeErr
+			rt.disableErr = unavailable
+			rt.mu.Unlock()
+
+			status, err := svc.tunDisable(ctx)
+			if err != nil {
+				t.Fatalf("disable with an unavailable runtime: %v", err)
+			}
+			if status.State != contract.TunUnavailable || status.Desired {
+				t.Fatalf("disable status=%+v, want unavailable and not desired", status)
+			}
+			if status.LastError != contract.TunReasonConflict {
+				t.Fatalf("disable status=%+v, want tun_conflict", status)
+			}
+			if !svc.bypass.Active() {
+				t.Fatal("bypass was released although coverage could not be proven off")
+			}
+			if !svc.tunCoverageUncertain {
+				t.Fatal("coverage was not marked uncertain after a failed disable")
+			}
+			if _, disables := rt.counts(); disables != 1 {
+				t.Fatalf("disable calls=%d, want one attempted idempotent disable", disables)
+			}
+			if snap, err := st.Load(ctx); err != nil || snap.Config.TunEnabled {
+				t.Fatalf("persisted tun_enabled=%v err=%v, want false", snap.Config.TunEnabled, err)
+			}
+		})
+	}
+}
+
+// TestTunDisableSuccessfulDisableIsProofOff pins the §10.3 success result: a
+// nil Disable proves no coverage survives, so `tun off` reports off, releases
+// the bypass and clears the wish even when the status probe failed or is
+// stale/unavailable.
+func TestTunDisableSuccessfulDisableIsProofOff(t *testing.T) {
+	probeErr := errors.New("status endpoint timed out")
+	cases := []struct {
+		name     string
+		probeErr error
+		state    contract.TunState
+		stale    bool
+	}{
+		{"probe fails", probeErr, contract.TunOff, false},
+		{"stale unavailable", nil, contract.TunUnavailable, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := &fakeTun{status: contract.TunStatus{State: contract.TunOff, Helper: contract.TunHelperInstalled}}
+			svc, st, _, ctx := newTunService(t, rt)
+			if _, err := svc.tunEnable(ctx); err != nil {
+				t.Fatalf("enable: %v", err)
+			}
+			rt.mu.Lock()
+			rt.status.State = tc.state
+			rt.statusErr = tc.probeErr
+			rt.disableKeepsState = tc.stale
+			rt.mu.Unlock()
+
+			status, err := svc.tunDisable(ctx)
+			if err != nil {
+				t.Fatalf("disable with a successful runtime: %v", err)
+			}
+			if status.State != contract.TunOff || status.Desired ||
+				status.LastError != "" || status.Detail != "" {
+				t.Fatalf("disable status=%+v, want a plain off", status)
+			}
+			if svc.bypass.Active() || svc.tunCoverageUncertain {
+				t.Fatal("bypass/uncertainty survived a successful disable")
+			}
+			if snap, err := st.Load(ctx); err != nil || snap.Config.TunEnabled {
+				t.Fatalf("persisted tun_enabled=%v err=%v, want false", snap.Config.TunEnabled, err)
+			}
+		})
+	}
+}
+
+// TestTunDisableActiveFailureWinsOverPersistFailure pins the ordering when both
+// the overlay and the wish write fail: the safety-critical runtime error stays
+// the reported one, and the unchanged snapshot keeps desired=true truthful.
+func TestTunDisableActiveFailureWinsOverPersistFailure(t *testing.T) {
+	rt := &fakeTun{status: contract.TunStatus{State: contract.TunOff, Helper: contract.TunHelperInstalled}}
+	svc, _, paths, ctx := newTunService(t, rt)
+	if _, err := svc.tunEnable(ctx); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	rt.mu.Lock()
+	rt.disableErr = &contract.TunError{Kind: contract.StateLocked, Reason: contract.TunReasonConflict}
+	rt.mu.Unlock()
+	if err := os.WriteFile(paths.Config, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := svc.tunDisable(ctx)
+	env := errorEnvelope(t, OpTunDisable, err)
+	if env.Error.Kind != contract.Internal || ExitCodeForEnvelope(env) != contract.ExitError {
+		t.Fatalf("disable error = %+v exit=%d, want internal/1", env.Error, ExitCodeForEnvelope(env))
+	}
+	if env.Error.Detail["reason"] != string(contract.TunReasonConflict) {
+		t.Fatalf("disable detail = %+v, want tun_conflict", env.Error.Detail)
+	}
+	if status.State != contract.TunOn || !status.Desired {
+		t.Fatalf("disable status=%+v, want on with the wish retained after a failed write", status)
+	}
+	if !svc.bypass.Active() || !svc.tunCoverageUncertain {
+		t.Fatal("active coverage was reported but the bypass was released")
 	}
 }
 
