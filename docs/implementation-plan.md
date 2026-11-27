@@ -255,11 +255,44 @@ Quit ساده با desktop proxy applied/unknown پیشنهاد نمی‌شود 
 مربوط نیست. **بازبینی مستقل:** دو دور بازبینی و دو دور رفع؛ verdict نهایی
 **Ready with findings** با هیچ یافتهٔ مسدودکننده/مادی (دو یافتهٔ مادی اولیهٔ
 مستندات عمومی و race تست رفع شدند؛ nitهای باقی‌مانده هم اعمال شدند).
-**تحویل:** commit `7b25e14` روی `main` به هر دو remote push شد. release فعلاً
-انجام نشد: دروازهٔ CI سبز روی commit تگ‌شده هنوز احراز نشده و سشن دیگر هم
-مشکل CI/flake را در یک worktree جدا follow-up می‌کند. **قدم بعدی:** پس از
-سبزشدن CI روی `7b25e14` (یا commit مستندات بعدی) و بسته‌شدن رفع CI جاری،
-batch واجد شرایط release را طبق دروازه‌های `AGENTS.md` تگ/منتشر کن.
+**تحویل:** commit `7b25e14` روی `main` به هر دو remote push شد. رفع flake CI
+در R18 اضافه شد و release فعلاً انجام نشد. **قدم بعدی:** پس از سبزشدن CI روی
+commit نهایی (R17+R18)، batch واجد شرایط را طبق دروازه‌های `AGENTS.md` تگ و
+منتشر کن.
+
+### R18 — پایدارسازی job «Build, vet and test» (۲۰۲۶-۱۱-۲۸)
+
+**وضعیت واحد: انجام شد (۲۰۲۶-۱۱-۲۸).** چند اجرای اخیر CI در job
+`Build, vet and test` با فلیک‌های `internal/app` قرمز شدند. چهار ریشه رفع شد:
+1. `TestDeletedMarkerIsRecreatedLockedWhileReady`: رکورد `ready` بر اساس ترتیب
+   مستند repair (`create→write→flock→write`) پیش از گرفتن flock قابل خواندن است؛
+   تست به `assertLockedEventually` تغییر کرد و دیگر در همان لحظه قفل نمی‌خواهد.
+2. `TestSecondRunWhileStoppingIsConflict`: SIGTERM در پنجرهٔ بین گزارش `ready`
+   و نصب handler سیگنال می‌رسید و با action پیش‌فرض supervisor را می‌کشت، پس
+   marker روی `ready` می‌ماند. handler پیش از readiness نصب می‌شود، startup
+   waitها context لغوشده را می‌بینند و از مسیر shutdown معمولی (نوشتن
+   `stopping` و توقف childها) عبور می‌کنند.
+3. `TestTrayQuitRacingExitStopsApp`: پیام `quit` و exit status تری روی دو کانال
+   مستقل مسابقه می‌دادند؛ اگر exit اول برنده می‌شد، quit گم می‌شد یا startup با
+   «tray exited with status 0» شکست می‌خورد. `drainTrayQuit` پیش از تصمیم روی
+   exit، خطوط نهایی همان generation را می‌خواند؛ quit صریح بر exit مقدم است و
+   در startup، `ready`+`quit` پس از گزارش readiness به loop سپرده می‌شود.
+4. `TestLaunchCancellationStopsSupervisorAndChildren`: همان پنجرهٔ سیگنال
+   می‌توانست child را یتیم و teardown را `teardown_incomplete` کند؛ handler
+   زودهنگام cancel را از مسیر shutdown تمیز عبور می‌دهد.
+
+**checkها:** `go build ./...` و `go vet ./...` سبز؛ `go test -count=1 ./...`
+سبز (۱۷/۱۷ پکیج، acceptance 117.289s، app 18.986s) روی درخت rebaseشده روی
+`7b25e14`/`f2f64f9`؛ `go test -race -count=1 ./internal/app` سبز؛ روی ext4
+`TestDeletedMarkerIsRecreatedLockedWhileReady` ۳۰۰/۳۰۰ سبز (baseline
+`2ca5c3b`: ۱ شکست در ۲۰۰) و ۱۰۰× `TestSecondRunWhileStoppingIsConflict`، ۴۰×
+`TestTrayQuitRacingExitStopsApp` و ۱۰۰×
+`TestLaunchCancellationStopsSupervisorAndChildren` سبز. **بازبینی مستقل:**
+verdict `Ready with nits`؛ یافتهٔ مادی نبود و nitها (حذف helper بی‌استفاده،
+کامنت صف پیام‌ها، اولویت fail-closed بر cancel، مستندسازی coupling کد خروج
+tray) اعمال و در دور follow-up تأیید شد. **commitها:** `fb0392f` و `a2e42ae`
+روی `f2f64f9`. **قدم بعدی:** push و CI سبز روی commit نهایی، سپس release
+batch واجد شرایط R17+R18.
 
 ### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
@@ -2174,7 +2207,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده؛ G: setup/packaging/docs؛
    code fixes `7ff128c`؛ H `a8ee4d3`). tag annotated `v1.2.0` (object
    `cda1fe35…`)، CI `45984462533` (attempt 2) سبز، `Release` `45985695347` و
-   Release عمومی id `460485888` با ۱۷ دارایی. **آخرین کد محصول `2d4da2a` است**
+   Release عمومی id `460485888` با ۱۷ دارایی. **آخرین کد محصول در زمان
+   `v1.2.1` `2d4da2a` بود**
    (warning وضعیت R-28؛ commits `cd1c848`+`2d4da2a`) و **شاهد
    post-release `d36361b`** است؛ بازبینی مستقل رفع PASS شد و اجرای off-link روی
    `2d4da2a` ۳۶/۰/۰ داد. شاهد panel contrast `9f89518` (اولیه `3616d11`) است؛
@@ -2207,10 +2241,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    شاهد host TUN-active در `39c6c4f`
    (اجرای محصول روی `6f51554`) اضافه شد و در `bc7428e` مستند شد، و رفع test-only
    رقابت قفل `TestLaunchTrayUnavailable` در `902959f` انجام شد؛ CI آن
-   (run `46069056473`) سبز است. **آخرین کد محصول همچنان `2d4da2a` است** و پس از
-   `v1.2.1` هیچ کد محصولی تغییر نکرده؛ CI/`Release` `v1.2.0` روی `a8ee4d3` و
-   `v1.2.1` روی `d90e17a` سبز/موفق بودند و `v1.2.1` عمومی است.
-   flakiness گاه‌به‌گاه step `Test` در CI دیده شد. دو رفع test-only جدا ثبت
+   (run `46069056473`) سبز است. **پس از `v1.2.1`، R17 (`7b25e14`) و R18
+   (`fb0392f`+`a2e42ae`) کد محصول را تغییر دادند؛** CI/`Release` `v1.2.0` روی
+   `a8ee4d3` و `v1.2.1` روی `d90e17a` سبز/موفق بودند و `v1.2.1` عمومی است.
+   flakiness گاه‌به‌گاه step `Test` در CI دیده شد و R18 آن را رفع کرد. دو رفع
+   test-only جدا ثبت
    شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و
    `TestLaunchTrayUnavailable` در `902959f` که روی `bc7428e` در دو تلاش با
    `app.lock is still locked: resource temporarily unavailable` شکست خورد. علت:
@@ -2218,7 +2253,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    پیش از `closeStartupHandles` (آزادکردن `app.lock`) می‌فرستد؛ قفل چند
    میکروثانیه بعد آزاد می‌شود و نشت نیست. رفع فقط تست را با
    `assertUnlockedEventually` (poll ۱۰ms، مهلت ۵s) به انتظار شرط تغییر داد؛
-   رفتار محصول تغییر نکرد.
+   رفتار محصول تغییر نکرد. R18 برخلاف آن دو، رفتار محصول را تغییر داد (handler
+   سیگنال پیش از readiness و اولویت quit صریح بر exit status تری).
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
