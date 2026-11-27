@@ -18,13 +18,16 @@ stopped/unavailable و sanitize در `contracts.md §۷.۳` قرارداد شد�
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ Wayland/GNOME،
 desktop-proxy واقعی و autostart/service واقعی در آن آزمون نشده‌اند.
 
-**پوشش TUN (D29، ۲۰۲۶-۱۱-۲۶):** TUN یک حالت پنجم نیست؛ یک لایهٔ پوشش روی همان
-حالت‌هاست که در R16 تعریف شده و **هنوز پیاده یا اجرا نشده است**. طراحی در
-`architecture.md §۹`، قرارداد در `contracts.md §۱۰` و taskها/دروازه‌ها در
-`implementation-plan.md` (R16) هستند. `v1.1.0` هیچ پشتیبانی TUN ندارد.
-DNS-through-pool و UDP (D30/R16-I/J) فقط task تحقیقی جدا دارند؛ DNS یک switch
-مستقل خواهد داشت و تا verdict آن‌ها رفتار فاز اول (DNS مستقیم/UDP بلاک) تغییر
-نمی‌کند.
+**پوشش TUN (D29، ۲۰۲۶-۱۱-۲۶؛ R16-C–G پیاده):** TUN یک حالت پنجم نیست؛ یک لایهٔ
+پوشش روی همان حالت‌هاست. سرویس جداگانه، اتصال engine، سطح CLI، tray و setup
+ممتاز در همین revision پیاده شده‌اند؛ پذیرش نهایی A17 (R16-H) و انتشار باز است و
+`v1.1.0` هیچ پشتیبانی TUN ندارد. طراحی در `architecture.md §۹`، قرارداد در
+`contracts.md §۱۰` و taskها/دروازه‌ها در `implementation-plan.md` (R16) هستند.
+setup فقط از CLI و با sudo اجرا می‌شود، unit/helper را در بسته نمی‌گذارد، پس از
+boot دایرکتوری `/run` را با tmpfiles بازمی‌سازد و برای socket `0600`/uid مجاز
+آمادگی را می‌سنجد. DNS-through-pool و UDP (D30/R16-I/J) فقط task تحقیقی جدا
+دارند؛ DNS یک switch مستقل خواهد داشت و تا verdict آن‌ها رفتار فاز اول (DNS
+مستقیم/UDP بلاک) تغییر نمی‌کند.
 
 **مدل اجرا (D26، ۲۰۲۶-۱۱-۲۳):** `routelatch run` پیش‌فرض app/tray و
 `run --headless` engine foreground است؛ بسته هیچ unit/autostart/postinst ندارد و

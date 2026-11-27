@@ -6,7 +6,8 @@
 //
 // The installed helper is deliberately small and fixed: a root-owned copy of
 // this binary under /usr/libexec/routelatch, a system unit with only
-// CAP_NET_ADMIN, a socket unit and a two-field root-owned config. No interface,
+// CAP_NET_ADMIN, a socket unit, a two-field root-owned config and one
+// tmpfiles.d entry that recreates the /run directory after boot. No interface,
 // route, domain or user text is accepted or written.
 package setup
 
@@ -25,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"routelatch/internal/contract"
 	"routelatch/internal/control"
@@ -50,10 +52,22 @@ const (
 	maxConfigBytes = 64 << 10
 	maxUnitBytes   = 64 << 10
 	unitMode       = 0o644
+	tmpfilesMode   = 0o644
 	binaryMode     = 0o755
 	dirMode        = 0o755
-	runtimeDirMode = 0o700
+	// The runtime directory is created by a root-owned tmpfiles.d entry and
+	// owned by the allowed engine uid. 0755 keeps it traversable before the
+	// service first starts (the socket itself stays 0600 and is owned by the
+	// uid), and the service's RuntimeDirectory uses the same mode so a restart
+	// does not silently change the boot-time layout.
+	runtimeDirMode = 0o755
+	socketWait     = 5 * time.Second
 )
+
+// tmpfilesName is the single boot-time directory entry setup owns. /run is
+// cleared on boot, so a directory created only at setup time disappears before
+// the socket unit starts; tmpfiles recreates it with the right owner and mode.
+const tmpfilesName = "routelatch-tun.conf"
 
 // Paths are the fixed installed locations. Tests replace every path with a
 // private tree so no test writes /etc, /usr or /run.
@@ -62,6 +76,7 @@ type Paths struct {
 	SocketUnit  string
 	Config      string
 	Binary      string
+	Tmpfiles    string
 	RuntimeDir  string
 }
 
@@ -72,6 +87,7 @@ func DefaultPaths() Paths {
 		SocketUnit:  "/etc/systemd/system/" + SocketUnitName,
 		Config:      tun.DefaultConfigPath,
 		Binary:      "/usr/libexec/routelatch/tun-service",
+		Tmpfiles:    "/etc/tmpfiles.d/" + tmpfilesName,
 		RuntimeDir:  "/run/routelatch-tun",
 	}
 }
@@ -82,6 +98,7 @@ type Status struct {
 	SocketUnit string   `json:"socket_unit"`
 	Config     string   `json:"config"`
 	Binary     string   `json:"binary"`
+	Tmpfiles   string   `json:"tmpfiles"`
 	AllowedUID int      `json:"allowed_uid"`
 	Changed    bool     `json:"changed"`
 	Managed    bool     `json:"managed"`
@@ -108,10 +125,30 @@ type Manager struct {
 	KernelVersion func() (major, minor int, err error)
 	TunDevice     func() error
 	SyncDir       func(string) error
+	// Ready waits until the socket unit has published the control socket at
+	// the documented path with the expected 0600 mode and allowed uid. Tests
+	// replace it because a fake manager creates no real socket.
+	Ready func(path string, uid int) error
 
 	Paths        Paths
 	Force        bool
 	SocksAddress string
+}
+
+// fileSnapshot is the previous state of one file this run may replace. It is
+// small except for the binary, which is only read when that file changes.
+type fileSnapshot struct {
+	Path    string
+	Exists  bool
+	Content []byte
+	Mode    os.FileMode
+}
+
+type dirSnapshot struct {
+	Path   string
+	Exists bool
+	Mode   os.FileMode
+	UID    int
 }
 
 // Install converges the helper to the documented files and reports whether
@@ -135,6 +172,9 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 	if _, err := m.lookPath("systemctl"); err != nil {
 		return Status{}, unsupported("systemd (systemctl) is not available; install the TUN helper on a systemd host")
 	}
+	if _, err := m.lookPath("systemd-tmpfiles"); err != nil {
+		return Status{}, unsupported("systemd-tmpfiles is not available; install the TUN helper on a complete systemd host")
+	}
 	source, err := m.executable()
 	if err != nil {
 		return Status{}, internalFailure("cannot locate the running RouteLatch binary", err)
@@ -152,6 +192,10 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, conflict("cannot inspect the existing TUN service config; nothing was changed", err)
 	}
+	tmpfiles, err := m.readSafe(m.Paths.Tmpfiles, maxUnitBytes)
+	if err != nil {
+		return Status{}, conflict("cannot inspect the existing TUN runtime tmpfiles entry; nothing was changed", err)
+	}
 	binary, err := m.statSafe(m.Paths.Binary)
 	if err != nil {
 		return Status{}, conflict("cannot inspect the installed TUN helper binary; nothing was changed", err)
@@ -166,6 +210,10 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, internalFailure("cannot build the TUN socket unit", err)
 	}
+	desiredTmpfiles, err := m.tmpfilesEntry(uid)
+	if err != nil {
+		return Status{}, internalFailure("cannot build the TUN runtime tmpfiles entry", err)
+	}
 	desiredConfig, err := json.Marshal(tun.ServiceConfig{AllowedUID: uid, SocksAddress: socks})
 	if err != nil {
 		return Status{}, internalFailure("cannot build the TUN service config", err)
@@ -174,7 +222,8 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 
 	// A foreign file is only ever adopted with --force, and only after the
 	// caller proved the unrelated unit is not live. Everything else is a
-	// conflict with nothing changed.
+	// conflict with nothing changed. A foreign tmpfiles entry is adopted only
+	// with --force too: it would otherwise rewrite the boot-time /run layout.
 	if service.Exists && !service.Safe {
 		return Status{}, conflict("the TUN service unit is a symlink, non-regular file or foreign-owned; refusing to follow or overwrite it", nil)
 	}
@@ -184,6 +233,9 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 	if config.Exists && !config.Safe {
 		return Status{}, conflict("the TUN service config is a symlink, non-regular file or foreign-owned; refusing to follow or overwrite it", nil)
 	}
+	if tmpfiles.Exists && !tmpfiles.Safe {
+		return Status{}, conflict("the TUN runtime tmpfiles entry is a symlink, non-regular file or foreign-owned; refusing to follow or overwrite it", nil)
+	}
 	if binary.Exists && !binary.Safe {
 		return Status{}, conflict("the TUN helper binary path is a symlink, non-regular file or foreign-owned; refusing to replace it", nil)
 	}
@@ -192,6 +244,9 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 	}
 	if socket.Exists && !socket.Managed && !m.Force {
 		return Status{}, conflict("the TUN socket unit was not created by RouteLatch; use --force to replace it after stopping it", nil)
+	}
+	if tmpfiles.Exists && !tmpfiles.Managed && !m.Force {
+		return Status{}, conflict("the TUN runtime tmpfiles entry was not created by RouteLatch; use --force to replace it", nil)
 	}
 	if (service.Exists && !service.Managed) || (socket.Exists && !socket.Managed) {
 		if err := m.requireInactive(ctx); err != nil {
@@ -210,56 +265,94 @@ func (m *Manager) Install(ctx context.Context) (Status, error) {
 			return Status{}, conflict("the TUN helper binary path already holds a different file; use --force to replace it", nil)
 		}
 	}
-	serviceChanged := !service.Exists || !bytes.Equal(service.Content, desiredService)
-	socketChanged := !socket.Exists || !bytes.Equal(socket.Content, desiredSocket)
-	configChanged := !config.Exists || !bytes.Equal(config.Content, desiredConfig)
+	serviceChanged := fileChanged(service, desiredService, unitMode)
+	socketChanged := fileChanged(socket, desiredSocket, unitMode)
+	configChanged := fileChanged(config, desiredConfig, unitMode)
+	tmpfilesChanged := fileChanged(tmpfiles, desiredTmpfiles, tmpfilesMode)
 	binaryChanged := true
 	if binary.Exists {
 		same, cmpErr := sameFile(m.Paths.Binary, source)
 		if cmpErr != nil {
 			return Status{}, conflict("cannot compare the existing TUN helper binary; nothing was changed", cmpErr)
 		}
-		binaryChanged = !same
+		binaryChanged = !same || binary.Mode.Perm() != binaryMode
 	}
 
-	changed := serviceChanged || socketChanged || configChanged || binaryChanged
+	changed := serviceChanged || socketChanged || configChanged || tmpfilesChanged || binaryChanged
+	snaps, dirState, err := m.beginInstall(
+		fieldSnapshot{path: m.Paths.Binary, changed: binaryChanged},
+		fieldSnapshot{path: m.Paths.Config, changed: configChanged},
+		fieldSnapshot{path: m.Paths.Tmpfiles, changed: tmpfilesChanged},
+		fieldSnapshot{path: m.Paths.SocketUnit, changed: socketChanged},
+		fieldSnapshot{path: m.Paths.ServiceUnit, changed: serviceChanged},
+	)
+	if err != nil {
+		return Status{}, err
+	}
+	socketWasEnabled := m.socketEnabled(ctx)
+	unitChanged := serviceChanged || socketChanged
+	activated := false
+	fail := func(cause error) (Status, error) {
+		if rbErr := m.rollback(ctx, snaps, dirState, activated && !socketWasEnabled, unitChanged); rbErr != nil {
+			return Status{}, internalFailure("the TUN helper install failed and its rollback was incomplete", errors.Join(cause, rbErr))
+		}
+		return Status{}, cause
+	}
+
 	if binaryChanged {
 		if err := m.copyBinary(source, m.Paths.Binary); err != nil {
-			return Status{}, err
+			return fail(err)
 		}
 	}
 	if configChanged {
 		if err := m.writeFile(m.Paths.Config, desiredConfig, unitMode); err != nil {
-			return Status{}, err
+			return fail(err)
+		}
+	}
+	if tmpfilesChanged {
+		if err := m.writeFile(m.Paths.Tmpfiles, desiredTmpfiles, tmpfilesMode); err != nil {
+			return fail(err)
 		}
 	}
 	if socketChanged {
 		if err := m.writeFile(m.Paths.SocketUnit, desiredSocket, unitMode); err != nil {
-			return Status{}, err
+			return fail(err)
 		}
 	}
 	if serviceChanged {
 		if err := m.writeFile(m.Paths.ServiceUnit, desiredService, unitMode); err != nil {
-			return Status{}, err
+			return fail(err)
 		}
 	}
 	if err := m.ensureRuntimeDir(uid); err != nil {
-		return Status{}, err
+		return fail(err)
+	}
+	if tmpfilesChanged {
+		if _, err := m.tmpfilesCreate(ctx, m.Paths.Tmpfiles); err != nil {
+			return fail(err)
+		}
 	}
 	if changed {
 		if _, err := m.systemctl(ctx, "daemon-reload"); err != nil {
-			return Status{}, err
+			return fail(err)
 		}
 	}
 	// The socket unit is the long-lived piece: the service exits after an
 	// explicit disable and the socket starts a fresh process on the next
 	// enable (§10.4). Enabling it is idempotent.
+	activated = true
 	if _, err := m.systemctl(ctx, "enable", "--now", SocketUnitName); err != nil {
-		return Status{}, err
+		return fail(err)
+	}
+	// Enabling the socket returns before the control path necessarily exists.
+	// The engine can only use the helper after the socket is 0600 and owned by
+	// the allowed uid, so setup does not report success without that proof.
+	if err := m.ready(ctx, filepath.Join(m.Paths.RuntimeDir, "control.sock"), uid); err != nil {
+		return fail(err)
 	}
 	return Status{
 		Unit: m.Paths.ServiceUnit, SocketUnit: m.Paths.SocketUnit,
-		Config: m.Paths.Config, Binary: m.Paths.Binary,
+		Config: m.Paths.Config, Binary: m.Paths.Binary, Tmpfiles: m.Paths.Tmpfiles,
 		AllowedUID: uid, Changed: changed, Managed: true,
 	}, nil
 }
@@ -298,13 +391,50 @@ func (m *Manager) Uninstall(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, conflict("cannot inspect the TUN service config; nothing was removed", err)
 	}
+	tmpfiles, err := m.readSafe(m.Paths.Tmpfiles, maxUnitBytes)
+	if err != nil {
+		return Status{}, conflict("cannot inspect the TUN runtime tmpfiles entry; nothing was removed", err)
+	}
+	tmpfilesOwned := tmpfiles.Exists && tmpfiles.Safe && tmpfiles.Managed
 	status := Status{
 		Unit: m.Paths.ServiceUnit, SocketUnit: m.Paths.SocketUnit,
-		Config: m.Paths.Config, Binary: m.Paths.Binary,
+		Config: m.Paths.Config, Binary: m.Paths.Binary, Tmpfiles: m.Paths.Tmpfiles,
+	}
+	// Report the uid the unit actually serves, not the Setup zero value. An
+	// uninstall without a readable owned unit leaves it unset (JSON omits 0).
+	status.AllowedUID = unitUser(service.Content)
+	if status.AllowedUID < 0 {
+		status.AllowedUID = unitUser(socket.Content)
+	}
+	if status.AllowedUID < 0 && config.Exists && config.Safe {
+		var cfg tun.ServiceConfig
+		if json.Unmarshal(config.Content, &cfg) == nil && cfg.Validate() == nil {
+			status.AllowedUID = cfg.AllowedUID
+		}
+	}
+	if status.AllowedUID < 0 {
+		status.AllowedUID = 0
 	}
 	if !service.Exists && !socket.Exists {
 		// Idempotent: no owned unit means there is nothing to stop or remove.
-		// A config or binary left without an owned unit is not ours to delete.
+		// A config or binary left without an owned unit is not ours to delete;
+		// an owned tmpfiles entry and its runtime artifacts are still ours.
+		if tmpfilesOwned {
+			ok, rmErr := m.removeOwned(m.Paths.Tmpfiles, true)
+			if rmErr != nil {
+				return Status{}, rmErr
+			}
+			if ok {
+				status.Removed = append(status.Removed, m.Paths.Tmpfiles)
+			}
+			artifacts, artErr := m.removeRuntimeArtifacts()
+			if artErr != nil {
+				return Status{}, artErr
+			}
+			status.Removed = append(status.Removed, artifacts...)
+			status.Managed = true
+			status.Changed = len(status.Removed) > 0
+		}
 		return status, nil
 	}
 	status.Managed = true
@@ -368,6 +498,15 @@ func (m *Manager) Uninstall(ctx context.Context) (Status, error) {
 		}
 		if ok {
 			removed = append(removed, m.Paths.Binary)
+		}
+	}
+	if tmpfilesOwned {
+		ok, err := m.removeOwned(m.Paths.Tmpfiles, true)
+		if err != nil {
+			return Status{}, err
+		}
+		if ok {
+			removed = append(removed, m.Paths.Tmpfiles)
 		}
 	}
 	leaseRemoved, err := m.removeRuntimeArtifacts()
@@ -450,7 +589,7 @@ func (m *Manager) checkPrerequisites() error {
 // replaces files, not a running unrelated service.
 func (m *Manager) requireInactive(ctx context.Context) error {
 	for _, name := range []string{ServiceUnitName, SocketUnitName} {
-		out, err := m.runner().Output(ctx, "systemctl", "is-active", name)
+		out, err := m.systemctlOutput(ctx, "is-active", name)
 		state := strings.TrimSpace(out)
 		if err != nil {
 			// is-active exits non-zero for inactive/unknown units. It prints
@@ -491,7 +630,7 @@ func (m *Manager) serviceUnit(uid int) ([]byte, error) {
 	b.WriteString("Restart=on-failure\n")
 	b.WriteString("RestartSec=1s\n")
 	b.WriteString("RuntimeDirectory=routelatch-tun\n")
-	b.WriteString("RuntimeDirectoryMode=0700\n")
+	b.WriteString("RuntimeDirectoryMode=0755\n")
 	b.WriteString("RuntimeDirectoryPreserve=yes\n")
 	b.WriteString("UMask=0077\n")
 	b.WriteString("AmbientCapabilities=CAP_NET_ADMIN\n")
@@ -502,7 +641,16 @@ func (m *Manager) serviceUnit(uid int) ([]byte, error) {
 	b.WriteString("PrivateTmp=yes\n")
 	// A private /dev would hide /dev/net/tun; the contract permits keeping it
 	// visible (or an equivalent DeviceAllow) rather than breaking the service.
+	// The device cgroup stays closed with an explicit short allowlist, so the
+	// service can use the TUN clone device but no unrelated device node.
+	b.WriteString("# /dev/net/tun must stay visible; see docs/contracts.md §10.4.\n")
 	b.WriteString("PrivateDevices=no\n")
+	b.WriteString("DevicePolicy=closed\n")
+	b.WriteString("DeviceAllow=/dev/net/tun rw\n")
+	b.WriteString("DeviceAllow=/dev/null rw\n")
+	b.WriteString("DeviceAllow=/dev/zero rw\n")
+	b.WriteString("DeviceAllow=/dev/random rw\n")
+	b.WriteString("DeviceAllow=/dev/urandom rw\n")
 	b.WriteString("ProtectKernelTunables=yes\n")
 	b.WriteString("ProtectKernelModules=yes\n")
 	b.WriteString("ProtectControlGroups=yes\n")
@@ -533,11 +681,45 @@ func (m *Manager) socketUnit(uid int) ([]byte, error) {
 	b.WriteString("ListenStream=" + socketPath + "\n")
 	b.WriteString("SocketMode=0600\n")
 	b.WriteString("SocketUser=" + strconv.Itoa(uid) + "\n")
-	b.WriteString("DirectoryMode=0700\n")
+	// If the runtime directory is absent before tmpfiles runs, systemd may
+	// create it itself. It must then be traversable by the engine uid; the
+	// socket inside stays 0600 and SocketUser= above owns it.
+	b.WriteString("DirectoryMode=0755\n")
 	b.WriteString("RemoveOnStop=yes\n")
 	b.WriteString("\n[Install]\n")
 	b.WriteString("WantedBy=sockets.target\n")
 	return []byte(b.String()), nil
+}
+
+// tmpfilesEntry recreates /run/routelatch-tun after boot with the allowed uid
+// as owner and a traversable mode. The socket inside is still 0600 and owned by
+// that uid; without this entry a fresh boot leaves a root-owned 0700 directory
+// (or none at all) and the non-root engine cannot reach control.sock.
+func (m *Manager) tmpfilesEntry(uid int) ([]byte, error) {
+	dir, err := tmpfilesPath(m.Paths.RuntimeDir)
+	if err != nil {
+		return nil, err
+	}
+	var b strings.Builder
+	b.WriteString(OwnershipMarker + "\n")
+	b.WriteString("# Recreate the TUN runtime directory after boot for the allowed engine uid.\n")
+	b.WriteString("d " + dir + " " + strconv.FormatUint(uint64(runtimeDirMode), 8) + " " + strconv.Itoa(uid) + " - -\n")
+	return []byte(b.String()), nil
+}
+
+// tmpfilesPath renders a path for the tmpfiles.d line format. The production
+// path is fixed and needs no quoting; a test tree may contain spaces, which the
+// format accepts as a double-quoted argument.
+func tmpfilesPath(path string) (string, error) {
+	if path == "" || strings.ContainsAny(path, "\x00\n\r") {
+		return "", errors.New("a TUN runtime path contains a control character that tmpfiles.d cannot represent")
+	}
+	if !strings.ContainsAny(path, " \t\"'\\") {
+		return path, nil
+	}
+	escaped := strings.ReplaceAll(path, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	return `"` + escaped + `"`, nil
 }
 
 // unitArgument applies the systemd escaping a path needs in ExecStart or
@@ -563,6 +745,7 @@ type fileState struct {
 	Exists  bool
 	Safe    bool
 	Managed bool
+	Mode    os.FileMode
 	Content []byte
 }
 
@@ -599,7 +782,7 @@ func (m *Manager) statSafe(path string) (fileState, error) {
 	if err != nil {
 		return fileState{Exists: true}, err
 	}
-	st := fileState{Exists: true}
+	st := fileState{Exists: true, Mode: info.Mode().Perm()}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return st, nil
 	}
@@ -607,6 +790,10 @@ func (m *Manager) statSafe(path string) (fileState, error) {
 	if err != nil {
 		return st, err
 	}
+	// Safe means a root-owned regular file. Its mode is not trusted: Install
+	// converges an owned file to the documented mode even when the content is
+	// unchanged, so `mode&022 == 0` holds for every installed unit/config/binary.
+	// A symlink or a non-root owner is still a conflict, never a chmod.
 	if owner != 0 {
 		return st, nil
 	}
@@ -733,7 +920,37 @@ func (m *Manager) ensureDir(dir string) error {
 	if owner != 0 {
 		return conflict("the TUN helper directory is not root-owned; refusing to write into it", nil)
 	}
+	// Dedicated RouteLatch directories are converged to the documented install
+	// mode. Shared system directories (/etc/systemd/system, /etc/tmpfiles.d) are
+	// never widened: only group/other write bits are cleared, so a hardened
+	// 0700/0750 host layout keeps its mode while a writable one loses the unsafe
+	// bits. The caller is root and the directory is root-owned either way.
+	perm := info.Mode().Perm()
+	if m.isInstallDir(dir) {
+		if perm != dirMode {
+			if err := os.Chmod(dir, dirMode); err != nil {
+				return internalFailure("cannot converge the TUN helper directory permissions", err)
+			}
+		}
+	} else if perm&0o022 != 0 {
+		if err := os.Chmod(dir, perm&^0o022); err != nil {
+			return internalFailure("cannot clear unsafe write bits on the TUN helper directory", err)
+		}
+	}
 	return nil
+}
+
+// isInstallDir reports whether dir is one of the dedicated directories setup
+// owns, as opposed to a shared system parent such as /etc/systemd/system.
+func (m *Manager) isInstallDir(dir string) bool {
+	dir = filepath.Clean(dir)
+	if config := m.Paths.Config; config != "" && dir == filepath.Clean(filepath.Dir(config)) {
+		return true
+	}
+	if binary := m.Paths.Binary; binary != "" && dir == filepath.Clean(filepath.Dir(binary)) {
+		return true
+	}
+	return false
 }
 
 func (m *Manager) ensureRuntimeDir(uid int) error {
@@ -748,9 +965,6 @@ func (m *Manager) ensureRuntimeDir(uid int) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return conflict("the TUN runtime directory is a symlink or not a directory; refusing to use it", nil)
 	}
-	if err := os.Chmod(dir, runtimeDirMode); err != nil {
-		return internalFailure("cannot protect the TUN runtime directory", err)
-	}
 	owner, err := m.ownerUID(dir)
 	if err != nil {
 		return conflict("cannot verify ownership of the TUN runtime directory", err)
@@ -758,10 +972,190 @@ func (m *Manager) ensureRuntimeDir(uid int) error {
 	if owner != 0 && owner != uid {
 		return conflict("the TUN runtime directory is owned by another user; refusing to reuse it", nil)
 	}
+	if err := os.Chmod(dir, runtimeDirMode); err != nil {
+		return internalFailure("cannot protect the TUN runtime directory", err)
+	}
 	if owner != uid {
 		if err := m.chown(dir, uid, -1); err != nil {
 			return internalFailure("cannot hand the TUN runtime directory to the allowed user", err)
 		}
+	}
+	return nil
+}
+
+// fieldSnapshot names one file whose previous state must be restored when a
+// later step of Install fails.
+type fieldSnapshot struct {
+	path    string
+	changed bool
+}
+
+func fileChanged(st fileState, desired []byte, mode os.FileMode) bool {
+	return !st.Exists || !bytes.Equal(st.Content, desired) || st.Mode.Perm() != mode
+}
+
+// beginInstall records the previous state of every file the converged install
+// may replace, plus the runtime directory, before the first mutation. Only
+// changed files are read so an idempotent run does not copy the binary.
+func (m *Manager) beginInstall(fields ...fieldSnapshot) ([]fileSnapshot, dirSnapshot, error) {
+	var snaps []fileSnapshot
+	for _, field := range fields {
+		if !field.changed {
+			continue
+		}
+		snap, err := snapshotFile(field.path)
+		if err != nil {
+			return nil, dirSnapshot{}, conflict("cannot snapshot an existing TUN helper file; nothing was changed", err)
+		}
+		snaps = append(snaps, snap)
+	}
+	dir, err := m.snapshotDir(m.Paths.RuntimeDir)
+	if err != nil {
+		return nil, dirSnapshot{}, conflict("cannot snapshot the TUN runtime directory; nothing was changed", err)
+	}
+	return snaps, dir, nil
+}
+
+func snapshotFile(path string) (fileSnapshot, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return fileSnapshot{Path: path}, nil
+	}
+	if err != nil {
+		return fileSnapshot{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fileSnapshot{}, errors.New("the existing TUN helper path is not a regular file")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fileSnapshot{}, err
+	}
+	return fileSnapshot{Path: path, Exists: true, Content: content, Mode: info.Mode().Perm()}, nil
+}
+
+func (m *Manager) snapshotDir(path string) (dirSnapshot, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return dirSnapshot{Path: path}, nil
+	}
+	if err != nil {
+		return dirSnapshot{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return dirSnapshot{}, errors.New("the existing TUN runtime path is not a directory")
+	}
+	uid, err := m.ownerUID(path)
+	if err != nil {
+		return dirSnapshot{}, err
+	}
+	return dirSnapshot{Path: path, Exists: true, Mode: info.Mode().Perm(), UID: uid}, nil
+}
+
+// rollback restores the previous files, socket enablement and runtime
+// directory. It is best-effort and reports every step that failed; a caller
+// must not claim a clean rollback when this returns an error.
+func (m *Manager) rollback(ctx context.Context, snaps []fileSnapshot, dir dirSnapshot, undoActivation, unitChanged bool) error {
+	var errs []error
+	// Undo activation before removing the path the socket would listen on.
+	if undoActivation {
+		if _, err := m.systemctlOutput(ctx, "disable", "--now", SocketUnitName); err != nil {
+			errs = append(errs, fmt.Errorf("disable socket: %w", err))
+		}
+	}
+	for i := len(snaps) - 1; i >= 0; i-- {
+		snap := snaps[i]
+		if snap.Exists {
+			if err := m.writeFile(snap.Path, snap.Content, snap.Mode.Perm()); err != nil {
+				errs = append(errs, err)
+			}
+			continue
+		}
+		if err := os.Remove(snap.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove newly written helper file: %w", err))
+		}
+	}
+	if dir.Exists {
+		if err := os.Chmod(dir.Path, dir.Mode.Perm()); err != nil {
+			errs = append(errs, fmt.Errorf("restore runtime directory mode: %w", err))
+		}
+		if err := m.chown(dir.Path, dir.UID, -1); err != nil {
+			errs = append(errs, fmt.Errorf("restore runtime directory owner: %w", err))
+		}
+	} else if _, err := m.removeRuntimeArtifacts(); err != nil {
+		errs = append(errs, err)
+	}
+	if unitChanged {
+		if _, err := m.systemctlOutput(ctx, "daemon-reload"); err != nil {
+			errs = append(errs, fmt.Errorf("reload restored units: %w", err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (m *Manager) tmpfilesCreate(ctx context.Context, path string) (string, error) {
+	bin, err := m.lookPath("systemd-tmpfiles")
+	if err != nil {
+		return "", unsupported("systemd-tmpfiles is not available; install the TUN helper on a complete systemd host")
+	}
+	out, err := m.runner().Output(ctx, bin, "--create", path)
+	if err != nil {
+		return out, externalFailure("systemd-tmpfiles --create failed; the TUN runtime directory is not ready", err)
+	}
+	return out, nil
+}
+
+func (m *Manager) socketEnabled(ctx context.Context) bool {
+	out, err := m.systemctlOutput(ctx, "is-enabled", SocketUnitName)
+	if err != nil {
+		return false
+	}
+	switch strings.TrimSpace(out) {
+	case "enabled", "enabled-runtime", "static", "indirect", "alias", "generated":
+		return true
+	default:
+		return false
+	}
+}
+
+// ready proves the socket unit published a 0600 control socket owned by the
+// allowed uid. "Succeeded" from systemctl alone is not enough for the engine.
+func (m *Manager) ready(ctx context.Context, path string, uid int) error {
+	if m.Ready != nil {
+		return m.Ready(path, uid)
+	}
+	deadline := time.Now().Add(socketWait)
+	var last error
+	for {
+		last = checkControlSocket(path, uid)
+		if last == nil {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return externalFailure("the TUN control socket did not become ready; the helper socket is not usable", last)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func checkControlSocket(path string, uid int) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return errors.New("the TUN control path is not a socket")
+	}
+	if info.Mode().Perm() != 0o600 {
+		return errors.New("the TUN control socket is not mode 0600")
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(st.Uid) != uid {
+		return errors.New("the TUN control socket is not owned by the allowed uid")
 	}
 	return nil
 }
@@ -912,7 +1306,10 @@ func (m *Manager) executable() (string, error) {
 	if m.Executable != nil {
 		return m.Executable()
 	}
-	return os.Executable()
+	// /proc/self/exe is the binary this process is actually running, even if
+	// the path used to launch it was replaced or is a symlink. os.Executable
+	// may return a path that no longer names the running image.
+	return os.Readlink("/proc/self/exe")
 }
 
 func (m *Manager) runner() platform.CommandRunner {
@@ -1004,11 +1401,21 @@ func (m *Manager) tunDevice() error {
 }
 
 func (m *Manager) systemctl(ctx context.Context, args ...string) (string, error) {
-	out, err := m.runner().Output(ctx, "systemctl", args...)
+	out, err := m.systemctlOutput(ctx, args...)
 	if err != nil {
 		return out, externalFailure("systemctl "+args[0]+" failed; the TUN helper state is unknown", err)
 	}
 	return out, nil
+}
+
+// systemctlOutput always executes the path systemd is actually installed at,
+// not a literal name looked up again by the child process environment.
+func (m *Manager) systemctlOutput(ctx context.Context, args ...string) (string, error) {
+	bin, err := m.lookPath("systemctl")
+	if err != nil {
+		return "", unsupported("systemd (systemctl) is not available")
+	}
+	return m.runner().Output(ctx, bin, args...)
 }
 
 func conflict(message string, cause error) error {
@@ -1027,11 +1434,13 @@ func unsupported(message string) error {
 	}
 }
 
+// denied is a CLI-only privileged-setup failure. It deliberately carries no
+// TUN reason: docs/contracts.md §10.3 pins error.detail.reason to the stable
+// management/status reasons, and "not root" is not one of them.
 func denied(message string) error {
 	return &control.OpError{
 		Kind: contract.PolicyDenied, Exit: contract.ExitDenied,
 		Message: message,
-		Detail:  map[string]any{"reason": "tun_setup_not_root"},
 	}
 }
 

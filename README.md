@@ -2,10 +2,10 @@
 
 RouteLatch is a local proxy client for Linux that sends only the destinations
 you approve through a pool of proxy exits. It builds the official Xray core
-into one static Go binary, so there is no separate Xray install, no TUN device
-and no root requirement. A future opt-in **TUN coverage layer** is defined for
-after v1 (decision D29 / plan R16) but is **not part of v1.1.0**; current
-releases remain loopback-only.
+into one static Go binary, so there is no separate Xray install. The normal
+proxy modes need no TUN device and no root. An opt-in **TUN coverage layer**
+(decision D29 / plan R16) is implemented in this source revision but is **not
+part of the published v1.1.0 release**; released packages remain loopback-only.
 
 You import share links (VLESS, Trojan or SOCKS5), approve destinations by
 domain, domain suffix, IP or CIDR, and pick a mode. In the default `targeted`
@@ -44,15 +44,78 @@ sweep finishes.
   so far.
 - Go 1.27.4 (the version pinned in `go.mod`) only if you build from source. Set
   `GOTOOLCHAIN=local`.
-- No root, TUN, firewall change or system-wide proxy setting in v1.1.0. TLS
-  verification uses the host CA bundle; RouteLatch does not install a root CA.
-  The planned post-v1 TUN coverage layer (D29/R16) will be opt-in, requires a
-  one-time privileged helper, and is not shipped in v1.1.0.
+- No root, TUN, firewall change or system-wide proxy setting is needed for the
+  normal proxy modes, including in v1.1.0. TLS verification uses the host CA
+  bundle; RouteLatch does not install a root CA. The optional TUN coverage layer
+  in this source revision needs Linux ≥5.7 with systemd and a one-time
+  `sudo routelatch tun setup` that grants only the helper
+  `CAP_NET_ADMIN`; the package still ships no unit, helper or maintainer script.
 - Plain `routelatch run` (app/tray) needs a StatusNotifier tray host and
   permitted `pidfd_open`: Linux ≥5.3, not blocked by seccomp/EPERM. Otherwise
   use `routelatch run --headless` or the opt-in service.
 - The optional desktop-proxy commands need a GNOME (`gsettings`) or KDE Plasma
   (`kwriteconfig6`/`kwriteconfig5`) session.
+
+## Optional TUN coverage (post-v1 source revision)
+
+TUN coverage is a layer over `targeted`, `all-proxy` and `all-direct`, not a
+fifth mode. It gives programs that ignore the system proxy a path to the same
+loopback listeners and the same approved-destination policy. It is not in the
+published v1.1.0 assets and stays off until the user installs and enables it.
+
+Prerequisites and scope:
+
+- Linux ≥5.7 and systemd, with a working `/dev/net/tun`. The setup command is
+  the only thing that runs as root and the only program that receives
+  `CAP_NET_ADMIN`; the engine, tray and CLI never become root.
+- One helper per machine. TUN captures **all host users'** traffic, including
+  other logged-in users, so enabling it is a deliberate system-wide change.
+  A per-user/per-app model is not part of this phase.
+- Plain DNS (port 53) is sent **directly**, not through the pool, and non-DNS
+  UDP/QUIC is blocked in this phase. ECH, QUIC and other protocols without
+  visible TLS/HTTP names can only be matched by IP/CIDR rules. System DNS is
+  not changed.
+- With the engine gone, TUN and its routes stay and connections fail closed
+  instead of falling back to direct. A crash or restart of the TUN service
+  itself opens a short fail-open window; a permanent kill-switch is not part of
+  this phase. A status/tray warning shows the state.
+
+One-time install and use:
+
+```sh
+sudo routelatch tun setup          # records the invoking uid; no root target
+routelatch tun on                  # only while mode is not stopped
+routelatch tun status
+routelatch tun off                 # needs a running engine
+```
+
+`tun setup` writes root-owned units, `/etc/routelatch/tun.json`, a tmpfiles
+entry that recreates `/run/routelatch-tun` after boot, and a root-owned copy of
+this binary under `/usr/libexec/routelatch/`. It is idempotent, waits for the
+0600 control socket to be owned by the invoking uid, and restores the previous
+files if any step fails. Pass `--socks 127.0.0.1:PORT` if the engine's SOCKS
+listener is not the default `127.0.0.1:8318`. An existing RouteLatch-owned unit
+is the ownership proof for its root-owned config and binary, so an upgrade
+changes those without `--force`. Without an owned unit, a differing config or
+binary needs `--force`, which only replaces a differing **root-owned, inactive**
+unit/config/tmpfiles entry that RouteLatch did not create; it never replaces a
+symlink, a non-root-owned file or an active foreign unit, and setup never runs a
+user-writable binary with `CAP_NET_ADMIN`.
+
+If the engine is not running, `tun off` cannot reach the helper. The independent
+recovery path is:
+
+```sh
+sudo routelatch tun uninstall
+# or, without the CLI:
+sudo systemctl stop routelatch-tun.socket
+sudo systemctl stop routelatch-tun.service
+```
+
+Stop the socket first so it cannot reactivate the service from its restart
+lease. `tun uninstall` disables the socket before the service and removes only
+the files and runtime lease/socket it owns; it never deletes rules, pool data,
+config, state or backups.
 
 ## Install
 
@@ -427,8 +490,9 @@ other software.
 - **No TUN and no device-wide capture in v1.1.0.** Only traffic sent to
   RouteLatch's listeners is affected. Programs that ignore
   `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`, or that were started outside
-  `routelatch exec`, are not routed. A planned post-v1 coverage layer (D29/R16)
-  will address this with a separate opt-in helper; it is not available yet.
+  `routelatch exec`, are not routed. The post-v1 coverage layer (D29/R16) in
+  this source revision addresses this with a separate opt-in helper; it is not
+  in the published v1.1.0 assets.
 - **No UDP or QUIC.** SOCKS5 `UDP ASSOCIATE` and `BIND` are refused.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
@@ -437,12 +501,12 @@ other software.
   repository or package signing; the published `.deb` and RPM files are
   unsigned.
 - **No system-wide "covers everything" mode in v1.1.0**; `all-proxy` keeps the
-  documented loopback/private exception. The planned post-v1 TUN coverage layer
-  (D29/R16) will sit on top of the existing modes rather than add a fifth mode;
-  plain DNS will remain direct and non-DNS UDP/QUIC will be blocked in its first
-  phase. DNS-through-pool and UDP coverage are separate research tasks (D30);
-  if they land, DNS will have its own independent switch and will not silently
-  change the routing mode.
+  documented loopback/private exception. The post-v1 TUN coverage layer
+  (D29/R16) sits on top of the existing modes rather than adding a fifth mode;
+  plain DNS remains direct and non-DNS UDP/QUIC is blocked in its first phase.
+  DNS-through-pool and UDP coverage are separate research tasks (D30); if they
+  land, DNS will have its own independent switch and will not silently change
+  the routing mode.
 
 ## Verified status
 
@@ -469,6 +533,17 @@ only under `GITHUB_ACTIONS=true`, so that mode is checked in the CI dry-run.
 Only `amd64` was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 
+The optional TUN helper was tested from the built binary only in a disposable
+privileged Docker/systemd container with an isolated network namespace:
+`tun setup` produced the root-owned units/config/tmpfiles entry and binary, the
+socket was `0600` owned by the engine uid, a second setup was a no-op, a
+container restart recreated `/run/routelatch-tun` from tmpfiles, `tun on` built
+the dual-stack link and routes, `tun off` removed them, stopping the socket and
+service without the engine removed coverage, an injected `systemctl enable`
+failure rolled back the new files and disabled the socket, and `tun uninstall`
+removed only the helper files. No host service, route, DNS, firewall or desktop
+setting was changed. KDE/Wayland tray behavior and final A17 acceptance remain open (R16-H).
+
 Beyond the default suite, the Linux build was historically exercised on real
 system components and gated loopback checks: the old packaged unit under a real
 `systemd --user` manager (start/stop/restart, port collision, SIGKILL restart),
@@ -492,7 +567,10 @@ Three different kinds of gap are kept separate:
   mux/XUDP are unsupported by the product; XHTTP over h3/QUIC is excluded by the
   no-UDP/QUIC policy. Windows, UDP and GUI are later milestones that need a new
   decision. TUN coverage was moved from "undefined later milestone" to the
-  post-v1 R16 plan (D29) in 2026-11-26; it is still not implemented or shipped.
+  post-v1 R16 plan (D29) in 2026-11-26; its service, engine connection, CLI,
+  tray surface and privileged setup are implemented in this source revision,
+  while final A17 acceptance (R16-H) and a release are still open. No published
+  asset contains it yet.
 - **Implemented but not yet exercised:** long hysteria2 sessions.
 - **Deferred by user decision (2026-11-21), or not yet proven by us:**
   arm64/riscv64/ppc64le runtime execution (deferred; only amd64 is exercised, the

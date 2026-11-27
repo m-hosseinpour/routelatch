@@ -46,7 +46,6 @@ var newTunSetupManager = func(force bool, socks string) *tunsetup.Manager {
 		Getenv:       os.Getenv,
 		Euid:         os.Geteuid,
 		Getuid:       os.Getuid,
-		Executable:   os.Executable,
 		Paths:        tunsetup.DefaultPaths(),
 		Force:        force,
 		SocksAddress: socks,
@@ -166,9 +165,14 @@ func tunSetupData(status tunsetup.Status) map[string]any {
 		"socket_unit": status.SocketUnit,
 		"config":      status.Config,
 		"binary":      status.Binary,
-		"allowed_uid": status.AllowedUID,
+		"tmpfiles":    status.Tmpfiles,
 		"changed":     status.Changed,
 		"managed":     status.Managed,
+	}
+	// uninstall has no target uid when no owned unit remains; reporting 0
+	// would falsely name root as the allowed engine user.
+	if status.AllowedUID > 0 {
+		data["allowed_uid"] = status.AllowedUID
 	}
 	if len(status.Removed) > 0 {
 		data["removed"] = status.Removed
@@ -212,13 +216,19 @@ func (c *cli) tunSetupUsage() {
        sudo routelatch tun uninstall
 
 setup writes root-owned /etc/systemd/system/routelatch-tun.{service,socket},
-/etc/routelatch/tun.json and a root-owned helper binary under
-/usr/libexec/routelatch/. It records the invoking user's uid from SUDO_UID and
-refuses to install for root. --socks must be a loopback IP literal (default
-127.0.0.1:8318). A unit or config that RouteLatch does not own is only replaced
-with --force, and only while it is inactive.
+/etc/routelatch/tun.json, /etc/tmpfiles.d/routelatch-tun.conf and a root-owned
+helper binary under /usr/libexec/routelatch/. The tmpfiles entry recreates
+/run/routelatch-tun after boot so the non-root engine can reach the 0600
+control socket. It records the invoking user's uid from SUDO_UID and refuses to
+install for root. --socks must be a loopback IP literal (default 127.0.0.1:8318);
+pass it when the engine listens elsewhere. A unit/config/tmpfiles entry that
+RouteLatch does not own is only replaced with --force, and a foreign unit only
+while it is inactive. A failed install restores the previous files.
 
-uninstall stops coverage first, then removes only files carrying the RouteLatch
-marker and the known runtime lease/socket. It never removes user state or
-unrelated settings.`)
+uninstall stops and disables the socket before the service, then removes only
+files carrying the RouteLatch marker, the proven root-owned binary/config, and
+the known runtime lease/socket. It never removes user state or unrelated
+settings. If the engine is gone, this command and
+'systemctl stop routelatch-tun.socket routelatch-tun.service' are the
+independent recovery path.`)
 }

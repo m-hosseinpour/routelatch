@@ -1130,6 +1130,10 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 > شیء `tun` در `data` یک افزودهٔ schema 1 است: payload قدیمی آن را ندارد و
 > مصرف‌کننده آن را nil/unknown می‌بیند. `since`/`last_error`/`detail` وقتی مقدار
 > ندارند حذف می‌شوند؛ شکل کامل و معنای `helper=missing` در §۱۰.۲ است.
+>
+> در `tun setup|uninstall` کلید `tmpfiles` همیشه می‌آید و `allowed_uid` فقط
+> وقتی می‌آید که یک uid مجازِ مالک قابل‌اثبات باقی مانده باشد (در uninstall
+> idempotent بدون unit، کلید حذف می‌شود و هرگز `0` گزارش نمی‌شود).
 
 | فرمان | `data` (خلاصه) | exitهای ممکن | معادل منو |
 | --- | --- | --- | --- |
@@ -1142,7 +1146,7 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `tun status` | `tun{desired,state,interface,since?,dns,udp,ipv6,helper,last_error?,detail?}` | 0، 1، 3 | «TUN coverage» |
 | `tun on` | همان `tun` | 0، 1، 3، 6، 7 | «TUN coverage» |
 | `tun off` | همان `tun` | 0، 1، 3 | «TUN coverage» |
-| `tun setup\|uninstall` | `unit, socket_unit, config, binary, allowed_uid, changed, managed, removed?` | 0، 1، 2، 6، 7، 9 | — |
+| `tun setup\|uninstall` | `unit, socket_unit, config, binary, tmpfiles, changed, managed, removed?, allowed_uid?` | 0، 1، 2، 6، 7، 9 | — |
 | `rules list` | `rules[{id,kind,host,addr,prefix,note,origin,added_at}]` | 0، 3 | «فهرست مقصدها» |
 | `rules add <input>` | `rule{...}, normalized, notice?` | 0، 2، 3، 6، 7 | «افزودن مقصد» |
 | `rules remove <id>` | `removed, closed` | 0، 3، 5، 6 | «حذف مقصد» |
@@ -2004,7 +2008,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E و tray Coverage/آیکن R16-F پیاده‌شده؛ بررسی واقعی KDE/Wayland و نصب/packaging در G/H باز)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E، tray Coverage/آیکن R16-F و setup ممتاز/packaging/docs R16-G پیاده‌شده؛ بررسی واقعی KDE/Wayland و پذیرش A17 در H باز)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
 فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
@@ -2012,10 +2016,12 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tun status|on|off`
 و `tun setup|uninstall` privileged) پیاده شده‌اند. tray Coverage (منو،
 `tun.enable`/`tun.disable` با تأیید دو مرحله‌ای و آیکن active/error/desired-off)
-در R16-F پیاده شده است؛ بررسی واقعی KDE/Wayland گیت‌شده و نصب
-واقعی/readiness/rollback helper و بسته‌بندی/مستندات کاربر در R16-G/H باز
-است؛ منطق setup در E فقط CLI-only و unit-testable است و هیچ نصب میزبان انجام
-نمی‌دهد.
+در R16-F پیاده شده است. R16-G منطق privileged setup/uninstall را تکمیل کرده
+است: کپی root-owned باینری از `/proc/self/exe`، tmpfiles.d برای بازسازی
+`/run/routelatch-tun` پس از boot، سخت‌گیری mode/owner، readiness واقعی socket
+`0600` و rollback؛ بسته همچنان هیچ unit/tmpfiles/helper/postinst ندارد و
+`tun setup` تنها سازندهٔ آن‌هاست. بررسی واقعی KDE/Wayland و پذیرش A17 در
+R16-H باز است و نصب واقعی فقط در محیط authorized/gated انجام می‌شود.
 production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
 socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
 نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
@@ -2133,12 +2139,26 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   آدرس جدید اجرا کند؛ سرویس target flowهای زنده را بی‌صدا عوض نمی‌کند. بودجهٔ
   درخواست management و shutdown (`run`/supervisor) بزرگ‌تر از عملیات ۳۰ثانیه‌ای
   سرویس به‌علاوهٔ re-sync جانبی است تا disable کند اما موفق به timeout تبدیل نشود.
-- `tun setup` با sudo اجرا می‌شود؛ idempotent است؛ unit/config مالک خود را
-  می‌شناسد و فایل غیرمالک را بدون `--force` بازنویسی نمی‌کند. `tun uninstall`
-  فقط unit/config/lease مالک را حذف می‌کند و اگر TUN فعال است اول disable می‌کند.
-  `tun setup --socks HOST:PORT` فقط listener لوپ‌بک engine را می‌پذیرد (پیش‌فرض
-  `127.0.0.1:8318`) و `--force` تنها برای unit/config غیرمالکِ غیرفعال است؛
-  setup هرگز یک unit فعال غیرمالک یا binary غیرمالک را جایگزین نمی‌کند.
+- `tun setup` با sudo اجرا می‌شود؛ idempotent است. مالکیت نصب با marker روی
+  unit/socket/tmpfiles اثبات می‌شود. **قانون unit-as-owner:** وقتی unit/socket
+  مالک RouteLatch وجود دارد، config و binary root-owned همان نصب هم بخشی از
+  همان install‌اند و در upgrade (تغییر `--socks` یا binary تازه) بدون `--force`
+  همگرا/جایگزین می‌شوند؛ یک config یا binary متفاوت بدون unit مالک، فقط با
+  `--force` جایگزین می‌شود. `tmpfiles` marker مستقل خود را دارد و بدون force
+  بازنویسی نمی‌شود.
+  `tun uninstall` اول socket و بعد service را disable/stop می‌کند، سپس فقط
+  unit/config/tmpfiles/helper و lease/socket مالک را حذف می‌کند و state/دادهٔ
+  کاربر را نه. `tun setup --socks HOST:PORT` فقط listener لوپ‌بک engine را
+  می‌پذیرد (پیش‌فرض `127.0.0.1:8318`؛ اگر engine جای دیگری listen می‌کند همان
+  را بدهید) و `--force` تنها برای unit/config/tmpfiles غیرمالکِ **غیرفعال** است.
+  معنای force صریح است: فایل غیرمالک اگر root-owned و regular و غیرفعال باشد
+  جایگزین می‌شود؛ symlink، فایل غیر-root-owned، binary غیرمالک خارج از مسیر
+  نصب، و unit فعال غیرمالک هرگز (حتی با `--force`) جایگزین نمی‌شوند. setup
+  هرگز binary قابل‌نوشتن کاربر را با `CAP_NET_ADMIN` اجرا نمی‌کند.
+- شکست privilege در `tun setup|uninstall` (مثلاً اجرای بدون root) یک خطای
+  CLI-only با `PolicyDenied`/`9` است و `error.detail.reason` ندارد، چون
+  allowlist §۱۰.۲ فقط دلیل‌های runtime/status را نگه می‌دارد؛ ErrorKind تازه
+  ساخته نمی‌شود.
 - codeهای خروج از همان جدول §۷.۲ می‌آیند؛ ErrorKind تازه ساخته نمی‌شود.
   نبود helper/kernel/systemd → `unsupported`/`7` با دلیل پایدار
   `tun_helper_unavailable` یا `tun_platform_unsupported`؛ تعارض instance →
@@ -2173,7 +2193,7 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   `restore` بکاپی که mode آن stopped است هنوز مسیر disable را صدا نمی‌زند؛ این
   مورد با lifecycle کامل R16-C/D بسته می‌شود و در R16-B تعمداً تغییر نکرده است.
 
-### ۱۰.۴ قرارداد helper و unit (پیشنهادی)
+### ۱۰.۴ قرارداد helper و unit (R16-C/G)
 
 - `tun setup` باید uid کاربر فراخوان (`SUDO_UID`/real uid) را ثبت کند، نه uid
   روت؛ اجرای مستقیم با root بدون کاربر هدف مجاز نیست. این فایل‌های root-owned
@@ -2183,22 +2203,44 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   - `/etc/routelatch/tun.json` (فقط `allowed_uid` و `socks_address`؛ مسیر
     باینری از unit root-owned می‌آید و نام/mtu/gateway/routeها در کد سرویس
     ثابت‌اند؛ بدون secret و بدون input کاربر)
-  - `/run/routelatch-tun/` (lease و socket؛ `/run` با boot پاک می‌شود)
+  - `/etc/tmpfiles.d/routelatch-tun.conf` (خط `d /run/routelatch-tun 0755
+    <allowed_uid> - -`؛ root-owned با marker؛ در uninstall حذف می‌شود)
+  - `/run/routelatch-tun/` (lease و socket؛ `/run` با boot پاک می‌شود، پس فقط
+    tmpfiles.d آن را با مالکیت uid مجاز و mode قابل‌عبور بازمی‌سازد)
 - unit با `CapabilityBoundingSet=CAP_NET_ADMIN`, `AmbientCapabilities=CAP_NET_ADMIN`,
   `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`,
   `PrivateTmp=yes` و `Restart=on-failure` اجرا می‌شود. `User` همان uid مجاز است؛
   engine/tray هرگز root نمی‌شوند. سرویس در شروع euid را می‌سنجد: اجرا با root
   یا uid غیر از `allowed_uid` رد می‌شود، حتی اگر socket را systemd با مالک uid
   به آن داده باشد.
-- **باینری سرویس must root-owned باشد:** setup یک کپی از باینری را در مسیر
-  root-owned مثل `/usr/libexec/routelatch/tun-service` (0755) می‌گذارد و unit
-  همان را اجرا می‌کند؛ هرگز باینری قابل‌نوشتن کاربر (مثل `$HOME/.local/bin`) را
-  با `CAP_NET_ADMIN` اجرا نمی‌کند. کپی باید با version/commit همان binary باشد و
+- **باینری سرویس must root-owned باشد:** setup نسخهٔ در حال اجرا را از
+  `/proc/self/exe` (نه مسیر قابل‌جعل launch) می‌خواند و یک کپی root-owned در
+  `/usr/libexec/routelatch/tun-service` (0755) می‌گذارد؛ unit همان را اجرا
+  می‌کند و setup هرگز باینری قابل‌نوشتن کاربر (مثل `$HOME/.local/bin`) را با
+  `CAP_NET_ADMIN` اجرا نمی‌کند. کپی باید با version/commit همان binary باشد و
   upgrade دوباره `tun setup` می‌خواهد. `RuntimeDirectory=routelatch-tun` برای
-  lease/socket با مالکیت uid ساخته می‌شود و `RuntimeDirectoryPreserve=yes`
-  lease را در restart سرویس نگه می‌دارد (در boot تازه `/run` پاک است).
-- `PrivateDevices=yes` نباید `/dev/net/tun` را پنهان کند؛ یا خاموش می‌ماند یا
-  `DeviceAllow=/dev/net/tun rw`/bind معادل دارد.
+  lease/socket با مالکیت uid و mode 0755 ساخته می‌شود و
+  `RuntimeDirectoryPreserve=yes` lease را در restart سرویس نگه می‌دارد (در boot
+  تازه `/run` پاک است و tmpfiles.d آن را بازمی‌سازد).
+- `PrivateDevices=yes` نباید `/dev/net/tun` را پنهان کند؛ unit با
+  `PrivateDevices=no` و `DevicePolicy=closed` فقط `/dev/net/tun` و deviceهای
+  پایهٔ لازم (`null`، `zero`، `random`، `urandom`) را با `DeviceAllow=` مجاز
+  می‌کند. هر variant باید در محیط مجاز اجرا و تأیید شود، نه فقط
+  `systemd-analyze verify`.
+- setup پس از نوشتن فایل‌ها `systemd-tmpfiles --create <file>` را اجرا می‌کند،
+  `systemctl daemon-reload` (فقط با تغییر unit) و `enable --now
+  routelatch-tun.socket` را با مسیر resolved از `LookPath` صدا می‌زند و تا
+  دیدن socket واقعی با mode `0600` و مالک uid مجاز آمادگی را اعلام نمی‌کند.
+  هر شکست بعد از اولین write، فایل‌های قبلی/وجود یا نبود آن‌ها، mode/owner
+  دایرکتوری runtime و حالت enable قبلی socket را برمی‌گرداند؛ اگر rollback
+  کامل نشود، خطا صریحاً «rollback incomplete» است.
+- setup فایل‌های root-owned موجود را به modeهای مستند همگرا می‌کند (unit/config/
+  tmpfiles `0644`، binary `0755`، دایرکتوری‌های اختصاصی `/etc/routelatch` و
+  `/usr/libexec/routelatch` `0755`) و `mode&022` را برای هر فایل نصب‌شده تضمین
+  می‌کند؛ دایرکتوری‌های سیستمی مشترک (`/etc/systemd/system`،
+  `/etc/tmpfiles.d`) هرگز widen نمی‌شوند و فقط write bits گروه/دیگر پاک
+  می‌شود. symlink یا فایل غیر-root-owned هرگز با chmod «امن» نمی‌شود، بلکه
+  conflict است.
 - شکل pin‌شدهٔ `/etc/routelatch/tun.json` (R16-C/G) فقط دو فیلد دارد:
   `allowed_uid` (عدد نامنفی؛ uid مجاز engine) و `socks_address` (فقط IP literal
   لوپ‌بک `127.0.0.0/8` یا `::1` با پورت معتبر). نام/MTU/gateway/routeها، مسیر
@@ -2207,9 +2249,10 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
   config رد می‌شود و هیچ interface/route/domain/log-level از آن پذیرفته نیست.
 - control socket `0600`، peer credential برابر uid مجاز، ورودی فقط listener
   لوپ‌بک و `enable|disable|status`. هر درخواست دیگر/آدرس غیرلوپ‌بک رد می‌شود.
-  `.socket` unit با `SocketMode=0600`/`SocketUser=<uid>` ساخته می‌شود (مسیر
-  `/run/routelatch-tun/` را setup با مالکیت uid می‌سازد)؛ service در disable با
-  exit 0 خارج می‌شود و socket برای enable بعدی باقی می‌ماند.
+  `.socket` unit با `SocketMode=0600`/`SocketUser=<uid>` و
+  `DirectoryMode=0755` ساخته می‌شود (tmpfiles.d مسیر `/run/routelatch-tun/` را
+  با مالکیت uid می‌سازد؛ `DirectoryMode` فقط fallback قابل‌عبور است)؛ service در
+  disable با exit 0 خارج می‌شود و socket برای enable بعدی باقی می‌ماند.
 - lease `/run/routelatch-tun/lease.json` فقط برای بازسازی fail-closed پس از
   restart سرویس در همان boot است و `boot_id` دارد؛ mismatch/discard. در boot
   تازه TUN خودکار ساخته نمی‌شود؛ engine بر اساس `tun_enabled` آن را درخواست
@@ -2290,9 +2333,11 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 - هیچ MITM/root CA/کاهش TLS، هیچ تغییر DNS سیستم، هیچ LAN listener/forwarding،
   و هیچ rule/pool مستقل در سرویس TUN مجاز نیست.
 - اگر engine در دسترس نیست و باید TUN فوراً برداشته شود، مسیر recovery
-  `sudo routelatch tun uninstall` (یا معادل مستند `systemctl stop
-  routelatch-tun.service`) است؛ `tun off` عادی از management socket استفاده
-  می‌کند و در نبود engine کافی نیست. این مسیر باید در README/doctor بیاید.
+  `sudo routelatch tun uninstall` است؛ معادل دستی مستند
+  `systemctl stop routelatch-tun.socket` و سپس `systemctl stop
+  routelatch-tun.service` است تا socket فعال، service را از lease دوباره
+  بالا نیاورد. `tun off` عادی از management socket استفاده می‌کند و در نبود
+  engine کافی نیست. این مسیر در README/deploy/doctor آمده است.
 
 ### ۱۰.۸ نگاشت پذیرش
 

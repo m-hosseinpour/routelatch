@@ -23,6 +23,20 @@ packages predate this change and still contain the old unit and old foreground
 `run`; see "Upgrading from a package with the old unit" below. Requirements:
 `docs/requirements.md` D26; contract: `docs/contracts.md` §7.5.
 
+**Optional TUN helper (still not a package payload):** the post-v1 TUN coverage
+layer (D29/R16) in this source revision needs Linux ≥5.7, systemd and
+`/dev/net/tun`, and is installed only by `sudo routelatch tun setup`. That
+command creates the root-owned `routelatch-tun.service`/`.socket` units,
+`/etc/routelatch/tun.json`, a `/etc/tmpfiles.d/routelatch-tun.conf` entry and a
+root-owned helper copy under `/usr/libexec/routelatch/`. The tarball, `.deb` and
+RPM still contain no unit, tmpfiles entry, helper or maintainer script; the
+package checks reject such payload. The helper is not part of the published
+v1.1.0 assets. `tun uninstall` removes only the helper files it owns and leaves
+rules, pool data, config, state and backups intact. See `README.md` and
+`deploy/README.md` for prerequisites, the fail-open window and independent
+recovery (the engine must be running for `tun off`; uninstall and
+`systemctl stop routelatch-tun.socket`/`.service` are the independent paths).
+
 The default answer for "how do I get a package" is the published GitHub Release:
 from D27 (2026-11-24), `.github/workflows/release.yml` builds all 17 assets and
 publishes them when an annotated `v*` tag is pushed (see "Release builds in

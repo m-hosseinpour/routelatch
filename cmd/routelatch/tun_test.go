@@ -14,6 +14,7 @@ import (
 	"routelatch/internal/control"
 	"routelatch/internal/egress"
 	"routelatch/internal/store"
+	"routelatch/internal/tun"
 	tunsetup "routelatch/internal/tun/setup"
 )
 
@@ -117,6 +118,18 @@ func tunData(t *testing.T, result cliResult) map[string]any {
 		t.Fatalf("data is not an object: %+v", result.env)
 	}
 	return data
+}
+
+func assertKeys(t *testing.T, data map[string]any, want ...string) {
+	t.Helper()
+	if len(data) != len(want) {
+		t.Fatalf("data keys = %v, want exactly %v", data, want)
+	}
+	for _, key := range want {
+		if _, ok := data[key]; !ok {
+			t.Fatalf("data is missing %q: %v", key, data)
+		}
+	}
 }
 
 func TestTunStatusOnOffAndAdditiveJSON(t *testing.T) {
@@ -277,11 +290,13 @@ func testTunSetupManager(t *testing.T) (*tunsetup.Manager, *cliTunRunner, string
 		Chown:         func(string, int, int) error { return nil },
 		KernelVersion: func() (int, int, error) { return 6, 8, nil },
 		TunDevice:     func() error { return nil },
+		Ready:         func(string, int) error { return nil },
 		Paths: tunsetup.Paths{
 			ServiceUnit: filepath.Join(dir, "etc/systemd/system", tunsetup.ServiceUnitName),
 			SocketUnit:  filepath.Join(dir, "etc/systemd/system", tunsetup.SocketUnitName),
 			Config:      filepath.Join(dir, "etc/routelatch/tun.json"),
 			Binary:      filepath.Join(dir, "usr/libexec/routelatch/tun-service"),
+			Tmpfiles:    filepath.Join(dir, "etc/tmpfiles.d/routelatch-tun.conf"),
 			RuntimeDir:  filepath.Join(dir, "run/routelatch-tun"),
 		},
 		SocksAddress: tunsetup.DefaultSocksAddress,
@@ -314,6 +329,10 @@ func TestTunSetupAndUninstallCLIIdempotent(t *testing.T) {
 	if data["changed"] != true || data["allowed_uid"] != float64(1000) || data["managed"] != true {
 		t.Fatalf("setup data = %v", data)
 	}
+	if data["tmpfiles"] != m.Paths.Tmpfiles {
+		t.Fatalf("setup tmpfiles = %v, want %q", data["tmpfiles"], m.Paths.Tmpfiles)
+	}
+	assertKeys(t, data, "unit", "socket_unit", "config", "binary", "tmpfiles", "allowed_uid", "changed", "managed")
 	second := runCLI(t, t.TempDir(), "tun", "setup")
 	if second.code != 0 {
 		t.Fatalf("second tun setup exit = %d (%+v)", second.code, second.env)
@@ -326,7 +345,12 @@ func TestTunSetupAndUninstallCLIIdempotent(t *testing.T) {
 	if uninstall.code != 0 || !uninstall.env.OK || uninstall.env.Command != "tun uninstall" {
 		t.Fatalf("tun uninstall = %+v (exit %d)", uninstall.env, uninstall.code)
 	}
-	removed, _ := tunData(t, uninstall)["removed"].([]any)
+	uninstallData := tunData(t, uninstall)
+	if uninstallData["allowed_uid"] != float64(1000) {
+		t.Fatalf("uninstall allowed_uid = %v, want 1000", uninstallData["allowed_uid"])
+	}
+	assertKeys(t, uninstallData, "unit", "socket_unit", "config", "binary", "tmpfiles", "allowed_uid", "changed", "managed", "removed")
+	removed, _ := uninstallData["removed"].([]any)
 	if len(removed) == 0 {
 		t.Fatalf("uninstall removed nothing: %v", uninstall.env.Data)
 	}
@@ -338,6 +362,51 @@ func TestTunSetupAndUninstallCLIIdempotent(t *testing.T) {
 	again := runCLI(t, t.TempDir(), "tun", "uninstall")
 	if again.code != 0 {
 		t.Fatalf("idempotent uninstall exit = %d (%+v)", again.code, again.env)
+	}
+	againData := tunData(t, again)
+	if _, present := againData["allowed_uid"]; present {
+		t.Fatalf("idempotent uninstall reported a stale allowed_uid: %v", again.env.Data)
+	}
+	assertKeys(t, againData, "unit", "socket_unit", "config", "binary", "tmpfiles", "changed", "managed")
+}
+
+func TestTunSetupSocksAndForce(t *testing.T) {
+	m, runner, _ := testTunSetupManager(t)
+	withTunSetupManager(t, m)
+	if err := os.MkdirAll(filepath.Dir(m.Paths.ServiceUnit), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(m.Paths.ServiceUnit, []byte("foreign unit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner.active = "inactive"
+
+	got := runCLI(t, t.TempDir(), "tun", "setup", "--socks", "127.0.0.1:9400", "--force")
+	if got.code != 0 || !got.env.OK {
+		t.Fatalf("forced setup = %+v (exit %d)", got.env, got.code)
+	}
+	cfg, err := tun.LoadServiceConfig(m.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SocksAddress != "127.0.0.1:9400" {
+		t.Fatalf("config socks = %q, want 127.0.0.1:9400", cfg.SocksAddress)
+	}
+	unit, err := os.ReadFile(m.Paths.ServiceUnit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(unit), tunsetup.OwnershipMarker) {
+		t.Fatalf("forced setup did not adopt the unit:\n%s", unit)
+	}
+}
+
+func TestTunSetupRejectsNonLoopbackSocks(t *testing.T) {
+	m, _, _ := testTunSetupManager(t)
+	withTunSetupManager(t, m)
+	got := runCLI(t, t.TempDir(), "tun", "setup", "--socks", "192.0.2.1:9400")
+	if got.code != 2 || got.env.Error == nil || got.env.Error.Kind != contract.InvalidDestination {
+		t.Fatalf("non-loopback socks = %+v (exit %d)", got.env, got.code)
 	}
 }
 
@@ -386,6 +455,11 @@ func TestTunHelpUsageAndHiddenService(t *testing.T) {
 	setupHelp := runCLI(t, t.TempDir(), "tun", "setup", "--help")
 	if setupHelp.code != 0 || !strings.Contains(setupHelp.stderr, "--socks") {
 		t.Fatalf("tun setup help = %d\n%s", setupHelp.code, setupHelp.stderr)
+	}
+	for _, want := range []string{"tmpfiles", "binary", "config", "uninstall"} {
+		if !strings.Contains(setupHelp.stderr, want) {
+			t.Fatalf("tun setup help does not mention %q:\n%s", want, setupHelp.stderr)
+		}
 	}
 	statusHelp := runCLI(t, t.TempDir(), "tun", "status", "--help")
 	if statusHelp.code != 0 || !strings.Contains(statusHelp.stderr, "tun <command>") {

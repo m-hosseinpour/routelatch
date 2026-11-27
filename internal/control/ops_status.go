@@ -374,9 +374,9 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		case contract.TunOff:
 			add("tun", "ok", "service is stopped; TUN coverage is off (the saved preference is kept)", "")
 		case contract.TunOn:
-			add("tun", "warn", "service is stopped but TUN coverage is still on", "run 'routelatch tun off' or stop routelatch-tun.service, then retry the stop")
+			add("tun", "warn", "service is stopped but TUN coverage is still on", "run 'routelatch tun off'; if the engine is unavailable, run 'sudo routelatch tun uninstall' or stop routelatch-tun.socket then routelatch-tun.service")
 		default:
-			add("tun", "warn", "service is stopped and TUN coverage could not be verified off: state="+string(tun.State), "stop routelatch-tun.service if coverage is still active, then retry")
+			add("tun", "warn", "service is stopped and TUN coverage could not be verified off: state="+string(tun.State), "stop routelatch-tun.socket then routelatch-tun.service if coverage is still active, or run 'sudo routelatch tun uninstall'")
 		}
 	case tun.State == contract.TunOn:
 		detail := "coverage is on: DNS stays direct and non-DNS UDP is blocked"
@@ -409,7 +409,7 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 		case contract.TunReasonPlatformUnsupported:
 			fix = "TUN needs Linux 5.7 or newer with a physical default route; keep coverage off on this system"
 		case contract.TunReasonConflict:
-			fix = "disable and re-enable TUN after the listener change; if coverage is stuck, stop routelatch-tun.service"
+			fix = "disable and re-enable TUN after the listener change; if coverage is stuck, run 'sudo routelatch tun uninstall' or stop routelatch-tun.socket then routelatch-tun.service"
 		case contract.TunReasonSidecarLoopRisk:
 			fix = "remove the hysteria2 exit or update the pinned sidecar so it can bind route.default_interface"
 		}
@@ -417,7 +417,7 @@ func (s *Service) doctor(ctx context.Context) (DoctorData, error) {
 	case tun.LastError == contract.TunReasonConflict:
 		// The helper did not confirm a clean off at startup. This is not a
 		// healthy default: crash-left coverage may still capture traffic.
-		add("tun", "warn", "TUN coverage could not be verified off; the helper did not confirm a clean stop", "stop routelatch-tun.service or run 'routelatch tun off'; the engine keeps its own dials outside coverage meanwhile")
+		add("tun", "warn", "TUN coverage could not be verified off; the helper did not confirm a clean stop", "run 'routelatch tun off' or 'sudo routelatch tun uninstall'; stopping routelatch-tun.socket then routelatch-tun.service is the engine-independent path; the engine keeps its own dials outside coverage meanwhile")
 	default:
 		add("tun", "ok", "TUN coverage is off; the proxy listeners work normally", "")
 	}

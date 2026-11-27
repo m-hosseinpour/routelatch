@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F انجام شدند (F: کد؛ KDE گیت‌شده)؛ R16-G بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G انجام شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs)؛ R16-H بعدی)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -594,6 +594,47 @@ icon و toggle میزبان اجرا نشد (مجوز این جلسه نبود)�
 
 **check:** `check-package.sh`, `check-artifact.sh` (بدون تغییر payload)؛
 idempotent setup/uninstall با fake manager؛ gated نصب واقعی فقط روی محیط مجاز.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-G — انجام شد):**
+HEAD هنگام شروع `c575d6d` بود و تغییرات G عمداً unstaged/uncommitted در working
+tree مانده‌اند تا بازبینی مستقل روی همان درخت انجام شود. `internal/tun/setup` حالا `/etc/tmpfiles.d/routelatch-tun.conf` (root-owned، خط
+`d /run/routelatch-tun 0755 <uid> - -`) را می‌نویسد و با
+`systemd-tmpfiles --create` اعمال می‌کند؛ socket unit `DirectoryMode=0755` و
+service `RuntimeDirectoryMode=0755` دارد. باینری از `/proc/self/exe` کپی
+می‌شود و `systemctl`/`systemd-tmpfiles` با مسیر `LookPath` اجرا می‌شوند.
+`statSafe`/`ensureDir` مالکیت root و نبود symlink را نگه می‌دارند و modeهای
+unit/config/tmpfiles `0644`، binary `0755` و دایرکتوری‌ها `0755` را حتی با
+محتوای یکسان همگرا می‌کنند؛ `mode&022` در فایل‌های نصب‌شده صفر است. setup پس
+از `enable --now` تا socket واقعی `0600` و مالک uid مجاز آماده نشود موفق
+نمی‌شود و در شکست فایل‌های قبلی/وجود‌ونبود، mode/owner دایرکتوری runtime و
+حالت enable قبلی socket را rollback می‌کند. `uninstall` اول socket را
+disable/stop و بعد service را متوقف می‌کند و فقط unit/socket/config/tmpfiles/
+helper و lease/socket مالک را پاک می‌کند؛ `allowed_uid` دیگر ۰ گزارش نمی‌شود.
+`reason:tun_setup_not_root` حذف شد (خطای CLI-only بدون detail، بدون ErrorKind
+تازه)؛ usage متن حذف config/binary را روشن می‌کند و `--socks` پیش‌فرض
+`127.0.0.1:8318` مستند است. unit با `DevicePolicy=closed` و allow صریح
+`/dev/net/tun`/`null`/`zero`/`random`/`urandom` سخت‌تر شد. README،
+packaging/README، deploy/README، CONTRIBUTING، docs/README، contracts §۱۰ و
+architecture §۹ به‌روزرسانی شدند؛ بسته همچنان هیچ unit/tmpfiles/helper/postinst
+ندارد و `tun setup` تنها سازنده است.
+**checkها:** gofmt/vet/build سبز؛ full `go test -count=1 ./...` سبز
+(acceptance ۱۱۸.۲s)؛ `-race` setup/cmd سبز؛ `scripts/build.sh` +
+`package.sh` + `check-package.sh` + `check-artifact.sh` در `DIST` ایزوله
+(`/tmp/opencode/rl-dist`) برای چهار معماری PASS و payload بدون unit؛
+`systemd-analyze verify` روی unitهای تولیدشده PASS؛ gated در کانتینر
+Docker/systemd دورانداختنی privileged و netns ایزوله: `tun setup` موفق،
+socket `0600`/uid ۱۰۰۰ و دایرکتوری `0755`/uid ۱۰۰۰، setup دوم
+`changed=false`، boot/restart دایرکتوری و socket را از tmpfiles بازساخت،
+`tun on` لینک/route دو-stack را ساخت و `tun off` پاک کرد، توقف مستقل
+`socket`+`service` بدون engine لینک را برداشت، و `tun uninstall` همهٔ فایل‌های
+مالک را حذف کرد و config/state کاربر را نگه داشت. یک شکست عمدی `enable`
+(با wrapper محلی) rollback فایل‌ها/دایرکتوری و disable سوکت را نشان داد و پس
+از حذف تزریق، setup دوباره موفق شد. container حذف شد؛ هیچ نصب/تغییر هاست انجام
+نشد. بازبینی مستقل G **Ready with findings** بود؛ JSON قرارداد setup
+(`tmpfiles`/`allowed_uid`)، architecture/doctor، unit-as-owner و chmod
+دایرکتوری‌های مشترک رفع و با تأیید متمرکز بسته شدند. **محدود:** KDE/Wayland،
+پذیرش A17 و review نهایی در H؛ نصب واقعی فقط در همان محیط disposable آزموده
+شد و روی هاست اجرا نشد. **next:** R16-H.
 
 #### R16-H — پذیرش A17 و بازبینی نهایی
 
@@ -1882,9 +1923,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-F در ۲۰۲۶-۱۱-۲۷ انجام و
-   بازبینی شدند (F: کد؛ KDE گیت‌شده)؛ verdict R16-A برابر `Ready` است و R16-G
-   قدم بعد است. R16-I/J
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-G در ۲۰۲۶-۱۱-۲۷ انجام و
+   بازبینی شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs، بدون commit)؛
+   verdict R16-A برابر `Ready` است و R16-H قدم بعد است. R16-I/J
    (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
    می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
@@ -1928,7 +1969,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B/C/D/E/F انجام شدند (F: کد؛ KDE گیت‌شده) و R16-G قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C/D/E/F/G انجام شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs،
+   review شده) و R16-H قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

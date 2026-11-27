@@ -347,8 +347,8 @@ func (c *cli) human(env contract.Envelope) {
 	case "tun setup":
 		if d, ok := env.Data.(map[string]any); ok {
 			fmt.Fprintf(c.stdout, "TUN helper installed for uid %v (changed: %v)\n", d["allowed_uid"], yesNo(d["changed"]))
-			fmt.Fprintf(c.stdout, "unit: %v\nsocket: %v\nconfig: %v\nbinary: %v\n",
-				d["unit"], d["socket_unit"], d["config"], d["binary"])
+			fmt.Fprintf(c.stdout, "unit: %v\nsocket: %v\nconfig: %v\nbinary: %v\ntmpfiles: %v\n",
+				d["unit"], d["socket_unit"], d["config"], d["binary"], d["tmpfiles"])
 			return
 		}
 	case "tun uninstall":

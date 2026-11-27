@@ -5,10 +5,13 @@ deliberate: it is a loopback proxy client with an approved-destination list, not
 a general VPN or a multi-platform product. An optional **TUN coverage layer** is
 defined for after v1 (decision D29 / plan R16): it is a coverage path over the
 existing modes, uses a separate privileged helper, and does not replace the
-approved-destination policy. It is not implemented or shipped in v1.1.0.
-DNS-through-pool and UDP coverage are separate research tasks (D30/R16-I/J);
-they need a new contract/acceptance and must not be enabled silently. Changes
-that widen the scope beyond these decisions need a new design decision first.
+approved-destination policy. The service, engine connection, CLI, tray surface
+and privileged setup are implemented in this source revision (R16-C–G), but
+final A17 acceptance (R16-H) and a release are still open; published v1.1.0
+assets do not contain it. DNS-through-pool and UDP coverage are separate
+research tasks (D30/R16-I/J); they need a new contract/acceptance and must not be
+enabled silently. Changes that widen the scope beyond these decisions need a new
+design decision first.
 
 Read [AGENTS.md](AGENTS.md) for the repository rules and
 [docs/implementation-plan.md#open-work](docs/implementation-plan.md#open-work) for
@@ -43,7 +46,12 @@ loopback-only. Opt-in checks that touch real system state are:
 - TUN coverage tests (R16) are gated and may create a TUN interface, routes and a
   temporary system unit; run them only in a disposable VM/container or an
   explicitly authorized host. They must never be part of the default offline
-  suite and must not change the real host's DNS/firewall/network.
+  suite and must not change the real host's DNS/firewall/network. The privileged
+  setup/uninstall logic is unit-tested with a fake manager and a private
+  filesystem tree; a real `tun setup`/boot/readiness/rollback run needs a
+  privileged, isolated systemd container or an explicitly authorized host, plus
+  Linux ≥5.7, systemd, `systemd-tmpfiles` and `/dev/net/tun`. Never install the
+  helper on a developer's host as part of an ordinary test run.
 
 The old gated "install a temporary systemd unit and run it" cells were retired
 with the packaged unit. Service/autostart behavior is covered by fake-manager

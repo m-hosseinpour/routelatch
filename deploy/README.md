@@ -30,10 +30,56 @@ in those environments, and it is the only mode a service or unit may run. Plain
 `run` deliberately detaches and is not suitable inside a systemd unit: systemd
 would see its main process exit immediately.
 
-No current mode needs root, TUN, a firewall change or a system-wide proxy
-setting. Listeners remain loopback-only under the documented policy. The planned
+No normal proxy mode needs root, TUN, a firewall change or a system-wide proxy
+setting. Listeners remain loopback-only under the documented policy. The
 post-v1 TUN coverage layer (D29/R16) is opt-in, uses a separate privileged
-helper installed by `sudo routelatch tun setup`, and is not part of v1.1.0.
+helper installed by `sudo routelatch tun setup`, and is not part of v1.1.0; the
+package still ships no unit, helper or maintainer script.
+
+## Optional TUN coverage helper
+
+TUN coverage is a system-wide layer over the existing modes, implemented in this
+source revision but not in the published v1.1.0 assets. It needs Linux ≥5.7,
+systemd and `/dev/net/tun`. The privileged helper is the only root component and
+receives only `CAP_NET_ADMIN`; the engine, tray and CLI stay non-root.
+
+```sh
+sudo routelatch tun setup       # idempotent; writes root-owned files
+routelatch tun on               # mode must not be stopped
+routelatch tun status
+routelatch tun off              # needs the running engine
+sudo routelatch tun uninstall   # independent of the engine
+```
+
+`setup` writes `/etc/systemd/system/routelatch-tun.{service,socket}`,
+`/etc/routelatch/tun.json`, `/etc/tmpfiles.d/routelatch-tun.conf` and a
+root-owned copy of the binary under `/usr/libexec/routelatch/`. The tmpfiles
+entry recreates `/run/routelatch-tun` with the invoking uid after boot; the
+socket is `0600` and the service waits for it before setup reports success.
+`--socks 127.0.0.1:PORT` changes the loopback target if the engine does not use
+the default `127.0.0.1:8318`. Setup restores the previous files if a later step
+fails. An existing RouteLatch-owned unit owns its root-owned config and binary,
+so a `--socks` change or a new binary is updated without `--force`; without an
+owned unit those differing files need `--force`. A foreign symlink, non-root-
+owned file or active foreign unit is never replaced; `--force` only adopts a
+differing root-owned, inactive unit/config/tmpfiles entry.
+
+All host users' traffic is captured while coverage is on. Plain DNS remains
+direct, non-DNS UDP/QUIC is blocked, and ECH/QUIC or other traffic without a
+visible TLS/HTTP name can only match IP/CIDR rules. The system DNS setting is not
+changed. A service crash or restart leaves a short fail-open window; a permanent
+kill-switch is not part of this phase. If the engine is gone, `tun off` cannot
+run; stop the socket before the service so it cannot reactivate from the restart
+lease:
+
+```sh
+sudo systemctl stop routelatch-tun.socket
+sudo systemctl stop routelatch-tun.service
+```
+
+`tun uninstall` does this ordering for you and removes only the files and
+runtime lease/socket it owns. It never deletes rules, pool data, config, state or
+backups.
 
 ## Desktop app and foreground mode
 

@@ -286,13 +286,15 @@ TUN در D29 (۲۰۲۶-۱۱-۲۶) از «مرحلهٔ بعدی مبهم» به �
 فاز اول TUN فقط UDP غیرDNS را بلاک می‌کند. در R16-C سرویس جداگانهٔ TUN
 (`internal/tun` و `__tun-service`) با lifecycle، lease، control socket و seam
 interface فیزیکی، در R16-D اتصال engine/bypass، در R16-E سطح CLI
-(`tun status|on|off` و `tun setup|uninstall`) و در R16-F زیرمنوی Coverage و
-آیکن TUN پیاده شده‌اند. نصب واقعی/readiness/بسته‌بندی (G) باز است و
-بررسی واقعی KDE/R16-H اجرا نشده است؛ setup فعلی فقط با fake paths/systemctl
-آزمون شده و هیچ نصب میزبان انجام نداده است. بنابراین TUN هنوز end-to-end اجرا یا
-پشتیبانی نمی‌شود و ادعای پشتیبانی آن در v1.x وجود ندارد.
+(`tun status|on|off` و `tun setup|uninstall`)، در R16-F زیرمنوی Coverage و
+آیکن TUN و در R16-G setup ممتاز/readiness/rollback/uninstall و بسته‌بندی/
+مستندات پیاده شده‌اند. G با نصب واقعی در یک کانتینر privileged/systemd
+دورانداختنی (setup، boot/restart از tmpfiles، `tun on/off`، توقف مستقل و
+uninstall) آزموده شد، نه روی هاست؛ بررسی واقعی KDE/Wayland و پذیرش A17 در
+R16-H باز است. بستهٔ منتشرشده هیچ unit/tmpfiles/helper ندارد، TUN در
+`v1.x` منتشر نشده و ادعای پشتیبانی آن در release وجود ندارد.
 
-## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray پیاده؛ نصب/readiness گیت‌شده باز)
+## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray و R16-G: setup/packaging/docs پیاده؛ پذیرش A17 در R16-H باز)
 
 **مرز.** TUN یک **حالت پنجم نیست**؛ یک لایهٔ پوشش روی `targeted`/`all-proxy`/
 `all-direct` است. جدول تصمیم §۳، فهرست تأییدشده، انتخاب exit، registry، D11 و
@@ -326,10 +328,19 @@ __tun-service`) و با همان هستهٔ pin‌شده اجرا می‌شود.
 **نصب یک‌باره.** `sudo routelatch tun setup` یک systemd **system** unit/socket
 می‌سازد (نه در بسته؛ D26 برای بسته دست‌نخورده می‌ماند). unit با
 `CapabilityBoundingSet=CAP_NET_ADMIN` و `AmbientCapabilities=CAP_NET_ADMIN`،
-`NoNewPrivileges=yes` و hardening اجرا می‌شود؛ کنترل socket فقط برای همان uid
+`NoNewPrivileges=yes`، `ProtectSystem=strict`، device policy بسته با allow
+صریح `/dev/net/tun` و hardening اجرا می‌شود؛ کنترل socket فقط برای همان uid
 (peer credential) است و ورودی‌اش فقط listener لوپ‌بک و دستورهای ثابت است. هیچ
-route/interface/آدرس دلخواهی از کاربر پذیرفته نمی‌شود. `tun uninstall` unit و
-state موقت را پاک می‌کند. جزئیات قراردادی در `contracts.md §۱۰`.
+route/interface/آدرس دلخواهی از کاربر پذیرفته نمی‌شود. setup نسخهٔ root-owned
+باینری را از `/proc/self/exe` در `/usr/libexec/routelatch/` می‌گذارد و هرگز
+باینری قابل‌نوشتن کاربر را با `CAP_NET_ADMIN` اجرا نمی‌کند؛ unit/config دلخواه
+را بدون `--force` جایگزین نمی‌کند. tmpfiles.d ریشه‌دار دایرکتوری
+`/run/routelatch-tun` را پس از boot با مالکیت uid مجاز بازمی‌سازد تا socket
+`0600` قبل از اولین اجرا قابل‌دسترسی باشد. setup تا وقتی socket واقعاً با mode
+و مالک درست منتشر نشود موفق گزارش نمی‌شود و در شکست، فایل‌های قبلی را برمی‌گرداند.
+`tun uninstall` اول socket/service را متوقف و غیرفعال می‌کند و سپس فقط
+unit/config/tmpfiles/helper و lease/socket مالک را پاک می‌کند. جزئیات قراردادی در
+`contracts.md §۱۰`.
 
 **حلقه و ترافیک خود RouteLatch.** TUN همهٔ ترافیک سیستم را می‌گیرد، پس dialهای
 خود engine (pool، direct، probe، refresh) و sidecar نیز باید از TUN بیرون بمانند:
