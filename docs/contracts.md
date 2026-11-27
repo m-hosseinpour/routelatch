@@ -2399,13 +2399,17 @@ socket/helper فقط warning و `off` می‌دهد و listener عادی را ا
 
 DNS-through-pool و پوشش UDP در D30/R16-I/J تعریف شده‌اند و **بخشی از این
 قرارداد فاز اول نیستند**؛ DNS یک switch مستقل خواهد داشت (جدا از mode) و تا
-verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیاده‌سازی نیازمند بخش/acceptance
-جدید در همین سند است، نه تغییر خاموش A17.
+verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. تحقیق R16-I/J (۲۰۲۶-۱۱-۲۷، هر دو
+`Ready for decision`) ثبت شده و D31/D32 مسیر را تعیین کرده‌اند: DNS فقط
+design/contract اول و UDP/QUIC یک pilot جداگانهٔ opt-in؛ این قرارداد و رفتار
+فاز اول تا تأیید بخش/acceptance جدید بدون تغییر می‌مانند. هر پیاده‌سازی نیازمند
+بخش/acceptance جدید در همین سند است، نه تغییر خاموش A17.
 
 **قدم بعد:** R16-B/C/D (مدل داده، سرویس، اتصال engine و bypass)، R16-E (CLI،
 layout/معنای setup و uninstall با fake paths/systemctl)، R16-F (tray) و R16-G
 (نصب/readiness/rollback، بسته‌بندی و مستندات کاربر) پیاده، تست و commit شده‌اند
 (`8a8ec72`، `b0438f2`، `7729205`، `c678f20`، `c575d6d`، `5144cbf`). R16-H در
 ۲۰۲۶-۱۱-۲۷ روی `7ff128c` A17 را با limits پذیرفت (CI `45974444673` سبز)؛
-release طبق گیت‌های `AGENTS.md` است و R16-I/J تحقیقات بعدی‌اند. در v1.1.0 هیچ
+release طبق گیت‌های `AGENTS.md` است و R16-I-1/J-1 (design/contract و
+contract/acceptance، بدون کد) تعریف شده‌اند و شروع نشده‌اند. در v1.1.0 هیچ
 TUN وجود نداشت؛ v1.2.0 (release `460485888`) آن را opt-in اضافه کرد.

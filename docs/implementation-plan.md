@@ -214,9 +214,9 @@ R15 (سطح کنترل tray) یک capability پس از v1 است که در بخ�
 | A17 | R16، پوشش TUN: helper/setup، dual-stack، TCP→router/pool، sniffing، DNS مستقیم/UDP بلاک، fail-closed، persistence، tray/icon، D21؛ check نهایی در R16-A/H و `contracts.md §۱۰.۸` |
 | A14 | **مجوز/ممیزی/بسته (R3+R8):** Apache-2.0، ممیزی ۶۸ ماژول، بستهٔ release با checksum و source offer؛ طبق تصمیم کاربر بررسی رسمی نام لازم نیست، ایمیل committer قابل‌انتشار است، و push مجاز است — ./release-readiness.md |
 
-DNS-through-pool و پوشش UDP (D30/R16-I/J) عمداً معیار A جدا ندارند، چون هنوز
-تحقیق‌نشده‌اند؛ پس از verdict و تصمیم، acceptance/contract جدید نوشته می‌شود و
-به A17 اضافه نمی‌شود.
+DNS-through-pool و پوشش UDP (D30/R16-I/J) عمداً معیار A جدا ندارند؛ تحقیق آن‌ها
+انجام شده ولی verdict فقط مسیر را تعیین کرده است، پس acceptance/contract جدید
+پیش از کد نوشته می‌شود و به A17 اضافه نمی‌شود.
 
 دادهٔ dev ساخته‌شده برای بازبینی دستی حذف نشود. import قدیمی read-only؛ upgrade
 از state قبلی backup خصوصی و schema version داشته باشد. rollback موتور و state
@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد؛ R16-I/J research: `Ready for decision`)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -263,7 +263,8 @@ checkها در همین بخش ثبت می‌شود.
   sniff است؛ ECH/غیرTLS فقط IP/CIDR.
 - **DNS-through-pool و UDP بخش A17 نیستند (D30):** هر کدام یک task تحقیقی جدا
   (R16-I/R16-J) پس از H می‌گیرند؛ DNS یک switch مستقل و جدا از mode/سایر
-  ترافیک خواهد داشت. تا verdict آن‌ها، DNS مستقیم و UDP بلاک می‌ماند.
+  ترافیک خواهد داشت. تا verdict آن‌ها و قرارداد بعدی (D31/D32)، DNS مستقیم و UDP
+  بلاک می‌ماند.
 - IPv6 هم capture می‌شود (dual-stack). fail-closed تا زنده‌بودن سرویس TUN؛
   خرابی/restart خود سرویس یک پنجرهٔ کوتاه fail-open دارد.
 - انتخاب TUN ماندگار است و پس از restart/Login خودکار فعال می‌شود؛ نبود helper
@@ -694,8 +695,10 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   <https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0>.
   body با «RouteLatch v1.2.0 — opt-in TUN coverage» شروع می‌شود. انتشار طبق
   مجوز ایستادهٔ `AGENTS.md` و پس از CI/package gates انجام شد.
-- **next:** R16-I/J research انجام شد (`Ready for decision`)؛ تصمیم implementation
-  و قرارداد جدید لازم است.
+- **next:** R16-I/J research انجام شد (`Ready for decision`) و تصمیم مسیر در
+  D31/D32 ثبت شد؛ R16-I-1 (design/contract برای DNS) و R16-J-1 (contract/acceptance
+  برای pilot UDP) تعریف شده‌اند ولی **شروع نشده‌اند**؛ شروع هر کدام درخواست/تأیید
+  کاربر می‌خواهد و هیچ کد/تست واقعی مجاز نیست.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -743,6 +746,11 @@ trust/bootstrap (پیشنهاد IP-literal DoH از کاربر، بدون defaul
 engine، live-switch vs `tun off/on`، wording پوشش. implementation تا تصمیم/
 قرارداد جدید شروع نمی‌شود.
 
+**تصمیم کاربر ۲۰۲۶-۱۱-۲۷ (D31):** DNS-through-pool اول design/contract است، نه
+کد؛ هیچ کد محصول و هیچ تغییر رفتار DNS تا تأیید پیشنهاد و یک milestone
+پیاده‌سازی جدا مجاز نیست و v1.2.0 DNS مستقیم می‌ماند. **next:** R16-I-1
+(design/contract، بدون کد)؛ شروع آن درخواست/تأیید کاربر می‌خواهد.
+
 #### R16-J — پوشش UDP/QUIC (تحقیق؛ بعد از H)
 
 **وابستگی:** R16-A/H و D30. **بخشی از A17 نیست** و تا verdict، UDP غیرDNS
@@ -778,6 +786,41 @@ policy باز است. real-pool UDP failure rate **Not verified** و engine UDP 
 **تصمیم‌های لازم:** pursue/keep blocked؛ اگر pursue: separate opt-in vs bundled،
 pilot، domain-only rule، QUIC sniff/ECH، 200ms sniff fix، Vision `-udp443`/XUDP،
 real-pool sample، caps/D13/status contract.
+
+**تصمیم کاربر ۲۰۲۶-۱۱-۲۷ (D32):** UDP/QUIC یک **pilot جداگانهٔ opt-in** است، نه
+همراه TUN و نه تغییر A17/D30؛ قرارداد/پذیرش جدید پیش از کد لازم است و نمونهٔ
+واقعی از pool مجوز صریح جدا می‌خواهد. تا آن زمان UDP غیرDNS بلاک می‌ماند.
+**next:** R16-J-1 (contract/acceptance، بدون کد)؛ شروع آن درخواست/تأیید کاربر
+می‌خواهد.
+
+#### کارهای باز بعدی (تعریف ۲۰۲۶-۱۱-۲۷؛ هیچ‌کدام شروع نشده)
+
+- **R16-I-1 — design/contract سوئیچ DNS (بدون کد).** ورودی‌ها:
+  `spike/tun/R16-I-DNS-RESEARCH.md`، D30/D31 و `contracts.md §۱۰`. خروجی یک
+  پیشنهاد است که این‌ها را روشن کند: دامنهٔ سیاست (approved-only یا همهٔ
+  کوئری‌ها)، DoH با IP literal از کاربر و بدون پیش‌فرض عمومی، bootstrap بدون
+  DNS سیستم، استثنای صریح DNS-egress تا حالت هدفمند هرگز resolver را مستقیم
+  نفرستد، خطای روشن pool مرده بدون fallback مستقیم، معنای switch (زنده در برابر
+  `tun off/on`)، پیش‌فرض خاموش، persistence/restart/backup، مرز CLI/tray (D28)،
+  DNS سیستم بدون تغییر، محدودیت‌های پوشش (systemd-resolved/stub، DoH مرورگر،
+  captive portal، split DNS)، D21 با `logLevel: none`، و IPv6/loop/latency.
+  دروازه: بازبینی مستقل + تأیید کاربر؛ سپس یک milestone پیاده‌سازی جدا.
+- **R16-J-1 — contract/acceptance برای pilot opt-in UDP (بدون کد).** ورودی‌ها:
+  `spike/tun/R16-J-UDP-RESEARCH.md`، D30/D32، `contracts.md §۱۰` و A17. خروجی:
+  دامنهٔ یک pilot جداگانهٔ opt-in، مسیر UDP در transport/engine، سیاست و قاعدهٔ
+  approved-domain/domain-only، نشت صفر مستقیم و fail-closed، QUIC sniff/ECH،
+  Vision/443 و XUDP، تصمیم هزینهٔ sniff حدود ۲۰۰ms، caps/صف‌ها/D13/status،
+  IPv6، idle/teardown، soak منابع، نمونه‌گیری واقعی از pool با مجوز جدا، و یک
+  acceptance جدید. دروازه: بازبینی مستقل + تأیید کاربر؛ ضعیف‌کردن بی‌صدای
+  سیاست no-UDP مجاز نیست.
+- **Verification backlog (باز، شروع‌نشده):** TUN-active واقعی روی host با
+  tray/toggle (نصب helper مجوز جدا می‌خواهد)، contrast پنل، Wayland/GNOME،
+  دیده‌شدن fail-open در status/آیکن، Login/autostart auto-enable، R-28 off-link،
+  runtime arm64، recovery دستی start-limit، caveat D21 debug؛ موارد addendum H
+  که در بازبینی VPN-خاموش دوباره اجرا نشدند؛ نرخ شکست UDP روی pool واقعی (در
+  دامنهٔ R16-J-1).
+- هیچ پیاده‌سازی یا تست واقعی pool اکنون مجاز نیست؛ رفتار v1.2.0 (DNS مستقیم و
+  UDP غیرDNS بلاک) بدون تغییر است.
 
 #### ترتیب، موازی‌کاری و دروازه‌ها
 
@@ -1988,13 +2031,16 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای تاریخ capability و R14 برای تاریخ انتشار) را
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۷): **`v1.2.0` آخرین ریلیز عمومی است و R1–R16 بسته‌اند؛
-   هیچ کار باز R16 یا v1 نمانده است.** **R16-A تا R16-H انجام، بازبینی و پذیرفته
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۷): **`v1.2.0` آخرین ریلیز عمومی است و R1–R16 از نظر
+   پیاده‌سازی/پذیرش بسته‌اند؛ هیچ کار باز R16 یا v1 در آن دامنه نمانده است.**
+   **R16-A تا R16-H انجام، بازبینی و پذیرفته
    شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده؛ G: setup/packaging/docs؛
    code fixes `7ff128c`؛ H `a8ee4d3`). tag annotated `v1.2.0` (object
    `cda1fe35…`)، CI `a8ee4d3` attempt 2 سبز، `Release` `45985695347` و Release
    عمومی id `460485888` با ۱۷ دارایی. R16-I/J research انجام شد
-   (`Ready for decision`)؛ implementation هر کدام تصمیم/قرارداد جدید می‌خواهد.** `v1.1.0` سطح کنترل tray (R15)،
+   (`Ready for decision`)؛ D31/D32 مسیر را تعیین کردند و R16-I-1/J-1 فقط
+   design-only تعریف شده‌اند و **شروع نشده‌اند**؛ implementation هر کدام
+   قرارداد/پذیرش و تأیید جدا می‌خواهد.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
