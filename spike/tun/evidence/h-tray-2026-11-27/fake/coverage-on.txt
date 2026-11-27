@@ -1,0 +1,12 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: on · desired on
+11|false|true|||Helper: installed
+87|false|true|||Interface: rl-tun0
+12|true|true|||Warnings (4)
+73|false|true|||DNS: plain DNS goes direct, not through the pool
+88|false|true|||UDP/QUIC: non-DNS UDP is blocked
+89|false|true|||Desktop proxy: apps using it bypass TUN
+90|false|true|||All direct: pool is unused; non-DNS UDP stays blocked
+14|false|true|||Enable system-wide coverage…
+86|false|true|||Unavailable: coverage is already on
+15|true|true|||Disable system-wide coverage…

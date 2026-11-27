@@ -1,0 +1,8 @@
+
+kill pid=22629 t0=1795768826.731432 state_on_again=True
+
+link transitions: [{"t": 1795768825.9633777, "present": true}, {"t": 1795768826.7928946, "present": false}, {"t": 1795768828.0018182, "present": true}]
+first_fail_s=None
+first_direct_s=0.4
+last_direct_s=1.255
+link_back_s=1.27

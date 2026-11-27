@@ -1,0 +1,40 @@
+
+$ routelatch mode all-proxy
+{"schema_version":1,"ok":true,"command":"mode","data":{"closed":{"count":0,"pending":0},"duration_ms":0,"kept":0,"mode":"all-proxy","policy_version":6}}
+[exit 0]
+
+all-proxy unapproved source: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"203.0.113.8\", \"port\": 43362, \"ts\": 1795772742.7774792}"}
+
+$ routelatch mode targeted
+{"schema_version":1,"ok":true,"command":"mode","data":{"closed":{"count":0,"pending":0},"duration_ms":0,"kept":0,"mode":"targeted","policy_version":7}}
+[exit 0]
+
+hold before switch: connected 0.001
+
+registered=True
+
+$ routelatch mode all-direct
+{"schema_version":1,"ok":true,"command":"mode","data":{"closed":{"count":1,"pending":0},"duration_ms":0,"kept":0,"mode":"all-direct","policy_version":8}}
+[exit 0]
+
+hold after switch: connected 0.001
+closed 1.632 eof=True
+
+mode switch elapsed ms: 1257
+
+$ routelatch mode stopped
+{"schema_version":1,"ok":true,"command":"mode","data":{"closed":{"count":0,"pending":0},"duration_ms":0,"kept":0,"mode":"stopped","policy_version":9}}
+[exit 0]
+
+$ routelatch status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":false,"mode":"stopped","policy_version":9,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":true,"selected_exit":"","tun":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"},"warnings":["service is stopped; traffic listeners are closed and leaving this mode needs a process restart"]}}
+
+stopped status: {"connections": {"dialing": 0, "open": 0, "proofs": {"accepted": 0, "confirmed": 0}}, "diagnostics": {"enabled": true, "queued": 0}, "listeners": {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}, "listeners_open": false, "mode": "stopped", "policy_version": 9, "pool": {"cooling": 0, "healthy": 1, "total": 1, "usable": 1}, "ready": true, "resume_requires_restart": true, "selected_exit": "", "tun": {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "state": "off", "udp": "blocked"}, "warnings": ["service is stopped; traffic listeners are closed and leaving this mode needs a process restart"]}
+
+$ routelatch tun on
+{"schema_version":1,"ok":false,"command":"tun on","error":{"kind":"stopped","path":"local","message":"service is stopped; choose a mode before enabling TUN"}}
+[exit 3]
+
+$ routelatch mode targeted
+{"schema_version":1,"ok":true,"command":"mode","data":{"closed":{"count":0,"pending":0},"duration_ms":0,"kept":0,"mode":"targeted","policy_version":10}}
+[exit 0]

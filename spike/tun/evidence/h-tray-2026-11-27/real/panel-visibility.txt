@@ -1,0 +1,10 @@
+R16-H panel visibility during the real and fake runs (2026-11-27)
+
+- Environment: DISPLAY=:0, Plasma 6.6.7 / X11; a full-screen
+  "kscreenlocker_greet" window (1920x1200+0+0) was IsViewable.
+- A bottom-strip root capture (1920x60 at y=1140) decoded with Pillow was
+  uniformly black (stddev 0.0 on sampled rows); the panel was not visible.
+- Consequence: no panel screenshot was kept and no pointer click was used.
+  Icon evidence is the exact StatusNotifierItem IconPixmap; menu evidence is
+  the dbusmenu GetLayout tree. The probe image was deleted; this note records
+  the observation.

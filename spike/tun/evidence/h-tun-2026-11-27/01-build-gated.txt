@@ -1,0 +1,26 @@
+$ scripts/build.sh (container, ARCHES=amd64)
+version=h-accept commit=e4859db date=2026-11-27T08:39:23Z
+building linux/amd64 -> /work/dist/routelatch-linux-amd64
+RouteLatch h-accept
+commit: e4859db
+build date: 2026-11-27T08:39:23Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"h-accept","commit":"e4859db","build_date":"2026-11-27T08:39:23Z"}}
+stamp linux/amd64: proven via version and --json
+
+wrote /work/dist/SHA256SUMS:
+f6a7e3ff677c02d77ca48ad8b6381455bea1afb4bb11fa0c755a18505d5e8421  routelatch-linux-amd64
+
+wrote /work/dist/BUILD-INFO (version/commit/date stamp that the package ships)
+install or enable nothing here; packaging/README.md documents the user's steps.
+
+$ /work/dist/routelatch-linux-amd64 version
+RouteLatch h-accept
+commit: e4859db
+build date: 2026-11-27T08:39:23Z
+$ go test -count=1 -run "^(TestTunIntegration|TestTunEngineIntegration)$" -v ./internal/tun
+=== RUN   TestTunEngineIntegration
+--- PASS: TestTunEngineIntegration (0.18s)
+=== RUN   TestTunIntegration
+--- PASS: TestTunIntegration (1.59s)
+PASS
+ok  	routelatch/internal/tun	1.785s

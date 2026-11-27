@@ -1,0 +1,6 @@
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(47, 129, 247, 255) badge_ring=(240, 246, 252, 255)
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(46, 160, 67, 255) badge_ring=(46, 160, 67, 255)
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(47, 129, 247, 255) badge_ring=(240, 246, 252, 255)
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(219, 109, 40, 255) badge_ring=(219, 109, 40, 255)
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(255, 255, 255, 255) badge_ring=(88, 166, 255, 255)
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(47, 129, 247, 255) badge_ring=(47, 129, 247, 255)

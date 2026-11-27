@@ -1,0 +1,79 @@
+0|true|true|||
+1|false|true|||Targeted · 3 usable · 4 open
+94|true|true|||Confirm: Disable system-wide coverage
+95|true|true|||Cancel
+4|true|true|||Mode
+5|true|true|radio|1|Targeted
+6|true|true|||All proxy
+7|true|true|||All direct
+8|true|true|||Stop listening…
+9|true|true|||Coverage
+10|false|true|||Coverage: on · desired on
+11|false|true|||Helper: installed
+87|false|true|||Interface: rl-tun0
+12|true|true|||Warnings (4)
+73|false|true|||DNS: plain DNS goes direct, not through the pool
+88|false|true|||UDP/QUIC: non-DNS UDP is blocked
+89|false|true|||Desktop proxy: apps using it bypass TUN
+90|false|true|||All direct: pool is unused; non-DNS UDP stays blocked
+14|false|true|||Enable system-wide coverage…
+86|false|true|||Unavailable: coverage is already on
+15|true|true|||Disable system-wide coverage…
+17|true|true|||Proposals (0)
+18|false|true|||No pending proposals
+19|true|true|||Show decided (0)
+20|false|true|||No decided or expired proposals
+21|true|true|||Clear decided/expired…
+22|true|true|||Approved rules (0)
+23|false|true|||No approved rules
+24|true|true|||Add rule… (Terminal menu)
+25|true|true|||Pool
+26|false|true|||3 records · 3 usable · 3 healthy · 0 cooling
+27|true|true|radio|1|Auto select
+28|true|true|||Healthy (3)
+29|false|true|||No healthy exits
+30|true|true|||Untested (0)
+31|false|true|||No untested exits
+32|true|true|||Cooling (0)
+33|false|true|||No cooling exits
+34|true|true|||Unsupported/Invalid (0)
+35|false|true|||No unsupported/invalid exits
+36|true|true|||Refresh all sources
+37|true|true|||Re-rank now
+38|true|true|||Test first 20 usable
+39|true|true|||Add/import… (Terminal menu)
+40|true|true|||Desktop proxy
+41|false|true|||Desktop proxy: unsupported
+42|false|true|||Refresh status
+43|false|true|||Set/Re-apply desktop proxy…
+44|false|true|||Restore previous desktop proxy…
+45|false|true|||This desktop environment is not supported; only GNOME and KDE are changed
+46|true|true|||Diagnostics
+47|true|true|||Run doctor
+48|true|true|||Doctor results
+49|false|true|||No doctor results yet
+50|true|true|||Warnings (4)
+74|false|true|||tun_dns_direct
+91|false|true|||tun_udp_blocked
+92|false|true|||tun_desktop_proxy_overlap
+93|false|true|||tun_all_direct
+52|true|true|||Show log path
+53|true|true|||Environment
+54|false|true|||HTTP_PROXY=
+55|false|true|||HTTPS_PROXY=
+56|false|true|||ALL_PROXY=
+57|false|true|||NO_PROXY=
+58|true|true|||Data
+59|true|true|||Back up state now
+60|false|true|||Restore backup… (CLI)
+61|true|true|||Settings
+62|false|true|||Start at login: Off
+63|false|true|||Start at login unavailable: autostart manages only the default data directory
+64|false|true|||HTTP 127.0.0.1:59101 · SOCKS 127.0.0.1:59102 · log info
+65|false|true|||State <tmp>/r16h/fake-20261127T074340Z/state.json · config /tmp/opencod…
+66|true|true|||Advanced
+67|true|true|||Restart engine…
+68|true|true|||Terminal menu…
+69|false|true|||Last action: Confirmation required
+2|true|true|||Quit
+3|true|true|||Quit RouteLatch

@@ -1,0 +1,8 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: error · desired on · not active
+106|false|true|||Helper: installed
+107|false|true|||Error: coverage error
+12|true|true|||Warnings (0)
+108|false|true|||No coverage warnings
+14|true|true|||Enable system-wide coverage…
+15|true|true|||Disable system-wide coverage…

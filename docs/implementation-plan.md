@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G انجام شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs)؛ R16-H بعدی)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ release طبق گیت‌ها)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -659,6 +659,30 @@ socket `0600`/uid ۱۰۰۰ و دایرکتوری `0755`/uid ۱۰۰۰، setup د�
 acceptance پیش‌فرض offline، gated `RL_TUN_TEST=1` روی محیط مجاز، package
 checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS.md` و پس از
 گیت‌های release.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (R16-H — انجام شد؛ A17 = Accepted with limits):**
+- H-TUN روی `7ff128c`: **158/158 PASS**، 0 fail؛ شامل setup/on/off/uninstall،
+  modeها، TLS/HTTP/IP و sniffing، IPv4/IPv6، DNS/53 v4 و IPv6 (UDP/TCP),
+  UDP/QUIC غیر53 بلاک، D13 sweep، engine kill/restart، service restart/lease،
+  SIGKILL fail-open (۰٫۶۰۵–۱٫۳۹۰s)، Quit، persistence، R-28 (on-link),
+  localhost/LAN، D21 canary، zero orphan؛ StartLimit 20/300 و recovery مستند؛
+  دو-engine/peer، socket/link witness و sidecar دیراضافه PASS.
+- H-Tray روی `7ff128c` (Plasma/X11، data-dir ایزوله، بدون helper): real
+  helper-missing/off/error و `tun on` exit 7؛ fake-status (visual-only)
+  active/starting/conflict/incompatible/unknown، confirmation/cancel/stale،
+  D21، آیکن/رنگ‌ها. **آزمون‌نشده:** TUN-active واقعی روی هاست (نصب helper مجاز
+  نبود)، panel screenshot/contrast، Wayland/GNOME، pointer/hover.
+- checkها: `go build`/`go vet`/`go test -count=1 ./...` روی `7ff128c`؛ package
+  checks در isolated DIST (هیچ unit/tmpfiles/helper/postinst) و gated tests؛
+  CI `45974444673` روی `7ff128c` سبز.
+- **review:** final code review findings (سه blocking: peer ownership، socket/
+  link witness، sidecar late-add) رفع و با تأیید متمرکز بسته شدند؛ قرارداد
+  `tun off` همسایه هم رفع/تأیید شد؛ H validator **Accepted with limits**.
+- **limits (ثبت‌شده):** fail-open error/icon visibility NOT RUN (نمونهٔ status
+  clean/on بود)، Login/autostart auto-enable NOT RUN، tray TUN-active واقعی
+  نیازمند نصب helper (مجاز نبود)، Wayland/GNOME، public/off-link، DNS-through-
+  pool و UDP (R16-I/J)، R-28 فقط on-link، D21 debug caveat، arm64 runtime.
+- **next:** release واجد شرایط طبق `AGENTS.md`؛ R16-I/J تحقیقات بعدی.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -1923,12 +1947,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
 2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-G در ۲۰۲۶-۱۱-۲۷ انجام،
-   بازبینی و commit شدند (F: کد/KDE گیت‌شده `c575d6d`؛ G: setup/packaging/docs
-   `5144cbf`)؛ verdict R16-A برابر `Ready` است و R16-H (پذیرش A17) قدم بعد است.
-   R16-I/J
-   (DNS-through-pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع
-   می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
+   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-H در ۲۰۲۶-۱۱-۲۷ انجام،
+   بازبینی و پذیرفته شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده
+   `c575d6d`؛ G: setup/packaging/docs `5144cbf`؛ code fixes `7ff128c`؛ CI
+   `45974444673` سبز)؛ release واجد شرایط طبق گیت‌ها. R16-I/J (DNS-through-
+   pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1970,8 +1993,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    داشت، تصمیم را با کاربر باز کن و gate را بی‌صدا ضعیف نکن.
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
-   R16-A/B/C/D/E/F/G انجام شدند (F: کد؛ KDE گیت‌شده؛ G: setup/packaging/docs،
-   review شده) و R16-H قدم بعد است. موارد آزمون‌نشده (Wayland/GNOME،
+   R16-A/B/C/D/E/F/G/H انجام شدند (A17 = Accepted with limits؛ F: کد؛ KDE
+   گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و release طبق گیت‌ها
+   در پیش است. موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

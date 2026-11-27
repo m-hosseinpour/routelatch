@@ -1,0 +1,5 @@
+12|true|true|||Warnings (4)
+73|false|true|||DNS: plain DNS goes direct, not through the pool
+88|false|true|||UDP/QUIC: non-DNS UDP is blocked
+89|false|true|||Desktop proxy: apps using it bypass TUN
+90|false|true|||All direct: pool is unused; non-DNS UDP stays blocked

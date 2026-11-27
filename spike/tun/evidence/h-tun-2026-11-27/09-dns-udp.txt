@@ -1,0 +1,14 @@
+
+DNS A: {"answers": ["203.0.113.7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+DNS AAAA: {"answers": ["2001:db8::7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+DNS TCP: {"answers": ["203.0.113.7"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+
+dnsmasq lines with physical source: ['Nov 27 08:40:13 dnsmasq[42]: query[A] canary-h.invalid from 172.31.77.10', 'Nov 27 08:40:14 dnsmasq[42]: query[AAAA] canary-h.invalid from 172.31.77.10', 'Nov 27 08:40:14 dnsmasq[42]: query[A] canary-h.invalid from 172.31.77.10']
+
+UDP v4/9999: {"error": "timeout", "ms": 2001, "ok": false, "stage": "udp"}
+UDP v4/443: {"error": "timeout", "ms": 2001, "ok": false, "stage": "udp"}
+UDP v6/9999: {"error": "timeout", "ms": 2001, "ok": false, "stage": "udp"}
+peer datagrams: 0->0
+
+resolv.conf before: 2f762a5d27e1f951a953054564a418c5bb793c72f970d818bffcc56b16a7d010  /etc/resolv.conf
+after: 2f762a5d27e1f951a953054564a418c5bb793c72f970d818bffcc56b16a7d010  /etc/resolv.conf

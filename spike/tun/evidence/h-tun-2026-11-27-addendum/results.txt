@@ -1,0 +1,20 @@
+# R16-H addendum results
+PASS package no-unit/tmpfiles/helper/postinst
+PASS package build/check-package/check-artifact
+PASS coverage on before IPv6 DNS :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T10:18:52.975613515Z", "state": "on", "udp": "blocked"}
+PASS IPv6 UDP DNS A/53 through TUN :: {"answers": ["203.0.113.7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+PASS IPv6 UDP DNS AAAA/53 through TUN :: {"answers": ["2001:db8::7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+PASS IPv6 TCP DNS A/53 through TUN :: {"answers": ["203.0.113.7"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+PASS v6 resolver saw two UDP datagrams :: [1, 2]
+PASS v6 resolver saw one TCP query :: [1]
+PASS all v6 DNS came from the physical interface :: ["fd00:78::10", "fd00:78::10", "fd00:78::10"]
+PASS system DNS unchanged after IPv6 DNS
+PASS coverage on before fail-open sampling :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T10:18:52.975613515Z", "state": "on", "udp": "blocked"}
+PASS status sampler observed the fail-open window :: 2 of 48 samples
+NOTRUN status exposes error/unavailable during fail-open :: no in-window sample reported an error; observed: [{"tun_state": null, "tun_last_error": null, "t": 1795774735.8787727}, {"tun_state": "on", "tun_last_error": null, "t": 1795774736.491647}]
+PASS status does not claim a clean off during fail-open :: []
+PASS service auto-restarts after SIGKILL :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T10:18:56.488228496Z", "state": "on", "udp": "blocked"}
+NOTRUN tray icon rendering during fail-open :: headless container: status/tray-facing fields observed, no KDE/Wayland icon
+
+SUMMARY passed=12 failed=0 notrun=2 total=14
+SUMMARY-ALL passed=14 failed=0 notrun=2

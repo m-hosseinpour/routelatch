@@ -503,12 +503,12 @@ other software.
 
 ## What it does not cover
 
-- **No TUN and no device-wide capture in v1.1.0.** Only traffic sent to
-  RouteLatch's listeners is affected. Programs that ignore
+- **No device-wide capture by default.** Only traffic sent to RouteLatch's
+  listeners is affected unless you opt in to TUN coverage. Programs that ignore
   `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`, or that were started outside
-  `routelatch exec`, are not routed. The post-v1 coverage layer (D29/R16) in
-  this source revision addresses this with a separate opt-in helper; it is not
-  in the published v1.1.0 assets.
+  `routelatch exec`, are not routed. The opt-in TUN helper (D29/R16) is
+  available in v1.2.0+ via `sudo routelatch tun setup`; v1.1.0 assets do not
+  contain it.
 - **No UDP or QUIC.** SOCKS5 `UDP ASSOCIATE` and `BIND` are refused.
 - **No system DNS change** and no fake DNS.
 - **No LAN listener and no authentication.** Sharing the proxy across a network
@@ -516,13 +516,13 @@ other software.
 - **No Windows, macOS, Android, 32-bit Linux or GUI** in v1. No apt/dnf
   repository or package signing; the published `.deb` and RPM files are
   unsigned.
-- **No system-wide "covers everything" mode in v1.1.0**; `all-proxy` keeps the
-  documented loopback/private exception. The post-v1 TUN coverage layer
-  (D29/R16) sits on top of the existing modes rather than adding a fifth mode;
-  plain DNS remains direct and non-DNS UDP/QUIC is blocked in its first phase.
-  DNS-through-pool and UDP coverage are separate research tasks (D30); if they
-  land, DNS will have its own independent switch and will not silently change
-  the routing mode.
+- **No automatic system-wide "covers everything" mode.** `all-proxy` keeps the
+  documented loopback/private exception; the opt-in TUN coverage layer
+  (D29/R16, v1.2.0+) sits on top of the existing modes rather than adding a
+  fifth mode. Plain DNS remains direct and non-DNS UDP/QUIC is blocked in its
+  first phase. DNS-through-pool and UDP coverage are separate research tasks
+  (D30); if they land, DNS will have its own independent switch and will not
+  silently change the routing mode.
 
 ## Verified status
 
@@ -558,7 +558,15 @@ the dual-stack link and routes, `tun off` removed them, stopping the socket and
 service without the engine removed coverage, an injected `systemctl enable`
 failure rolled back the new files and disabled the socket, and `tun uninstall`
 removed only the helper files. No host service, route, DNS, firewall or desktop
-setting was changed. KDE/Wayland tray behavior and final A17 acceptance remain open (R16-H).
+setting was changed. The R16-H acceptance at `7ff128c` passed 158/158 TUN
+scenario checks and repeated `scripts/check-package.sh`/`check-artifact.sh`
+(no unit, tmpfiles, helper, autostart or maintainer script in the package);
+A17 is accepted with limits. A real KDE Plasma/X11 run verified the
+helper-missing/off/error tray surface, while the active/starting/conflict/
+incompatible/unknown states were rendered by an unchanged tray against a
+fake status peer. A real TUN-active host icon/toggle (which needs the helper
+installed), panel screenshot/contrast, Wayland/GNOME and Login/autostart
+auto-enable remain unverified.
 
 Beyond the default suite, the Linux build was historically exercised on real
 system components and gated loopback checks: the old packaged unit under a real
@@ -584,9 +592,10 @@ Three different kinds of gap are kept separate:
   no-UDP/QUIC policy. Windows, UDP and GUI are later milestones that need a new
   decision. TUN coverage was moved from "undefined later milestone" to the
   post-v1 R16 plan (D29) in 2026-11-26; its service, engine connection, CLI,
-  tray surface and privileged setup are implemented in this source revision,
-  while final A17 acceptance (R16-H) and a release are still open. No published
-  asset contains it yet.
+  tray surface and privileged setup are implemented in this source revision and
+  intended to ship opt-in in v1.2.0 (release pending at this revision).
+  R16-H accepted A17 with the environmental limits listed above; DNS-through-
+  pool and UDP coverage remain later research (D30/R16-I/J).
 - **Implemented but not yet exercised:** long hysteria2 sessions.
 - **Deferred by user decision (2026-11-21), or not yet proven by us:**
   arm64/riscv64/ppc64le runtime execution (deferred; only amd64 is exercised, the

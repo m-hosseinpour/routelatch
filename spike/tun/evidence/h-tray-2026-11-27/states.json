@@ -1,0 +1,115 @@
+{
+  "off": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": false, "state": "off", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed"},
+      "warnings": []
+    },
+    "enable": null, "disable": null
+  },
+  "on": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 4, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": true, "state": "on", "interface": "rl-tun0", "since": "2026-11-27T07:00:00Z",
+              "dns": "direct", "udp": "blocked", "ipv6": true, "helper": "installed"},
+      "warnings": ["tun_dns_direct", "tun_udp_blocked", "tun_desktop_proxy_overlap", "tun_all_direct"]
+    },
+    "enable": null,
+    "disable": {"desired": false, "state": "off", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed"}
+  },
+  "starting": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": true, "state": "starting", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed"},
+      "warnings": []
+    },
+    "enable": {"desired": true, "state": "starting", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed"},
+    "disable": null
+  },
+  "error": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": true, "state": "error", "dns": "direct", "udp": "blocked", "ipv6": false,
+              "helper": "installed", "last_error": "tun_helper_unavailable",
+              "detail": "https://canary-detail.invalid/secret"},
+      "warnings": ["tun_service_unavailable"]
+    },
+    "enable": {"desired": true, "state": "starting", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed"},
+    "disable": null
+  },
+  "conflict": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": false, "state": "on", "interface": "rl-tun0", "dns": "direct", "udp": "blocked",
+              "ipv6": true, "helper": "installed", "last_error": "tun_conflict"},
+      "warnings": ["tun_conflict", "tun_all_direct", "tun_dns_direct", "tun_udp_blocked"]
+    },
+    "enable": null, "disable": null
+  },
+  "incompatible": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": false, "state": "off", "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "incompatible"},
+      "warnings": ["tun_helper_missing"]
+    },
+    "enable": null, "disable": null
+  },
+  "unknown": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "warnings": []
+    },
+    "enable": null, "disable": null
+  },
+  "inject": {
+    "status": {
+      "ready": true, "listeners_open": true, "mode": "targeted", "policy_version": 3,
+      "resume_requires_restart": false,
+      "listeners": {"http": "127.0.0.1:59101", "socks": "127.0.0.1:59102"},
+      "pool": {"total": 3, "usable": 3, "healthy": 3, "cooling": 0},
+      "connections": {"open": 0, "dialing": 0},
+      "diagnostics": {"enabled": true},
+      "tun": {"desired": true, "state": "error", "interface": "http://canary-interface.invalid/x",
+              "dns": "direct", "udp": "blocked", "ipv6": false, "helper": "installed",
+              "last_error": "tun_https://canary-reason.invalid/x",
+              "detail": "https://canary-detail.invalid/secret"},
+      "warnings": ["tun_https://canary-warning.invalid/x"]
+    },
+    "enable": null, "disable": null
+  }
+}

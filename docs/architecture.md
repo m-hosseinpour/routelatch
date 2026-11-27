@@ -290,11 +290,12 @@ interface فیزیکی، در R16-D اتصال engine/bypass، در R16-E سطح
 آیکن TUN و در R16-G setup ممتاز/readiness/rollback/uninstall و بسته‌بندی/
 مستندات پیاده شده‌اند. G با نصب واقعی در یک کانتینر privileged/systemd
 دورانداختنی (setup، boot/restart از tmpfiles، `tun on/off`، توقف مستقل و
-uninstall) آزموده شد، نه روی هاست؛ بررسی واقعی KDE/Wayland و پذیرش A17 در
-R16-H باز است. بستهٔ منتشرشده هیچ unit/tmpfiles/helper ندارد، TUN در
-`v1.x` منتشر نشده و ادعای پشتیبانی آن در release وجود ندارد.
+uninstall) آزموده شد، نه روی هاست؛ R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت
+(شاهد در `spike/tun/H-ACCEPTANCE.md` و `H-TRAY.md`). TUN در v1.2.0 به‌صورت
+opt-in منتشر می‌شود؛ بستهٔ منتشرشده همچنان هیچ unit/tmpfiles/helper ندارد و
+TUN-active واقعی روی هاست/Wayland/GNOME آزمون‌نشده می‌ماند.
 
-## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray و R16-G: setup/packaging/docs پیاده؛ پذیرش A17 در R16-H باز)
+## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray، R16-G: setup/packaging/docs و R16-H: پذیرش؛ A17 = Accepted with limits)
 
 **مرز.** TUN یک **حالت پنجم نیست**؛ یک لایهٔ پوشش روی `targeted`/`all-proxy`/
 `all-direct` است. جدول تصمیم §۳، فهرست تأییدشده، انتخاب exit، registry، D11 و

@@ -1,0 +1,13 @@
+
+$ routelatch tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ routelatch status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":11,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"},"warnings":[]}}
+
+status after off: {"connections": {"dialing": 0, "open": 0, "proofs": {"accepted": 0, "confirmed": 0}}, "diagnostics": {"enabled": true, "queued": 0}, "listeners": {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}, "listeners_open": true, "mode": "targeted", "policy_version": 11, "pool": {"cooling": 0, "healthy": 1, "total": 1, "usable": 1}, "ready": true, "resume_requires_restart": false, "selected_exit": "", "tun": {"desired": false, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "state": "off", "udp": "blocked"}, "warnings": []}
+
+$ routelatch tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T09:46:10.615364862Z","state":"on","udp":"blocked"}}
+[exit 0]

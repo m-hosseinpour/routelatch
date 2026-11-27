@@ -1,0 +1,5 @@
+off / fake status: (<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN off')>,)
+on / fake status: (<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 4 open · TUN on')>,)
+error / fake status / conflict: (<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN error')>,)
+pending / fake status / starting: (<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN starting')>,)
+no TUN suffix / fake status / older payload: (<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open')>,)

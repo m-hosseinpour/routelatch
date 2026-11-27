@@ -1,0 +1,10 @@
+config.get=1
+config.path=1
+desktop.status=1
+env=10
+pool.list=10
+proposals.list=10
+rules.list=10
+status=31
+tun.disable=1
+tun.enable=1

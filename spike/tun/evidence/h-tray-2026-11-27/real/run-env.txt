@@ -1,0 +1,9 @@
+base=<tmp>/r16h/real-20261127T074612Z
+data=<tmp>/r16h/real-20261127T074612Z/data
+http=47307
+socks=54487
+supervisor=1680336
+tray=1680360
+bus=org.freedesktop.StatusNotifierItem-1680360-1
+binary=<tmp>/r16h/bin/routelatch
+head=e4859dbad63970c0c27654c405d8ea370d172287

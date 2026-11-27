@@ -1,0 +1,18 @@
+2: eth0@if270: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default  link-netnsid 0
+    inet6 2001:db8::7/128 scope global nodad 
+       valid_lft forever preferred_lft forever
+    inet6 fd00:78::20/64 scope global nodad 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a4c0:53ff:fecc:13f8/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+---
+{"addr": "2001:db8::7", "event": "listen", "proto": "udp", "ts": 1795774729.4167182}
+{"addr": "2001:db8::7", "event": "listen", "proto": "tcp", "ts": 1795774729.4167717}
+---
+---
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port
+UNCONN 0      0         127.0.0.11:55268      0.0.0.0:*   
+UNCONN 0      0      [2001:db8::7]:53            [::]:*   
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port
+LISTEN 0      4096      127.0.0.11:42919      0.0.0.0:*   
+LISTEN 0      8      [2001:db8::7]:53            [::]:*   

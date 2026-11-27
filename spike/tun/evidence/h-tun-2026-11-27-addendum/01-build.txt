@@ -1,0 +1,19 @@
+$ scripts/build.sh (container, ARCHES=amd64)
+version=h-accept commit=7ff128c date=2026-11-27T10:18:50Z
+building linux/amd64 -> /work/dist/routelatch-linux-amd64
+RouteLatch h-accept
+commit: 7ff128c
+build date: 2026-11-27T10:18:50Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"h-accept","commit":"7ff128c","build_date":"2026-11-27T10:18:50Z"}}
+stamp linux/amd64: proven via version and --json
+
+wrote /work/dist/SHA256SUMS:
+c5f6487810e2f051ad058cbb2cd284efe7eb1a9d6261d2c349e3a7c7d41c8623  routelatch-linux-amd64
+
+wrote /work/dist/BUILD-INFO (version/commit/date stamp that the package ships)
+install or enable nothing here; packaging/README.md documents the user's steps.
+
+$ /work/dist/routelatch-linux-amd64 version
+RouteLatch h-accept
+commit: 7ff128c
+build date: 2026-11-27T10:18:50Z

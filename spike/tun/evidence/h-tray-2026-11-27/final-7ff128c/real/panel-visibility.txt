@@ -1,0 +1,12 @@
+R16-H tray final-run panel visibility (2026-11-27, revision 7ff128c)
+
+- Environment: DISPLAY=:0, Plasma 6.6.7 / X11.
+- At run time no full-screen `kscreenlocker_greet` window was present;
+  `xwininfo -root -tree` showed plasmashell windows, including a 38x28
+  window at the bottom edge, so the earlier lock-screen note describes the
+  e4859db run and not this one.
+- No panel screenshot and no pointer click were performed in this run.
+  Icon evidence remains the exact StatusNotifierItem IconPixmap and menu
+  evidence the dbusmenu GetLayout tree. Badge contrast on the live panel
+  theme is still unobserved, and this note is not a claim that the panel
+  rendered the temporary item correctly.

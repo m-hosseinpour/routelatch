@@ -1,0 +1,8 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: unknown · status not reported
+12|true|true|||Warnings
+105|false|true|||Coverage status unknown
+14|false|true|||Enable system-wide coverage…
+100|false|true|||Unavailable: TUN status is unavailable from this engine
+15|false|true|||Disable system-wide coverage…
+104|false|true|||Unavailable: TUN status is unavailable from this engine

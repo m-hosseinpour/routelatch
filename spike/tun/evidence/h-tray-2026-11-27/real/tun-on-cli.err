@@ -1,0 +1,2 @@
+error: TUN helper is not installed
+reason: tun_helper_unavailable

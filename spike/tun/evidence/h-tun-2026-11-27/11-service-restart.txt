@@ -1,0 +1,6 @@
+
+$ systemctl restart
+
+link transitions: [{"t": 1795768824.4879873, "present": true}, {"t": 1795768824.8991702, "present": false}, {"t": 1795768824.9747472, "present": true}]
+
+lease/socket: {"desired":"on","boot_id":"a09cffca-828b-41d3-bd53-8e5e98152c4b","pid":22629,"interface":"rl-tun0","since":"2026-11-27T08:40:24.978629234Z"}600 1500

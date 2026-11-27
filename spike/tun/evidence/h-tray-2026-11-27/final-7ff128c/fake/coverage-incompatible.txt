@@ -1,0 +1,9 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: off · desired off
+11|false|true|||Helper: incompatible · rerun 'sudo routelatch tun setup'
+12|true|true|||Warnings (1)
+73|false|true|||Helper: missing or not usable
+14|false|true|||Enable system-wide coverage…
+100|false|true|||Unavailable: helper is incompatible; rerun 'sudo routelatch tun setup'
+15|false|true|||Disable system-wide coverage…
+101|false|true|||Unavailable: coverage is already off

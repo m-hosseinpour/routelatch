@@ -1,0 +1,25 @@
+
+$ systemctl stop routelatch-tun.socket
+
+tun status with no socket and no link: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+
+tun status with missing socket + link witness: {"desired": true, "detail": "the TUN helper did not answer; coverage could not be verified off", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_conflict", "state": "unavailable", "udp": "blocked"}
+
+$ tun off under socket/link witness
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"detail":"the TUN helper did not answer; coverage could not be verified off","dns":"direct","helper":"missing","interface":"","ipv6":false,"last_error":"tun_conflict","state":"unavailable","udp":"blocked"}}
+[exit 0]
+
+tun status after witness off: {"desired": false, "detail": "the TUN helper did not answer; coverage could not be verified off", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_conflict", "state": "unavailable", "udp": "blocked"}
+
+direct probe with witness routes: {"error": "timed out", "ms": 3003, "ok": false}
+
+$ curl via SOCKS with witness routes
+TLS-OK[exit 0]
+
+$ tun off after witness removal
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"missing","interface":"","ipv6":false,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ routelatch tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T09:46:43.611917791Z","state":"on","udp":"blocked"}}
+[exit 0]

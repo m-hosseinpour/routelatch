@@ -2008,7 +2008,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 ([`licensing.md`](licensing.md)). هیچ تصمیم T2 بازی نمانده است؛ R-12/R-14 محدودیت
 ادعا و شرط بازگشت آینده‌اند، نه تصمیم ناتمام.
 
-## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E، tray Coverage/آیکن R16-F و setup ممتاز/packaging/docs R16-G پیاده‌شده؛ بررسی واقعی KDE/Wayland و پذیرش A17 در H باز)
+## ۱۰. پوشش TUN (D29؛ قرارداد R16 — مدل داده/opهای R16-B، سرویس R16-C، engine R16-D، CLI R16-E، tray Coverage/آیکن R16-F، setup ممتاز/packaging/docs R16-G پیاده‌شده؛ R16-H انجام شد و A17 در ۲۰۲۶-۱۱-۲۷ با limits پذیرفته شد؛ TUN-active tray واقعی/Wayland/GNOME و چند limit محیطی باز)
 
 این بخش قرارداد milestone پس از v1 است. R16-B (تایپ‌های `internal/contract/tun.go`،
 فیلدهای config/status، opهای management و seam تزریق‌شدنی)، سرویس جداگانهٔ R16-C
@@ -2020,8 +2020,9 @@ adoption و bypass ترافیک خود RouteLatch) و سطح CLI در R16-E (`tu
 است: کپی root-owned باینری از `/proc/self/exe`، tmpfiles.d برای بازسازی
 `/run/routelatch-tun` پس از boot، سخت‌گیری mode/owner، readiness واقعی socket
 `0600` و rollback؛ بسته همچنان هیچ unit/tmpfiles/helper/postinst ندارد و
-`tun setup` تنها سازندهٔ آن‌هاست. بررسی واقعی KDE/Wayland و پذیرش A17 در
-R16-H باز است و نصب واقعی فقط در محیط authorized/gated انجام می‌شود.
+`tun setup` تنها سازندهٔ آن‌هاست. R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت؛
+TUN-active واقعی روی هاست، KDE فعال/panel contrast و Wayland/GNOME آزمون‌نشده
+می‌مانند و نصب واقعی فقط در محیط authorized/gated انجام می‌شود.
 production runtime را از طریق کلاینت `internal/tun` به control وصل می‌کند؛ نبود
 socket/helper فقط warning و `off` می‌دهد و listener عادی را از کار نمی‌اندازد.
 نام‌ها و شکل‌های زیر برای بخش پیاده‌شده pin شده‌اند و برای R16-D به بعد الزام‌آورند.
@@ -2404,5 +2405,7 @@ verdict آن‌ها، DNS مستقیم/UDP بلاک می‌ماند. هر پیا
 **قدم بعد:** R16-B/C/D (مدل داده، سرویس، اتصال engine و bypass)، R16-E (CLI،
 layout/معنای setup و uninstall با fake paths/systemctl)، R16-F (tray) و R16-G
 (نصب/readiness/rollback، بسته‌بندی و مستندات کاربر) پیاده، تست و commit شده‌اند
-(`c575d6d`، `5144cbf`). تنها پذیرش A17 (H) باز است؛ R16-A فقط پس از مجوز
-صریح و ادعای پشتیبانی TUN در v1.1.0 وجود ندارد.
+(`8a8ec72`، `b0438f2`، `7729205`، `c678f20`، `c575d6d`، `5144cbf`). R16-H در
+۲۰۲۶-۱۱-۲۷ روی `7ff128c` A17 را با limits پذیرفت (CI `45974444673` سبز)؛
+release طبق گیت‌های `AGENTS.md` است و R16-I/J تحقیقات بعدی‌اند. در v1.1.0 هیچ
+TUN وجود نداشت؛ v1.2.0 آن را opt-in اضافه می‌کند.

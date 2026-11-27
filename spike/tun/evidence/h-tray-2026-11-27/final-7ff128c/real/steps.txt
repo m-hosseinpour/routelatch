@@ -1,0 +1,12 @@
+10:03:54 base=<tmp>/r16h-final/real-20261127T100354Z http=48907 socks=34959
+10:03:55 tray=2434801 bus=org.freedesktop.StatusNotifierItem-2434801-1 supervisor=2434774
+10:03:55 coverage(off/missing) captured
+10:03:55 click id=14
+10:03:56 disabled Enable click: no pending, no job
+10:03:57 desired on with missing helper: state and icon captured
+10:03:57 click id=16
+10:03:57 disable pending shown
+10:03:57 click id=73
+10:03:57 disable confirmed: wish cleared, off
+10:03:58 notify scan: no URL/destination
+10:03:58 real run complete; tray=2434801

@@ -1,0 +1,37 @@
+# host checks (2026-11-27) HEAD=7ff128c
+go: go version go1.27.4 linux/amd64
+$ go build ./...
+elapsed=1.60s exit=0
+
+$ go vet ./...
+elapsed=0.56s exit=0
+
+$ go test -count=1 ./...
+ok  	routelatch/cmd/routelatch	2.309s
+ok  	routelatch/internal/acceptance	120.502s
+ok  	routelatch/internal/app	19.178s
+ok  	routelatch/internal/autostart	0.020s
+ok  	routelatch/internal/conns	0.128s
+ok  	routelatch/internal/contract	0.003s
+ok  	routelatch/internal/control	0.811s
+ok  	routelatch/internal/diagnostics	0.047s
+ok  	routelatch/internal/egress	0.006s
+ok  	routelatch/internal/engine	10.932s
+ok  	routelatch/internal/frontend	2.164s
+ok  	routelatch/internal/imports	0.025s
+ok  	routelatch/internal/instance	0.005s
+ok  	routelatch/internal/licensing	0.006s
+ok  	routelatch/internal/platform	0.008s
+ok  	routelatch/internal/pool	0.005s
+ok  	routelatch/internal/probes	0.079s
+ok  	routelatch/internal/proposals	0.004s
+ok  	routelatch/internal/routing	0.007s
+ok  	routelatch/internal/service	0.016s
+ok  	routelatch/internal/singbox	0.112s
+ok  	routelatch/internal/store	0.010s
+ok  	routelatch/internal/systemd	0.005s
+ok  	routelatch/internal/trayui	0.710s
+ok  	routelatch/internal/tun	0.173s
+ok  	routelatch/internal/tun/setup	0.020s
+elapsed=121.97s exit=0
+

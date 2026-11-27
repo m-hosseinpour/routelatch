@@ -18,10 +18,10 @@ stopped/unavailable و sanitize در `contracts.md §۷.۳` قرارداد شد�
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است؛ Wayland/GNOME،
 desktop-proxy واقعی و autostart/service واقعی در آن آزمون نشده‌اند.
 
-**پوشش TUN (D29، ۲۰۲۶-۱۱-۲۶؛ R16-C–G پیاده):** TUN یک حالت پنجم نیست؛ یک لایهٔ
-پوشش روی همان حالت‌هاست. سرویس جداگانه، اتصال engine، سطح CLI، tray و setup
-ممتاز در همین revision پیاده شده‌اند؛ پذیرش نهایی A17 (R16-H) و انتشار باز است و
-`v1.1.0` هیچ پشتیبانی TUN ندارد. طراحی در `architecture.md §۹`، قرارداد در
+**پوشش TUN (D29، ۲۰۲۶-۱۱-۲۶؛ R16-C–H پیاده/پذیرفته):** TUN یک حالت پنجم
+نیست؛ یک لایهٔ پوشش روی همان حالت‌هاست. سرویس جداگانه، اتصال engine، سطح CLI،
+tray و setup ممتاز پیاده شده‌اند و برای انتشار opt-in در v1.2.0 آماده‌اند؛ R16-H در
+۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت (`v1.1.0` هیچ پشتیبانی TUN نداشت). طراحی در `architecture.md §۹`، قرارداد در
 `contracts.md §۱۰` و taskها/دروازه‌ها در `implementation-plan.md` (R16) هستند.
 setup فقط از CLI و با sudo اجرا می‌شود، unit/helper را در بسته نمی‌گذارد، پس از
 boot دایرکتوری `/run` را با tmpfiles بازمی‌سازد و برای socket `0600`/uid مجاز

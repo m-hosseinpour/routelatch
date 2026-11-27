@@ -1,0 +1,19 @@
+
+$ helper state after quick sequence
+active
+active
+active
+Result=success
+NRestarts=0
+Nov 27 09:46:04 rl-h-<run>-a systemd[1]: routelatch-tun.service: Failed with result 'signal'.
+Nov 27 09:46:05 rl-h-<run>-a systemd[1]: routelatch-tun.service: Scheduled restart job, restart counter is at 1.
+Nov 27 09:46:05 rl-h-<run>-a systemd[1]: Started routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 09:46:05 rl-h-<run>-a tun-service[22629]: routelatch-tun: 2026/11/27 09:46:05 restart lease requests coverage rebuild
+Nov 27 09:46:05 rl-h-<run>-a tun-service[22629]: routelatch-tun: 2026/11/27 09:46:05 coverage is on
+Nov 27 09:46:07 rl-h-<run>-a tun-service[22629]: routelatch-tun: 2026/11/27 09:46:07 coverage is off
+Nov 27 09:46:07 rl-h-<run>-a systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 09:46:07 rl-h-<run>-a systemd[1]: Started routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 09:46:10 rl-h-<run>-a tun-service[23039]: routelatch-tun: 2026/11/27 09:46:10 coverage is on
+Nov 27 09:46:11 rl-h-<run>-a tun-service[23039]: routelatch-tun: 2026/11/27 09:46:11 coverage is off
+Nov 27 09:46:11 rl-h-<run>-a systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 09:46:11 rl-h-<run>-a systemd[1]: Started routelatch-tun.service - RouteLatch TUN coverage helper.

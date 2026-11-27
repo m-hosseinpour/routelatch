@@ -1,0 +1,35 @@
+
+$ tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T10:18:52.975613515Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+$ IPv6 link/routes
+::/1 dev rl-tun0 metric 1 pref medium
+fc00::/64 dev rl-tun0 proto kernel metric 256 pref medium
+fd00:78::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev rl-tun0 proto kernel metric 256 pref medium
+8000::/1 dev rl-tun0 metric 1 pref medium
+default via fd00:78::20 dev eth0 metric 1024 pref medium
+3: rl-tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 500
+    inet6 fc00::1/64 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::30e6:972a:577f:5c0/64 scope link stable-privacy proto kernel_ll 
+       valid_lft forever preferred_lft forever
+2: eth0@if269: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether <mac> brd <mac> link-netnsid 0
+    inet 172.31.78.10/24 brd 172.31.78.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fd00:78::10/64 scope global nodad 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c828:5cff:feee:2d55/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+
+UDP v6 A: {"answers": ["203.0.113.7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+UDP v6 AAAA: {"answers": ["2001:db8::7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+TCP v6 A: {"answers": ["203.0.113.7"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+
+v6 resolver query log: [{"count": 1, "event": "query", "proto": "udp", "qname": "canary-h.invalid", "qtype": 1, "source": "fd00:78::10", "ts": 1795774733.6388505}, {"count": 2, "event": "query", "proto": "udp", "qname": "canary-h.invalid", "qtype": 28, "source": "fd00:78::10", "ts": 1795774733.7567573}, {"count": 1, "event": "query", "proto": "tcp", "qname": "canary-h.invalid", "qtype": 1, "source": "fd00:78::10", "ts": 1795774733.8910892}]
+
+resolv.conf before: 2f762a5d27e1f951a953054564a418c5bb793c72f970d818bffcc56b16a7d010  /etc/resolv.conf
+after: 2f762a5d27e1f951a953054564a418c5bb793c72f970d818bffcc56b16a7d010  /etc/resolv.conf

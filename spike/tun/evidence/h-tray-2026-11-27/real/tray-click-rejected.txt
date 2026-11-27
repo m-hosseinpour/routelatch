@@ -1,0 +1,1 @@
+2026-11-27T07:46:14.018Z app.tray: tray: click rejected: the menu node is disabled

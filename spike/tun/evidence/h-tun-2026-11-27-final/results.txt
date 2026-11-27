@@ -1,0 +1,187 @@
+# R16-H A17 acceptance results
+PASS tun setup exit 0 :: exit=0
+PASS setup layout root-owned
+PASS control socket 0600/uid1500
+PASS socket active
+PASS unit start limit 20/300/none :: BindsTo=routelatch-tun.socket
+StartLimitIntervalSec=300
+StartLimitBurst=20
+StartLimitAction=none
+PASS service binds to its socket :: BindsTo=routelatch-tun.socket
+StartLimitIntervalSec=300
+StartLimitBurst=20
+StartLimitAction=none
+PASS setup idempotent :: {"allowed_uid": 1500, "binary": "/usr/libexec/routelatch/tun-service", "changed": false, "config": "/etc/routelatch/tun.json", "managed": true, "socket_unit": "/etc/systemd/system/routelatch-tun.socket", "tmpfiles": "/etc/tmpfiles.d/routelatch-tun.conf", "unit": "/etc/systemd/system/routelatch-tun.service"}
+PASS setup refuses root without SUDO_UID :: exit=9
+PASS engine start
+PASS import pool exit :: exit=0
+PASS domain rule canary-h.invalid :: exit=0
+PASS domain rule canary6-h.invalid :: exit=0
+PASS domain rule canary-http-h.invalid :: exit=0
+PASS pool has one record :: {"cooling": 0, "healthy": 0, "total": 1, "usable": 1}
+PASS targeted mode :: targeted
+PASS tun on accepted :: exit=0
+PASS tun state on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:38.9701308Z", "state": "on", "udp": "blocked"}
+PASS status tun desired/on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:38.9701308Z", "state": "on", "udp": "blocked"}
+PASS dns direct + udp blocked + ipv6 :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:38.9701308Z", "state": "on", "udp": "blocked"}
+PASS dual-stack link
+PASS IPv4 half routes :: count=2
+PASS IPv6 half routes :: count=2
+PASS lease desired on
+PASS service non-root net_admin
+PASS localhost direct :: {"ms": 1, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"127.0.0.1\", \"peer\": \"127.0.0.1\", \"port\": 39478, \"ts\": 1795772740.0077553}"}
+PASS LAN direct :: {"ms": 1, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"172.31.77.20\", \"peer\": \"172.31.77.10\", \"port\": 56480, \"ts\": 1795772740.1612952}"}
+PASS TLS through TUN succeeds :: {"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 22, "ok": true, "stage": "tls"}
+PASS TLS SNI reaches SOCKS (sniff) :: {"atyp": 3, "event": "connect", "mapped": "203.0.113.7", "peer": "172.31.77.10:59286", "port": 7101, "target": "canary-h.invalid", "ts": 1795772740.2899878}
+PASS peer sees TLS SNI :: {"event": "tls_request", "peer": "203.0.113.7:53640", "port": "tls4", "sni": "canary-h.invalid"}
+PASS HTTP through TUN succeeds :: {"bytes": 64, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 12, "ok": true, "stage": "http"}
+PASS HTTP Host reaches SOCKS (sniff) :: {"atyp": 3, "event": "connect", "mapped": "203.0.113.7", "peer": "172.31.77.10:59290", "port": 7104, "target": "canary-http-h.invalid", "ts": 1795772740.6508532}
+PASS approved IP uses pool :: peer=203.0.113.7
+PASS unapproved IP goes direct :: peer=172.31.77.10
+PASS direct flow does not enter pool :: 3->3
+PASS engine remains ready :: ["tun_dns_direct", "tun_udp_blocked"]
+PASS mode all-proxy :: {"connections": {"dialing": 0, "open": 0, "proofs": {"accepted": 0, "confirmed": 0}}, "diagnostics": {"enabled": true, "queued": 0}, "listeners": {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}, "listeners_open": true, "mode": "all-proxy", "policy_version": 6, "pool": {"cooling": 0, "healthy": 1, "total": 1, "usable": 1}, "ready": true, "resume_requires_restart": false, "selected_exit": "", "tun": {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:38.9701308Z", "state": "on", "udp": "blocked"}, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+PASS all-proxy uses pool for unapproved :: peer=203.0.113.8
+PASS held connection established :: connected 0.001
+PASS held connection is tracked before the switch
+PASS mode switch sweeps the held flow :: connected 0.001
+closed 1.632 eof=True
+PASS all-direct uses direct egress :: peer=172.31.77.10
+PASS stopped closes TUN :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "state": "off", "udp": "blocked"}
+PASS stopped closes listeners :: {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}
+PASS stopped app goes direct :: peer=172.31.77.10
+PASS tun on refused in stopped :: exit=3
+PASS engine restart after stopped
+PASS targeted restores coverage after restart :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:47.76812651Z", "state": "on", "udp": "blocked"}
+PASS IPv6 TLS succeeds :: {"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 20, "ok": true, "stage": "tls"}
+PASS IPv6 SNI reaches SOCKS :: {"atyp": 3, "event": "connect", "mapped": "2001:db8::7", "peer": "172.31.77.10:36968", "port": 7101, "target": "canary6-h.invalid", "ts": 1795772748.4561925}
+PASS peer sees IPv6 SNI :: {"event": "tls_request", "peer": "2001:db8::7:41674", "port": "tls6", "sni": "canary6-h.invalid"}
+PASS IPv6 approved uses pool :: peer=2001:db8::7
+PASS IPv6 unapproved goes direct :: peer=fd00:77::10
+PASS DNS A/53 through TUN :: {"answers": ["203.0.113.7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+PASS DNS AAAA/53 through TUN :: {"answers": ["2001:db8::7"], "ms": 0, "ok": true, "rcode": 0, "stage": "dns"}
+PASS DNS TCP/53 through TUN :: {"answers": ["203.0.113.7"], "ms": 1, "ok": true, "rcode": 0, "stage": "dns"}
+PASS DNS reaches peer from physical iface :: ['Nov 27 09:45:49 dnsmasq[41]: query[A] canary-h.invalid from 172.31.77.10']
+PASS non-53 UDP blocked v4
+PASS QUIC/443 blocked v4
+PASS non-53 UDP blocked v6
+PASS zero UDP datagrams at peer :: 0->0
+PASS system DNS unchanged
+PASS precondition TUN on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:47.76812651Z", "state": "on", "udp": "blocked"}
+PASS engine pid present
+PASS engine killed
+PASS TUN link stays after engine death
+PASS TUN routes stay after engine death :: v4=2 v6=2
+PASS flow fails closed (no direct reply) :: {"error": "eof", "ms": 1206, "ok": false}
+PASS no direct fallback while engine dead :: 3->3
+PASS engine restart becomes ready
+PASS TUN adopted after engine restart :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:45:47.76812651Z", "state": "on", "udp": "blocked"}
+PASS flow recovers through pool :: peer=203.0.113.7
+PASS service restart shows a link gap :: absent=1 back=1
+PASS service restart reports on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:02.052228921Z", "state": "on", "udp": "blocked"}
+PASS flow recovers after service restart :: peer=203.0.113.7
+PASS SIGKILL produces a measured fail-open window :: direct observed at 0.605s
+PASS fail-open window is short and bounded :: direct 0.605s..1.39s, link back 1.399s
+PASS service auto-restarts after SIGKILL :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:05.50143774Z", "state": "on", "udp": "blocked"}
+PASS flow recovers through pool after SIGKILL :: peer=203.0.113.7
+PASS tun off removes link
+PASS tun off clears desire :: {"desired": false, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "state": "off", "udp": "blocked"}
+PASS app direct after tun off :: peer=172.31.77.10
+PASS non-53 UDP allowed after off (proves on-block) :: 0->1
+PASS tun on again :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:10.615364862Z", "state": "on", "udp": "blocked"}
+PASS Quit removes TUN link
+PASS Quit removes TUN routes :: v4=0 v6=0
+PASS Quit leaves no engine process
+PASS quick sequence does not exhaust start limit :: units usable
+PASS socket unit stays usable after quick sequence :: active
+PASS engine restart ready
+PASS TUN auto-enables from saved desire :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS auto-enabled coverage passes app flow :: peer=203.0.113.7
+PASS first engine coverage on for peer test :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS second engine listeners configured :: "http_listen": "127.0.0.1:8417",
+  "socks_listen": "127.0.0.1:8418",
+  "tun_enabled": true
+PASS second engine starts beside peer coverage
+PASS second engine ready :: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'", "tun_dns_direct", "tun_udp_blocked", "tun_conflict"]
+PASS second engine reports tun_conflict :: {"desired": true, "detail": "TUN coverage could not be verified off; the engine keeps its own dials outside it", "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "last_error": "tun_conflict", "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS second engine kept its listeners open :: {"http": "127.0.0.1:8417", "socks": "127.0.0.1:8418"}
+PASS peer coverage survives second startup :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS peer coverage still carries the approved flow :: peer=203.0.113.7
+PASS second tun on refused as conflict :: exit=6 {'kind': 'state_locked', 'path': 'local', 'message': 'another TUN instance or helper owns the interface', 'detail': {'reason': 'tun_conflict'}}
+PASS peer coverage survives second tun on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS second tun off refused as conflict :: exit=6 {'kind': 'state_locked', 'path': 'local', 'message': 'another TUN instance or helper owns the interface', 'detail': {'reason': 'tun_conflict'}}
+PASS peer coverage survives second tun off :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS second engine stops
+PASS peer coverage survives second Quit :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS peer coverage flow after second Quit :: peer=203.0.113.7
+PASS coverage on before limit test :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:12.355001886Z", "state": "on", "udp": "blocked"}
+PASS bounded start limit hit :: hit_at=21
+PASS start-limit-hit recorded :: Result=start-limit-hit
+NRestarts=0
+Nov 27 09:46:27 rl-h-<run>-a tun-service[25106]: routelatch-tun: 2026/11/27 09:46:27 restart lease requests coverage rebuild
+Nov 27 09:46:27 rl-h-<run>-a tun-service[25106]: routelatch-tun: 2026/11/27 09:46:27 coverage is on
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: Stopping routelatch-tun.service - RouteLatch TUN coverage helper...
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: routelatch-tun.service: Deactivated successfully.
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: Stopped routelatch-tun.service - RouteLatch TUN coverage helper.
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: routelatch-tun.service: Start request repeated too quickly.
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: routelatch-tun.service: Failed with result 'start-limit-hit'.
+Nov 27 09:46:28 rl-h-<run>-a systemd[1]: Failed to start routelatch-tun.service - RouteLatch TUN coverage helper.
+PASS no rl-tun0 after limit
+PASS no TUN routes after limit :: v4=0 v6=0
+PASS coverage is not reported on after limit :: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+PASS coverage is not reported as a clean off :: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+PASS tun on fails while the limit is hit :: exit=7
+PASS limit failure did not release the engine bypass :: 0->0
+PASS reset-failed recovery restores coverage :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:29.662834811Z", "state": "on", "udp": "blocked"}
+PASS coverage flow works after documented recovery :: peer=203.0.113.7
+PASS simulated default-route change applied
+PASS stale bypass: approved flow still works :: peer=203.0.113.7
+PASS stale direct path stays stale or fails closed (no loop) :: peer=172.31.77.10
+PASS off/on follows new interface (no silent direct) :: {"error": "timed out", "ms": 3003, "ok": false}
+PASS off/on rebinds bypass without direct leak :: peer=203.0.113.7
+PASS restored default recovers pool :: peer=203.0.113.7
+PASS restored default recovers direct :: peer=172.31.77.10
+PASS canary flow executed :: {"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 18, "ok": true, "stage": "tls"}
+PASS peer observed canary SNI :: {"event": "tls_request", "peer": "172.31.77.10:48952", "port": "tls4", "sni": "canary2-h.invalid"}
+PASS no flow destination in files/log
+PASS no flow destination in TUN journal
+PASS no flow destination in status
+PASS coverage on before witness test :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:36.284593424Z", "state": "on", "udp": "blocked"}
+PASS socket stop binds the service down :: service=inactive
+PASS missing socket without a link is not coverage :: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+PASS witness rl-tun0 present
+PASS missing socket + link reports conflict :: {"desired": true, "detail": "the TUN helper did not answer; coverage could not be verified off", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_conflict", "state": "unavailable", "udp": "blocked"}
+PASS off does not claim coverage off under the witness :: exit=0 {"desired": false, "detail": "the TUN helper did not answer; coverage could not be verified off", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_conflict", "state": "unavailable", "udp": "blocked"}
+PASS status says coverage could not be verified off :: the TUN helper did not answer; coverage could not be verified off
+PASS witness coverage captures rather than leaks direct :: {"error": "timed out", "ms": 3003, "ok": false}
+PASS witness off kept the engine bypass (proxy flow reaches pool) :: exit=0 TLS-OK
+PASS off after witness removal is a clean off :: {"desired": false, "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "state": "off", "udp": "blocked"}
+PASS coverage returns after helper restart :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T09:46:43.611917791Z", "state": "on", "udp": "blocked"}
+PASS coverage flow after witness recovery :: peer=203.0.113.7
+PASS tun uninstall exit 0 :: exit=0
+PASS uninstall removes owned files :: removed:/etc/systemd/system/routelatch-tun.service
+removed:/etc/systemd/system/routelatch-tun.socket
+removed:/etc/routelatch/tun.json
+removed:/etc/tmpfiles.d/routelatch-tun.conf
+removed:/usr/libexec/routelatch/tun-service
+removed:/run/routelatch-tun/control.sock
+removed:/run/routelatch-tun/lease.json
+-rw------- 1 rl rl  373 Nov 27 09:46 /home/rl/data/config.json
+-rw------- 1 rl rl 2249 Nov 27 09:46 /home/rl/data/state.json
+PASS uninstall preserves user data
+PASS helper reports missing :: {"desired": false, "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "state": "off", "udp": "blocked"}
+PASS tun on without helper refused :: exit=7 {'kind': 'unsupported', 'path': 'local', 'message': 'TUN helper is not installed', 'detail': {'reason': 'tun_helper_unavailable'}}
+PASS failed enable keeps the desire :: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+PASS engine ready without helper
+PASS missing helper is visible :: {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}
+PASS missing helper warning is surfaced :: ["tun_service_unavailable"]
+PASS normal listeners stay available
+PASS tun off clears desire without helper :: {"desired": false, "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "state": "off", "udp": "blocked"}
+PASS engine still ready after helper-missing path
+PASS no TUN link at end :: Device "rl-tun0" does not exist.
+PASS no TUN routes at end :: v4=0 v6=0
+PASS no engine process at end
+PASS no helper socket/lease at end
+PASS no helper unit at end
+
+SUMMARY passed=158 failed=0 notrun=0 total=158

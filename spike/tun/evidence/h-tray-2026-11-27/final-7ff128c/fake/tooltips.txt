@@ -1,0 +1,5 @@
+(<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN off')>,)
+(<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 4 open · TUN on')>,)
+(<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN error')>,)
+(<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open · TUN starting')>,)
+(<('', @a(iiay) [], 'RouteLatch', 'Targeted · 3 usable · 0 open')>,)

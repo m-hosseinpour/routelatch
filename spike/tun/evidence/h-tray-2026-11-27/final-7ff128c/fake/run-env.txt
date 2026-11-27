@@ -1,0 +1,6 @@
+base=<tmp>/r16h-final/fake-20261127T100441Z
+tray=2435497
+bus=org.freedesktop.StatusNotifierItem-2435497-1
+fake_socket=<tmp>/r16h-final/fake-20261127T100441Z/run/control.sock
+binary=<tmp>/r16h-final/bin/routelatch
+head=7ff128ced6fc0f39a5301521a92bdd703f79d996

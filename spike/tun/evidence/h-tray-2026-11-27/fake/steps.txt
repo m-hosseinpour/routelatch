@@ -1,0 +1,36 @@
+07:43:41 fake tray ready pid=1651255 bus=org.freedesktop.StatusNotifierItem-1651255-1
+07:43:41 state=off
+07:43:41 click id=14
+07:43:42 click id=71
+07:43:42 enable pending + cancel: zero requests
+07:43:42 state=error
+07:43:43 click id=14
+07:43:43 click id=15
+07:43:43 pending replaced by the newer action
+07:43:43 click id=78
+07:43:44 click id=14
+07:43:44 waiting 62s for the pending to expire
+07:44:46 stale pending expired, zero requests
+07:44:46 state=error
+07:44:46 click id=14
+07:44:46 click id=81
+07:44:46 click id=81
+07:44:47 state=on
+07:44:49 enable confirmed once, coverage on
+07:44:49 warnings captured
+07:44:50 click id=15
+07:44:50 click id=94
+07:44:50 state=off
+07:44:51 disable confirmed once, coverage off
+07:44:51 state=conflict
+07:44:53 conflict state captured
+07:44:53 state=incompatible
+07:44:57 incompatible helper captured
+07:44:57 state=starting
+07:45:01 pending state captured
+07:45:01 state=unknown
+07:45:03 unknown payload captured
+07:45:03 state=inject
+07:45:07 injected URL-shaped status text not rendered in Coverage
+07:45:08 notification scan: no URL/destination
+07:45:08 fake run complete

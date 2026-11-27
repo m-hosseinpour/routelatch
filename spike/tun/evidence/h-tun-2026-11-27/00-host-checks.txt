@@ -1,0 +1,73 @@
+# clean e4859db host checks (2026-11-27T08:43:44Z) HEAD=e4859db
+$ go build ./...
+elapsed=2.48s exit=0
+$ go vet ./...
+elapsed=0.86s exit=0
+$ go test -count=1 ./...
+ok  	routelatch/cmd/routelatch	2.320s
+ok  	routelatch/internal/acceptance	116.460s
+2026-11-27T08:44:08.949Z app.tray: tray: lifecycle event dropped kind=restarting
+--- FAIL: TestSessionBusHandshakeHonoursDeadline (0.20s)
+    --- FAIL: TestSessionBusHandshakeHonoursDeadline/tray_probe (0.00s)
+        tray_test.go:83: handshake returned session bus handshake failed: read unix @->/tmp/rl-dbus-2488204984/bus: read: bad file descriptor, want context.DeadlineExceeded
+FAIL
+FAIL	routelatch/internal/app	18.291s
+ok  	routelatch/internal/autostart	0.017s
+ok  	routelatch/internal/conns	0.119s
+ok  	routelatch/internal/contract	0.002s
+ok  	routelatch/internal/control	0.956s
+ok  	routelatch/internal/diagnostics	0.049s
+ok  	routelatch/internal/egress	0.008s
+ok  	routelatch/internal/engine	10.874s
+ok  	routelatch/internal/frontend	2.131s
+ok  	routelatch/internal/imports	0.037s
+ok  	routelatch/internal/instance	0.006s
+ok  	routelatch/internal/licensing	0.011s
+ok  	routelatch/internal/platform	0.006s
+ok  	routelatch/internal/pool	0.006s
+ok  	routelatch/internal/probes	0.077s
+ok  	routelatch/internal/proposals	0.003s
+ok  	routelatch/internal/routing	0.010s
+ok  	routelatch/internal/service	0.017s
+ok  	routelatch/internal/singbox	0.115s
+ok  	routelatch/internal/store	0.011s
+ok  	routelatch/internal/systemd	0.007s
+ok  	routelatch/internal/trayui	0.782s
+ok  	routelatch/internal/tun	0.174s
+ok  	routelatch/internal/tun/setup	0.016s
+FAIL
+Command exited with non-zero status 1
+elapsed=119.53s exit=1
+
+# rerun after the known app teardown flake (bad file descriptor)
+$ go test -count=1 ./internal/app
+ok  	routelatch/internal/app	18.456s
+elapsed=19.41s exit=0
+$ go test -count=1 ./...
+ok  	routelatch/cmd/routelatch	2.317s
+ok  	routelatch/internal/acceptance	120.751s
+ok  	routelatch/internal/app	18.674s
+ok  	routelatch/internal/autostart	0.023s
+ok  	routelatch/internal/conns	0.122s
+ok  	routelatch/internal/contract	0.003s
+ok  	routelatch/internal/control	0.954s
+ok  	routelatch/internal/diagnostics	0.047s
+ok  	routelatch/internal/egress	0.004s
+ok  	routelatch/internal/engine	10.872s
+ok  	routelatch/internal/frontend	2.127s
+ok  	routelatch/internal/imports	0.033s
+ok  	routelatch/internal/instance	0.005s
+ok  	routelatch/internal/licensing	0.007s
+ok  	routelatch/internal/platform	0.007s
+ok  	routelatch/internal/pool	0.006s
+ok  	routelatch/internal/probes	0.078s
+ok  	routelatch/internal/proposals	0.006s
+ok  	routelatch/internal/routing	0.011s
+ok  	routelatch/internal/service	0.017s
+ok  	routelatch/internal/singbox	0.116s
+ok  	routelatch/internal/store	0.013s
+ok  	routelatch/internal/systemd	0.006s
+ok  	routelatch/internal/trayui	0.792s
+ok  	routelatch/internal/tun	0.184s
+ok  	routelatch/internal/tun/setup	0.026s
+elapsed=122.37s exit=0

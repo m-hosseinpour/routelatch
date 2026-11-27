@@ -1,0 +1,4 @@
+
+localhost source: {"ms": 2, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"127.0.0.1\", \"peer\": \"127.0.0.1\", \"port\": 53484, \"ts\": 1795768806.0100095}"}
+
+LAN source: {"ms": 1, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"172.31.77.20\", \"peer\": \"172.31.77.10\", \"port\": 57588, \"ts\": 1795768806.1408553}"}

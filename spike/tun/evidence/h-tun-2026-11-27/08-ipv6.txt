@@ -1,0 +1,6 @@
+
+$ routelatch rules add --kind ip 2001:db8::7
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"2001:db8::7","rule":{"added_at":"2026-11-27T08:40:12.704205912Z","addr":"2001:db8::7","id":"r-81bf3545beda63357688e661","kind":"ip","origin":"user"}}}
+[exit 0]
+
+IPv6 TLS: {"bytes": 63, "first": "HTTP/1.1 200 OK\r\nContent-Length:", "ms": 19, "ok": true, "stage": "tls"}

@@ -1,0 +1,41 @@
+
+$ routelatch tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ tun uninstall
+{"schema_version":1,"ok":true,"command":"tun uninstall","data":{"allowed_uid":1500,"binary":"/usr/libexec/routelatch/tun-service","changed":true,"config":"/etc/routelatch/tun.json","managed":true,"removed":["/etc/systemd/system/routelatch-tun.service","/etc/systemd/system/routelatch-tun.socket","/etc/routelatch/tun.json","/usr/libexec/routelatch/tun-service","/etc/tmpfiles.d/routelatch-tun.conf","/run/routelatch-tun/lease.json"],"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}
+[exit 0]
+
+$ uninstall layout
+removed:/etc/systemd/system/routelatch-tun.service
+removed:/etc/systemd/system/routelatch-tun.socket
+removed:/etc/routelatch/tun.json
+removed:/etc/tmpfiles.d/routelatch-tun.conf
+removed:/usr/libexec/routelatch/tun-service
+removed:/run/routelatch-tun/control.sock
+removed:/run/routelatch-tun/lease.json
+-rw------- 1 rl rl  373 Nov 27 08:40 /home/rl/data/config.json
+-rw------- 1 rl rl 2248 Nov 27 08:40 /home/rl/data/state.json
+
+$ routelatch tun status
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":false,"dns":"direct","helper":"missing","interface":"","ipv6":false,"state":"off","udp":"blocked"}}
+
+$ routelatch tun on
+{"schema_version":1,"ok":false,"command":"tun on","error":{"kind":"unsupported","path":"local","message":"TUN helper is not installed","detail":{"reason":"tun_helper_unavailable"}}}
+[exit 7]
+
+$ routelatch status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":1,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":11,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":true,"detail":"TUN service did not report its state","dns":"direct","helper":"missing","interface":"","ipv6":false,"last_error":"tun_service_unavailable","state":"unavailable","udp":"blocked"},"warnings":["tun_service_unavailable"]}}
+
+$ routelatch status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":11,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":true,"detail":"TUN service did not report its state","dns":"direct","helper":"missing","interface":"","ipv6":false,"last_error":"tun_service_unavailable","state":"unavailable","udp":"blocked"},"warnings":["tun_service_unavailable"]}}
+
+status without helper: {"connections": {"dialing": 0, "open": 0, "proofs": {"accepted": 0, "confirmed": 0}}, "diagnostics": {"enabled": true, "queued": 0}, "listeners": {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}, "listeners_open": true, "mode": "targeted", "policy_version": 11, "pool": {"cooling": 0, "healthy": 1, "total": 1, "usable": 1}, "ready": true, "resume_requires_restart": false, "selected_exit": "", "tun": {"desired": true, "detail": "TUN service did not report its state", "dns": "direct", "helper": "missing", "interface": "", "ipv6": false, "last_error": "tun_service_unavailable", "state": "unavailable", "udp": "blocked"}, "warnings": ["tun_service_unavailable"]}
+
+listeners: LISTEN 0      4096       127.0.0.1:8318       0.0.0.0:*   
+LISTEN 0      4096       127.0.0.1:8317       0.0.0.0:*   
+
+$ routelatch tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"missing","interface":"","ipv6":false,"state":"off","udp":"blocked"}}
+[exit 0]

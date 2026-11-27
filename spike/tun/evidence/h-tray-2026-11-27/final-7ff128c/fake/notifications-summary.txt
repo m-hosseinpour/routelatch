@@ -1,0 +1,2 @@
+{'app': 'RouteLatch', 'summary': 'RouteLatch', 'body': 'System-wide coverage starting'}
+{'app': 'RouteLatch', 'summary': 'RouteLatch', 'body': 'System-wide coverage off'}

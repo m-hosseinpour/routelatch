@@ -1,0 +1,13 @@
+date: 2026-11-27T08:39:23Z
+repo HEAD: e4859dbad63970c0c27654c405d8ea370d172287
+e4859db test(app): treat a missing lock file as unlocked in cancellation test
+docker: 29.10.1
+image: sha256:cbf0ea967ebe733c1072a3ba64e0816e609098b8e1dd98108d083ef9f909c13a
+base: sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
+host kernel: 7.0.0-44-generic
+container kernel: 7.0.0-44-generic
+os: Ubuntu 26.04.1 LTS
+systemd 259 (259.9-0ubuntu0.1)
+ip utility, iproute2-6.19.0, libbpf 1.6.3
+go (container):
+go version go1.27.4 linux/amd64

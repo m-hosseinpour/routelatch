@@ -1,0 +1,28 @@
+
+$ routelatch tun status
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ tun status before on
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+
+$ routelatch import link socks5://172.31.77.20:11080#exit-h
+{"schema_version":1,"ok":true,"command":"import","data":{"records":{"invalid":0,"unsupported":0,"valid":1},"source_id":"s-1675dc7915d5"}}
+[exit 0]
+
+$ routelatch rules add --kind domain canary-h.invalid
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"canary-h.invalid","rule":{"added_at":"2026-11-27T08:40:04.957486224Z","host":"canary-h.invalid","id":"r-dfd97557bdcbbcae5370ad1e","kind":"domain","origin":"user"}}}
+[exit 0]
+
+$ routelatch rules add --kind domain canary6-h.invalid
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"canary6-h.invalid","rule":{"added_at":"2026-11-27T08:40:05.027968902Z","host":"canary6-h.invalid","id":"r-38385cdcdcedada08ab5c2e3","kind":"domain","origin":"user"}}}
+[exit 0]
+
+$ routelatch rules add --kind domain canary-http-h.invalid
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"canary-http-h.invalid","rule":{"added_at":"2026-11-27T08:40:05.10100201Z","host":"canary-http-h.invalid","id":"r-eb1ed45e72b47fddeef0c5dd","kind":"domain","origin":"user"}}}
+[exit 0]
+
+$ routelatch status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":4,"pool":{"cooling":0,"healthy":0,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"},"warnings":[]}}
+
+status after policy: {"connections": {"dialing": 0, "open": 0, "proofs": {"accepted": 0, "confirmed": 0}}, "diagnostics": {"enabled": true, "queued": 0}, "listeners": {"http": "127.0.0.1:8317", "socks": "127.0.0.1:8318"}, "listeners_open": true, "mode": "targeted", "policy_version": 4, "pool": {"cooling": 0, "healthy": 0, "total": 1, "usable": 1}, "ready": true, "resume_requires_restart": false, "selected_exit": "", "tun": {"desired": false, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "state": "off", "udp": "blocked"}, "warnings": []}

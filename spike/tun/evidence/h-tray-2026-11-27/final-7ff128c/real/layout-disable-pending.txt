@@ -1,0 +1,73 @@
+0|true|true|||
+1|false|true|||Targeted · 0 usable · 0 open
+73|true|true|||Confirm: Disable system-wide coverage
+74|true|true|||Cancel
+4|true|true|||Mode
+5|true|true|radio|1|Targeted
+6|true|true|||All proxy
+7|true|true|||All direct
+8|true|true|||Stop listening…
+9|true|true|||Coverage
+10|false|true|||Coverage: unavailable · desired on · not active
+11|false|true|||Helper: missing · run 'sudo routelatch tun setup' in a terminal
+70|false|true|||Error: TUN service unavailable
+12|true|true|||Warnings (1)
+71|false|true|||Service: coverage is not running
+14|false|true|||Enable system-wide coverage…
+15|false|true|||Unavailable: helper is missing; run 'sudo routelatch tun setup'
+16|true|true|||Disable system-wide coverage…
+18|true|true|||Proposals (0)
+19|false|true|||No pending proposals
+20|true|true|||Show decided (0)
+21|false|true|||No decided or expired proposals
+22|true|true|||Clear decided/expired…
+23|true|true|||Approved rules (0)
+24|false|true|||No approved rules
+25|true|true|||Add rule… (Terminal menu)
+26|true|true|||Pool
+27|false|true|||No exits; add or refresh from the Terminal menu
+28|true|true|radio|1|Auto select
+29|true|true|||Healthy (0)
+30|false|true|||No healthy exits
+31|true|true|||Untested (0)
+32|false|true|||No untested exits
+33|true|true|||Cooling (0)
+34|false|true|||No cooling exits
+35|true|true|||Unsupported/Invalid (0)
+36|false|true|||No unsupported/invalid exits
+37|true|true|||Refresh all sources
+38|true|true|||Re-rank now
+39|true|true|||Test first 20 usable
+40|true|true|||Add/import… (Terminal menu)
+41|true|true|||Desktop proxy
+42|false|true|||Desktop proxy: not applied (kde)
+43|true|true|||Refresh status
+44|true|true|||Set/Re-apply desktop proxy…
+45|true|true|||Restore previous desktop proxy…
+46|true|true|||Diagnostics
+47|true|true|||Run doctor
+48|true|true|||Doctor results
+49|false|true|||No doctor results yet
+50|true|true|||Warnings (2)
+51|false|true|||pool has no usable exit; approved destinations fail with pool_unavailable; run …
+72|false|true|||tun_service_unavailable
+52|true|true|||Show log path
+53|true|true|||Environment
+54|false|true|||HTTP_PROXY=http://127.0.0.1:48907
+55|false|true|||HTTPS_PROXY=http://127.0.0.1:48907
+56|false|true|||ALL_PROXY=http://127.0.0.1:48907
+57|false|true|||NO_PROXY=localhost,127.0.0.1,.localhost,127.0.0.0/8,::1,169.254.0.0/16,fe80::/1…
+58|true|true|||Data
+59|true|true|||Back up state now
+60|false|true|||Restore backup… (CLI)
+61|true|true|||Settings
+62|false|true|||Start at login: Off
+63|false|true|||Start at login unavailable: autostart manages only the default data directory
+64|false|true|||HTTP 127.0.0.1:48907 · SOCKS 127.0.0.1:34959 · log info
+65|false|true|||State <tmp>/r16h-final/real-20261127T100354Z/data/state.json · config /…
+66|true|true|||Advanced
+67|true|true|||Restart engine…
+68|true|true|||Terminal menu…
+69|false|true|||Last action: Confirmation required
+2|true|true|||Quit
+3|true|true|||Quit RouteLatch
