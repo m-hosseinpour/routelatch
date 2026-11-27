@@ -564,9 +564,16 @@ scenario checks and repeated `scripts/check-package.sh`/`check-artifact.sh`
 A17 is accepted with limits. A real KDE Plasma/X11 run verified the
 helper-missing/off/error tray surface, while the active/starting/conflict/
 incompatible/unknown states were rendered by an unchanged tray against a
-fake status peer. A real TUN-active host icon/toggle (which needs the helper
-installed), panel screenshot/contrast, Wayland/GNOME and Login/autostart
-auto-enable remain unverified.
+fake status peer. Panel contrast was measured on that real Plasma 6.6.7/X11
+BreezeDark panel (`#202326`): **PASS**, with a minimum core contrast of 4.21:1
+across the helper-missing/off, error/desired-on and fake
+off/error/active/starting/conflict states. A synthetic light-panel composite
+(not a real light-theme run) is a caveat: the white mark is 1.14:1 on `#eff0f1`
+and 1.03:1 on `#fcfcfc`, below 3:1, though the blue body and enclosed mark keep
+the silhouette identifiable. No light-theme rendering, translucency, hover or
+theme recolouring was tested, and no product change was made. A real
+TUN-active host icon/toggle (which needs the helper installed), Wayland/GNOME
+and Login/autostart auto-enable remain unverified.
 
 `v1.2.1` closes the R-28 status-visibility gap found after v1.2.0. For 60
 seconds after an approved egress dial fails with kind `exit_unreachable`,

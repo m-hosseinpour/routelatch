@@ -672,7 +672,8 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   helper-missing/off/error و `tun on` exit 7؛ fake-status (visual-only)
   active/starting/conflict/incompatible/unknown، confirmation/cancel/stale،
   D21، آیکن/رنگ‌ها. **آزمون‌نشده:** TUN-active واقعی روی هاست (نصب helper مجاز
-  نبود)، panel screenshot/contrast، Wayland/GNOME، pointer/hover.
+  نبود)، Wayland/GNOME، pointer/hover؛ **panel contrast بعداً (۲۰۲۶-۱۱-۲۷) روی
+  BreezeDark PASS شد** و فقط محدودیت light-theme باز است (پایین را ببینید).
 - checkها: `go build`/`go vet`/`go test -count=1 ./...` روی `7ff128c`؛ package
   checks در isolated DIST (هیچ unit/tmpfiles/helper/postinst) و gated tests؛
   CI `45974444673` روی `7ff128c` سبز.
@@ -682,9 +683,10 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
 - **limits (ثبت‌شده و به‌روزشده ۲۰۲۶-۱۱-۲۷):** fail-open error/icon visibility
   NOT RUN (در بازبینی VPN-خاموش، status در gap فقط block/timeout شد و on جعلی
   نداد)، Login/autostart auto-enable NOT RUN، tray TUN-active واقعی نیازمند نصب
-  helper (مجاز نبود)، Wayland/GNOME، panel contrast، DNS-through-pool و UDP
-  (R16-I/J)، D21 debug caveat، arm64 runtime. R-28 on-link و off-link (با
-  warning) تأیید شد؛ start-limit recovery هم PASS است.
+  helper (مجاز نبود)، Wayland/GNOME، DNS-through-pool و UDP (R16-I/J)، D21 debug
+  caveat، arm64 runtime. **panel contrast در ۲۰۲۶-۱۱-۲۷ روی BreezeDark PASS شد**
+  و فقط محدودیت light-theme دارد (به‌روزرسانی panel contrast را ببینید). R-28
+  on-link و off-link (با warning) تأیید شد؛ start-limit recovery هم PASS است.
 - **بازبینی ۲۰۲۶-۱۱-۲۷ (VPN هاست خاموش):** ایزوله‌بودن کانتینر (بدون
   interface/route وابسته به VPN) و H 158/158، R16-I DoH/fail-closed و R16-J
   latency/exit دوباره تأیید شدند؛ هیچ نتیجهٔ قبلی تغییر نکرد. شاهد:
@@ -743,6 +745,27 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   <https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.1>.
   body با «RouteLatch v1.2.1 — R-28 status warning» شروع می‌شود. رفع روی
   `cd1c848`+`2d4da2a` با شاهد `d36361b` است و `v1.2.0` تاریخی است.
+
+**به‌روزرسانی ۲۰۲۶-۱۱-۲۷ (panel contrast — انجام شد؛ BreezeDark PASS، محدودیت light-theme):**
+- **BreezeDark واقعی (Plasma 6.6.7/X11، scale 1.25، Papirus-Dark، پنل `#202326`): PASS.**
+  کمترین contrast هستهٔ آیکن **4.21:1** (بدنهٔ آبی)، white mark **15.79:1**،
+  off ring **14.48:1** و badgeها **4.68–6.25:1**؛ stateهای helper-missing/off،
+  error/desired-on و fake off/error/active/starting/conflict همه ≥3:1. صفحه در
+  طول اجرا قفل بود؛ شاهد، محتوای پنجرهٔ panel در X11 است نه screenshot دسکتاپ.
+- **محدودیت light-theme:** یک composite **مصنوعی** (نه اجرای واقعی light theme)
+  نشان داد white mark/core روی `#eff0f1` **1.14:1** و روی `#fcfcfc` **1.03:1**
+  است (زیر 3:1)؛ بدنهٔ آبی 3.28/3.65، off ring 1.05/1.06، starting badge 2.21/2.46
+  و on/error روی `#eff0f1` 2.96/2.95 (مرزی). silhouette قابل‌تشخیص می‌ماند چون
+  white mark و ring داخل بدنهٔ آبی محصورند (white-vs-blue 3.75:1، ring-vs-blue
+  3.44:1). هیچ رندر واقعی Breeze-Light، translucency، hover یا theme recoloring
+  آزموده نشد و **هیچ تغییر محصول** انجام نشد؛ رفع light-theme نیازمند رنگ‌های
+  theme-aware است و خارج از این verification می‌ماند.
+- **شاهد:** `spike/tun/PANEL-CONTRAST.md` و
+  `spike/tun/evidence/panel-contrast-2026-11-27/`؛ commits `3616d11` (اولیه) و
+  `9f89518` (addendum مصنوعی light-panel). این commit فقط مستندات است.
+- **backlog:** «contrast پنل» با همین محدودیت بسته شد؛ بقیهٔ موارد backlog
+  (TUN-active واقعی host، Wayland/GNOME، Login/autostart، fail-open in-gap،
+  arm64، D21 debug) باز و آزمون‌نشده‌اند.
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -858,12 +881,14 @@ real-pool sample، caps/D13/status contract.
   acceptance جدید. دروازه: بازبینی مستقل + تأیید کاربر؛ ضعیف‌کردن بی‌صدای
   سیاست no-UDP مجاز نیست.
 - **Verification backlog (باز، شروع‌نشده؛ به‌روزشده ۲۰۲۶-۱۱-۲۷):** TUN-active
-  واقعی روی host با tray/toggle (نصب helper مجوز جدا می‌خواهد)، contrast پنل،
-  Wayland/GNOME، دیده‌شدن fail-open در status/آیکن (in-gap calls فقط block/timeout
-  می‌شوند)، Login/autostart auto-enable، runtime arm64، caveat D21 debug؛ نرخ
-  شکست UDP روی pool واقعی (در دامنهٔ R16-J-1). H addendum rerun انجام شد
-  (۱۴ PASS / ۲ NOTRUN)؛ **R-28 off-link و start-limit recovery دیگر باز نیستند**
-  (هر دو PASS؛ warning R-28 در `status` دیده می‌شود ولی در `tun status`/tray نه).
+  واقعی روی host با tray/toggle (نصب helper مجوز جدا می‌خواهد)، Wayland/GNOME،
+  دیده‌شدن fail-open در status/آیکن (in-gap calls فقط block/timeout می‌شوند)،
+  Login/autostart auto-enable، runtime arm64 (تعویق کاربر)، caveat D21 debug؛ نرخ
+  شکست UDP روی pool واقعی (در دامنهٔ R16-J-1). **panel contrast دیگر باز نیست:**
+  روی BreezeDark PASS شد و محدودیت light-theme (synthetic) ثبت است؛ شاهد
+  `spike/tun/PANEL-CONTRAST.md` و commits `3616d11`/`9f89518`. H addendum rerun
+  انجام شد (۱۴ PASS / ۲ NOTRUN)؛ **R-28 off-link و start-limit recovery دیگر باز
+  نیستند** (هر دو PASS؛ warning R-28 در `status` دیده می‌شود ولی در `tun status`/tray نه).
 - هیچ پیاده‌سازی یا تست واقعی pool اکنون مجاز نیست؛ رفتار v1.2.0 (DNS مستقیم و
   UDP غیرDNS بلاک) و `v1.2.1` (فقط warning وضعیت) سیاست را تغییر
   نمی‌دهد.
@@ -2089,7 +2114,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    Release عمومی id `460485888` با ۱۷ دارایی. **آخرین کد محصول `2d4da2a` است**
    (warning وضعیت R-28؛ commits `cd1c848`+`2d4da2a`) و **شاهد
    post-release `d36361b`** است؛ بازبینی مستقل رفع PASS شد و اجرای off-link روی
-   `2d4da2a` ۳۶/۰/۰ داد. patch `v1.2.1` از همین revision با تگ annotated
+   `2d4da2a` ۳۶/۰/۰ داد. شاهد panel contrast `9f89518` (اولیه `3616d11`) است؛
+   **وضعیت فعلی: code `2d4da2a`، R-28 evidence `d36361b`، panel evidence `9f89518`**
+   و commit مستندات بعد از آن. patch `v1.2.1` از همین revision با تگ annotated
    `03610063…` روی `d90e17a`، CI `46037851906`، `Release` `46038540738` و
    Release عمومی id `460876153` (۱۷ دارایی) منتشر شد. R16-I/J research
    انجام شد (`Ready for decision`)؛ D31/D32 مسیر را تعیین کردند و R16-I-1/J-1

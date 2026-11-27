@@ -77,10 +77,11 @@ This record does not claim a new security review.
 Known limits carried from the R16-H acceptance record:
 `spike/tun/H-ACCEPTANCE.md` and
 `spike/tray/evidence/r15h-acceptance-2026-11-26.md`. TUN runtime was exercised
-on `amd64` only; Wayland/GNOME, a real TUN-active host tray/toggle, panel
-contrast, Login/autostart auto-enable and `arm64` runtime remain unverified.
-The R-28 off-link path and the start-limit recovery were verified after the
-release (see the v1.2.1 record).
+on `amd64` only; Wayland/GNOME, a real TUN-active host tray/toggle,
+Login/autostart auto-enable and `arm64` runtime remain unverified. Panel
+contrast was verified after the release on BreezeDark with a light-theme limit
+(see the v1.2.1 record below). The R-28 off-link path and the start-limit
+recovery were verified after the release (see the v1.2.1 record).
 
 ## v1.2.1 — R-28 status warning (2026-11-27)
 
@@ -146,6 +147,22 @@ verification used synthetic local fixtures, one break shape
 icon was observed; there was one TTL observation only. Evidence:
 `spike/tun/POST-RELEASE-VERIFICATION.md` and
 `spike/tun/evidence/post-v1.2.0-verification-2026-11-27/`.
+
+Post-release panel-contrast verification at product `3f124df` (evidence commit
+`3616d11`, synthetic light-panel addendum `9f89518`): the real Plasma 6.6.7/X11
+run (scale 1.25, BreezeDark with Papirus-Dark, panel `#202326`) is a **PASS**.
+The minimum core contrast is 4.21:1 (blue engine body), the white inner mark is
+15.79:1, the off ring 14.48:1 and the badges 4.68–6.25:1; the helper-missing/off,
+error/desired-on and fake off/error/active/starting/conflict states were all at
+least 3:1. A **synthetic** light-panel composite (not a real light-theme run) is
+a caveat: the white mark/core measures 1.14:1 on `#eff0f1` and 1.03:1 on
+`#fcfcfc`, below 3:1; the blue body is 3.28/3.65, the off ring 1.05/1.06, the
+starting badge 2.21/2.46 and on/error 2.96/2.95 on `#eff0f1` (marginal). The
+silhouette stays identifiable because the white mark and ring are enclosed by
+the blue body (white-vs-blue 3.75:1, ring-vs-blue 3.44:1). No real Breeze-Light
+rendering, translucency, hover or theme recolouring was tested, and there was no
+product change. Evidence: `spike/tun/PANEL-CONTRAST.md` and
+`spike/tun/evidence/panel-contrast-2026-11-27/`.
 
 ## v1.1.0 — tray control surface (2026-11-26)
 
