@@ -232,7 +232,7 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ release طبق گیت‌ها)
+### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 منتشر شد)
 
 **وضعیت واحد (a): R16 در ۲۰۲۶-۱۱-۲۶ فقط تعریف شد؛ هیچ کد، تست، TUN، route،
 سرویس، unit، tray icon یا بسته تغییر نکرد و هیچ فرمان میزبان اجرا نشد.**
@@ -682,7 +682,15 @@ checks، و گزارش passed/failed/not-run. انتشار فقط طبق `AGENTS
   clean/on بود)، Login/autostart auto-enable NOT RUN، tray TUN-active واقعی
   نیازمند نصب helper (مجاز نبود)، Wayland/GNOME، public/off-link، DNS-through-
   pool و UDP (R16-I/J)، R-28 فقط on-link، D21 debug caveat، arm64 runtime.
-- **next:** release واجد شرایط طبق `AGENTS.md`؛ R16-I/J تحقیقات بعدی.
+- **انتشار (۲۰۲۶-۱۱-۲۷):** تگ annotated `v1.2.0` (object
+  `cda1fe352a2b1144633415f8b3071b2dcf542382`) روی `a8ee4d3` در هر دو remote
+  push شد؛ CI `a8ee4d3` (attempt 2) سبز؛ `Release` `45985695347` موفق؛ Release
+  عمومی `v1.2.0` (id `460485888`، بدون draft/prerelease) با ۱۷ دارایی
+  (۴ tarball، ۴ `.deb`، ۴ spec، ۴ RPM و `SHA256SUMS`) منتشر شد:
+  <https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0>.
+  body با «RouteLatch v1.2.0 — opt-in TUN coverage» شروع می‌شود. انتشار طبق
+  مجوز ایستادهٔ `AGENTS.md` و پس از CI/package gates انجام شد.
+- **next:** R16-I/J تحقیقات بعدی (DNS-through-pool و UDP).
 
 #### R16-I — DNS-through-pool و switch مستقل (تحقیق؛ بعد از H)
 
@@ -1946,12 +1954,13 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 1. `AGENTS.md` و همین بخش (مخصوصاً R15 برای تاریخ capability و R14 برای تاریخ انتشار) را
    بخوان؛ `git status` و `git log --oneline -5` را با HEAD ثبت‌شده مقایسه کن؛
    تغییر/دادهٔ کاربر را حفظ کن.
-2. وضعیت مرجع (۲۰۲۶-۱۱-۲۶): **`v1.1.0` آخرین ریلیز عمومی است و R1–R15 بسته‌اند؛
-   هیچ کار باز R15 یا v1 نمانده است.** **R16-A تا R16-H در ۲۰۲۶-۱۱-۲۷ انجام،
-   بازبینی و پذیرفته شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده
-   `c575d6d`؛ G: setup/packaging/docs `5144cbf`؛ code fixes `7ff128c`؛ CI
-   `45974444673` سبز)؛ release واجد شرایط طبق گیت‌ها. R16-I/J (DNS-through-
-   pool و UDP) فقط task تحقیقی تعریف‌شده‌اند و بعد از H شروع می‌شوند.** `v1.1.0` سطح کنترل tray (R15)،
+2. وضعیت مرجع (۲۰۲۶-۱۱-۲۷): **`v1.2.0` آخرین ریلیز عمومی است و R1–R16 بسته‌اند؛
+   هیچ کار باز R16 یا v1 نمانده است.** **R16-A تا R16-H انجام، بازبینی و پذیرفته
+   شدند (A17 = Accepted with limits؛ F: کد/KDE گیت‌شده؛ G: setup/packaging/docs؛
+   code fixes `7ff128c`؛ H `a8ee4d3`). tag annotated `v1.2.0` (object
+   `cda1fe35…`)، CI `a8ee4d3` attempt 2 سبز، `Release` `45985695347` و Release
+   عمومی id `460485888` با ۱۷ دارایی. R16-I/J (DNS-through-pool و UDP) فقط task
+   تحقیقی تعریف‌شده‌اند.** `v1.1.0` سطح کنترل tray (R15)،
    `status.resume_requires_restart` و lifecycle restart سطح process را اضافه کرد:
    تگ annotated `7abe9704f66cbcc78fe6340093e8a365324b9407` روی
    `532c1697da6140fdfd5258dc98da2c1f7927cc61` (`532c169`، هر دو remote)، CI سبز
@@ -1969,10 +1978,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    محدودیت‌های R15-H (بدون اسکرین‌شات؛ Wayland/GNOME، desktop set/restore و
    autostart اجرانشده؛ proposal accept/recheck/clear و pool remove/test فقط با
    تست واحد؛ non-amd64 runtime-untested) در
-   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD فعلی `271964d`
-   یک commit فقط‌مستند است؛ CI `45797624302` آن در job «Build, vet and test» و
-   step `Test` قرمز شد در حالی که full suite محلی سبز است و این شکست به‌عنوان
-   flake شناخته‌شده تأیید نشده است.
+   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. HEAD فعلی `a8ee4d3`
+   (tag `v1.2.0`) است؛ CI `a8ee4d3` (attempt 2) و `Release` `45985695347` سبزند.
+   flakiness گاه‌به‌گاه step `Test` در CI دیده شد؛
+   `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` اصلاح شد و
+   اجراهای بعدی سبزند.
 3. تصمیم D27: trigger انتشار، push تگ annotated `v*` است؛ هر ۱۷ دارایی در CI
    ساخته و پس از تأیید خودکار منتشر می‌شوند؛ هیچ ساخت/آپلود محلی در جریان
    ریلیز نیست. قاعدهٔ انتخاب batch در `AGENTS.md` و دروازهٔ CI سبز روی commit
@@ -1994,8 +2004,8 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
 7. پایان هر task: ردیف R15/R16 (یا R14 برای تاریخ انتشار)، HEAD، checks واقعی و
    قدم بعدی را همین‌جا به‌روز کن. R15-0 تا R15-H و انتشار `v1.1.0` کامل شدند؛
    R16-A/B/C/D/E/F/G/H انجام شدند (A17 = Accepted with limits؛ F: کد؛ KDE
-   گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و release طبق گیت‌ها
-   در پیش است. موارد آزمون‌نشده (Wayland/GNOME،
+   گیت‌شده؛ G: setup/packaging/docs؛ H شاهد/validator) و `v1.2.0` منتشر شد.
+   موارد آزمون‌نشده (Wayland/GNOME،
    اسکرین‌شات، desktop set/restore، autostart، proposal accept/recheck/clear،
    pool remove/test، runtime غیر-amd64 و service install) فقط با مجوز/محیط جدا
    انجام می‌شوند و کار باز R15 نیستند.

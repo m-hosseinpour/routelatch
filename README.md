@@ -534,18 +534,14 @@ gated or impossible check, not a pass; the gated tests stay skipped unless a
 real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
 
-Packaging was verified for this revision in the final green release dry-run
-`45463989732` (commit `02e3226`, the same workflow blob as the guard-fix run
-`45422318159`): four tarballs, four unsigned `.deb` files and four RPM specs
-were built in CI, the four binary RPMs were built and inspected there, two
-packaging runs produced an identical `SHA256SUMS`, and the final 17-file set
-passed `scripts/release-assets.sh verify`. `scripts/check-artifact.sh` passed for
-the amd64 artifact, and `scripts/check-package.sh` passed for every architecture
-(metadata, payload paths, binary bytes, spec version/arch/layout, exact
-checksums, and **no systemd unit, autostart entry or maintainer script**). This
-batch also re-ran `package.sh`/`check-package.sh` locally in an isolated `DIST`
-for amd64/arm64 in local mode; the release `PACKAGE-NOTES`/spec text is produced
-only under `GITHUB_ACTIONS=true`, so that mode is checked in the CI dry-run.
+Packaging for v1.2.0 was built and published by the `Release` workflow run
+`45985695347` from the annotated tag `v1.2.0` (object
+`cda1fe352a2b1144633415f8b3071b2dcf542382`) on commit `a8ee4d3`, whose CI
+run `45984462533` succeeded. The public release `v1.2.0` (`id 460485888`) has
+17 assets: four tarballs, four unsigned `.deb` files, four spec files, four
+binary RPMs and `SHA256SUMS`. `scripts/check-package.sh` and
+`scripts/check-artifact.sh` passed at the revision, including the check that
+the package contains **no systemd unit, autostart entry or maintainer script**.
 Only `amd64` was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 
@@ -593,7 +589,7 @@ Three different kinds of gap are kept separate:
   decision. TUN coverage was moved from "undefined later milestone" to the
   post-v1 R16 plan (D29) in 2026-11-26; its service, engine connection, CLI,
   tray surface and privileged setup are implemented in this source revision and
-  intended to ship opt-in in v1.2.0 (release pending at this revision).
+  shipped opt-in in v1.2.0 ([release 460485888](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0)).
   R16-H accepted A17 with the environmental limits listed above; DNS-through-
   pool and UDP coverage remain later research (D30/R16-I/J).
 - **Implemented but not yet exercised:** long hysteria2 sessions.

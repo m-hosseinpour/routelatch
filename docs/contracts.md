@@ -2408,4 +2408,4 @@ layout/معنای setup و uninstall با fake paths/systemctl)، R16-F (tray) �
 (`8a8ec72`، `b0438f2`، `7729205`، `c678f20`، `c575d6d`، `5144cbf`). R16-H در
 ۲۰۲۶-۱۱-۲۷ روی `7ff128c` A17 را با limits پذیرفت (CI `45974444673` سبز)؛
 release طبق گیت‌های `AGENTS.md` است و R16-I/J تحقیقات بعدی‌اند. در v1.1.0 هیچ
-TUN وجود نداشت؛ v1.2.0 آن را opt-in اضافه می‌کند.
+TUN وجود نداشت؛ v1.2.0 (release `460485888`) آن را opt-in اضافه کرد.

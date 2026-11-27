@@ -291,9 +291,10 @@ interface فیزیکی، در R16-D اتصال engine/bypass، در R16-E سطح
 مستندات پیاده شده‌اند. G با نصب واقعی در یک کانتینر privileged/systemd
 دورانداختنی (setup، boot/restart از tmpfiles، `tun on/off`، توقف مستقل و
 uninstall) آزموده شد، نه روی هاست؛ R16-H در ۲۰۲۶-۱۱-۲۷ A17 را با limits پذیرفت
-(شاهد در `spike/tun/H-ACCEPTANCE.md` و `H-TRAY.md`). TUN در v1.2.0 به‌صورت
-opt-in منتشر می‌شود؛ بستهٔ منتشرشده همچنان هیچ unit/tmpfiles/helper ندارد و
-TUN-active واقعی روی هاست/Wayland/GNOME آزمون‌نشده می‌ماند.
+(شاهد در `spike/tun/H-ACCEPTANCE.md` و `H-TRAY.md`). TUN در v1.2.0 (release
+`460485888`) به‌صورت opt-in منتشر شد؛ بستهٔ منتشرشده همچنان هیچ
+unit/tmpfiles/helper ندارد و TUN-active واقعی روی هاست/Wayland/GNOME
+آزمون‌نشده می‌ماند.
 
 ## ۹. پوشش TUN (D29؛ تعریف ۲۰۲۶-۱۱-۲۶؛ R16-C: سرویس و lifecycle، R16-D: اتصال engine و bypass، R16-E: CLI، R16-F: tray، R16-G: setup/packaging/docs و R16-H: پذیرش؛ A17 = Accepted with limits)
 
