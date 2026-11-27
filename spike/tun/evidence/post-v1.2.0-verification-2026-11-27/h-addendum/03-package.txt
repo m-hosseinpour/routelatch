@@ -1,0 +1,145 @@
+$ VERSION=h-accept COMMIT=899b036 DIST=/work/pkgdist ARCHES='amd64 arm64 riscv64 ppc64le' REQUIRE_DEB=1 scripts/build.sh
+version=h-accept commit=899b036 date=2026-11-27T13:33:43Z
+building linux/amd64 -> /work/pkgdist/routelatch-linux-amd64
+building linux/arm64 -> /work/pkgdist/routelatch-linux-arm64
+building linux/riscv64 -> /work/pkgdist/routelatch-linux-riscv64
+building linux/ppc64le -> /work/pkgdist/routelatch-linux-ppc64le
+RouteLatch h-accept
+commit: 899b036
+build date: 2026-11-27T13:33:43Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"h-accept","commit":"899b036","build_date":"2026-11-27T13:33:43Z"}}
+stamp linux/amd64: proven via version and --json
+stamp linux/arm64: version/commit/date embedded (not executable on amd64)
+stamp linux/riscv64: version/commit/date embedded (not executable on amd64)
+stamp linux/ppc64le: version/commit/date embedded (not executable on amd64)
+
+wrote /work/pkgdist/SHA256SUMS:
+f363326087f60603ea0e818ab49dba5201efb06928a1b03fd68935733c1a77af  routelatch-linux-amd64
+a7c2edb3f17a140a1e8783ba64f7368e08661cd0591de6fcb04d4157fb3165ba  routelatch-linux-arm64
+3aa0e4eaadfa5c0bdbf9fda163405b183b10943fe4806386927cec7ac0db7eab  routelatch-linux-riscv64
+d2b1a4e7999a44b2e178a7a28656d1699a9394b4734ea40d14da28b64f62b450  routelatch-linux-ppc64le
+
+wrote /work/pkgdist/BUILD-INFO (version/commit/date stamp that the package ships)
+install or enable nothing here; packaging/README.md documents the user's steps.
+[exit 0]
+
+$ VERSION=h-accept COMMIT=899b036 DIST=/work/pkgdist REQUIRE_DEB=1 scripts/package.sh
+note: no sing-box sidecar in /work/pkgdist/singbox; packaging without it (set REQUIRE_SINGBOX=1 for release builds)
+package stamp amd64: version, commit and date match BUILD-INFO
+packaged routelatch-h-accept-linux-amd64.tar.gz
+packaged routelatch_0.0.0+h.accept_amd64.deb
+generated routelatch-x86_64.spec (binary RPM built and inspected in CI)
+packaged routelatch-h-accept-linux-arm64.tar.gz
+packaged routelatch_0.0.0+h.accept_arm64.deb
+generated routelatch-aarch64.spec (binary RPM built and inspected in CI)
+packaged routelatch-h-accept-linux-riscv64.tar.gz
+packaged routelatch_0.0.0+h.accept_riscv64.deb
+generated routelatch-riscv64.spec (binary RPM built and inspected in CI)
+packaged routelatch-h-accept-linux-ppc64le.tar.gz
+packaged routelatch_0.0.0+h.accept_ppc64el.deb
+generated routelatch-ppc64le.spec (binary RPM built and inspected in CI)
+
+package roots, tarballs, .deb files and RPM specs are under /work/pkgdist/packages:
+/work/pkgdist/packages/SHA256SUMS
+/work/pkgdist/packages/routelatch-aarch64.spec
+/work/pkgdist/packages/routelatch-h-accept-linux-amd64.tar.gz
+/work/pkgdist/packages/routelatch-h-accept-linux-arm64.tar.gz
+/work/pkgdist/packages/routelatch-h-accept-linux-ppc64le.tar.gz
+/work/pkgdist/packages/routelatch-h-accept-linux-riscv64.tar.gz
+/work/pkgdist/packages/routelatch-ppc64le.spec
+/work/pkgdist/packages/routelatch-riscv64.spec
+/work/pkgdist/packages/routelatch-x86_64.spec
+/work/pkgdist/packages/routelatch_0.0.0+h.accept_amd64.deb
+/work/pkgdist/packages/routelatch_0.0.0+h.accept_arm64.deb
+/work/pkgdist/packages/routelatch_0.0.0+h.accept_ppc64el.deb
+/work/pkgdist/packages/routelatch_0.0.0+h.accept_riscv64.deb
+
+7b60305345536da3dbb86bfe8974f13ba749787612048ca71e3c395f8ee029cf  routelatch-h-accept-linux-amd64.tar.gz
+55e5750607d413c9ce72f5b40d64286b1447a899d47f38d1e8e050164d4b8aae  routelatch_0.0.0+h.accept_amd64.deb
+cb4b183ff286e6ddf31fdf8347f4902240b94f005ba9ef6162cce084fbdbadf3  routelatch-x86_64.spec
+f4b94942e2b39e2afe598ce662846936deaef99a5d78a30baa8b35187473de2d  routelatch-h-accept-linux-arm64.tar.gz
+6dbda91adeb5008e4f5aeed0ba34db5a4a2e7efdfcd28700cdd54c74254e5510  routelatch_0.0.0+h.accept_arm64.deb
+483d96efb13391fd1c6d634751ed7b55a58ee70953bf055d6e4506bb367fb8f0  routelatch-aarch64.spec
+84233d50f7be9c8593a853baa6e9533c6b2e1a511a9b0daffab4bf377a3e2107  routelatch-h-accept-linux-riscv64.tar.gz
+6b29b7c76084c0bd4caa160372aba20963f23d534b274edbb2de72b295f8eda4  routelatch_0.0.0+h.accept_riscv64.deb
+7a7bd97feab766d0cb090d521f7a61b0f5183a6411e9964375e572e4a827d817  routelatch-riscv64.spec
+3fec88946b40dd1cbe9178f5b5e96a19ebd245b6423e4c9951a1ef0f6defd906  routelatch-h-accept-linux-ppc64le.tar.gz
+d6d5fd8bb1ea1c9166ad128a692205490bcb4713475a80b368288dd4acd5499f  routelatch_0.0.0+h.accept_ppc64el.deb
+6d3bd3b5908175bc27e8e73fc2df4dbadf4fa8a85cc9ca907ad6538a0dd61dd2  routelatch-ppc64le.spec
+
+sing-box sidecar: not included (no usable sidecar inputs in /work/pkgdist/singbox)
+Debian packages: routelatch_0.0.0+h.accept_<debian-arch>.deb (unsigned; verify with SHA256SUMS)
+Debian architecture names match GOARCH except ppc64le -> ppc64el.
+RPM specs: routelatch-<rpm-arch>.spec (Version 0.0.0+h.accept); binary RPMs are built and inspected by CI.
+RPM architecture names: amd64->x86_64, arm64->aarch64, riscv64 and ppc64le unchanged.
+inspect with: tar tzf /work/pkgdist/packages/routelatch-h-accept-linux-amd64.tar.gz
+[exit 0]
+
+$ DIST=/work/pkgdist ARCHES='amd64 arm64 riscv64 ppc64le' scripts/check-package.sh
+== checksums in /work/pkgdist/packages/SHA256SUMS ==
+routelatch-h-accept-linux-amd64.tar.gz: OK
+routelatch_0.0.0+h.accept_amd64.deb: OK
+routelatch-x86_64.spec: OK
+routelatch-h-accept-linux-arm64.tar.gz: OK
+routelatch_0.0.0+h.accept_arm64.deb: OK
+routelatch-aarch64.spec: OK
+routelatch-h-accept-linux-riscv64.tar.gz: OK
+routelatch_0.0.0+h.accept_riscv64.deb: OK
+routelatch-riscv64.spec: OK
+routelatch-h-accept-linux-ppc64le.tar.gz: OK
+routelatch_0.0.0+h.accept_ppc64el.deb: OK
+routelatch-ppc64le.spec: OK
+== linux/amd64 tarball ==
+== linux/amd64 .deb metadata ==
+== linux/amd64 .deb control archive ==
+== linux/amd64 .deb payload ==
+== linux/amd64 RPM spec (x86_64) ==
+linux/amd64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/arm64 tarball ==
+== linux/arm64 .deb metadata ==
+== linux/arm64 .deb control archive ==
+== linux/arm64 .deb payload ==
+== linux/arm64 RPM spec (aarch64) ==
+linux/arm64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/riscv64 tarball ==
+== linux/riscv64 .deb metadata ==
+== linux/riscv64 .deb control archive ==
+== linux/riscv64 .deb payload ==
+== linux/riscv64 RPM spec (riscv64) ==
+linux/riscv64: tarball, .deb and RPM spec layout, metadata and checksums match
+== linux/ppc64le tarball ==
+== linux/ppc64le .deb metadata ==
+== linux/ppc64le .deb control archive ==
+== linux/ppc64le .deb payload ==
+== linux/ppc64le RPM spec (ppc64le) ==
+linux/ppc64le: tarball, .deb and RPM spec layout, metadata and checksums match
+PASS: package checksums, tarball layout, .deb metadata/payload and RPM specs are consistent
+[exit 0]
+
+$ DIST=/work/pkgdist ROUTELATCH_CHECK_HTTP_PORT=19317 ROUTELATCH_CHECK_SOCKS_PORT=19318 scripts/check-artifact.sh /work/pkgdist/routelatch-linux-amd64
+== file ==
+/work/pkgdist/routelatch-linux-amd64: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=KdeYs74cDBTaDTk9IUlb/ryRuwFirgNmcs0__H2Di/qI_u2C7m3HuYFXQ6OQX7/7gcgBOJ6TG5zhYrQ_bll, BuildID[sha1]=ab58556d3df2a56cd6c47b525e2e5d58c56a835f, stripped
+== dynamic linkage ==
+static: ldd reports no dynamic executable
+== build stamp: expected version=h-accept commit=899b036 build_date=2026-11-27T13:33:43Z ==
+RouteLatch h-accept
+commit: 899b036
+build date: 2026-11-27T13:33:43Z
+{"schema_version":1,"ok":true,"command":"version","data":{"version":"h-accept","commit":"899b036","build_date":"2026-11-27T13:33:43Z"}}
+stamp: version, commit and build_date match in human and --json output
+== empty environment, temporary XDG, loopback-only listeners ==
+warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'
+mode: targeted (policy 1)
+exit: auto
+ready: yes
+listeners: http 127.0.0.1:19317, socks 127.0.0.1:19318
+pool: 0 total, 0 usable, 0 healthy, 0 cooling
+connections: 0 open, 0 dialing
+diagnostics: enabled=true queued=0
+run exit after SIGTERM: 0
+PASS: artifact is static, stamped, and answers version/status with an empty environment
+[exit 0]
+
+$ explicit package payload assertions
+packages ship no unit, tmpfiles, helper or maintainer script
+[exit 0]

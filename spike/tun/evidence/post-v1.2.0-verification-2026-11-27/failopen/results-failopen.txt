@@ -1,0 +1,9 @@
+PASS link watcher observed the gap in all 4 kills :: [1296, 1255, 1222, 1158]
+PASS JSON status sample landed inside every gap :: [1, 1, 1, 1]
+PASS text status sample landed inside every gap :: [1, 1, 1, 1]
+PASS service auto-restarted after every SIGKILL :: [1433, 1377, 1348, 1300]
+PASS status never claimed a clean off inside a gap :: []
+NOTRUN status exposed an error/unavailable/timeout inside a gap :: all in-gap JSON samples were a clean on; count=4
+OBSERVE in-gap JSON samples=4 clean-on=4 unhealthy=0 timeouts=0 ranges_ms=[[1296, 1433], [1255, 1377], [1222, 1348], [1158, 1300]]
+OBSERVE post-recovery fields=[{"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}]
+SUMMARY passed=5 failed=0 notrun=1 total=6

@@ -1,0 +1,12 @@
+date: 2026-11-27T13:58:26Z
+== host after cleanup ==
+default: default via <host-lan-ip> dev <host-iface> proto dhcp src <host-lan-ip> metric 600 
+rl-tun0: Device "rl-tun0" does not exist.
+198.18 routes: 0
+fc00::/64 routes: 0
+tailscale: Tailscale is stopped.
+tailscale0: tailscale0       UNKNOWN        fe80::f9cd:a743:8536:63bf/64 
+rl-ha containers: 0
+rl-ha networks: 0
+repo status:
+?? spike/tun/evidence/post-v1.2.0-verification-2026-11-27/

@@ -1,0 +1,94 @@
+
+$ tun setup
+{"schema_version":1,"ok":true,"command":"tun setup","data":{"allowed_uid":1500,"binary":"/usr/libexec/routelatch/tun-service","changed":false,"config":"/etc/routelatch/tun.json","managed":true,"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}
+[exit 0]
+
+$ import link socks5://172.31.79.20:11080#exit-off
+{"schema_version":1,"ok":true,"command":"import","data":{"records":{"invalid":0,"unsupported":0,"valid":1},"source_id":"s-a73a458a8c69"}}
+[exit 0]
+
+$ rules add --kind ip 203.0.113.7
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"203.0.113.7","rule":{"added_at":"2026-11-27T13:54:03.707573004Z","addr":"203.0.113.7","id":"r-262ed8cb99bef02b24a46492","kind":"ip","origin":"user"}}}
+[exit 0]
+
+$ tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:03.875214764Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+baseline approved: {"ms": 420, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 35132, \"ts\": 1795787644.9081078}"}
+
+baseline direct: {"ms": 215, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 45896, \"ts\": 1795787645.3104835}"}
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787645.8525379, "tag": "before-change", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:03.875214764Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+
+$ replace default with dummy0
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 10.255.255.1 dev dummy0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+
+$ routes after change
+172.31.79.20 dev eth0 src 172.31.78.10 uid 0 
+    cache 
+---app
+203.0.113.7 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+---arp
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+172.31.79.20 dev eth0 INCOMPLETE 
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787647.766545, "tag": "gap-immediate", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:03.875214764Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787649.267255, "tag": "gap-1s", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:03.875214764Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787651.2149053, "tag": "gap-2.5s", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:03.875214764Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+
+after change approved: {"error": "eof", "ms": 3468, "ok": false}
+
+after change direct: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 58884, \"ts\": 1795787655.3361702}"}
+
+after change new source accepts: []
+after change new exit events: []
+
+$ bypass/engine log after change
+2026-11-27T13:54:03.874Z info    tun.bypass: interface=eth0
+---errors
+
+$ tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+{"status_tun": {"desired": false, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "off"}, "t": 1795787656.609641, "tag": "after-off", "text": "tun: off (desired: no, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes", "text_rc": 0, "text_stderr": "", "tun": {"desired": false, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "off"}, "tun_rc": 0, "warnings": []}
+
+$ tun on (dummy0)
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:16.750875091Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+$ routes/bypass after off/on on dummy0
+203.0.113.7 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+---pool
+172.31.79.20 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+---bypass
+2026-11-27T13:54:03.874Z info    tun.bypass: interface=eth0
+2026-11-27T13:54:16.749Z info    tun.bypass: interface=dummy0
+
+after off/on approved: {"error": "timed out", "ms": 4005, "ok": false}
+after off/on direct: {"error": "timed out", "ms": 3004, "ok": false}
+after off/on new source accepts: []
+after off/on new exit events: []
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787665.5386803, "tag": "after-off-on", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:16.750875091Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}
+
+$ tun off (restore)
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ restore default
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+
+$ tun on (restored)
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+restored approved: {"ms": 423, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 41536, \"ts\": 1795787667.2226748}"}
+restored direct: {"ms": 216, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 34276, \"ts\": 1795787667.6993413}"}
+{"status_tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "t": 1795787668.1813157, "tag": "restored", "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T13:54:26.284484271Z", "text_rc": 0, "text_stderr": "", "tun": {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}, "tun_rc": 0, "warnings": ["tun_dns_direct", "tun_udp_blocked"]}

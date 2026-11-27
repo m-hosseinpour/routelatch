@@ -1,0 +1,8 @@
+== unit start-limit (installed at HEAD) ==
+BindsTo=routelatch-tun.socket
+Restart=on-failure
+---
+StartLimitIntervalUSec=5min
+StartLimitBurst=20
+StartLimitAction=none
+NRestarts=0

@@ -1,0 +1,28 @@
+# post-release R-28 off-link verification
+PASS off-link peer exit and source fixture listening :: LISTEN 0      128     172.31.79.20:11080      0.0.0.0:*   ; LISTEN 0      64           0.0.0.0:7110       0.0.0.0:*   ; LISTEN 0      64              [::]:7110          [::]:*
+PASS tun setup exit 0 :: exit=0
+PASS engine ready :: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'"]
+PASS import off-link pool exit :: exit=0
+PASS approved IP rule :: exit=0
+PASS tun on and link up :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T13:54:03.875214764Z", "state": "on", "udp": "blocked"}
+PASS pool exit is off-link (via the gateway on eth0, no connected /24) :: 0.0.0.0/1 dev rl-tun0 metric 1  | default via 172.31.78.21 dev eth0  | 128.0.0.0/1 dev rl-tun0 metric 1  | 172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10  | 198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1  | ---get-oif-eth0 | 172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0  |     cache  | 
+PASS baseline approved flow uses the off-link pool :: {"ms": 420, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 35132, \"ts\": 1795787644.9081078}"}
+PASS baseline unapproved flow is direct :: {"ms": 215, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 45896, \"ts\": 1795787645.3104835}"}
+PASS pool exit observed the approved CONNECT :: [{"atyp": 1, "event": "connect", "mapped": "203.0.113.7", "peer": "172.31.78.10:42218", "port": 7110, "target": "203.0.113.7", "ts": 1795787576.9645834}, {"atyp": 1, "event": "connect", "mapped": "203.0.113.7", "peer": "172.31.78.10:38670", "port": 7110, "target": "203.0.113.7", "ts": 1795787644.9067066}]
+PASS default-interface change applied
+PASS approved flow fails closed after the off-link change :: {"error": "eof", "ms": 3468, "ok": false}
+PASS no approved flow turned into a direct connection :: []
+PASS no loop: the engine did not reach the pool exit or loop the app flow :: []
+OBSERVE unapproved direct after change: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 58884, \"ts\": 1795787655.3361702}"}
+NOTRUN status reports a degraded/stale condition after the change :: state stayed on with no last_error/detail/pool warning while approved dials failed
+PASS tun off accepted :: exit=0
+PASS link removed on tun off
+PASS tun on re-enables after off :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T13:54:16.750875091Z", "state": "on", "udp": "blocked"}
+PASS off/on rebinds bypass to the new default interface :: 203.0.113.7 dev rl-tun0 src 198.18.0.1 uid 0  |     cache  | ---pool | 172.31.79.20 dev rl-tun0 src 198.18.0.1 uid 0  |     cache  | ---bypass | 2026-11-27T13:54:03.874Z info    tun.bypass: interface=eth0 | 2026-11-27T13:54:16.749Z info    tun.bypass: interface=dummy0 | 
+PASS off/on does not silently restore the old off-link pool :: {"error": "timed out", "ms": 4005, "ok": false}
+OBSERVE unapproved direct after off/on: {"error": "timed out", "ms": 3004, "ok": false}
+PASS off/on does not leak approved traffic direct :: []
+PASS restored default: tun on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T13:54:26.284484271Z", "state": "on", "udp": "blocked"}
+PASS approved pool flow recovers after off/on :: {"ms": 423, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 41536, \"ts\": 1795787667.2226748}"}
+PASS direct path recovers after off/on :: {"ms": 216, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 34276, \"ts\": 1795787667.6993413}"}
+SUMMARY passed=23 failed=0 notrun=1 total=24

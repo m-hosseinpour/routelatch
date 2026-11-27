@@ -1,0 +1,38 @@
+== before change ==
+$ pool list
+{"schema_version":1,"ok":true,"command":"pool list","data":{"counts":{"cooling":0,"healthy":1,"invalid":0,"total":1,"unknown":0,"unsupported":0,"usable":1},"records":[{"display_name":"exit-off","health":{"consecutive_failures":0,"ewma_latency_ms":216,"exit":"x-a96d69c47e999192","last_success_at":"2026-11-27T13:54:33.148218245Z","samples":2,"status":"healthy"},"id":"x-a96d69c47e999192","order":0,"port":11080,"protocol":"socks5","security":"none","server":"172.31.79.20","sources":["s-a73a458a8c69"],"status":"healthy","transport":"raw"}],"truncated":false}}
+$ status
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":2,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"},"warnings":["tun_dns_direct","tun_udp_blocked"]}}
+$ tun status
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"}}
+
+== apply dummy0 default ==
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 10.255.255.1 dev dummy0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+$ pool list (1s)
+{"schema_version":1,"ok":true,"command":"pool list","data":{"counts":{"cooling":0,"healthy":1,"invalid":0,"total":1,"unknown":0,"unsupported":0,"usable":1},"records":[{"display_name":"exit-off","health":{"consecutive_failures":0,"ewma_latency_ms":216,"exit":"x-a96d69c47e999192","last_success_at":"2026-11-27T13:54:33.148218245Z","samples":2,"status":"healthy"},"id":"x-a96d69c47e999192","order":0,"port":11080,"protocol":"socks5","security":"none","server":"172.31.79.20","sources":["s-a73a458a8c69"],"status":"healthy","transport":"raw"}],"truncated":false}}
+$ status (1s)
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":2,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"},"warnings":["tun_dns_direct","tun_udp_blocked"]}}
+$ tun status (1s)
+{"schema_version":1,"ok":true,"command":"tun status","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"}}
+
+$ approved probe (post-change)
+{"error": "eof", "ms": 3475, "ok": false}
+$ pool list (after failed probe)
+{"schema_version":1,"ok":true,"command":"pool list","data":{"counts":{"cooling":0,"healthy":1,"invalid":0,"total":1,"unknown":0,"unsupported":0,"usable":1},"records":[{"display_name":"exit-off","health":{"consecutive_failures":0,"ewma_latency_ms":216,"exit":"x-a96d69c47e999192","last_success_at":"2026-11-27T13:54:33.148218245Z","samples":2,"status":"healthy"},"id":"x-a96d69c47e999192","order":0,"port":11080,"protocol":"socks5","security":"none","server":"172.31.79.20","sources":["s-a73a458a8c69"],"status":"healthy","transport":"raw"}],"truncated":false}}
+$ status (after failed probe)
+{"schema_version":1,"ok":true,"command":"status","data":{"connections":{"dialing":0,"open":0,"proofs":{"accepted":0,"confirmed":0}},"diagnostics":{"enabled":true,"queued":0},"listeners":{"http":"127.0.0.1:8317","socks":"127.0.0.1:8318"},"listeners_open":true,"mode":"targeted","policy_version":2,"pool":{"cooling":0,"healthy":1,"total":1,"usable":1},"ready":true,"resume_requires_restart":false,"selected_exit":"","tun":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:54:26.284484271Z","state":"on","udp":"blocked"},"warnings":["tun_dns_direct","tun_udp_blocked"]}}
+$ tun status text (after failed probe)
+tun: on (desired: yes, helper: installed)
+interface: rl-tun0
+dns: direct, udp: blocked, ipv6: yes
+since: 2026-11-27T13:54:26.284484271Z
+
+== restore ==
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T13:55:56.551268676Z","state":"on","udp":"blocked"}}
+$ approved probe (restored)
+{"ms": 432, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 54760, \"ts\": 1795787758.190662}"}

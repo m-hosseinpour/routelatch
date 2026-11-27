@@ -1,0 +1,36 @@
+== host ==
+default: default via <host-lan-ip> dev <host-iface> proto dhcp src <host-lan-ip> metric 600 
+ipv6 default: 
+tailscale: Tailscale is stopped.
+tailscale0 addrs: tailscale0       UNKNOWN        fe80::f9cd:a743:8536:63bf/64 
+rl-tun0: Device "rl-tun0" does not exist.
+
+== container A links/addrs/routes ==
+lo               UNKNOWN        <mac> <LOOPBACK,UP,LOWER_UP> 
+eth0@if360       UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+---
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if360       UP             172.31.78.10/24 fd00:78::10/64 fe80::c4ab:b0ff:fe56:cc62/64 
+---v4
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+---v6
+fd00:78::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+default via fd00:78::20 dev eth0 metric 1024 pref medium
+
+== inherited VPN/tailscale/host routes ==
+Device "tailscale0" does not exist.
+Device "rl-tun0" does not exist.
+Device "<host-iface>" does not exist.
+no host LAN/tailscale route
+eth0
+lo
+
+== public egress attempts (TUN off) ==
+== public egress attempts (TUN off; v4 via 172.31.78.21, v6 via fd00:78::20) ==
+1.1.1.1 443 unreachable: timed out
+93.184.216.34 80 unreachable: timed out
+8.8.8.8 53 unreachable: timed out
+2606:4700:4700::1111 443 unreachable: timed out
+2001:4860:4860::8888 53 unreachable: timed out

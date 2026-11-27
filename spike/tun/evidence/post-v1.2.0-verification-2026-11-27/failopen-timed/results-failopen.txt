@@ -1,0 +1,9 @@
+PASS link watcher observed the gap in all 4 kills :: [1135, 1215, 1315, 1291]
+PASS JSON status sample landed inside every gap :: [1, 1, 1, 1]
+PASS text status sample landed inside every gap :: [1, 1, 1, 2]
+PASS service auto-restarted after every SIGKILL :: [1287, 1375, 1458, 1424]
+PASS status never claimed a clean off inside a gap :: []
+PASS every in-gap status call blocked until recovery or timed out :: completed=0 spanning=4 json_ms=[[467, null], [569, null], [631, null], [631, null]]
+OBSERVE in-gap(start) JSON=4 completed_in_gap=0 spanning_into_recovery=4 clean_on_completed=0 timeouts=0 text_completed=1 text_spanning=4 timed=[[467, null, "on"], [569, null, "on"], [631, null, "on"], [631, null, "on"]] ranges_ms=[[1135, 1287], [1215, 1375], [1315, 1458], [1291, 1424]]
+OBSERVE post-recovery fields=[{"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}]
+SUMMARY passed=6 failed=0 notrun=0 total=6

@@ -1,0 +1,15 @@
+date: 2026-11-27T13:33:42Z
+repo HEAD: 899b036fa317f2a620bd0d8da0eb892e6c5474da
+899b036 docs(plan): record R16-I/J decisions and define next tasks
+docker: 29.10.1
+image: sha256:cbf0ea967ebe733c1072a3ba64e0816e609098b8e1dd98108d083ef9f909c13a
+host kernel: 7.0.0-44-generic
+container kernel: 7.0.0-44-generic
+os: Ubuntu 26.04.1 LTS
+systemd 259 (259.9-0ubuntu0.1)
+ip utility, iproute2-6.19.0, libbpf 1.6.3
+go (container):
+go version go1.27.4 linux/amd64
+file (mounted for check-artifact):
+file-5.46
+magic file from /usr/lib/file/magic.mgc
