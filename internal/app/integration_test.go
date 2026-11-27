@@ -602,13 +602,58 @@ func splitFields(s string) []string {
 
 func assertUnlocked(t *testing.T, path string) {
 	t.Helper()
+	if err := unlockedPath(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// unlockedPath reports whether path holds no flock. A missing file counts as
+// unlocked: the supervisor publishes the starting marker before the preflight
+// that creates state.lock, and the marker is readable before its fsync returns.
+// A cancellation in that window therefore kills the supervisor with no lock
+// file ever created. Nothing in the product unlinks coordination files, so
+// absence is never a released lock that leaked.
+func unlockedPath(path string) error {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return fmt.Errorf("%s is still locked: %w", path, err)
+	}
+	return nil
+}
+
+// Regression: a canceled launch may stop before the engine-lock preflight, so
+// the locked-file probe must not turn absence into a failure. A live holder
+// must still be detected.
+func TestUnlockedPathAcceptsMissingLockAndDetectsHolder(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "state.lock")
+	if err := unlockedPath(missing); err != nil {
+		t.Fatalf("a missing coordinate file holds no lock: %v", err)
+	}
+	held := filepath.Join(dir, "held.lock")
+	f, err := os.OpenFile(held, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		t.Fatalf("%s is still locked: %v", path, err)
+		t.Fatal(err)
+	}
+	if err := unlockedPath(held); err == nil {
+		t.Fatal("a held lock was reported unlocked")
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+		t.Fatal(err)
+	}
+	if err := unlockedPath(held); err != nil {
+		t.Fatalf("released lock was reported held: %v", err)
 	}
 }
 
