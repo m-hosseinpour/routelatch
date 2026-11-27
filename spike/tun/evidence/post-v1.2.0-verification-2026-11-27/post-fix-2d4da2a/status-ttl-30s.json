@@ -1,0 +1,90 @@
+{
+  "pool": {
+    "counts": {
+      "cooling": 1,
+      "healthy": 0,
+      "invalid": 0,
+      "total": 1,
+      "unknown": 0,
+      "unsupported": 0,
+      "usable": 0
+    },
+    "records": [
+      {
+        "display_name": "exit-off",
+        "health": {
+          "consecutive_failures": 1,
+          "cooldown_until": "2026-11-27T16:34:41.162089791Z",
+          "ewma_latency_ms": 225,
+          "exit": "x-a96d69c47e999192",
+          "last_failure_at": "2026-11-27T16:33:41.162089791Z",
+          "last_failure_kind": "exit_unreachable",
+          "last_success_at": "2026-11-27T16:33:18.830643507Z",
+          "samples": 2,
+          "status": "cooling"
+        },
+        "id": "x-a96d69c47e999192",
+        "order": 0,
+        "port": 11080,
+        "protocol": "socks5",
+        "security": "none",
+        "server": "172.31.79.20",
+        "sources": [
+          "s-a73a458a8c69"
+        ],
+        "status": "cooling",
+        "status_reason": "cooling:exit_unreachable",
+        "transport": "raw"
+      }
+    ],
+    "truncated": false
+  },
+  "status": {
+    "connections": {
+      "dialing": 0,
+      "open": 0,
+      "proofs": {
+        "accepted": 0,
+        "confirmed": 0
+      }
+    },
+    "diagnostics": {
+      "enabled": true,
+      "queued": 0
+    },
+    "listeners": {
+      "http": "127.0.0.1:8317",
+      "socks": "127.0.0.1:8318"
+    },
+    "listeners_open": true,
+    "mode": "targeted",
+    "policy_version": 2,
+    "pool": {
+      "cooling": 1,
+      "healthy": 0,
+      "total": 1,
+      "usable": 0
+    },
+    "ready": true,
+    "resume_requires_restart": false,
+    "selected_exit": "",
+    "tun": {
+      "desired": true,
+      "dns": "direct",
+      "helper": "installed",
+      "interface": "rl-tun0",
+      "ipv6": true,
+      "since": "2026-11-27T16:33:17.436678186Z",
+      "state": "on",
+      "udp": "blocked"
+    },
+    "warnings": [
+      "pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'",
+      "recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+      "tun_dns_direct",
+      "tun_udp_blocked"
+    ]
+  },
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 0 usable, 0 healthy, 1 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "tun_status_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z"
+}

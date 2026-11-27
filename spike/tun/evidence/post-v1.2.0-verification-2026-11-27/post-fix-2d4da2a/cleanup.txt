@@ -1,0 +1,8 @@
+$ tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+$ link check
+Device "rl-tun0" does not exist.
+Device "dummy0" does not exist.
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+$ stop engine and fixtures

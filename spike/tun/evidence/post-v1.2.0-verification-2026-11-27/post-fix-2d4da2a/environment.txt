@@ -1,0 +1,16 @@
+date: 2026-11-27T15:01:12Z
+repo HEAD: 2d4da2a63015f7e2ab81355a678c34d45578a96a
+2d4da2a fix(control): record only exit_unreachable as the egress warning
+docker: 29.10.1
+image: sha256:cbf0ea967ebe733c1072a3ba64e0816e609098b8e1dd98108d083ef9f909c13a
+host kernel: 7.0.0-44-generic
+container kernel: 7.0.0-44-generic
+os: Ubuntu 26.04.1 LTS
+systemd 259 (259.9-0ubuntu0.1)
+ip utility, iproute2-6.19.0, libbpf 1.6.3
+binary:
+RouteLatch postfix-2d4da2a
+commit: 2d4da2a
+build date: 2026-11-27T14:58:46Z
+sha256:
+1caac4666d37bbe0271e648a9105abb6b956669599ab9572f4fccca41ccb9e0c  routelatch-linux-amd64

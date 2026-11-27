@@ -1,0 +1,40 @@
+== host before ==
+default via <host-lan-ip> dev <host-iface> proto dhcp src <host-lan-ip> metric 600 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 metric 425 linkdown 
+172.18.0.0/16 dev br-e92db0637722 proto kernel scope link src 172.18.0.1 metric 426 linkdown 
+172.31.78.0/24 dev br-d699e2d427a4 proto kernel scope link src 172.31.78.1 
+172.31.79.0/24 dev br-468bcee090f4 proto kernel scope link src 172.31.79.1 
+<host-lan-ip>/24 dev <host-iface> proto kernel scope link src <host-lan-ip> metric 600 
+<host-lan-ip>/24 dev <host-iface> proto kernel scope link src <host-lan-ip> metric 427 linkdown 
+ipv6 default:
+Device "rl-tun0" does not exist.
+Tailscale is stopped.
+tailscale0       UNKNOWN        fe80::f9cd:a743:8536:63bf/64 
+== container A before ==
+lo               UNKNOWN        <mac> <LOOPBACK,UP,LOWER_UP> 
+eth0@if371       UP             <mac> <BROADCAST,MULTICAST,UP,LOWER_UP> 
+---addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if371       UP             172.31.78.10/24 fd00:78::10/64 fe80::aca9:93ff:feac:3a32/64 
+---v4
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+---v6
+fd00:78::/64 dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+default via fd00:78::21 dev eth0 metric 1024 pref medium
+---forbidden
+none
+none-v6
+no-vpn-or-tun-link
+== container A public egress attempts (TUN off) ==
+== peer R forwarding ==
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+default via 172.31.78.1 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.21 
+172.31.79.0/24 dev eth1 proto kernel scope link src 172.31.79.2 
+== container A public egress attempts (TUN off; v4 via 172.31.78.21, forwarding off) ==
+1.1.1.1 443 unreachable: timed out
+93.184.216.34 80 unreachable: timed out
+8.8.8.8 53 unreachable: timed out

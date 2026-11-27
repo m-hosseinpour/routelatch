@@ -1,0 +1,686 @@
+
+$ tun setup
+{"schema_version":1,"ok":true,"command":"tun setup","data":{"allowed_uid":1500,"binary":"/usr/libexec/routelatch/tun-service","changed":false,"config":"/etc/routelatch/tun.json","managed":true,"socket_unit":"/etc/systemd/system/routelatch-tun.socket","tmpfiles":"/etc/tmpfiles.d/routelatch-tun.conf","unit":"/etc/systemd/system/routelatch-tun.service"}}
+[exit 0]
+
+$ import link socks5://172.31.79.20:11080#exit-off
+{"schema_version":1,"ok":true,"command":"import","data":{"records":{"invalid":0,"unsupported":0,"valid":1},"source_id":"s-a73a458a8c69"}}
+[exit 0]
+
+$ rules add --kind ip 203.0.113.7
+{"schema_version":1,"ok":true,"command":"rules add","data":{"normalized":"203.0.113.7","rule":{"added_at":"2026-11-27T16:33:08.525286666Z","addr":"203.0.113.7","id":"r-5dc1a5b52081a492dbfbfa59","kind":"ip","origin":"user"}}}
+[exit 0]
+
+$ tun on
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T16:33:08.670401309Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+baseline approved: {"ms": 428, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 40750, \"ts\": 1795797189.5883331}"}
+
+baseline direct: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 43958, \"ts\": 1795797189.9569483}"}
+
+[before-change]
+{
+  "egress_warning": false,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:09.59654367Z",
+        "samples": 1,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 2 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797190.6243749,
+  "tag": "before-change",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:08.670401309Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+$ replace default with dummy0
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 10.255.255.1 dev dummy0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+
+$ routes after change
+172.31.79.20 dev eth0 src 172.31.78.10 uid 0 
+    cache 
+---app
+203.0.113.7 dev rl-tun0 src 198.18.0.1 uid 0 
+    cache 
+---arp
+
+[break1-pre-failure]
+{
+  "egress_warning": false,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:09.59654367Z",
+        "samples": 1,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797191.5512443,
+  "tag": "break1-pre-failure",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:08.670401309Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+after change approved: {"error": "eof", "ms": 3498, "ok": false}
+
+[break1-post-failure]
+{
+  "egress_warning": true,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:09.59654367Z",
+        "samples": 1,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797195.7784832,
+  "tag": "break1-post-failure",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:08.670401309Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+after change direct: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 52718, \"ts\": 1795797196.1266232}"}
+
+after change new source accepts: [{"event": "accept", "family": "AF_INET", "local": "203.0.113.8", "peer": "172.31.78.10"}]
+after change new exit events: []
+
+$ tun off
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+[break1-after-off]
+{
+  "egress_warning": true,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:09.59654367Z",
+        "samples": 1,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+  "status_tun": {
+    "desired": false,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "off"
+  },
+  "t": 1795797197.1907995,
+  "tag": "break1-after-off",
+  "tun": {
+    "desired": false,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "off"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: off (desired: no, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes",
+  "tun_text_rc": 0,
+  "warnings": [
+    "recent approved egress dial failed; traffic remains fail-closed with no direct fallback"
+  ]
+}
+
+$ restore default
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+
+$ tun on (restored)
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T16:33:17.436678186Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+[restored-before-success]
+{
+  "egress_warning": true,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:09.59654367Z",
+        "samples": 1,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797198.2553282,
+  "tag": "restored-before-success",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+restored approved: {"ms": 430, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 42668, \"ts\": 1795797198.820399}"}
+
+[restored-after-success]
+{
+  "egress_warning": false,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:18.830643507Z",
+        "samples": 2,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 2 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797199.413177,
+  "tag": "restored-after-success",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+restored direct: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 52722, \"ts\": 1795797199.7484999}"}
+
+$ replace default with dummy0 (TTL run)
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 10.255.255.1 dev dummy0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+
+TTL run approved: {"error": "eof", "ms": 3486, "ok": false}
+
+[ttl-post-failure]
+{
+  "egress_warning": true,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_success_at": "2026-11-27T16:33:18.830643507Z",
+        "samples": 2,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797204.0571768,
+  "tag": "ttl-post-failure",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+[ttl-30s]
+{
+  "egress_warning": true,
+  "pool_counts": {
+    "cooling": 1,
+    "healthy": 0,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 0
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 1,
+        "cooldown_until": "2026-11-27T16:34:41.162089791Z",
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_failure_at": "2026-11-27T16:33:41.162089791Z",
+        "last_failure_kind": "exit_unreachable",
+        "last_success_at": "2026-11-27T16:33:18.830643507Z",
+        "samples": 2,
+        "status": "cooling"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "cooling"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 0 usable, 0 healthy, 1 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'\nwarning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797234.591646,
+  "tag": "ttl-30s",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'",
+    "recent approved egress dial failed; traffic remains fail-closed with no direct fallback",
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+[ttl-61s]
+{
+  "egress_warning": false,
+  "pool_counts": {
+    "cooling": 1,
+    "healthy": 0,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 0
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 1,
+        "cooldown_until": "2026-11-27T16:34:41.162089791Z",
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_failure_at": "2026-11-27T16:33:41.162089791Z",
+        "last_failure_kind": "exit_unreachable",
+        "last_success_at": "2026-11-27T16:33:18.830643507Z",
+        "samples": 2,
+        "status": "cooling"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "cooling"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 0 usable, 0 healthy, 1 cooling\nconnections: 0 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'\nwarning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797266.1421287,
+  "tag": "ttl-61s",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:17.436678186Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'",
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}
+
+$ tun off (final)
+{"schema_version":1,"ok":true,"command":"tun off","data":{"desired":false,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"state":"off","udp":"blocked"}}
+[exit 0]
+
+$ restore default (final)
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+
+$ tun on (final)
+{"schema_version":1,"ok":true,"command":"tun on","data":{"desired":true,"dns":"direct","helper":"installed","interface":"rl-tun0","ipv6":true,"since":"2026-11-27T16:34:26.714081007Z","state":"on","udp":"blocked"}}
+[exit 0]
+
+waiting 16.1s for the diagnostic pool cooldown
+
+final approved: {"ms": 429, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 34634, \"ts\": 1795797283.8171747}"}
+final direct: {"ms": 215, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 43392, \"ts\": 1795797284.1816049}"}
+
+[final]
+{
+  "egress_warning": false,
+  "pool_counts": {
+    "cooling": 0,
+    "healthy": 1,
+    "invalid": 0,
+    "total": 1,
+    "unknown": 0,
+    "unsupported": 0,
+    "usable": 1
+  },
+  "pool_records": [
+    {
+      "health": {
+        "consecutive_failures": 0,
+        "ewma_latency_ms": 225,
+        "exit": "x-a96d69c47e999192",
+        "last_failure_at": "2026-11-27T16:33:41.162089791Z",
+        "last_success_at": "2026-11-27T16:34:43.826553034Z",
+        "samples": 3,
+        "status": "healthy"
+      },
+      "id": "x-a96d69c47e999192",
+      "last_failure_kind": null,
+      "status": "healthy"
+    }
+  ],
+  "status_rc": 0,
+  "status_ready": true,
+  "status_text": "mode: targeted (policy 2)\nexit: auto\nready: yes\nlisteners: http 127.0.0.1:8317, socks 127.0.0.1:8318\npool: 1 total, 1 usable, 1 healthy, 0 cooling\nconnections: 2 open, 0 dialing\ndiagnostics: enabled=true queued=0",
+  "status_text_rc": 0,
+  "status_text_stderr": "warning: tun_dns_direct\nwarning: tun_udp_blocked",
+  "status_tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "t": 1795797284.7268937,
+  "tag": "final",
+  "tun": {
+    "desired": true,
+    "detail": null,
+    "helper": "installed",
+    "interface": "rl-tun0",
+    "last_error": null,
+    "state": "on"
+  },
+  "tun_rc": 0,
+  "tun_text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:34:26.714081007Z",
+  "tun_text_rc": 0,
+  "warnings": [
+    "tun_dns_direct",
+    "tun_udp_blocked"
+  ]
+}

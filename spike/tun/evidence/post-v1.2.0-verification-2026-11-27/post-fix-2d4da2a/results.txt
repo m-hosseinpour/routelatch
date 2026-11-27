@@ -1,0 +1,39 @@
+# post-fix R-28 off-link verification (2d4da2a)
+PASS off-link peer exit and source fixture listening :: LISTEN 0      128     172.31.79.20:11080      0.0.0.0:*   ; LISTEN 0      64           0.0.0.0:7110       0.0.0.0:*   ; LISTEN 0      64              [::]:7110          [::]:*
+PASS tun setup exit 0 :: exit=0
+PASS engine ready :: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'"]
+PASS import off-link pool exit :: exit=0
+PASS approved IP rule :: exit=0
+PASS tun on and link up :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T16:33:08.670401309Z", "state": "on", "udp": "blocked"}
+PASS pool exit is off-link (via the gateway on eth0, no connected /24) :: 0.0.0.0/1 dev rl-tun0 metric 1  | default via 172.31.78.21 dev eth0  | 128.0.0.0/1 dev rl-tun0 metric 1  | 172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10  | 198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1  | ---get-oif-eth0 | 172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0  |     cache  | 
+PASS baseline approved flow uses the off-link pool :: {"ms": 428, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 40750, \"ts\": 1795797189.5883331}"}
+PASS baseline unapproved flow is direct :: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 43958, \"ts\": 1795797189.9569483}"}
+PASS pool exit observed the approved CONNECT :: [{"atyp": 1, "event": "connect", "mapped": "203.0.113.7", "peer": "172.31.78.10:36284", "port": 7110, "target": "203.0.113.7", "ts": 1795797189.5869448}]
+PASS no egress warning before the change :: ["tun_dns_direct", "tun_udp_blocked"]
+PASS default-interface change applied
+PASS no egress warning immediately after the route change (before any approved dial) :: ["tun_dns_direct", "tun_udp_blocked"]
+PASS approved flow fails closed after the off-link change :: {"error": "eof", "ms": 3498, "ok": false}
+PASS status reports the fixed egress warning after the failed approved dial :: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+PASS the warning text is the fixed destination-free sentence :: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+PASS tun status stays coverage-only (on, no last_error/detail) :: {"tun": {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}, "text": "tun: on (desired: yes, helper: installed)\ninterface: rl-tun0\ndns: direct, udp: blocked, ipv6: yes\nsince: 2026-11-27T16:33:08.670401309Z"}
+PASS pool list stays healthy and unchanged by the warning :: {"counts": {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}, "records": [{"id": "x-a96d69c47e999192", "status": "healthy", "health": {"consecutive_failures": 0, "ewma_latency_ms": 225, "exit": "x-a96d69c47e999192", "last_success_at": "2026-11-27T16:33:09.59654367Z", "samples": 1, "status": "healthy"}, "last_failure_kind": null}]}
+PASS no approved flow turned into a direct connection :: []
+PASS no loop: the engine did not reach the pool exit :: []
+OBSERVE unapproved direct after change: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 52718, \"ts\": 1795797196.1266232}"}
+PASS tun off accepted :: exit=0
+PASS link removed on tun off
+PASS the warning survives tun off inside its TTL :: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback"]
+PASS restored default: tun on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T16:33:17.436678186Z", "state": "on", "udp": "blocked"}
+PASS the warning is still present before a successful approved dial :: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+PASS approved pool flow recovers after off/on :: {"ms": 430, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 42668, \"ts\": 1795797198.820399}"}
+PASS the first successful approved dial clears the warning :: ["tun_dns_direct", "tun_udp_blocked"]
+PASS direct path recovers after off/on :: {"ms": 214, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 52722, \"ts\": 1795797199.7484999}"}
+PASS second default-interface change applied
+PASS second approved failure raises the warning :: {"probe": {"error": "eof", "ms": 3486, "ok": false}, "warnings": ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]}
+PASS the warning is still present at ~30s :: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'", "recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+PASS the warning expires after its 60s TTL with no successful dial :: {"age_s": 62.1, "warnings": ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'", "tun_dns_direct", "tun_udp_blocked"]}
+PASS tun status remains on through the TTL observation :: {"state": "on", "desired": true, "helper": "installed", "interface": "rl-tun0", "last_error": null, "detail": null}
+PASS final restored default: tun on :: {"desired": true, "dns": "direct", "helper": "installed", "interface": "rl-tun0", "ipv6": true, "since": "2026-11-27T16:34:26.714081007Z", "state": "on", "udp": "blocked"}
+PASS final approved pool flow recovers :: {"ms": 429, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.7\", \"peer\": \"203.0.113.7\", \"port\": 34634, \"ts\": 1795797283.8171747}"}
+PASS final direct path recovers :: {"ms": 215, "ok": true, "raw": "{\"family\": \"AF_INET\", \"local\": \"203.0.113.8\", \"peer\": \"172.31.78.10\", \"port\": 43392, \"ts\": 1795797284.1816049}"}
+SUMMARY passed=36 failed=0 notrun=0 total=36

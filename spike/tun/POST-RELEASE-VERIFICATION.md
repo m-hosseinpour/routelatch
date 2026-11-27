@@ -160,3 +160,94 @@ All `rl-ha-post120v-20261127-*` containers and both networks were removed. The h
 no `rl-tun0`, no `198.18/15` or `fc00::/64` route, its only default is via
 `wlp0s20f3`, and Tailscale remains stopped. The repository contains only this report
 and the evidence directory; product code, docs and the plan are untouched.
+
+## Addendum — post-fix rerun at `2d4da2a` (2026-11-27)
+
+**Scope and revision.** Verification only. The binary was built from `2d4da2a`
+(`fix(control): record only exit_unreachable as the egress warning`) in a fresh
+disposable privileged systemd container with an isolated netns; no host
+network/DNS/firewall/systemd/desktop change, no public exit/resolver, no subscription,
+credential or user pool. The earlier report's §2 “Conformance gap (not fixed …)” text
+describes the tested revision `899b036` and is left unchanged as history. **This
+addendum supersedes only its status-visibility conclusion: the fixed warning appears
+in the real off-link failure at `2d4da2a`.** The earlier safety observations
+(fail-closed, no direct fallback, no loop) still stand.
+
+**Topology and environment.** Client A (`172.31.78.10`) and router peer R
+(`172.31.78.21` on A's segment, `172.31.79.2` on an internal `172.31.79.0/24`
+bridge). R owns the off-link exit `172.31.79.20:11080` and the synthetic source
+`203.0.113.7/8:7110`; A has no `172.31.79.0/24` route and reaches the exit through
+the default gateway. Host isolation was re-confirmed before and after: one host
+default via the Wi-Fi interface, no IPv6 default, Tailscale stopped, no `rl-tun0`,
+and no host LAN/VPN route inside A. A's only links are `lo`/`eth0`; public egress
+attempts (`1.1.1.1:443`, `93.184.216.34:80`, `8.8.8.8:53`) timed out with the peer's
+forwarding off. Image `rl-tun-spike:base` (`sha256:cbf0ea96…`), Ubuntu 26.04.1,
+kernel `7.0.0-44-generic`, systemd `259.9`, Docker `29.10.1`. Binary SHA-256
+`1caac466…`.
+
+**Break and warning.** The prior break shape was reproduced: add `dummy0`
+(`10.255.255.1/32`) and replace the default via the gateway with `dummy0`.
+`ip route get 172.31.79.20 oif eth0` then falls back to `172.31.79.20 dev eth0`
+with no connected `172.31.79.0/24`; the exit is reachable only by ARP on the shared
+segment, which the peer deliberately does not answer (`arp_ignore=1`). Before the
+break, `status` had only `tun_dns_direct`/`tun_udp_blocked`; immediately after the
+route change, still only those two. The first approved flow after the change failed
+closed (`eof`, 3498 ms; a second run 3486 ms), no direct accept and no exit CONNECT.
+The **next `status` sample** (16:33:15.778Z, after the failed dial) reported:
+
+- `status --json` → `data.warnings` contains the exact fixed sentence
+  `recent approved egress dial failed; traffic remains fail-closed with no direct fallback`
+  (plus the two TUN warnings);
+- human `status` → the same line as `warning: …` on **stderr** (stdout body unchanged,
+  matching `TestPrintStatusPrintsEgressWarning`);
+- `tun status` → `state=on, desired=true, helper=installed, last_error=null,
+  detail=null`; it remains coverage-only and does not carry the egress warning;
+- `pool list` → `healthy=1`, `consecutive_failures=0` at that moment. The warning
+  itself does not mutate health.
+
+**TTL and clear.** A later approved failure reset the timestamp. The warning was
+still present in the `status` sample 30 s later, and absent at 62.1 s, with no
+successful approved dial in between (`status.warnings` still carried the separate
+pool-unavailable line). The warning also survived `tun off` inside the TTL and
+`tun on` before recovery, then disappeared on the first successful approved dial
+(429 ms) after the default was restored and `tun off/on` rebound the bypass. Those
+are the documented 60 s TTL and clear-on-success behaviors.
+
+**Health nuance (separate from the warning).** While the break persisted, automatic
+diagnostics probed the still-unreachable exit about 17 s after the failed approved
+dial and recorded one `exit_unreachable` failure, putting the record into a 60 s
+cooldown; `status` then also showed “pool has no usable exit”. This is the existing
+diagnostics/health action, not the warning (the warning is observational and does
+not cool, rerank or change health). After the route restore, `tun off/on`, and the
+cooldown expiry, a final approved flow recovered (429 ms, peer `203.0.113.7`) and
+the pool record returned to healthy; the direct path recovered at 215 ms. The
+earlier report's “pool stays healthy” observation was true at the instant after the
+failed dial; this longer run shows the later diagnostics cooldown as well.
+
+**Failure-kind attribution.** The warning appeared, so the recorded class was
+`exit_unreachable`, the only class the fixed code records; it was not a
+timeout/cancel and no destination-leaking log was added. The client-visible `eof`
+arrives after ~3.5 s, consistent with the off-link ARP/connect path (the prior
+evidence recorded the ARP entry `INCOMPLETE`); a refused transport would fail
+immediately. The prior NOTRUN reflects sampling before the failed dial finished; this run
+samples after it and reads `data.warnings` (the first harness pass here also read
+the envelope by mistake and was corrected before the recorded run).
+
+**Result.** Off-link R-28 post-fix harness: **36 PASS, 0 FAIL, 0 NOTRUN**. Safety is
+unchanged: approved traffic fails closed with no direct fallback, no loop and no
+exit CONNECT; the unapproved destination still takes its allowed stale direct path;
+recovery follows route restore plus `tun off/on` (and, for the persistent break, the
+diagnostics cooldown).
+
+**Evidence.** `spike/tun/evidence/post-v1.2.0-verification-2026-11-27/post-fix-2d4da2a/`:
+`results.txt`, `steps.txt`, `samples.jsonl`, `warning-observation.txt`,
+`status-*.json`, `isolation.txt`, `environment.txt`, `topology.txt`, `cleanup.txt`,
+`host-cleanup.txt`, and `harness/r28_offlink_fix.py`. All `rl-r28fix-*` containers
+and networks were removed; the host has no `rl-tun0`, no `198.18/15` or
+`fc00::/64` route, its only default is the Wi-Fi interface, and Tailscale remains
+stopped.
+
+**Limits.** Synthetic local fixtures only; no public exit/resolver, real
+subscription or user pool. One break shape (`default → dummy0`), one architecture
+(amd64) runtime, headless (no tray), and one TTL observation; the warning is
+in-memory and is not expected to survive a service restart (not exercised here).

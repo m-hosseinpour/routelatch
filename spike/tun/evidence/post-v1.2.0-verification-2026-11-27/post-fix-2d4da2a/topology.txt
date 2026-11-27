@@ -1,0 +1,33 @@
+$ routes before change
+default via 172.31.78.21 dev eth0 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+---get-oif-eth0
+172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0 
+    cache 
+$ routes before change
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 172.31.78.21 dev eth0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+---get-oif-eth0
+172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0 
+    cache 
+$ routes before change
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 172.31.78.21 dev eth0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+---get-oif-eth0
+172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0 
+    cache 
+$ routes before change
+0.0.0.0/1 dev rl-tun0 metric 1 
+default via 172.31.78.21 dev eth0 
+128.0.0.0/1 dev rl-tun0 metric 1 
+172.31.78.0/24 dev eth0 proto kernel scope link src 172.31.78.10 
+198.18.0.0/15 dev rl-tun0 proto kernel scope link src 198.18.0.1 
+---get-oif-eth0
+172.31.79.20 via 172.31.78.21 dev eth0 src 172.31.78.10 uid 0 
+    cache 

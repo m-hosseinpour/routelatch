@@ -1,0 +1,66 @@
+Post-fix R-28 warning observation (binary 2d4da2a, 2026-11-27)
+All times UTC. `status --json` data.warnings; human `status` prints warnings to stderr.
+
+[break1-pre-failure] 2026-11-27T16:33:11.551Z
+  json warnings: ["tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: False
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[break1-post-failure] 2026-11-27T16:33:15.778Z
+  json warnings: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: True
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[break1-after-off] 2026-11-27T16:33:17.190Z
+  json warnings: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback"]
+  egress warning present: True
+  tun: {"desired": false, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "off"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback"
+
+[restored-before-success] 2026-11-27T16:33:18.255Z
+  json warnings: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: True
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[restored-after-success] 2026-11-27T16:33:19.413Z
+  json warnings: ["tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: False
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[ttl-post-failure] 2026-11-27T16:33:24.057Z
+  json warnings: ["recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: True
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[ttl-30s] 2026-11-27T16:33:54.591Z
+  json warnings: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'", "recent approved egress dial failed; traffic remains fail-closed with no direct fallback", "tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: True
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 1, "healthy": 0, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 0}
+  status text stderr: "warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'\nwarning: recent approved egress dial failed; traffic remains fail-closed with no direct fallback\nwarning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[ttl-61s] 2026-11-27T16:34:26.142Z
+  json warnings: ["pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'", "tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: False
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 1, "healthy": 0, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 0}
+  status text stderr: "warning: pool has no usable exit; approved destinations fail with pool_unavailable; run 'pool refresh' or 'pool add <link>'\nwarning: tun_dns_direct\nwarning: tun_udp_blocked"
+
+[final] 2026-11-27T16:34:44.726Z
+  json warnings: ["tun_dns_direct", "tun_udp_blocked"]
+  egress warning present: False
+  tun: {"desired": true, "detail": null, "helper": "installed", "interface": "rl-tun0", "last_error": null, "state": "on"}
+  pool counts: {"cooling": 0, "healthy": 1, "invalid": 0, "total": 1, "unknown": 0, "unsupported": 0, "usable": 1}
+  status text stderr: "warning: tun_dns_direct\nwarning: tun_udp_blocked"
+
