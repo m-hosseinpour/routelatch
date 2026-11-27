@@ -1,0 +1,1 @@
+size=22x22 engine_center=(255, 255, 255, 255) badge_center=(255, 255, 255, 255) badge_ring=(88, 166, 255, 255)

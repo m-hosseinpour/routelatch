@@ -1,0 +1,590 @@
+{
+  "threshold_non_text": 3.0,
+  "session": {
+    "date": "2026-11-27T17:36:20Z",
+    "display": ":0",
+    "session_bus": "unix:path=<runtime>/bus",
+    "xdg_session_type": "x11",
+    "desktop": "KDE",
+    "plasma": "plasmashell 6.6.7",
+    "kwin": "kwin 6.6.4",
+    "screen": "1920x1200",
+    "scale_factor": "1.25",
+    "panel_window": "0x160003c",
+    "panel_geometry": "1920x38+0+1163",
+    "lock_screen_active": "true",
+    "look_and_feel": "org.kubuntudark.desktop",
+    "icon_theme": "Papirus-Dark",
+    "window_bg": "32,35,38"
+  },
+  "states": [
+    {
+      "state": "off",
+      "crop": "crop-off-helper-missing.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 346,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_rgb": [
+            239,
+            246,
+            252
+          ],
+          "observed_hex": "#eff6fc",
+          "pixels_within_tolerance": 9,
+          "contrast_vs_panel_bg": 14.48
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        240,
+        246,
+        252
+      ],
+      "badge_vs_engine_contrast": 3.44,
+      "badge_vs_engine_delta_e76": 77.0,
+      "label": "off (real, helper missing)",
+      "group": "real",
+      "tag": "off-helper-missing"
+    },
+    {
+      "state": "error",
+      "crop": "crop-error-desired-missing.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 321,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_rgb": [
+            219,
+            109,
+            40
+          ],
+          "observed_hex": "#db6d28",
+          "pixels_within_tolerance": 46,
+          "contrast_vs_panel_bg": 4.68
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        219,
+        109,
+        40
+      ],
+      "badge_vs_engine_contrast": 1.11,
+      "badge_vs_engine_delta_e76": 123.1,
+      "label": "error (real, desired on / helper missing)",
+      "group": "real",
+      "tag": "error-desired-missing"
+    },
+    {
+      "state": "off",
+      "crop": "crop-off.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 346,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_rgb": [
+            239,
+            246,
+            252
+          ],
+          "observed_hex": "#eff6fc",
+          "pixels_within_tolerance": 9,
+          "contrast_vs_panel_bg": 14.48
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        240,
+        246,
+        252
+      ],
+      "badge_vs_engine_contrast": 3.44,
+      "badge_vs_engine_delta_e76": 77.0,
+      "label": "off (fake)",
+      "group": "fake",
+      "tag": "off"
+    },
+    {
+      "state": "error",
+      "crop": "crop-error.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 321,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_rgb": [
+            219,
+            109,
+            40
+          ],
+          "observed_hex": "#db6d28",
+          "pixels_within_tolerance": 46,
+          "contrast_vs_panel_bg": 4.68
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        219,
+        109,
+        40
+      ],
+      "badge_vs_engine_contrast": 1.11,
+      "badge_vs_engine_delta_e76": 123.1,
+      "label": "error (fake)",
+      "group": "fake",
+      "tag": "error"
+    },
+    {
+      "state": "on",
+      "crop": "crop-on.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 321,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            46,
+            160,
+            67
+          ],
+          "nominal_hex": "#2ea043",
+          "observed_rgb": [
+            46,
+            160,
+            67
+          ],
+          "observed_hex": "#2ea043",
+          "pixels_within_tolerance": 58,
+          "contrast_vs_panel_bg": 4.68
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        46,
+        160,
+        67
+      ],
+      "badge_vs_engine_contrast": 1.11,
+      "badge_vs_engine_delta_e76": 125.2,
+      "label": "on (fake)",
+      "group": "fake",
+      "tag": "on"
+    },
+    {
+      "state": "starting",
+      "crop": "crop-starting.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 322,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            88,
+            166,
+            255
+          ],
+          "nominal_hex": "#58a6ff",
+          "observed_rgb": [
+            88,
+            166,
+            255
+          ],
+          "observed_hex": "#58a6ff",
+          "pixels_within_tolerance": 48,
+          "contrast_vs_panel_bg": 6.25
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        88,
+        166,
+        255
+      ],
+      "badge_vs_engine_contrast": 1.48,
+      "badge_vs_engine_delta_e76": 23.5,
+      "label": "starting (fake)",
+      "group": "fake",
+      "tag": "starting"
+    },
+    {
+      "state": "conflict",
+      "crop": "crop-conflict.png",
+      "crop_size": [
+        38,
+        37
+      ],
+      "panel_bg_rgb": [
+        32,
+        35,
+        38
+      ],
+      "panel_bg_hex": "#202326",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_rgb": [
+            47,
+            129,
+            247
+          ],
+          "observed_hex": "#2f81f7",
+          "pixels_within_tolerance": 321,
+          "contrast_vs_panel_bg": 4.21
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_rgb": [
+            255,
+            255,
+            255
+          ],
+          "observed_hex": "#ffffff",
+          "pixels_within_tolerance": 40,
+          "contrast_vs_panel_bg": 15.79
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_rgb": [
+            219,
+            109,
+            40
+          ],
+          "observed_hex": "#db6d28",
+          "pixels_within_tolerance": 46,
+          "contrast_vs_panel_bg": 4.68
+        }
+      ],
+      "all_expected_colours_present": true,
+      "min_core_contrast": 4.21,
+      "threshold_non_text": 3.0,
+      "pass": true,
+      "badge_rgb": [
+        219,
+        109,
+        40
+      ],
+      "badge_vs_engine_contrast": 1.11,
+      "badge_vs_engine_delta_e76": 123.1,
+      "label": "conflict (fake)",
+      "group": "fake",
+      "tag": "conflict"
+    }
+  ],
+  "overall_pass": true
+}

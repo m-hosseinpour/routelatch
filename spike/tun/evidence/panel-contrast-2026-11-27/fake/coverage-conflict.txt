@@ -1,0 +1,13 @@
+9|true|true|||Coverage
+10|false|true|||Coverage: on · desired off · active without request
+11|false|true|||Helper: installed
+83|false|true|||Interface: rl-tun0
+84|false|true|||Error: coverage conflict
+12|true|true|||Warnings (4)
+85|false|true|||Conflict: coverage could not be applied or verified
+86|false|true|||All direct: pool is unused; non-DNS UDP stays blocked
+87|false|true|||DNS: plain DNS goes direct, not through the pool
+88|false|true|||UDP/QUIC: non-DNS UDP is blocked
+14|false|true|||Enable system-wide coverage…
+74|false|true|||Unavailable: coverage is already on
+15|true|true|||Disable system-wide coverage…

@@ -1,0 +1,78 @@
+{
+  "state": "starting",
+  "crop": "crop-starting.png",
+  "crop_size": [
+    38,
+    37
+  ],
+  "panel_bg_rgb": [
+    32,
+    35,
+    38
+  ],
+  "panel_bg_hex": "#202326",
+  "elements": [
+    {
+      "element": "engine",
+      "nominal_rgb": [
+        47,
+        129,
+        247
+      ],
+      "nominal_hex": "#2f81f7",
+      "observed_rgb": [
+        47,
+        129,
+        247
+      ],
+      "observed_hex": "#2f81f7",
+      "pixels_within_tolerance": 322,
+      "contrast_vs_panel_bg": 4.21
+    },
+    {
+      "element": "mark",
+      "nominal_rgb": [
+        255,
+        255,
+        255
+      ],
+      "nominal_hex": "#ffffff",
+      "observed_rgb": [
+        255,
+        255,
+        255
+      ],
+      "observed_hex": "#ffffff",
+      "pixels_within_tolerance": 40,
+      "contrast_vs_panel_bg": 15.79
+    },
+    {
+      "element": "badge",
+      "nominal_rgb": [
+        88,
+        166,
+        255
+      ],
+      "nominal_hex": "#58a6ff",
+      "observed_rgb": [
+        88,
+        166,
+        255
+      ],
+      "observed_hex": "#58a6ff",
+      "pixels_within_tolerance": 48,
+      "contrast_vs_panel_bg": 6.25
+    }
+  ],
+  "all_expected_colours_present": true,
+  "min_core_contrast": 4.21,
+  "threshold_non_text": 3.0,
+  "pass": true,
+  "badge_rgb": [
+    88,
+    166,
+    255
+  ],
+  "badge_vs_engine_contrast": 1.48,
+  "badge_vs_engine_delta_e76": 23.5
+}

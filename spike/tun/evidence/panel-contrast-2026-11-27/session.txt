@@ -1,0 +1,15 @@
+date=2026-11-27T17:36:20Z
+display=:0
+session_bus=unix:path=<runtime>/bus
+xdg_session_type=x11
+desktop=KDE
+plasma=plasmashell 6.6.7
+kwin=kwin 6.6.4
+screen=1920x1200
+scale_factor=1.25
+panel_window=0x160003c
+panel_geometry=1920x38+0+1163
+lock_screen_active=true
+look_and_feel=org.kubuntudark.desktop
+icon_theme=Papirus-Dark
+window_bg=32,35,38

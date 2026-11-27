@@ -1,0 +1,15 @@
+panel-contrast-2026-11-27 — revision record
+
+product_head=3f124dfa006e6701cdf83345f0ef983ea9b3f194
+product_build=CGO_ENABLED=0 go1.27.4 -trimpath (unstamped dev binary)
+binary_sha256=915b694cdd2aab55db0de89ba8cbdbea29e44df42e494e3e967987523124d564
+run_utc=2026-11-27T17:36:20Z..2026-11-27T17:36:47Z
+panel_window=0x160003c (1920x38+0+1163)
+desktop=Plasma 6.6.7 / kwin 6.6.4 / X11 :0
+scale_factor=1.25 (22 logical px icon rendered at 28 physical px)
+theme=BreezeDark colour scheme, org.kubuntudark.desktop look-and-feel, Papirus-Dark icons
+panel_background=#202326 (32,35,38)
+lock_screen_active=true during the run
+
+The product head is the revision the temporary binary was built from. The
+presence of this untracked evidence directory does not change product code.

@@ -1,0 +1,30 @@
+{
+  "panel": [
+    1920,
+    37
+  ],
+  "panel_bg_local": [
+    32,
+    35,
+    38
+  ],
+  "icon_origin": [
+    1594,
+    5
+  ],
+  "icon_size": 28,
+  "scale": 1.2727,
+  "match_mae": 6.305,
+  "crop_box": [
+    1589,
+    0,
+    1627,
+    37
+  ],
+  "crop_size": [
+    38,
+    37
+  ],
+  "border_margin": 5,
+  "border_background_only": true
+}
