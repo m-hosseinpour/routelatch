@@ -1,0 +1,923 @@
+{
+  "synthetic": true,
+  "real_light_theme_run": false,
+  "note": "IconPixmap composited over light backgrounds; not a desktop/theme run.",
+  "scale": 1.25,
+  "rendered_size_px": 28,
+  "threshold_non_text": 3.0,
+  "backgrounds": [
+    {
+      "tag": "eff0f1",
+      "hex": "#eff0f1",
+      "rgb": [
+        239,
+        240,
+        241
+      ]
+    },
+    {
+      "tag": "fcfcfc",
+      "hex": "#fcfcfc",
+      "rgb": [
+        252,
+        252,
+        252
+      ]
+    }
+  ],
+  "states": [
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "real-off-missing",
+      "state_label": "real off / helper missing",
+      "state": "off",
+      "composite": "composite-eff0f1-real-off-missing.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 98,
+          "pixels_within_tolerance": 209,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 37,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 9,
+          "contrast_vs_background": 1.05,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.05,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "real-error-desired",
+      "state_label": "real error / desired on",
+      "state": "error",
+      "composite": "composite-eff0f1-real-error-desired.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 97,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 30,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 2.95,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.14,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "fake-off",
+      "state_label": "fake off",
+      "state": "off",
+      "composite": "composite-eff0f1-fake-off.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 98,
+          "pixels_within_tolerance": 209,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 37,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 9,
+          "contrast_vs_background": 1.05,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.05,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "fake-error",
+      "state_label": "fake error",
+      "state": "error",
+      "composite": "composite-eff0f1-fake-error.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 97,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 30,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 2.95,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.14,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "fake-on",
+      "state_label": "fake on",
+      "state": "on",
+      "composite": "composite-eff0f1-fake-on.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 204,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 27,
+          "pixels_within_tolerance": 34,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            46,
+            160,
+            67
+          ],
+          "nominal_hex": "#2ea043",
+          "observed_exact": [
+            46,
+            160,
+            67
+          ],
+          "exact_pixels": 14,
+          "pixels_within_tolerance": 32,
+          "contrast_vs_background": 2.96,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.14,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "fake-starting",
+      "state_label": "fake starting",
+      "state": "starting",
+      "composite": "composite-eff0f1-fake-starting.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 215,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 29,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            88,
+            166,
+            255
+          ],
+          "nominal_hex": "#58a6ff",
+          "observed_exact": [
+            88,
+            166,
+            255
+          ],
+          "exact_pixels": 1,
+          "pixels_within_tolerance": 20,
+          "contrast_vs_background": 2.21,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.14,
+      "pass": false
+    },
+    {
+      "background": "eff0f1",
+      "background_hex": "#eff0f1",
+      "state_tag": "fake-conflict",
+      "state_label": "fake conflict",
+      "state": "conflict",
+      "composite": "composite-eff0f1-fake-conflict.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 97,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.28,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 30,
+          "contrast_vs_background": 1.14,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 2.95,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.14,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "real-off-missing",
+      "state_label": "real off / helper missing",
+      "state": "off",
+      "composite": "composite-fcfcfc-real-off-missing.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 97,
+          "pixels_within_tolerance": 209,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 849,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_exact": [
+            240,
+            246,
+            252
+          ],
+          "exact_pixels": 1,
+          "pixels_within_tolerance": 21,
+          "contrast_vs_background": 1.06,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "real-error-desired",
+      "state_label": "real error / desired on",
+      "state": "error",
+      "composite": "composite-fcfcfc-real-error-desired.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 32,
+          "pixels_within_tolerance": 831,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 3.29,
+          "pass": true
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "fake-off",
+      "state_label": "fake off",
+      "state": "off",
+      "composite": "composite-fcfcfc-fake-off.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 97,
+          "pixels_within_tolerance": 209,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 849,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            240,
+            246,
+            252
+          ],
+          "nominal_hex": "#f0f6fc",
+          "observed_exact": [
+            240,
+            246,
+            252
+          ],
+          "exact_pixels": 1,
+          "pixels_within_tolerance": 21,
+          "contrast_vs_background": 1.06,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "fake-error",
+      "state_label": "fake error",
+      "state": "error",
+      "composite": "composite-fcfcfc-fake-error.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 32,
+          "pixels_within_tolerance": 831,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 3.29,
+          "pass": true
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "fake-on",
+      "state_label": "fake on",
+      "state": "on",
+      "composite": "composite-fcfcfc-fake-on.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 204,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 31,
+          "pixels_within_tolerance": 830,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            46,
+            160,
+            67
+          ],
+          "nominal_hex": "#2ea043",
+          "observed_exact": [
+            46,
+            160,
+            67
+          ],
+          "exact_pixels": 14,
+          "pixels_within_tolerance": 32,
+          "contrast_vs_background": 3.29,
+          "pass": true
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "fake-starting",
+      "state_label": "fake starting",
+      "state": "starting",
+      "composite": "composite-fcfcfc-fake-starting.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 215,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 26,
+          "pixels_within_tolerance": 833,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            88,
+            166,
+            255
+          ],
+          "nominal_hex": "#58a6ff",
+          "observed_exact": [
+            88,
+            166,
+            255
+          ],
+          "exact_pixels": 1,
+          "pixels_within_tolerance": 20,
+          "contrast_vs_background": 2.46,
+          "pass": false
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    },
+    {
+      "background": "fcfcfc",
+      "background_hex": "#fcfcfc",
+      "state_tag": "fake-conflict",
+      "state_label": "fake conflict",
+      "state": "conflict",
+      "composite": "composite-fcfcfc-fake-conflict.png",
+      "elements": [
+        {
+          "element": "engine",
+          "nominal_rgb": [
+            47,
+            129,
+            247
+          ],
+          "nominal_hex": "#2f81f7",
+          "observed_exact": [
+            47,
+            129,
+            247
+          ],
+          "exact_pixels": 96,
+          "pixels_within_tolerance": 205,
+          "contrast_vs_background": 3.65,
+          "pass": true
+        },
+        {
+          "element": "mark",
+          "nominal_rgb": [
+            255,
+            255,
+            255
+          ],
+          "nominal_hex": "#ffffff",
+          "observed_exact": [
+            255,
+            255,
+            255
+          ],
+          "exact_pixels": 32,
+          "pixels_within_tolerance": 831,
+          "contrast_vs_background": 1.03,
+          "pass": false
+        },
+        {
+          "element": "badge",
+          "nominal_rgb": [
+            219,
+            109,
+            40
+          ],
+          "nominal_hex": "#db6d28",
+          "observed_exact": null,
+          "exact_pixels": 0,
+          "pixels_within_tolerance": 12,
+          "contrast_vs_background": 3.29,
+          "pass": true
+        }
+      ],
+      "min_core_contrast": 1.03,
+      "pass": false
+    }
+  ],
+  "overall_pass": false
+}

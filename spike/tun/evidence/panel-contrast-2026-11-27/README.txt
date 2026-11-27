@@ -11,6 +11,8 @@ Contents
                      off/helper-missing and error/desired-on icons, menu labels
 - fake/              unchanged product tray child against the visual-only fake
                      management peer: off, error, on, starting, conflict
+- light-synthetic/   synthetic light-background composites (#eff0f1, #fcfcfc),
+                     not a light-theme run; see its README.txt
 - locate_crop.py     locates the 22px pixmap in the panel capture (scale aware)
                      and writes only a tight crop + JSON geometry
 - measure.py         WCAG relative-luminance contrast of product colours vs the
@@ -26,7 +28,7 @@ Build the temporary binary into the scratch tree first, then run the script:
   (cd <repo> && CGO_ENABLED=0 .toolchain/go/bin/go build -trimpath -o "$W/bin/routelatch" ./cmd/routelatch)
   <repo>/spike/tun/evidence/panel-contrast-2026-11-27/panel-run.sh
 
-Only tight 38x37 px crops around the icon are stored here. Full panel images
-were captured under the scratch directory, cropped, and deleted; they were
-never copied into the repository or the evidence set. Scratch paths are shown
-as <scratch> in committed text.
+Only tight 38x37 px dark-panel crops and 38x38 synthetic light composites are
+stored here. Full panel images were captured under the scratch directory,
+cropped, and deleted; they were never copied into the repository or the evidence
+set. Scratch paths are shown as <scratch> in committed text.

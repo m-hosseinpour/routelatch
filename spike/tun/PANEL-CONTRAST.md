@@ -13,6 +13,10 @@ The helper-missing/off, error, active/on, starting and conflict icon states were
 all rendered and measured. The white inner mark reaches 15.79:1 and the near-white
 off ring 14.48:1. No tested state was indistinguishable from the panel.
 
+A later **synthetic** light-panel composite is recorded in the
+[addendum](#synthetic-light-panel-composite-2026-11-27-addendum). It is not a
+real light-theme run and does not change the dark-theme result above.
+
 The screen was locked during the run, so the evidence is the panel's mapped X11
 window content, not a desktop screenshot and not a human visual observation.
 The panel re-rendered for each state (the expected exact badge colours changed
@@ -103,6 +107,69 @@ white `255,255,255`, green `46,160,67`, orange `219,109,40`, light blue
   The 1:1 and 4x crops are the legibility evidence at normal panel scale; no
   formal colour-vision or user study was performed.
 
+## Synthetic light-panel composite (2026-11-27 addendum)
+
+> **Synthetic only.** These images are the retained `IconPixmap` PNGs
+> composited over light backgrounds at the same 1.25 scale. No light theme was
+> selected, no panel or desktop setting was changed, and no real light-panel
+> screenshot exists. The committed crops are opaque captures over the dark
+> panel, so their pixels cannot be cleanly re-composited; the source pixmaps are
+> the exact D-Bus assets from which those crops were rendered and their core
+> colours match the dark-panel measurements.
+
+**Synthetic light-panel result: FAIL for the white mark, off ring and starting
+badge; the blue silhouette itself passes.** The white mark measures **1.14:1**
+on `#eff0f1` and **1.03:1** on `#fcfcfc` — effectively 1:1, so it would not meet
+the 3:1 non-text threshold if judged against a light panel. The blue body
+remains 3.28:1 / 3.65:1, so the icon silhouette does not disappear entirely.
+
+| State | Engine (blue) | White mark | Badge |
+| --- | --- | --- | --- |
+| real off / helper missing | 3.28 / 3.65 | 1.14 / 1.03 | off ring `#f0f6fc` 1.05 / 1.06 |
+| real error / desired on | 3.28 / 3.65 | 1.14 / 1.03 | orange `#db6d28` 2.95 / 3.29 |
+| fake off | 3.28 / 3.65 | 1.14 / 1.03 | off ring `#f0f6fc` 1.05 / 1.06 |
+| fake error | 3.28 / 3.65 | 1.14 / 1.03 | orange `#db6d28` 2.95 / 3.29 |
+| fake on | 3.28 / 3.65 | 1.14 / 1.03 | green `#2ea043` 2.96 / 3.29 |
+| fake starting | 3.28 / 3.65 | 1.14 / 1.03 | light blue `#58a6ff` 2.21 / 2.46 |
+| fake conflict | 3.28 / 3.65 | 1.14 / 1.03 | orange `#db6d28` 2.95 / 3.29 |
+
+Values are `#eff0f1 / #fcfcfc` contrast ratios against the light background;
+threshold 3:1. Full per-element values are in `light-synthetic/light-contrast.json`.
+
+Parts and states:
+
+- **Blue body:** passes on both backgrounds (3.28:1 and 3.65:1).
+- **White inner mark:** fails on both (1.14:1 and 1.03:1). It is enclosed by the
+  blue body, so its actual adjacent contrast is white versus blue (3.75:1), not
+  white versus the panel. The icon therefore remains identifiable as a blue disc
+  with a lighter centre, but the white mark itself does not provide light-panel
+  contrast.
+- **Off ring:** fails against the light panel (1.05:1 / 1.06:1); over the blue
+  body the ring is 3.44:1. It would be much weaker on a light panel.
+- **Error / conflict orange:** 2.95:1 on `#eff0f1` (just below 3:1) and 3.29:1 on
+  `#fcfcfc`. Marginal on the Breeze-light background; passes only on near-white.
+- **On green:** 2.96:1 on `#eff0f1` (marginal fail) and 3.29:1 on `#fcfcfc`.
+- **Starting light blue:** fails both backgrounds (2.21:1 / 2.46:1).
+- The on, error/conflict and starting badges also have low luminance contrast
+  against the blue body (roughly 1.1–1.5:1), relying on hue and shape; the off
+  ring is the exception (3.44:1 against blue). That is a separate
+  state-distinction limit, not the panel-background ratio measured here.
+
+Method and limits:
+
+- The 22x22 RGBA `IconPixmap` was composited over `#eff0f1` and `#fcfcfc` at
+  source size, then resampled to 28 px with Lanczos and written as a 38x38 px
+  synthetic crop. Ratios use the product core colours; at 28 px the one-pixel
+  off ring and badge edges are heavily resampled, so exact-core pixel counts are
+  also recorded in the JSON.
+- This is a colour/geometry test, not a real Breeze-Light panel rendering. The
+  actual light panel may use a translucent or tinted background, different border
+  or hover treatment, and theme-provided icon recolouring; none of those were
+  tested. The result supports "white mark is ~1:1 on light backgrounds", not a
+  claim about a specific light desktop.
+- No product change is proposed here; a light-theme fix would need theme-aware
+  icon colours and is outside this verification.
+
 ## Limits and not verified
 
 - **Locked screen.** The session was locked for the whole run. The panel window
@@ -113,10 +180,12 @@ white `255,255,255`, green `46,160,67`, orange `219,109,40`, light blue
   performed.
 - **Current theme only.** The icon colours are hard-coded in `internal/app/tray.go`,
   not theme-aware. This PASS applies to the measured BreezeDark/Papirus-Dark
-  panel (`#202326`). A light panel was not tested; there the white inner mark
-  would have near-1:1 contrast against the background, and the blue body would be
-  around 3.7:1 against white. That is a remaining product/theme limit, not a
-  failure of this check.
+  panel (`#202326`). A light panel was not run; the synthetic addendum measures
+  the white mark at 1.14:1 on `#eff0f1` and 1.03:1 on `#fcfcfc` (effectively 1:1)
+  and the blue body at 3.28:1 / 3.65:1. The icon silhouette remains visible, but
+  the white mark, off ring and starting badge do not meet 3:1 against the light
+  backgrounds. That is a remaining product/theme limit, not a failure of the
+  dark-theme check.
 - **Fake states are visual-only.** Active/on, starting and conflict were produced
   by the fake status peer. A real TUN-active icon still requires installing the
   host helper, which was not authorized. The real run exercised only
@@ -152,6 +221,7 @@ All paths are under `spike/tun/evidence/panel-contrast-2026-11-27/`.
 | `contrast.json`, `contrast.md` | aggregate measurements and PASS table |
 | `panel-crops-1x.png` | seven labelled tight crops at 1:1 |
 | `panel-crops-4x.png` | same crops at 4x nearest-neighbour |
+| `light-synthetic/` | synthetic light-background composites (`#eff0f1`, `#fcfcfc`), `light-contrast.json`/`.md`, 4x montage |
 | `panel-run.sh`, `locate_crop.py`, `measure.py`, `summarize.py` | reproducible harness |
 | `bus-before.txt`, `bus-after.txt` | StatusNotifier item list before/after cleanup |
 
