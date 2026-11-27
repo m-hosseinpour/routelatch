@@ -108,8 +108,9 @@ type supervisor struct {
 	// restartSeq is the lifecycle token for the current restart attempt. A
 	// late completion with an older token never emits ready.
 	restartSeq uint64
-	// pendingTrayMsgs holds messages drained during a restart, in arrival
-	// order, so the loop can process them after the restart completes.
+	// pendingTrayMsgs holds messages deferred during a restart, or a startup
+	// quit that followed ready, in arrival order so the loop can process them
+	// before its next select.
 	pendingTrayMsgs []string
 }
 
@@ -294,12 +295,12 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		return s.abortStartup(err)
 	}
 	if err := s.waitEngineReady(ctx); err != nil {
-		if ctx.Err() != nil {
-			return s.shutdown(0, nil)
-		}
 		var repair *repairError
 		if errors.As(err, &repair) {
 			return s.failClosed(repair.err)
+		}
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
 		}
 		return s.abortStartup(s.mapChildExit("engine", err))
 	}
@@ -310,12 +311,12 @@ func RunSupervisor(ctx context.Context, opts SupervisorOptions) error {
 		return s.abortStartup(err)
 	}
 	if err := s.waitTrayReady(ctx); err != nil {
-		if ctx.Err() != nil {
-			return s.shutdown(0, nil)
-		}
 		var repair *repairError
 		if errors.As(err, &repair) {
 			return s.failClosed(repair.err)
+		}
+		if ctx.Err() != nil {
+			return s.shutdown(0, nil)
 		}
 		return s.abortStartup(s.mapChildExit("tray", err))
 	}
@@ -1007,6 +1008,11 @@ func (s *supervisor) stopTrayOnly() error {
 // The child's write end is closed, so its reader reaches EOF; inspect every
 // line that reader delivers before discarding the generation. An explicit quit
 // always wins over the exit status.
+//
+// Only ready and quit are interpreted here. lost/error messages are classified
+// by the child's exit code, which is how this tray writes them (3 for lost, 7
+// for tray_unavailable, 1 for other failures); a new tray path must keep those
+// pairs consistent or extend this drain.
 func drainTrayQuit(tray *childProc, timeout time.Duration) (ready, quit bool) {
 	if tray == nil || tray.msgs == nil {
 		return false, false

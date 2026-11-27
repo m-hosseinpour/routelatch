@@ -1017,19 +1017,6 @@ func stopLaunched(t *testing.T, pid int) {
 	waitGroupEmpty(t, pid, 5*time.Second)
 }
 
-func assertLocked(t *testing.T, path string) {
-	t.Helper()
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		t.Fatalf("%s is not locked", path)
-	}
-}
-
 // assertLockedEventually waits for path to hold a flock. The documented repair
 // order is create->write->flock->write, so a recreated marker can publish its
 // record before the flock is taken; a test that observes the record must wait
