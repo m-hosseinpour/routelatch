@@ -14,15 +14,18 @@ published by the CI pipeline. **v1.1.0** added the R15 tray control surface,
 `status.resume_requires_restart` and the process-level restart lifecycle; its
 evidence is in "v1.1.0 — tray control surface (2026-11-26)" below. **v1.2.0**
 added opt-in TUN coverage (A17 = Accepted with limits); its evidence is in
-"v1.2.0 — opt-in TUN coverage (2026-11-27)" below. **v1.2.1**, the current
-public release, is a patch that adds the R-28 fail-closed status warning; its
-evidence is in "v1.2.1 — R-28 status warning (2026-11-27)" below. The v1.0.1
+"v1.2.0 — opt-in TUN coverage (2026-11-27)" below. **v1.2.1** is a patch that
+adds the R-28 fail-closed status warning; its evidence is in "v1.2.1 — R-28
+status warning (2026-11-27)" below. **v1.3.0**, the current public release,
+adds single-click tray controls (D33/A16) and the R18 supervisor signal/tray-quit
+fixes; its evidence is in "v1.3.0 — single-click tray controls and CI stability
+(2026-11-28)" below. The v1.0.1
 evidence is in "v1.0.1 — first CI-built
 release (2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections,
 the history scan, name check and dependency audit remain historical evidence;
 they are not repeated here. The tags, pushes and releases were authorized by
-the project owner (v1.2.0 and v1.2.1 under the standing authorization recorded
-in `AGENTS.md` on 2026-11-26).
+the project owner (v1.2.0, v1.2.1 and v1.3.0 under the standing authorization
+recorded in `AGENTS.md` on 2026-11-26).
 
 **CI release pipeline (D27, 2026-11-24).** From `v1.0.1` on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
@@ -47,6 +50,44 @@ old tag was deleted locally and on both remotes and **v1.0.1** was recreated on
 the fixed, CI-green commit; attempt 4 published the release (see the v1.0.1
 section). The v1.0.1 and earlier release sections below remain evidence of the
 local build/upload process used for `v0.1.0`–`v1.0.0`.
+
+## v1.3.0 — single-click tray controls and CI stability (2026-11-28)
+
+Tag `v1.3.0` is an annotated tag (tag object
+`e0acb5f2b57d4dd4040065659e0ff07ca5ae6f85`) on `main` commit `dae857a`, pushed
+to both remotes. The release removes the two-step tray confirmation (D33/A16)
+so a menu action executes on the first click, and carries the R18 supervisor
+fixes for early signals and the tray quit/exit race. Routing policy, the
+approved list, the fail-closed path and the stored data format are unchanged.
+
+`CI` push run `46085313237` on `dae857a` was green before the tag push (all six
+jobs). `Release` run `46086807630` (tag push) succeeded. The public GitHub
+Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.3.0> (release id
+`461181047`, title `v1.3.0`, neither a draft nor a prerelease, published
+2026-11-28T00:21:29Z). It carries exactly 17 assets: four
+`routelatch-v1.3.0-linux-<arch>.tar.gz` tarballs, four
+`routelatch_1.3.0_<debarch>.deb` packages, four `routelatch-<rpmarch>.spec`
+files, four `routelatch-1.3.0-1.<rpmarch>.rpm` binary RPMs and `SHA256SUMS`.
+Its body starts "RouteLatch v1.3.0 — single-click tray controls and CI
+stability" (the annotated tag message).
+
+The tag-push `CI` run `46086807593` failed afterward in
+`TestLaunchSupervisorPIDFDOpenFailureUsesRawKill`: the test scanned procfs
+immediately after `cmd.Wait` and saw a matching token on a child that had
+already been reaped. The test-only fix `87cc759` makes the survivor check poll
+for a live (non-zombie/non-dead) process for up to three seconds. It changes no
+product code or shipped artifact, so no new tag or release was created and
+v1.3.0 remains the current public release.
+
+Known limits carried from the R16-H acceptance record:
+`spike/tun/H-ACCEPTANCE.md` and
+`spike/tray/evidence/r15h-acceptance-2026-11-26.md`. TUN runtime was exercised
+on `amd64` only. Wayland/GNOME, Login/autostart auto-enable and `arm64` runtime
+remain unverified. Panel contrast, the R-28 off-link path and the real
+TUN-active host tray/toggle were verified after the earlier releases and are
+recorded in the sections below; this record does not claim new host or
+non-amd64 runtime coverage.
 
 ## v1.2.0 — opt-in TUN coverage (2026-11-27)
 
