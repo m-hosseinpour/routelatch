@@ -351,11 +351,6 @@ func procPIDs(t *testing.T) []string {
 	return out
 }
 
-func atoi(s string) int {
-	n, _ := strconv.Atoi(s)
-	return n
-}
-
 func TestFailClosedReleasesOwnerBeforeAppLock(t *testing.T) {
 	root := t.TempDir()
 	instance := filepath.Join(root, "run")

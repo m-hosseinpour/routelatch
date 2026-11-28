@@ -984,8 +984,9 @@ func readPIDFile(t *testing.T, path string) int {
 }
 
 // liveProcessWithArg returns the first live process whose cmdline contains
-// needle. A just-reaped child can remain visible in procfs for a moment; a
-// zombie or dead entry is not a survivor.
+// needle. A forked descendant can briefly show the parent's argv before it
+// execs (or a cmdline read can race that exec); only a live match is a
+// survivor, and a zombie or dead entry is not.
 func liveProcessWithArg(t *testing.T, needle string) (int, bool) {
 	t.Helper()
 	for _, name := range procPIDs(t) {

@@ -73,8 +73,9 @@ Its body starts "RouteLatch v1.3.0 — single-click tray controls and CI
 stability" (the annotated tag message).
 
 The tag-push `CI` run `46086807593` failed afterward in
-`TestLaunchSupervisorPIDFDOpenFailureUsesRawKill`: the test scanned procfs
-immediately after `cmd.Wait` and saw a matching token on a child that had
+`TestLaunchSupervisorPIDFDOpenFailureUsesRawKill`: the immediate procfs scan
+matched a live entry in the brief fork→exec window (or a cmdline read racing
+that exec) that still showed the parent's argv, while the direct child had
 already been reaped. The test-only fix `87cc759` makes the survivor check poll
 for a live (non-zombie/non-dead) process for up to three seconds. It changes no
 product code or shipped artifact, so no new tag or release was created and

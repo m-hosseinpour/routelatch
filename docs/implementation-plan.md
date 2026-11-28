@@ -297,8 +297,9 @@ tray) اعمال و در دور follow-up تأیید شد. **commitها:** `fb03
 `Release` run `46086807630` ۵/۵ job و CI `main` run `46085313237` ۶/۶ job سبز.
 **فلیک post-release:** اجرای CI خود تگ `v1.3.0` (run `46086807593`) در job
 `Build, vet and test` با `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill`
-شکست خورد: اسکن procfs بلافاصله پس از `cmd.Wait` یک entry با token دید، در حالی
-که `Wait` قبلاً child را reap کرده بود (پنجرهٔ کوتاه procfs/PID reuse). رفع
+شکست خورد: اسکن procfs یک entry زنده با token دید که در پنجرهٔ کوتاه fork→exec
+(یا خواندن cmdline در همان لحظه) هنوز argv والد را نشان می‌داد؛ `Wait` قبلاً
+child مستقیم را reap کرده بود. رفع
 test-only در `87cc759`: `liveProcessWithArg` فقط process زنده
 (non-zombie/non-X) را survivor می‌داند و `noProcessWithArg` تا ۳s با poll
 می‌گردد. رفتار محصول تغییر نکرد؛ چون این batch فقط test است، طبق `AGENTS.md`
