@@ -955,7 +955,7 @@ func processAlive(pid int) bool {
 		return false
 	}
 	_, state, _, err := readProcStat(pid)
-	return err == nil && state != 'Z'
+	return err == nil && state != 'Z' && state != 'X' && state != 'x'
 }
 
 func waitProcessGone(t *testing.T, pid int, timeout time.Duration) {
@@ -983,24 +983,41 @@ func readPIDFile(t *testing.T, path string) int {
 	return pid
 }
 
+// liveProcessWithArg returns the first live process whose cmdline contains
+// needle. A just-reaped child can remain visible in procfs for a moment; a
+// zombie or dead entry is not a survivor.
+func liveProcessWithArg(t *testing.T, needle string) (int, bool) {
+	t.Helper()
+	for _, name := range procPIDs(t) {
+		pid, err := strconv.Atoi(name)
+		if err != nil {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(procRoot, name, "cmdline"))
+		if err != nil || !strings.Contains(string(raw), needle) {
+			continue
+		}
+		if processAlive(pid) {
+			return pid, true
+		}
+	}
+	return 0, false
+}
+
 func noProcessWithArg(t *testing.T, needle string) {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		found := false
-		for _, name := range procPIDs(t) {
-			raw, err := os.ReadFile(filepath.Join(procRoot, name, "cmdline"))
-			if err == nil && strings.Contains(string(raw), needle) {
-				found = true
-				break
-			}
-		}
+	for {
+		pid, found := liveProcessWithArg(t, needle)
 		if !found {
 			return
 		}
+		if !time.Now().Before(deadline) {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+			t.Fatalf("a helper process for %s survived", needle)
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("a helper process for %s survived", needle)
 }
 
 func stopLaunched(t *testing.T, pid int) {

@@ -333,13 +333,7 @@ func TestLaunchSupervisorPIDFDOpenFailureUsesRawKill(t *testing.T) {
 	if f.Exit != contract.ExitError {
 		t.Fatalf("failure = %+v, want exit 1 (not unsupported 7)", f)
 	}
-	for _, pidRaw := range procPIDs(t) {
-		raw, readErr := os.ReadFile(filepath.Join(procRoot, pidRaw, "cmdline"))
-		if readErr == nil && strings.Contains(string(raw), token) {
-			_ = syscall.Kill(atoi(pidRaw), syscall.SIGKILL)
-			t.Fatalf("direct child %s survived the documented raw SIGKILL path", pidRaw)
-		}
-	}
+	noProcessWithArg(t, token)
 }
 
 func procPIDs(t *testing.T) []string {
