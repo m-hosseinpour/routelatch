@@ -232,6 +232,71 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
+### R19 — چرخهٔ سلامت، بررسی کامل pool، ترتیب قوانین و منوی tray (تعریف/پیاده‌سازی ۲۰۲۶-۱۱-۲۸؛ commit/بازبینی/انتشار نشده)
+
+**وضعیت واحد: پیاده‌سازی در درخت کار انجام شده، ولی این batch هنوز commit، بازبینی
+مستقل و انتشار نشده است.**
+درخواست کاربر و پاسخ‌های تأییدشده در D34–D41 ثبت شدند. تغییرها:
+
+- **Accept as domain suffix:** `internal/trayui` آیتم را فقط برای پیشنهاد `route`
+  با مقصد hostname نشان می‌دهد، آن را با همان گیت Accept/Reject/Recheck فعال
+  می‌کند و `proposals.accept` را با `rule_kind=domain_suffix` می‌فرستد.
+  `acceptProposal` اکنون `rule_kind` را می‌خواند: `domain_suffix` روی پیشنهاد
+  hostname یک قانون `domain_suffix` روی همان hostname می‌سازد، مقدار خالی (یا
+  `domain`) همان قانون دامنهٔ دقیق قبلی را، و kind ناشناخته، ناسازگار با مقصد
+  (مثل suffix روی پیشنهاد IP) یا ارسال آن برای پیشنهاد `unroute` پیش از مصرف
+  پیشنهاد با خطای usage رد می‌شود تا هیچ قانونی ساخته نشود.
+  **check:** `gofmt -w` روی فایل‌های تغییریافته، `gofmt -l` تمیز؛ `go build ./...`
+  و `go vet ./internal/control ./internal/contract` سبز؛
+  `go test -count=1 ./internal/control ./internal/contract ./internal/routing ./internal/trayui`
+  سبز، شامل تست‌های `internal/control/ops_props_test.go` برای suffix/exact،
+  مصرف و replay پیشنهاد، رد kindهای ناسازگار بدون ساخت قانون و match
+  مرز-برچسب (`example.com` و `api.example.com` بله، `badexample.com` نه).
+- **چرخهٔ خودکار:** `HealthProbeBatch=100`، `HealthCycleBudget=5m`، انتخاب
+  unseen-first/قدیمی‌ترین شاهد، استخر کارگر محدود به `healthSem` (۲)، timeout
+  مؤثر سقف‌خورده به نصف headroom، درهم‌آمیزی egress/transport زیر cutoff و یک
+  mutation در `applyMeasurements`. `Rotate` دیگر cursor ندارد.
+- **`pool.scan`:** cursor/limit، batch ۱۰۰، بودجهٔ ۸ دقیقه در هر فراخوانی،
+  transport و سپس egress برای targetهای پیکربندی‌شده، اعمال health در یک mutation
+  و `Next=-1` در پایان؛ timeout مدیریتی ۱۰ دقیقه. job tray «Check all exits (best
+  first)» تا پایان cursor را دنبال می‌کند و نام job را با `pool check x/y`
+  به‌روز می‌کند.
+- **تأخیر/Reachable:** `ExitHealth.TransportLatencyMS`/`TransportSuccessAt`، پاک‌شدن
+  شواهد endpoint با شکست transport و عدم ارتقا به Healthy؛ گروه‌های Healthy /
+  Reachable · delay checked / Untested / Cooling / Unsupported با sort تأخیر
+  صعودی و label `· N ms`/`· delay —`. تأخیر نمایشی از `TransportLatencyMS` و
+  برای exit سالم بدون نمونهٔ endpoint از EWMA می‌آید. `pool scan` می‌تواند با
+  handshake کامل TLS، Healthy واقعی بسازد.
+- **قوانین جدیدترین‌اول:** prepend در `addRule`، حفظ ترتیب در `removeRule`،
+  هم‌سوشدن نمایش tray با همان ترتیب (بدون معکوس‌سازی دوم)، `schema_version` ۲ با مهاجرت یک‌بارهٔ ۱→۲/۰→۲ پس از backup
+  اجباری و بدون bump `policy_version`؛ checksum بکاپ با schema داخل payload
+  بررسی می‌شود تا بکاپ v1 پس از ارتقا معتبر بماند.
+- **Clear desktop proxy:** `desktop.clear` با/بدون marker، در حالت stopped و
+  already-disabled؛ snapshot کلیدها به‌عنوان restore point، نوشتن فقط کلید disable،
+  `applied+cleared`، حفظ restore point در Apply بعدی و rollback در شکست.
+- **تشخیص فقط targeted:** `diagnose`/`recheck` در all-proxy/all-direct با
+  `PolicyDenied`؛ گیت خودکار در `evaluate` از قبل همان بود و تست رگرسیون D21 در
+  `internal/control/d21_mode_gating_test.go` اضافه شد (بدون مقصد در reply، log یا
+  state).
+- **صفحه‌بندی تودرتو:** حذف `ActionPageNext/ActionPagePrevious` و page state؛
+  زنجیرهٔ `Page n/m` در انتهای هر صفحه، `PageSize=20` و سقف عمق منو ۵۱۲.
+
+**checkها (اجراشده در ۲۰۲۶-۱۱-۲۸ روی همین درخت dirty):** `go build ./...` و
+`go vet ./...` سبز؛ `go test -count=1` روی `internal/probes`، `internal/pool`،
+`internal/store`، `internal/control`، `internal/diagnostics`، `internal/platform`
+و `internal/trayui` سبز؛ `CGO_ENABLED=1 go test -race ./internal/probes` سبز؛
+`go test -count=1 ./internal/acceptance` سبز (۲۷۴ PASS، ۰ FAIL، ۱۵ NOTE،
+۱۱۶.۵۵۴s). دو تست acceptance (`TestLegacyStoredCoolingRecordsDeriveUnsupported` و
+`TestR13BDifferingRuntimeOneLock`) با TMPDIR طولانی به‌خاطر سقف مسیر socket
+شکست می‌خورند؛ با TMPDIR کوتاه سبزند و به این batch مربوط نیستند. اجرای کامل
+`go test -count=1 ./...` هنوز انجام نشده است. **بازبینی مستقل انجام نشده.**
+
+**قدم بعد:** اجرای کامل `go test ./...`؛
+بازبینی مستقل read-only؛ commit و push؛ سبزشدن CI؛ سپس این batch کاربرمحور یک
+minor است و `v1.4.0` پس از سبزبودن CI روی commit تگ‌شده منتشر می‌شود (هنوز انجام
+نشده). بازبینی میدانی Clear روی دسکتاپ واقعی و منوی تودرتو روی host واقعی مجوز
+محیط جدا می‌خواهد.
+
 ### R17 — حذف تأیید دو مرحله‌ای از tray (تعریف/انجام ۲۰۲۶-۱۱-۲۸)
 
 **وضعیت واحد: انجام شد (۲۰۲۶-۱۱-۲۸).** به درخواست کاربر، مرحلهٔ تأیید دوم از
@@ -2263,7 +2328,9 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill` قرمز شد؛ رفع test-only
    `87cc759` همان اسکن را به شرط زنده‌بودن process محدود کرد و به‌دلیل test-only
    بودن، release تازه نساخت. **آخرین کد محصول `dae857a` و آخرین commit
-   test-only `a259cf2` است.**
+   test-only `a259cf2` است.** **پس از آن، batch R19 در درخت کار پیاده‌سازی شده
+   ولی commit/بازبینی/انتشار نشده است؛ وضعیت، checkها، gap باز suffix و قدم بعد
+   فقط در R19 ثبت‌اند.**
    flakiness گاه‌به‌گاه step `Test` در CI دیده شد و R18 آن را رفع کرد. دو رفع
    test-only جدا ثبت
    شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و

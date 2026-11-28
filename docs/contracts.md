@@ -61,6 +61,7 @@ type Destination struct {
     Addr   netip.Addr  // DestIP؛ برای CIDR آدرس شبکه
     Prefix netip.Prefix // فقط DestCIDR
     Port   uint16      // ۰ = ذکر نشده
+    TLS    bool        // فقط target probe با scheme صریح tls://؛ مسیر/قانون را تغییر نمی‌دهد
 }
 ```
 
@@ -615,18 +616,28 @@ probe استفاده شد.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "http_listen": "127.0.0.1:8317",
   "socks_listen": "127.0.0.1:8318",
   "log_level": "info",
   "tun_enabled": false,
   "diagnostics": { "enabled": true, "queue_limit": 32, "max_concurrent": 1, "retention_days": 30 },
-  "probes": { "targets": [], "timeout_ms": 20000, "cooldown_base": 60, "cooldown_max": 900 }
+  "probes": {
+    "targets": ["tls://cloudflare.com:443", "tls://www.gstatic.com:443"],
+    "timeout_ms": 20000, "cooldown_base": 60, "cooldown_max": 900
+  }
 }
 ```
 
 `tun_enabled` یک فیلد additive با پیش‌فرض `false` است و فقط «خواست کاربر» برای
 پوشش TUN را نگه می‌دارد، نه اثبات فعال‌بودن آن؛ جزئیات در §۱۰.۲.
+
+`schema_version` config همان شمارهٔ schema state است، ولی config مهاجرت ساختاری
+جدا ندارد: فایل قدیمی با نسخهٔ `1` پذیرفته می‌شود و فقط در نخستین نوشتن config
+نسخهٔ فعلی را می‌گیرد. `probes.targets` پیش‌فرض دو target فعال دارد (§۶.۱)؛ کلید
+غایب یعنی همان پیش‌فرض‌ها، فهرست صریحاً خالی (`[]`) خالی می‌ماند و
+`config set probes.targets=` آن را پاک می‌کند. این شماره را با `schema_version`
+پروتکل management (§۴.۶) اشتباه نکنید؛ آن جداگانه `1` است.
 
 هر دو آدرس باید loopback باشند (`127.0.0.1` یا `::1`)؛ هر چیز دیگر `unsupported` با
 exit `7` است (D14)، نه usage/exit `2` و نه `policy_denied`. تغییر آدرس listener فقط با
@@ -640,7 +651,7 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "policy_version": 7,
   "mode": "targeted",
   "selected_exit": "",
@@ -652,6 +663,14 @@ listenerهای ترافیک احراز هویت ندارند و هیچ‌گاه 
   "updated_at": "..."
 }
 ```
+
+`rules` جدیدترین‌اول است: قانون تازه‌اضافه‌شده اندیس ۰ می‌گیرد و حذف ترتیب نسبی
+بقیه را حفظ می‌کند. این ترتیب بخشی از قرارداد ذخیره است، ولی `Match` مستقل از آن
+است (§۱.۵، §۷.۳)؛ CLI و tray همان ترتیب را بدون معکوس‌سازی نمایش می‌دهند.
+
+`health` می‌تواند `transport_latency_ms` و `transport_success_at` را نیز داشته باشد
+(§۶.۲)؛ این دو فقط شاهد endpoint و مبنای نمایش تأخیر/گروه Reachableاند، نه ادعای
+health.
 
 فیلدهای secret (UUID/password، URL منبع) در همین فایل `0600` هستند و در هیچ خروجی
 CLI/JSON/لاگ بازتولید نمی‌شوند. `status` فهرست همیشه `dedupe_key` را کوتاه (۸ کاراکتر
@@ -670,7 +689,9 @@ state/config/backup/log هیچ مقصد دیده‌شده‌ای را نگه ن�
 
 1. `flock(LOCK_EX|LOCK_NB)` روی فایل lock؛ شکست → `state_locked`.
 2. خواندن، مهاجرت schema در حافظه، اجرای callback روی کپی.
-3. اگر mode/rules عوض شده و `policy_version` بزرگ نشده → خطا (بدون نوشتن).
+3. اگر mode/rules/انتخاب دستی عوض شده و `policy_version` بزرگ نشده → خطا (بدون
+   نوشتن). مقایسهٔ rules شامل ترتیب هم هست: تغییر فقط-ترتیبی هم باید
+   `policy_version` را بالا ببرد، هرچند تصمیم مسیریابی به ترتیب وابسته نیست.
 4. نوشتن `state.json.tmp-<pid>` با `O_CREATE|O_EXCL`، مجوز `0600`.
 5. `f.Sync()`، `f.Close()`.
 6. کپی محتوای قبلی به `state.json.bak` (best-effort، فقط اگر نسخهٔ قبلی سالم بود؛
@@ -688,17 +709,26 @@ state/config/backup/log هیچ مقصد دیده‌شده‌ای را نگه ن�
 
 ### ۴.۵ schema، مهاجرت، backup و restore
 
-- `schema_version` عدد صحیح است؛ نسخهٔ فعلی `1`.
-- نسخهٔ قدیمی‌تر: پیش از مهاجرت backup اجباری، مهاجرت‌ها تابع خالص و تست‌پذیر، سپس
-  نوشتن اتمیک. مهاجرت نیمه‌کاره هرگز commit نمی‌شود.
+- `schema_version` عدد صحیح است؛ نسخهٔ فعلی **۲**.
+- نسخهٔ ۲ فقط ترتیب ذخیره‌شدهٔ rules را تغییر می‌دهد (جدیدترین‌اول). نسخه‌های ۱ و ۰
+  فهرست را قدیمی‌ترین‌اول ذخیره می‌کردند؛ مهاجرت آن را **یک‌بار** برمی‌گرداند و
+  version guard باعث idempotent بودن می‌شود (فایل v2 هرگز دوباره معکوس نمی‌شود).
+  `policy_version` عمداً بالا نمی‌رود، چون ترتیب ورودی مسیریابی نیست.
+- نسخهٔ قدیمی‌تر: پیش از مهاجرت backup اجباری (کپی `state.json`)، مهاجرت‌ها تابع
+  خالص و تست‌پذیر، سپس نوشتن اتمیک. مهاجرت نیمه‌کاره هرگز commit نمی‌شود. اگر
+  backup ممکن نباشد، مهاجرت انجام نمی‌شود.
 - نسخهٔ جدیدتر از build: `state_corrupt` با پیام «با نسخهٔ جدیدتر ساخته شده»؛ **هیچ
   downgrade یا حدس ساختاری**.
 - فایل خراب: fail closed؛ سرویس بالا نمی‌آید و فایل را بازنویسی نمی‌کند. `restore` فقط
   با backup معتبر (schema + checksum) و پس از تأیید کاربر.
 - `backup` یک envelope می‌نویسد: `{"schema_version","created_at","checksum":"sha256:...","state":{...}}`
-  که checksum روی بایت‌های canonical `state` است. `restore` checksum، schema و اینکه
-  مسیر داخل پوشهٔ backup بماند (بدون `..`) را بررسی می‌کند؛ سپس از فایل فعلی backup
-  می‌گیرد و جایگزین می‌کند. backup ناقص یا دستکاری‌شده رد می‌شود.
+  که checksum روی بایت‌های canonical `state` **با همان `schema_version` داخل payload**
+  است. بنابراین backup ساخته‌شده با build قدیمی (v1) پس از ارتقا هم معتبر می‌ماند؛
+  هنگام restore، checksum با شکل ثبت‌شده در payload بررسی و سپس state با
+  `migrateState` به نسخهٔ فعلی مهاجرت می‌شود (از جمله معکوس‌کردن یک‌بارهٔ rules
+  برای v1). `restore` schema، checksum و اینکه مسیر داخل پوشهٔ backup بماند
+  (بدون `..`) را بررسی می‌کند؛ سپس از فایل فعلی backup می‌گیرد و جایگزین می‌کند.
+  backup ناقص یا دستکاری‌شده رد می‌شود.
 - backup ساخته‌شده با build قدیمی‌تر ممکن است در payload خود تاریخچهٔ پیشنهاد داشته
   باشد؛ checksum آن با همان شکل قدیمی بررسی می‌شود، اما پیشنهادها و شواهد در restore
   نادیده گرفته می‌شوند و وارد state زنده نمی‌شوند (D21). backupهای جدید هیچ فیلد
@@ -712,16 +742,20 @@ state/config/backup/log هیچ مقصد دیده‌شده‌ای را نگه ن�
   پاسخ `MaxManagementResponse = 4 MiB` (فهرست ۲۰۰۰ رکورد جا می‌شود)؛ `pool list`
   `--limit/--offset` هم دارد.
 - هر درخواست `schema_version` دارد و باید `1` باشد؛ ناشناخته → `unsupported`.
+  این `1` نسخهٔ **پروتکل management** است و با `schema_version` فایل state/config
+  (که اکنون `2` است) یکی نیست.
 - پس از `bind`، `chmod 0600` و `stat` تأیید می‌شود (مستقل از umask).
 - برای هر اتصال `SO_PEERCRED` خوانده می‌شود؛ `uid` باید برابر `os.Getuid()` باشد،
   وگرنه بستن + `peer_rejected` (فقط uid لاگ می‌شود، نه دادهٔ درخواست). root و
   هم‌uid خارج از مرز امنیتی ما هستند و همین‌طور مستند می‌شود.
-- deadline هر درخواست ۵s است و هر فرمان بودجهٔ ثابت خودش را دارد: `pool test` ۱۰ دقیقه
-  (بدون فرمول وابسته به تعداد exit؛ فهرست با `MaxPoolTestExits = 20` بریده می‌شود)،
+- deadline هر درخواست ۵s است و هر فرمان بودجهٔ ثابت خودش را دارد: `pool test` و
+  `pool.scan` ۱۰ دقیقه (بدون فرمول وابسته به تعداد exit؛ `pool test` با
+  `MaxPoolTestExits = 20` بریده می‌شود و هر `pool.scan` یک batch حداکثر ۱۰۰ exit و
+  بودجهٔ probe ۸ دقیقه دارد تا فراخوانی‌های cursorدار از deadline سوکت بیرون نزنند)،
   `diagnose` و `proposals recheck` ۶۰s، `pool refresh` ۹۰s، `import`/`pool add` ۶۰s، و
-  `desktop set|restore`/`backup`/`restore` ۳۰s. بیشترین بودجه همان ۱۰ دقیقه است و
-  deadline سوکت برابر timeout + ۲s؛ در `pool test` اگر probe خطا بدهد یا deadline برسد،
-  نتایج partial با `truncated=true` برمی‌گردد. درخواست بدون پاسخ هرگز state را نیمه‌کاره
+  `desktop set|restore|clear`/`backup`/`restore` ۳۰s. بیشترین بودجه همان ۱۰ دقیقه است و
+  deadline سوکت برابر timeout + ۲s؛ در `pool test`/`pool.scan` اگر probe خطا بدهد یا
+  deadline برسد، نتایج partial با `truncated=true` برمی‌گردد. درخواست بدون پاسخ هرگز state را نیمه‌کاره
   رها نمی‌کند (mutation اتمیک است).
 - پاسخ هیچ secret، URL منبع یا share link ندارد.
 
@@ -740,8 +774,8 @@ state/config/backup/log هیچ مقصد دیده‌شده‌ای را نگه ن�
 
 | محیط | پشتیبانی | ابزار | رفتار |
 | --- | --- | --- | --- |
-| GNOME | بله | `gsettings` (`org.gnome.system.proxy`، `ignore-hosts`) | set/restore با ownership check |
-| KDE | بله | `kwriteconfig6`/`kwriteconfig5` (`kioslaverc`) | set/restore با ownership check |
+| GNOME | بله | `gsettings` (`org.gnome.system.proxy`، `ignore-hosts`) | set/restore/clear با ownership check |
+| KDE | بله | `kwriteconfig6`/`kwriteconfig5` (`kioslaverc`) | set/restore/clear با ownership check |
 | سایر | نه | — | exit `7` و پیام صریح «این محیط پشتیبانی نمی‌شود»؛ هرگز ادعای «پروکسی کل سیستم» |
 
 شکست خود ابزار با `external_tool_failed` (exit `1`) گزارش می‌شود، نه با «محیط پشتیبانی
@@ -765,6 +799,24 @@ desktop را مستقیم نمی‌کند؛ `doctor` و `desktop restore` آفل
 آخرین مقدار دستی کاربر و بقیهٔ کلیدها را به مقدار پیش از اولین apply برمی‌گرداند. اگر خواندن،
 اعتبارسنجی مقدار فعلی یا ذخیرهٔ marker شکست بخورد، هیچ کلیدی نوشته نمی‌شود. تغییر محیط دسکتاپ
 یا مقادیر listenerهای ثبت‌شده همچنان مستلزم `restore` دستی است.
+
+**Clear و restore point (D39).** `desktop.clear` کلید disable را می‌نویسد: GNOME
+`org.gnome.system.proxy mode=none` و KDE `kioslaverc:Proxy Settings/ProxyType=0`.
+بدون marker قبلی، ابتدا همهٔ مقادیر قابل‌restore فعلی خوانده و snapshot می‌شوند؛
+سپس فقط همان کلید disable نوشته و state با `applied=true` و `cleared=true` ذخیره
+می‌شود. marker هیچ مقدار Previous ساختگی ندارد: برای کلیدهای KDE که وجود ندارند
+مقدار خالی یعنی «در restore حذف کن»، و مقدار GNOME خالی خطا است.
+با marker موجود، Clear فقط وقتی می‌نویسد که کلید disable هنوز همان مقدار
+RouteLatch را داشته باشد؛ ویرایش کاربر دست‌نخورده می‌ماند و فقط گزارش می‌شود.
+اگر مقدار از قبل `none`/`0` باشد، هیچ نوشتنی روی تنظیم دسکتاپ انجام نمی‌شود
+و فقط notice «already disabled» برمی‌گردد (بدون ساخت marker در حالت بدون marker). پس از
+Clear، `restore` همان restore point اولیه را برمی‌گرداند؛ `desktop proxy set`
+بعدی مالکیت را دوباره می‌گیرد، کلیدهای ویرایش‌نشده را به Previous اصلی نگه
+می‌دارد و فقط کلیدهای دست‌کاری‌شده را نقطهٔ restore تازه می‌کند. شکست نوشتن یا
+تأیید مقدار، کلید disable را به مقدار پیش از Clear برمی‌گرداند (KDE absent دوباره
+حذف می‌شود) و در صورت شکست rollback پیام صریح restore می‌دهد. این op به listener
+زنده و health سرویس نیاز ندارد و در حالت stopped هم کار می‌کند. Clear فقط وقتی در
+tray غیرفعال است که پلتفرم پشتیبانی نشود (با دلیل) یا status نامعلوم/ناخوانا باشد.
 
 کلیدهای مدیریت‌شدهٔ KDE همان شش کلید `ReversedException`، `httpProxy`، `httpsProxy`،
 `socksProxy`، `NoProxyFor` و `ProxyType` هستند؛ `ftpProxy` و `Authmode` دست‌نخورده
@@ -832,6 +884,10 @@ exit جدا هستند. `RecordID` از `DedupeKey` مشتق می‌شود و ب
 | `cooling` | `cooling` | شکست مجدد؛ cooldown نمایی تا سقف |
 | هر | `invalid` | بازاعتبارسنجی دادهٔ اتصال را شکست داد |
 | رکورد حذف/غیرفعال | حذف | اتصال‌های همان exit بسته می‌شوند |
+
+`Reachable` یک status ذخیره‌شده نیست: نمای نمایشی `unknown` است که شاهد موفق
+endpoint (`TransportSuccessAt`) دارد. جدول بالا و انتخاب/رتبه‌بندی فقط با status
+کار می‌کنند؛ Reachable نه گیت انتخاب است و نه Healthy (§۶.۲).
 
 `invalid`/`unsupported` برای همان نسخهٔ رکورد نهایی‌اند؛ refresh با دادهٔ درست یک
 `DedupeKey` جدید می‌سازد. `destination_unconfirmed` در probe یا stream معمولی هیچ‌گاه
@@ -999,7 +1055,7 @@ merge بر اساس `DedupeKey` → commit. اگر یک منبع شکست بخو
 | نوع | چه می‌سنجد | triggerهای مجاز |
 | --- | --- | --- |
 | `transport` | فقط endpoint خروجی: TCP و در صورت نیاز TLS/pin | startup، rotation، rerank، manual، after-failure |
-| `egress` | dial از exit به هدف پیکربندی‌شده + اولین بایت | manual، rerank، rotation (اگر هدف تعریف شده) |
+| `egress` | dial از exit به هدف پیکربندی‌شده + اولین بایت (یا برای `tls://` یک handshake کامل) | manual، rerank (scan هم از همین trigger استفاده می‌کند)، rotation (اگر هدف تعریف شده) |
 | `direct_tcp` | اتصال مستقیم به مقصد، بدون بایت برنامه | failure (تشخیص)، manual |
 | `direct_tls` | TLS مستقیم با SNI و verification کامل | failure (تشخیص)، manual |
 
@@ -1010,13 +1066,33 @@ merge بر اساس `DedupeKey` → commit. اگر یک منبع شکست بخو
 probe از همان `core.Instance` فعال با tag صریح استفاده می‌کند؛ ساختن core دوم در همان
 process به‌خاطر وضعیت سراسری مجاز نیست.
 
-`Probes.Targets` پیش‌فرض خالی است: RouteLatch هیچ مقصد ثالثِ اختراعی برای «تست اینترنت»
-ندارد. بدون هدف، سلامت از سیگنال transport + شواهد مثبت استفادهٔ واقعی ساخته می‌شود؛
-`pool test --target` یا تنظیم `probes.targets` یک انتخاب صریح کاربر است.
+**هدف‌های egress (D41).** سه شکل پذیرفته می‌شود: `host:port` و `tcp://host:port`
+منتظر اولین بایت downlink می‌مانند (رفتار قبلی)، و `tls://host:port` یک handshake
+کامل TLS با SNI=host و rootهای سیستم انجام می‌دهد؛ در این حالت هیچ درخواست HTTP،
+بدنه یا دادهٔ برنامه فرستاده نمی‌شود. scheme ناشناخته، پورت ۰، target بدشکل و IP
+نامشخص رد می‌شوند. hostname بدون resolve محلی به exit داده می‌شود؛ RouteLatch فقط
+نام سرور exit را برای dial خودش resolve می‌کند. بدون target، scan/rotation فقط
+شاهد transport و گروه Reachable می‌سازد و Healthy از شواهد استفادهٔ واقعی می‌آید.
+
+پیکربندی پیش‌فرض دو target فعال دارد: `tls://cloudflare.com:443` و
+`tls://www.gstatic.com:443`. این‌ها مقصد ثالث پیش‌فرض، اما مستند و قابل‌حذف‌اند؛
+فهرست صریحاً خالی (`"targets": []`) خالی می‌ماند و `config set probes.targets=`
+پیش‌فرض‌ها را پاک می‌کند. پیامد حریم خصوصی صریح است: هر exit که در scan/rotation
+بررسی می‌شود با این دو endpoint تماس می‌گیرد و آن‌ها آدرس IP خروجی را می‌بینند؛
+هیچ مقصد کاربر یا دادهٔ درخواست فرستاده نمی‌شود. این تصمیم invariant قبلی «اپ
+هرگز مقصد ثالث اختراع نمی‌کند» را آگاهانه به «مقصد پیش‌فرض مستند، قابل‌مشاهده،
+فقط handshake و قابل‌حذف» تغییر می‌دهد.
 
 ### ۶.۲ انتساب شواهد
 
 - **مثبت:** بایت برگشتی از تونل (downlink > 0) یعنی مسیر کار کرد → نمونهٔ موفق و EWMA.
+- **شاهد endpoint:** موفقیت transport فقط endpoint را ثابت می‌کند؛
+  `TransportLatencyMS` و `TransportSuccessAt` ثبت می‌شوند، cooldown پاک می‌شود و
+  status `unknown` می‌ماند. همین ترکیب در منو «Reachable · delay checked» است و
+  تأخیر واقعی exit از همین RTT می‌آید. شکست انتسابی transport شواهد endpoint قبلی
+  را پاک می‌کند؛ موفقیت transport هرگز Healthy نمی‌سازد. برای egress، handshake
+  کامل TLS معادل بایت برگشتی است؛ handshake دریافت‌شده اما ناموفق
+  (`tls_failure`) و timeout قابل انتساب به exit نیستند و health را تغییر نمی‌دهند.
 - **منفی قابل انتساب:** `exit_unreachable`، `handshake_rejected` و `timeout` فاز dial.
   این‌ها cooling می‌سازند.
 - **نمونهٔ pre-byte یک CONNECT:** اگر exit پس از proof و پیش از اولین بایت مقصد تونل را
@@ -1040,9 +1116,15 @@ process به‌خاطر وضعیت سراسری مجاز نیست.
 
 | حالت | probe خودکار | دستی |
 | --- | --- | --- |
-| هدفمند / همه از پروکسی | transport (startup + هر ۱۰ دقیقه + after-failure)؛ egress فقط با trigger صریح/rerank | مجاز |
-| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ `diagnose --direct` مجاز |
+| هدفمند | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank (scan هم rerank است) | `diagnose`/`recheck` و `pool test` مجاز |
+| همه از پروکسی | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank (scan هم rerank است) | `pool test` مجاز؛ `diagnose`/`recheck` با `policy_denied` رد می‌شوند و پیشنهادی ساخته نمی‌شود |
+| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ تشخیص دستی و پیشنهاد ممنوع (`policy_denied`) |
 | متوقف | probe و worker وجود ندارد؛ listenerها بسته‌اند | management socket پاسخ می‌دهد: `status`/`rules list`/`pool list` exit `0` با `mode=stopped`؛ `env`/`exec` و `pool test` → exit `3`؛ خروج از stopped فقط با process جدید |
+
+گیت تشخیص برای مسیر خودکار هم همین است: `evaluate` در all-proxy و all-direct و
+stopped پیش از هر probe رد می‌کند، پس هیچ پیشنهاد یا مقایسهٔ پنهان مستقیم/پروکسی
+ساخته نمی‌شود (D37). TUN گیت نیست؛ targeted با یا بدون TUN مجاز است. D21 در همهٔ
+این حالت‌ها برقرار است و با تست رگرسیون بررسی می‌شود.
 
 خاموش‌کردن `diagnostics.enabled` صف را لغو می‌کند (`CancelQueued`)، پیشنهاد جدید نمی‌سازد،
 probe مقصد جدید را متوقف می‌کند؛ health pool و فرمان دستی مستقل می‌مانند (D09).
@@ -1058,8 +1140,13 @@ probe مقصد جدید را متوقف می‌کند؛ health pool و فرما�
 | شاهد استفادهٔ واقعی | حداکثر ۱ نمونه در ثانیه برای هر exit | اولین بایت برگشتی از تونل واقعی؛ coalescing تا هر اتصال یک fsync نسازد |
 | حد سوییچ | بهبود ≥ ۲۰٪ و ≥ ۲ نمونهٔ موفق | D16: ضد flapping |
 | حد اقامت | ۵ دقیقه | بین دو سوییچ |
-| deadline probe | ۲۰s کل، ۸s انتظار اولین بایت | dial ≤۱۰s + first byte ≤۸s |
+| deadline probe | ۲۰s کل، ۸s انتظار اولین بایت/handshake | dial ≤۱۰s + first byte ≤۸s |
 | سقف `pool test` | ۲۰ exit در هر فراخوانی | deadline سوکت متناسب با تعداد؛ partial مجاز |
+| batch چرخهٔ خودکار | ۱۰۰ exit | unseen-first و سپس قدیمی‌ترین شاهد |
+| بودجهٔ چرخهٔ خودکار | ۵ دقیقه | فقط شروع probe تازه را می‌بندد؛ باقی‌مانده دست‌نخورده برای چرخهٔ بعد |
+| هم‌زمانی چرخه | ۲ (همان healthSem) | استخر کارگر محدود؛ چرخه بعدی روی قبلی سوار نمی‌شود |
+| `pool.scan` | batch ۱۰۰ exit، بودجهٔ ۸ دقیقه در هر فراخوانی | cursor تا `next=-1`؛ deadline مدیریتی ۱۰ دقیقه |
+| سهم egress در batch | حداکثر نیمی، یک slot برای هر target | در cutoff با transport درهم می‌آید |
 | فاصلهٔ transport probe خودکار | ۱۰ دقیقه | فقط در targeted/all-proxy؛ بدون ترافیک مقصد |
 | هم‌زمانی probe | health ۲، diagnostic ۱، صف ۳۲ | سقف منابع |
 | نمونه/نگهداری | ۲۰۰ نمونه، ۷ روز (ring حافظه‌ای) | — |
@@ -1163,12 +1250,17 @@ JSON، exit code و معنای همهٔ فرمان‌های جدول یکی اس
 | `config get\|set\|path` | `path, values` | 0، 2، 3، 6، 7 | «تنظیمات» |
 | `doctor` | `checks[{name,status,detail,fix}]` | 0، 3، 10 | «بررسی سلامت» |
 | `env` / `exec -- <cmd>` | `HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,NO_PROXY` / child exit code | 0، 3، 7 + کد فرزند | «اجرای برنامه» |
-| `desktop proxy status\|set\|restore` | `environment, supported, applied, previous_set, conflict` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
+| `desktop proxy status\|set\|restore` | `environment, supported, applied, cleared, previous_set, conflict` | 0، 1، 3، 6، 7، 8، 10، 12 | «پروکسی دسکتاپ» |
 | `backup` / `restore <ref>` | `ref{path,schema_version,created_at}` | 0، 3، 6، 10 | «پشتیبان» |
 | `menu` | — | 0، 2، 3 | خودش |
 
 `pool remove <id>` تنها مسیر حذف رکورد است (از جمله رکورد `unsupported` با دلیل
 `engine_record_rejected`)؛ v1 هیچ فرمان حذف آفلاین ندارد.
+
+`rules list` همان ترتیب ذخیره‌شدهٔ جدیدترین‌اول را برمی‌گرداند؛ `rules add` قانون
+تازه را prepend می‌کند و `rules remove` ترتیب نسبی بقیه را حفظ می‌کند (D38).
+`pool.scan` و `desktop.clear` در این جدول نیستند چون فرمان CLI ندارند؛ opهای
+management برای tray هستند (§۴.۶، §۷.۳).
 
 **`ready` و `listeners_open`.** management socket پیش از `StartNetwork` هم پاسخ
 می‌دهد، بنابراین `status` به‌تنهایی آمادگی نیست. `ready=true` فقط وقتی است که
@@ -1266,7 +1358,7 @@ RouteLatch
   Mode ▸
     Targeted | All proxy | All direct            radio
     Stop listening
-    Desktop proxy warning: <reason>              disabled (applied/unknown only)
+    Desktop proxy warning: <reason>              disabled (applied, not cleared, or unknown)
   Coverage ▸
     Coverage: <state> · desired <on|off>         disabled
     Interface: <local interface>                 disabled
@@ -1278,22 +1370,24 @@ RouteLatch
     Disable system-wide coverage…
   Proposals (N) ▸
     <pending proposal> ▸
-      Accept | Reject | Recheck
+      Accept | Accept as domain suffix | Reject | Recheck
     Show decided (N) ▸
     Clear decided/expired
   Approved rules (N) ▸
-    <rule> ▸
+    <rule> ▸                                     (newest first)
       Remove
       Details                                    disabled
-    Page x/y · Previous page · Next page
+    Page 2/m ▸ …                                 (nested; page 3 inside page 2, …)
     Add rule… (Terminal menu)
   Pool ▸
     <summary>                                    disabled
     Auto select (radio) | <pinned exit>
-    Healthy (N) ▸ pages
-    Untested (N) ▸ pages
-    Cooling (N) ▸ pages
-    Unsupported/Invalid (N) ▸ pages
+    Healthy (N) ▸                                pages, best delay first
+    Reachable · delay checked (N) ▸              pages, best delay first
+    Untested (N) ▸                               pages
+    Cooling (N) ▸                                pages
+    Unsupported/Invalid (N) ▸                    pages
+    Check all exits (best first)                 job
     Refresh all sources                          job
     Re-rank now
     Test selected exit | Test first 20 usable    job
@@ -1303,6 +1397,7 @@ RouteLatch
     Refresh status
     Set/Re-apply desktop proxy
     Restore previous desktop proxy
+    Clear desktop proxy (disable system proxy)
   Diagnostics ▸
     Run doctor                                   job
     Doctor results ▸
@@ -1319,7 +1414,7 @@ RouteLatch
   Advanced ▸
     Restart engine
     Terminal menu…
-    Restart warning: <reason>                   disabled (applied/unknown only)
+    Restart warning: <reason>                   disabled (applied, not cleared, or unknown)
   Last action: <short result>                    disabled
   Quit ▸
     Quit RouteLatch
@@ -1346,12 +1441,23 @@ desired=false باشد. آیتم غیرقابل‌اجرا با دلیل کوت�
 `Engine unavailable; retrying…`. در all-direct شمار pool در هدر نمایش داده
 نمی‌شود چون انتخاب خروجی موضوعیت ندارد؛ در stopped/unavailable actionهای
 نامعتبر غیرفعال می‌شوند. `Restart engine` در حالت stopped به‌صورت یک آیتم اضافی در ریشه با
-متن «Restart engine to resume» هم دیده می‌شود؛ action یکی است. صفحه‌بندی pool و
-rules ۲۰–۲۵ آیتم دارد (تعداد دقیق در پیاده‌سازی ثابت و تست می‌شود) و گروه‌های
-pool از `Counts` و `status` همان `pool list` می‌آیند. «Test first 20 usable»
-همان سقف `MaxPoolTestExits` قرارداد است؛ tray نباید ادعای تست کل pool بدهد.
+متن «Restart engine to resume» هم دیده می‌شود؛ action یکی است. هر صفحهٔ pool، rules
+و proposals دقیقاً ۲۰ آیتم دارد (`PageSize`). صفحه‌بندی Previous/Next ندارد: انتهای
+هر صفحه یک زیرمنوی `Page n/m` است که صفحهٔ بعد داخل آن قرار دارد و همین‌طور تا آخر.
+این صفحه‌بندی منو را در همان بازشدن نگه می‌دارد، ولی عمق را یک سطح به‌ازای هر صفحه
+بالا می‌برد؛ سقف ساخت درخت ۵۱۲ سطح است، پس با PageSize=20 حدود ۱۰٬۰۰۰ رکورد در
+یک فهرست قابل دسترسی است (۲۰۰۰ رکورد ≈ ۱۰۰ سطح). رفتار host واقعی D-Bus با منوی
+بسیار عمیق و هزینهٔ کلیک‌های زنجیره‌ای آزمون‌نشده است (R-31). گروه‌های pool از
+`Counts` و `status` همان `pool list` می‌آیند: Healthy، Reachable · delay checked،
+Untested، Cooling و Unsupported/Invalid. Healthy و Reachable با تأخیر صعودی مرتب
+می‌شوند و ردیف بدون اندازه‌گیری آخر می‌آید؛ هر exit برچسب `· N ms` یا `· delay —`
+دارد. Reachable یعنی endpoint شاهد دارد ولی egress اثبات نشده و Healthy نیست (D36).
+«Check all exits (best first)» یک job است و تا پایان آن actionهای تغییردهنده
+غیرفعال می‌مانند؛ برخلاف «Test first 20 usable» (همان سقف `MaxPoolTestExits`) کل
+pool قابل‌dial را با cursor پوشش می‌دهد. بررسی کامل، اتصال‌های کاربر را قطع نمی‌کند
+و mode/selected exit را تغییر نمی‌دهد.
 `N` در «Proposals (N)» تعداد pending است؛ decided/expired زیر
-«Show decided» و در صورت زیادبودن با همان صفحه‌بندی ۲۰–۲۵تایی می‌آیند. اگر
+«Show decided» و در صورت زیادبودن با همان صفحه‌بندی ۲۰آیتمی تودرتو می‌آیند. اگر
 `status.diagnostics.enabled=false` باشد، Accept/Reject/Recheck غیرفعال‌اند
 (engine پیشنهاد جدیدی نمی‌سازد و این opها به diag نیاز دارند)؛ نمایش و
 Clear decided/expired باز می‌مانند. `Details` یک rule شامل ID کوتاه، kind، operand، note
@@ -1365,7 +1471,11 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 `conflict=service` غیرفعال و با دلیل نمایش داده می‌شود؛ تغییر آن فقط از طریق
 همان `autostart.Manager` و با اقدام صریح کاربر است. `Desktop proxy` فقط وقتی
 `supported=true` است actionهای Set/Restore/Refresh را فعال می‌کند؛ در محیط
-پشتیبانی‌نشده فقط status و دلیل نمایش داده می‌شود.
+پشتیبانی‌نشده فقط status و دلیل نمایش داده می‌شود. `Clear desktop proxy` در هر
+حالت پشتیبانی‌شده با status معلوم فعال است: بدون marker قبلی، با سرویس stopped و
+حتی وقتی پروکسی از قبل clear/disabled است؛ فقط پلتفرم پشتیبانی‌نشده یا status
+نامعلوم/ناخوانا آن را با دلیل غیرفعال می‌کند. متن حالت status پس از clear
+«Desktop proxy: cleared (disabled)» است.
 
 **نگاشت actionها.**
 
@@ -1375,6 +1485,7 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 | Stop listening | `mode=stopped` | نه |
 | Restart engine | pipe `restart-engine` به supervisor | بله (انتظار readiness) |
 | Proposal Accept (route) | `proposals.accept` | نه |
+| Proposal Accept as domain suffix (hostname route) | `proposals.accept` با `rule_kind=domain_suffix` | نه |
 | Proposal Accept (unroute) | `proposals.accept` (حذف rule) | نه |
 | Proposal Reject | `proposals.reject` | نه |
 | Proposal Recheck | `proposals.recheck` | بله |
@@ -1384,10 +1495,12 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 | Pool Remove | `pool.remove` | نه |
 | Pool Refresh all | `pool.refresh` با `all=true` | بله |
 | Pool Test selected / first 20 | `pool.test` با id یا بدون id | بله |
+| Pool Check all exits | `pool.scan` با cursor تا `next=-1` | بله |
 | Pool Re-rank | `pool.rerank` | نه |
 | Desktop Refresh status | `desktop.status` | نه |
 | Desktop Set/Re-apply | `desktop.set` | بله |
 | Desktop Restore | `desktop.restore` | بله |
+| Desktop Clear | `desktop.clear` | بله |
 | Back up now | `backup` | بله |
 | Run doctor | `doctor` | بله |
 | Start at login | `autostart.Manager.Status/Enable/Disable` محلی | بله (محلی) |
@@ -1411,16 +1524,19 @@ sanitize‌شده را notification می‌کند. `Start at login` با data-di
 عملاً بازکردن دوبارهٔ منو و ناوبری تا آیتم Confirm را لازم می‌کرد؛ D33 آن را حذف
 کرد و کلیک صریح روی label را همان تصمیم کاربر دانست. خروجی هر action/job با
 notification و «Last action» گزارش می‌شود. guardهای واقعی حفظ می‌شوند: Quit ساده
-وقتی desktop proxy applied/unknown است پیشنهاد نمی‌شود و به restore/keep صریح
-تبدیل می‌شود؛ تا پایان یک job، actionهای تغییردهنده disabled می‌مانند؛ و هیچ
+وقتی desktop proxy applied (و cleared نیست) یا unknown است پیشنهاد نمی‌شود و به
+restore/keep صریح تبدیل می‌شود؛ تا پایان یک job، actionهای تغییردهنده disabled
+می‌مانند؛ و هیچ
 actionی بدون کلیک یا از روی label اجرا نمی‌شود. حذف rule/exit، clear proposals،
 restore، stop/restart و TUN هم تک‌کلیکی‌اند. منوی huh در CLI قاعدهٔ مستقل خود را
 دارد و پیش‌فرض «نه» آن دست‌نخورده است.
 
 **jobها و refresh.** حداکثر یک job طولانی هم‌زمان اجرا می‌شود؛ تا پایان آن،
 actionهای تغییردهنده disabled‌اند و ریشه یک آیتم «Job: … running» نشان می‌دهد.
-jobهای تعریف‌شده: pool refresh/test، proposal recheck، desktop set/restore،
-backup، doctor، restart و autostart toggle. status هر ۲ ثانیه و لیست‌ها هر ۱۵
+jobهای تعریف‌شده: pool refresh/test/scan، proposal recheck، desktop set/restore/clear،
+backup، doctor، restart و autostart toggle. job «Check all exits» نام خود را با
+پیشرفت («pool check x/y») به‌روز می‌کند و فقط وقتی `next=-1` شد یا batch پیشرفت
+نکرد تمام می‌شود. status هر ۲ ثانیه و لیست‌ها هر ۱۵
 ثانیه (و بلافاصله پس از action) refresh می‌شوند؛ فراخوانی status/list یک
 deadline کوتاه (۱–۲ ثانیه) دارد، در goroutine جدا اجرا می‌شود و tick بعدی را
 بلوکه نمی‌کند؛ تغییرها با fingerprint مقایسه می‌شوند تا rebuild بی‌مورد رخ
@@ -1441,7 +1557,8 @@ rate limit مشاهده‌شده در Plasma تکرار نشود.
 actionهای pool/probe/rules mutation و proposalها را غیرفعال می‌کند (diagnostics
 و probe در stopped اجرا نمی‌شوند)؛ read-onlyها مثل status/rules list باز می‌مانند.
 `Set/Re-apply desktop proxy` در stopped غیرفعال است (listenerی نیست که آدرسش
-اعمال شود)؛ `Restore` مجاز و برای پاک‌کردن یک setting قدیمی مفید است. اگر
+اعمال شود)؛ `Restore` و `Clear` مجاز و برای پاک‌کردن/غیرفعال‌کردن یک setting قدیمی
+مفیدند. اگر
 `resume_requires_restart=true` باشد، mode تغییر تا **Restart engine** غیرفعال
 است و پس از restart و readiness، tray دوباره mode را فعال می‌کند و
 «Stopped · choose a mode to resume» نشان می‌دهد. اگر `false` باشد (process تازه
@@ -1460,10 +1577,12 @@ applied یا نامعلوم باشد، زیر Mode و زیر Advanced → Restar
 Quit ساده همیشه پیش از اجرا یک `desktop.status` تازه می‌خواند.
 
 **Quit و پروکسی دسکتاپ.** پیش از Quit، tray یک `desktop.status` تازه با
-deadline کوتاه می‌گیرد. اگر `applied=true` باشد، Quit به دو گزینه تبدیل می‌شود:
+deadline کوتاه می‌گیرد. اگر `applied=true` و `cleared=false` باشد، Quit به دو گزینه تبدیل می‌شود:
 «Restore desktop proxy and quit» (اول `desktop.restore`؛ اگر شکست خورد Quit
 انجام نمی‌شود و خطا نمایش داده می‌شود) و «Quit and keep desktop proxy» (با
-هشدار که اینترنت ممکن است تا restore قطع بماند). اگر وضعیت نامعلوم باشد، همان
+هشدار که اینترنت ممکن است تا restore قطع بماند). اگر proxy با `clear` غیرفعال
+شده باشد (`cleared=true`)، اینترنت به آن وابسته نیست و همان Quit ساده کافی است.
+اگر وضعیت نامعلوم باشد، همان
 هشدار با گزینهٔ صریح نمایش داده می‌شود. Quit هرگز به‌طور خودکار تنظیمات دسکتاپ
 را restore نمی‌کند. اگر job در حال اجرا باشد، Quit یک job غیر-restart را
 interrupted می‌کند و سپس خارج می‌شود؛ jobهای restart همان مسیر restart را دارند
@@ -2015,6 +2134,7 @@ orphan یا direct fallback رخ نمی‌دهد، و مسیر انتخاب‌ش
 | R-28 | تغییر interface فیزیکی پیش‌فرض (Wi-Fi→Ethernet، VPN، suspend/resume) در فاز اول به‌صورت خودکار به bypass/TUN منتقل نمی‌شود؛ ممکن است تا `tun off/on` خطا یا مسیر کهنه بماند. تا آن زمان فقط شکست dial مسیر تأییدشده با kind `exit_unreachable` — خطای transport خود exit پیش از برقراری اتصال مقصد — به‌صورت in-memory ثبت می‌شود و warning ثابت `recent approved egress dial failed; traffic remains fail-closed with no direct fallback` را تا ۶۰ ثانیه در `status.warnings` نشان می‌دهد؛ اولین dial موفق مسیر تأییدشده (pool) آن را پاک می‌کند. `handshake_rejected` و `timeout` عمداً ثبت نمی‌شوند: در adapter SOCKS5 پاسخ 0x03/0x04 (network/host unreachable) به `handshake_rejected` نگاشت می‌شود و `timeout` می‌تواند از stall سمت مقصد و انقضای deadline دست‌دادن exit بیاید؛ پس شکست مقصد warning نمی‌سازد. timeout واقعی dial به exit هم از stall مقصد قابل تفکیک نیست و ثبت نمی‌شود (محدودیت شناخته‌شده). این سیگنال هیچ مقصد/exit/URL/اعتبارنامه‌ای ندارد، direct fallback یا تغییر routing نمی‌سازد و health/ranking/cooldown را تغییر نمی‌دهد | R16-A رفتار route monitor را می‌سنجد؛ در غیر این صورت watch/restart تصمیم بعدی است و status خطا را نشان می‌دهد |
 | R-29 | sidecar hysteria2 برای جلوگیری از loop زیر TUN به `route.default_interface` نسخهٔ pin‌شده وابسته است | R16-A پشتیبانی sing-box 1.14.4 و hysteria2 را runtime تأیید کرد (container، root)؛ unit hardened آزمون‌نشده است. fallback برای نسخهٔ بدون پشتیبانی/خطای runtime همچنان `unsupported`/`sidecar_loop_risk` است، نه loop |
 | R-30 | هم‌زمانی TUN با VPN/TUN دیگر یا route/firewall خارجی آزمون‌نشده است و ممکن است تصادم route/blackhole بدهد (R16-A فقط routeهای هاست را read-only و LAN/VPN را شبیه‌سازی کرد؛ VPN کامل هم‌زمان آزمون‌نشده) | `tun setup` وضعیت را بررسی و conflict را روشن گزارش می‌کند؛ coexistence کامل تصمیم/آزمون جدا می‌خواهد |
+| R-31 | صفحه‌بندی تودرتوی tray عمق منو را با طول فهرست رشد می‌دهد: سقف ساخت ۵۱۲ سطح است (با PageSize=20 حدود ۱۰٬۰۰۰ رکورد در یک فهرست؛ ۲۰۰۰ رکورد ≈ ۱۰۰ سطح). رفتار host واقعی StatusNotifier/D-Bus با منوی بسیار عمیق، محدودیت‌های خود host و هزینهٔ رسیدن به صفحهٔ آخر با کلیک‌های زنجیره‌ای آزمون‌نشده است | آزمون روی host واقعی با فهرست بزرگ؛ در صورت نیاز صفحه‌بندی تخت/گروهی جایگزین یا سقف کمتر با پیام روشن |
 
 **تصمیم‌های باز برای کاربر:** فقط مجوز انتشار (remote/push/tag/release) و بستن
 باقی‌مانده‌های A14؛ `D20` با Apache-2.0 بسته شده و ممیزی باینری انجام شده است

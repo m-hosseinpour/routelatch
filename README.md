@@ -26,11 +26,18 @@ RouteLatch never silently falls back to direct for approved traffic.
   confirmed a destination and one that only accepted the request. HTTP CONNECT
   retries a tunnel that dies before the destination's first byte on a different
   automatic exit (bounded, never a direct fallback, never from a manual pin).
+- Health keeps three separate signals: a measured endpoint delay, a "reachable"
+  view for an exit whose TCP/TLS endpoint answers, and `healthy` only after an
+  egress proof. The automatic cycle covers unseen and least-recently checked
+  exits first, and the tray can check the whole usable pool with a cursor.
 - Share-link, link-file, subscription-URL and v2rayN import. Records that fail
   validation stay quarantined with a reason and are never dialed.
 - Diagnostics that write **proposals** only; adding or removing a route needs
-  your confirmation, and a failed request is never replayed.
-- Opt-in GNOME/KDE desktop-proxy integration with an ownership-aware restore.
+  your confirmation, and a failed request is never replayed. Diagnosis and
+  proposals run only in `targeted` mode.
+- Opt-in GNOME/KDE desktop-proxy integration with an ownership-aware restore,
+  plus a Clear action that disables the system proxy without losing the restore
+  point.
 - A CLI, `--json` output on every command, a small interactive menu, a tray
   control surface for the running app and documented exit codes.
 
@@ -255,15 +262,15 @@ routing/pool policy of its own. The menu is in English in this release.
 | Status line | Mode, usable exits and open connections; `Stopped`, `Restarting` and `Engine unavailable; retrying…` are explicit states. |
 | Mode | Switch between targeted, all-proxy and all-direct; `Stop listening` closes the traffic listeners. In stopped mode, `Restart engine to resume` replaces the engine process first. |
 | Proposals | Pending suggestions with Accept, Reject and Recheck; `Show decided` and `Clear decided/expired`. |
-| Approved rules | The approved list with per-rule removal and details, 20 rows per page. Add a rule from the Terminal menu. |
-| Pool | Counts, auto/pinned exit, groups by health, 20 rows per page, refresh, re-rank, test selected/first 20, and remove. Imports stay in the Terminal menu. |
-| Desktop proxy | Status and refresh, plus Set/Re-apply and Restore. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
+| Approved rules | The approved list, newest first, with per-rule removal and details, 20 rows per page. Further pages are nested `Page n/m` submenus inside the page, not Previous/Next actions. Add a rule from the Terminal menu. |
+| Pool | Counts, auto/pinned exit, groups `Healthy` / `Reachable · delay checked` / `Untested` / `Cooling` / `Unsupported`, each exit labelled with its measured delay, 20 rows per page with nested pages. Healthy and Reachable are ordered best delay first. Check all exits (best first), refresh, re-rank, test selected/first 20, and remove. Imports stay in the Terminal menu. |
+| Desktop proxy | Status and refresh, plus Set/Re-apply, Restore and Clear (disable the system proxy). Clear works with or without a previous marker, while stopped, and when the proxy is already disabled; it keeps the restore point. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
 | Diagnostics | Run doctor, doctor results, warnings, the log path, and the proxy environment. |
 | Data | Back up state now (the backup is written under the data directory). Restore and arbitrary paths stay in the CLI. |
 | Settings | Start at login on/off via the XDG autostart entry, and a read-only config/path summary. |
 | Advanced | Restart engine, and Terminal menu. |
 | Last action | Short, sanitized result of the most recent action or job. |
-| Quit | Plain quit when the desktop proxy is not applied. If it is applied, quit becomes the explicit restore-and-quit or keep-and-quit choice. Quit never restores the desktop proxy silently. |
+| Quit | Plain quit when the desktop proxy is not applied (or is cleared). If it is applied, quit becomes the explicit restore-and-quit or keep-and-quit choice. Quit never restores the desktop proxy silently. |
 
 Every action runs on the single click that selects it (D33). There is no
 `Confirm: …` / `Cancel` step and no pending-action expiry, because the
@@ -271,7 +278,8 @@ StatusNotifier host closes the menu on the first click and a second step would
 force the user to reopen and navigate the menu again. The explicit click is the
 user's decision; the menu uses clear labels for consequences and reports the
 result in a notification and `Last action`. A plain Quit is not offered while
-the desktop proxy is applied or unknown: the menu shows the explicit
+the desktop proxy is applied (and not cleared) or unknown: the menu shows the
+explicit
 restore-and-quit and keep-and-quit choices instead, and reads
 `desktop.status` fresh before a plain-quit click. Mutating actions stay
 disabled while a job runs. Operations that need typed
@@ -288,6 +296,17 @@ shows why it is unavailable). Commands and lists that need a live engine are
 disabled while the engine is unavailable or stopped. Dynamic labels are
 sanitized and bounded, and notifications/logs carry counts, modes, short IDs
 and paths, never destination hostnames, share URLs or credentials.
+
+`Check all exits (best first)` is a job: it walks the usable pool with a cursor,
+shows progress in the job name, and keeps other mutating actions disabled until
+it finishes, so a large pool can take several minutes. An exit label shows the
+last measured TCP/TLS round trip (`· N ms`) or `· delay —`; the `Reachable`
+group means its endpoint answered but egress is not proven. Nesting one `Page
+n/m` menu per page keeps navigation inside the open menu but makes the menu
+deeper as a list grows; the practical limit and the untested real D-Bus host
+behaviour are recorded in [docs/contracts.md](docs/contracts.md) §7.3/R-31.
+These pool, clear and nested-paging controls are in the source revision
+after `v1.3.0`; the published `v1.3.0` assets do not contain them.
 
 ### Upgrading from the old packaged unit
 
@@ -428,6 +447,8 @@ you prefer.
 
    A rule has no port and covers all ports. An executable that resolves a name
    itself and connects to the IP is matched by IP, not by the domain rule.
+   `rules list` shows the newest rule first, the same order as `state.json` and
+   the tray.
 
 4. Select a mode. `targeted` is the default, so this step is only needed after a
    change:
@@ -461,7 +482,9 @@ you prefer.
    hand as their new restore point. Other keys keep their original restore
    values, so `restore` undoes the proxy completely and returns only the edited
    keys to what you had set by hand. A change of desktop environment or
-   listener addresses still needs `restore` first.
+   listener addresses still needs `restore` first. Disabling the proxy without
+   losing those values is `Clear desktop proxy` in the tray menu; it is not a
+   CLI verb.
 
 Check health and configuration with `routelatch status`, `routelatch doctor`,
 `routelatch pool list` and `routelatch config get`. The full command list is in
@@ -505,9 +528,19 @@ connection, and no hidden fallback listener exists.
   approved list, pool records (including credentials), health summaries and
   configuration, in private `0600` files. Proposals live only in the running
   process's memory and disappear on restart.
+- **Default egress-proof targets.** A new configuration enables
+  `tls://cloudflare.com:443` and `tls://www.gstatic.com:443` so a pool check can
+  prove real egress and mark an exit `healthy`. A probe completes a TLS
+  handshake with the target name and system roots; it sends no HTTP request and
+  no body, and the name is resolved at the exit, not locally. Each scanned exit
+  therefore contacts those two endpoints. This is a documented, visible default,
+  not a hidden third-party destination: `routelatch config set probes.targets=`
+  removes both, and an explicitly empty list stays empty.
 - **Diagnostics propose, never apply.** Only eligible direct failures create
   proposals; the failed request is not replayed and no rule changes without your
-  confirmation.
+  confirmation. Diagnosis and proposals exist only in `targeted` mode:
+  `all-proxy` and `all-direct` create no proposals and reject `diagnose`/`recheck`
+  with `policy_denied`.
 
 RouteLatch cannot make you anonymous, and it cannot protect traffic that never
 reaches its listeners or log data produced by your OS, resolver, firewall or
@@ -540,11 +573,13 @@ other software.
 
 The current acceptance suite
 ([`internal/acceptance/`](internal/acceptance/README.md)) drives the shipped
-binary as a real process against loopback-only fixture exits and peers. The
-R13-E run prints **274 PASS, 0 FAIL and 15 NOTE in about 120 s**. NOTE means a
-gated or impossible check, not a pass; the gated tests stay skipped unless a
-real desktop or authorized user-manager check is enabled.
-`go build ./...`, `go vet ./...` and `go test -count=1 ./...` are green.
+binary as a real process against loopback-only fixture exits and peers. On this
+source revision it prints **274 PASS, 0 FAIL and 15 NOTE in about 117 s** (run
+2026-11-28). NOTE means a gated or impossible check, not a pass; the gated tests
+stay skipped unless a real desktop or authorized user-manager check is enabled.
+`go build ./...`, `go vet ./...`, the focused package tests and
+`go test -race ./internal/probes` are green; a full `go test ./...` run for the
+post-v1.3.0 changes is still pending before release.
 
 Packaging for v1.3.0 was built and published by the `Release` workflow run
 `46086807630` from the annotated tag `v1.3.0` (object
