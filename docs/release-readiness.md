@@ -16,16 +16,20 @@ evidence is in "v1.1.0 — tray control surface (2026-11-26)" below. **v1.2.0**
 added opt-in TUN coverage (A17 = Accepted with limits); its evidence is in
 "v1.2.0 — opt-in TUN coverage (2026-11-27)" below. **v1.2.1** is a patch that
 adds the R-28 fail-closed status warning; its evidence is in "v1.2.1 — R-28
-status warning (2026-11-27)" below. **v1.3.0**, the current public release,
-adds single-click tray controls (D33/A16) and the R18 supervisor signal/tray-quit
-fixes; its evidence is in "v1.3.0 — single-click tray controls and CI stability
+status warning (2026-11-27)" below. **v1.3.0** added single-click tray controls
+(D33/A16) and the R18 supervisor signal/tray-quit fixes; its evidence is in
+"v1.3.0 — single-click tray controls and CI stability (2026-11-28)" below.
+**v1.4.0**, the current public release, adds whole-pool checks with measured
+delay, newest-first rules, an always-available desktop Clear and nested page
+menus, with the R19 independent-review corrections; its evidence is in
+"v1.4.0 — whole-pool checks, real delay and an always-available clear
 (2026-11-28)" below. The v1.0.1
 evidence is in "v1.0.1 — first CI-built
 release (2026-11-25)". The v1.0.0, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 sections,
 the history scan, name check and dependency audit remain historical evidence;
 they are not repeated here. The tags, pushes and releases were authorized by
-the project owner (v1.2.0, v1.2.1 and v1.3.0 under the standing authorization
-recorded in `AGENTS.md` on 2026-11-26).
+the project owner (v1.2.0, v1.2.1, v1.3.0 and v1.4.0 under the standing
+authorization recorded in `AGENTS.md` on 2026-11-26).
 
 **CI release pipeline (D27, 2026-11-24).** From `v1.0.1` on, GitHub Actions
 builds all 17 assets and creates the public GitHub Release on an annotated `v*`
@@ -50,6 +54,56 @@ old tag was deleted locally and on both remotes and **v1.0.1** was recreated on
 the fixed, CI-green commit; attempt 4 published the release (see the v1.0.1
 section). The v1.0.1 and earlier release sections below remain evidence of the
 local build/upload process used for `v0.1.0`–`v1.0.0`.
+
+## v1.4.0 — whole-pool checks, real delay and an always-available clear (2026-11-28)
+
+Tag `v1.4.0` is an annotated tag (tag object
+`bc2a31965668f79c1a14e90a4813b24a875cec65`) on `main` commit `14e8040`, pushed
+to both remotes. The release adds a job that checks the whole pool in cursor
+pages, a real measured delay for every tested exit, TLS-handshake egress proof,
+the "Accept as domain suffix" proposal action, newest-first rule storage with a
+one-time schema upgrade behind the mandatory backup, diagnostics limited to
+targeted mode, an always-selectable desktop Clear whose restore point is
+persisted before the desktop write, and nested "Page n/m" menus. Routing
+policy, the fail-closed path and the documented mode guarantees are unchanged;
+rule matching is unaffected because the order never mattered.
+
+`CI` push run `46147534900` on `14e8040` was green before the tag push (all six
+jobs). `Release` run `46147968895` (tag push) succeeded. The public GitHub
+Release is
+<https://github.com/m-hosseinpour/routelatch/releases/tag/v1.4.0> (release id
+`461570166`, title `v1.4.0`, neither a draft nor a prerelease, published
+2026-11-28T13:13:49Z). It carries exactly 17 assets: four
+`routelatch-v1.4.0-linux-<arch>.tar.gz` tarballs, four
+`routelatch_1.4.0_<debarch>.deb` packages, four `routelatch-<rpmarch>.spec`
+files, four `routelatch-1.4.0-1.<rpmarch>.rpm` binary RPMs and `SHA256SUMS`.
+Its body starts "RouteLatch v1.4.0 — whole-pool checks, real delay and an
+always-available clear" (the annotated tag message).
+
+The independent review first returned **Not ready** with one blocking finding
+(`pool.scan` used a rerank trigger that all-direct rejects and then reported
+false success) and two important findings (the Clear marker was persisted after
+the desktop write; cleared+conflict was ignored in the quit/mode/restart
+gating). The fixes and review nits are in `60aa7a1`; the follow-up verdict was
+**Ready with nits**, the closing nits are in `14e8040`, and the reviewer then
+confirmed **Ready**.
+
+The tag-push `CI` run `46147969068` failed afterward in the `Build, vet and
+test` job at `internal/engine` `TestStopClosesPendingSocksHandshake` with
+`fds 3, baseline 3`. The test compared a process-wide `/proc/self/fd` count,
+so sockets left by earlier tests that closed asynchronously broke the
+expectation; the product was correct. The test-only fix `2b838da` asserts on
+the tracked peer connection instead. CI on `main` for `2b838da` (run
+`46149749355`) is green. The fix changes no product code or shipped artifact,
+so no new tag or release was created and the published `v1.4.0` remains as
+tagged.
+
+Remaining verification: real GNOME/KDE Clear and deep nested menus on a real
+D-Bus host, TLS egress through real public exits, and the residual crash window
+between persisting the Clear marker and writing the desktop key (conflict
+gating is safe, but mode fidelity on restore is not guaranteed). Only `amd64`
+was runtime-exercised; the other three architectures were cross-built and
+remain runtime-untested.
 
 ## v1.3.0 — single-click tray controls and CI stability (2026-11-28)
 
@@ -79,7 +133,7 @@ that exec) that still showed the parent's argv, while the direct child had
 already been reaped. The test-only fix `87cc759` makes the survivor check poll
 for a live (non-zombie/non-dead) process for up to three seconds. It changes no
 product code or shipped artifact, so no new tag or release was created and
-v1.3.0 remains the current public release.
+v1.3.0 remained the current public release until `v1.4.0` superseded it.
 
 Known limits carried from the R16-H acceptance record:
 `spike/tun/H-ACCEPTANCE.md` and

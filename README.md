@@ -5,8 +5,10 @@ you approve through a pool of proxy exits. It builds the official Xray core
 into one static Go binary, so there is no separate Xray install. The normal
 proxy modes need no TUN device and no root. An opt-in **TUN coverage layer**
 (decision D29 / plan R16) shipped in the published v1.2.0 release; `v1.2.1`
-added a fail-closed status warning, and `v1.3.0` is the current release with
-single-click tray controls and supervisor stability fixes. Released packages
+added a fail-closed status warning, `v1.3.0` added single-click tray controls
+and supervisor stability fixes, and `v1.4.0` is the current release with
+whole-pool checks, measured delay, newest-first rules, an always-available
+desktop Clear and nested paging. Released packages
 remain loopback-only unless you opt in to TUN.
 
 You import share links (VLESS, Trojan or SOCKS5), approve destinations by
@@ -54,7 +56,7 @@ sweep finishes.
 - Go 1.27.4 (the version pinned in `go.mod`) only if you build from source. Set
   `GOTOOLCHAIN=local`.
 - No root, TUN, firewall change or system-wide proxy setting is needed for the
-  normal proxy modes, including in v1.3.0. TLS verification uses the host CA
+  normal proxy modes, including in v1.4.0. TLS verification uses the host CA
   bundle; RouteLatch does not install a root CA. The optional TUN coverage layer
   in this source revision needs Linux ≥5.7 with systemd and a one-time
   `sudo routelatch tun setup` that grants only the helper
@@ -145,23 +147,24 @@ A later `tun on` or auto-enable can then use the helper again.
 
 ## Install
 
-The current published release, `v1.3.0`, has 17 unsigned assets on the
-[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.3.0):
+The current published release, `v1.4.0`, has 17 unsigned assets on the
+[GitHub Release](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.4.0):
 four Linux tarballs (`amd64`, `arm64`, `riscv64`, `ppc64le`), four `.deb`
 packages (Debian names `amd64`, `arm64`, `riscv64`, `ppc64el`), four RPM
-`.spec` files, four binary RPMs (`routelatch-1.3.0-1.<arch>.rpm`) and a
-`SHA256SUMS` file. `v0.1.1`–`v1.3.0` have the same 17-asset layout; the first
+`.spec` files, four binary RPMs (`routelatch-1.4.0-1.<arch>.rpm`) and a
+`SHA256SUMS` file. `v0.1.1`–`v1.4.0` have the same 17-asset layout; the first
 release, `v0.1.0`, published only the `amd64` and `arm64` tarballs plus
 `SHA256SUMS`.
 
-`v1.3.0` keeps the `v1.0.0` runtime model: plain `routelatch run` is the
+`v1.4.0` keeps the `v1.0.0` runtime model: plain `routelatch run` is the
 detached app/tray, `run --headless` is the foreground engine, and packages
 install no systemd unit, autostart entry or maintainer script. `v1.1.0` added
 the tray control surface, the additive `status.resume_requires_restart` field
 and the tray-driven engine restart; `v1.2.0` added opt-in TUN coverage; `v1.2.1`
 added the R-28 fail-closed status warning; `v1.3.0` runs tray menu actions on
 the first click and fixes early-signal and tray quit/exit races in the app
-supervisor. **Upgrade from
+supervisor; `v1.4.0` adds whole-pool checks with measured delay, newest-first
+rules, an always-available desktop Clear and nested page menus. **Upgrade from
 `v0.1.3` requires stopping and removing its old user unit** (`/usr/lib/systemd/user/routelatch.service`)
 before installing; a leftover unit would either lose its main process or start
 an app where a service is expected. The opt-in service unit is created only by
@@ -178,7 +181,7 @@ From D27 (2026-11-24), releases are built and published by the
 tag is pushed; no asset is built or uploaded from a maintainer's machine. It
 verifies the pinned sing-box archives, runs the package checkers and publishes
 only after every uploaded asset's name, size and SHA-256 digest matches the
-build. `v1.0.1` is the first release produced this way; `v1.3.0` is the latest.
+build. `v1.0.1` is the first release produced this way; `v1.4.0` is the latest.
 
 Verify a download before unpacking it. From the directory holding the downloaded
 file and the release's `SHA256SUMS`:
@@ -194,14 +197,14 @@ file whose check fails.
 From a tarball:
 
 ```sh
-tar xzf routelatch-v1.3.0-linux-amd64.tar.gz
-cd routelatch-v1.3.0-linux-amd64
+tar xzf routelatch-v1.4.0-linux-amd64.tar.gz
+cd routelatch-v1.4.0-linux-amd64
 install -Dm755 bin/routelatch "$HOME/.local/bin/routelatch"
 ln -sf routelatch "$HOME/.local/bin/rlch"
 ```
 
 The last command creates `rlch`, a short alias for `routelatch`. The
-`v1.0.0`–`v1.3.0` tarballs and packages ship that link; older published assets
+`v1.0.0`–`v1.4.0` tarballs and packages ship that link; older published assets
 predate it, and the manual `ln -s` works with an older binary too.
 
 Or install a package (all release packages are **unsigned**; the only
@@ -308,8 +311,7 @@ group means its endpoint answered but egress is not proven. Nesting one `Page
 n/m` menu per page keeps navigation inside the open menu but makes the menu
 deeper as a list grows; the practical limit and the untested real D-Bus host
 behaviour are recorded in [docs/contracts.md](docs/contracts.md) §7.3/R-31.
-These pool, clear and nested-paging controls are in the source revision
-after `v1.3.0`; the published `v1.3.0` assets do not contain them.
+These pool, clear and nested-paging controls shipped in `v1.4.0`.
 
 ### Upgrading from the old packaged unit
 
@@ -585,18 +587,19 @@ stay skipped unless a real desktop or authorized user-manager check is enabled.
 the full `go test -count=1 ./...` suite (including the acceptance run above) is
 also green on this revision (run 2026-11-28).
 
-Packaging for v1.3.0 was built and published by the `Release` workflow run
-`46086807630` from the annotated tag `v1.3.0` (object
-`e0acb5f2b57d4dd4040065659e0ff07ca5ae6f85`) on commit `dae857a`, whose pre-tag
-CI run `46085313237` succeeded. The public release `v1.3.0` (`id 461181047`,
-neither a draft nor a prerelease, published 2026-11-28T00:21:29Z) has
+Packaging for v1.4.0 was built and published by the `Release` workflow run
+`46147968895` from the annotated tag `v1.4.0` (object
+`bc2a31965668f79c1a14e90a4813b24a875cec65`) on commit `14e8040`, whose pre-tag
+CI run `46147534900` succeeded. The public release `v1.4.0` (`id 461570166`,
+neither a draft nor a prerelease, published 2026-11-28T13:13:49Z) has
 17 assets: four tarballs, four unsigned `.deb` files, four spec files, four
-binary RPMs and `SHA256SUMS`. The tag-push CI run `46086807593` later failed in
-a test-only procfs survivor check; the shipped artifacts, their checksums and
-this release are unchanged, and the test-only fix `87cc759` is not part of the
-released binaries. `scripts/check-package.sh` and
-`scripts/check-artifact.sh` passed at the revision, including the check that
-the package contains **no systemd unit, autostart entry or maintainer script**.
+binary RPMs and `SHA256SUMS`. The tag-push CI run `46147969068` later failed in
+a test-only process-wide fd-count check; the shipped artifacts, their checksums
+and this release are unchanged, and the test-only fix `2b838da` is not part of
+the released binaries. `scripts/check-package.sh` and
+`scripts/check-artifact.sh` passed in the release pipeline at the revision,
+including the check that the package contains **no systemd unit, autostart
+entry or maintainer script**.
 Only `amd64` was executed; `arm64`/`riscv64`/`ppc64le` were cross-built and are
 runtime-untested.
 
@@ -671,7 +674,7 @@ Three different kinds of gap are kept separate:
   post-v1 R16 plan (D29) in 2026-11-26; its service, engine connection, CLI,
   tray surface and privileged setup are implemented in this source revision and
   shipped opt-in in v1.2.0 ([release 460485888](https://github.com/m-hosseinpour/routelatch/releases/tag/v1.2.0))
-  and remains in the current v1.3.0 release (id `461181047`).
+  and remains in the current v1.4.0 release (id `461570166`).
   R16-H accepted A17 with the environmental limits listed above; DNS-through-
   pool and UDP coverage remain later research (D30/R16-I/J).
 - **Implemented but not yet exercised:** long hysteria2 sessions.
