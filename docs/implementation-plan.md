@@ -256,9 +256,10 @@ Quit ساده با desktop proxy applied/unknown پیشنهاد نمی‌شود 
 **Ready with findings** با هیچ یافتهٔ مسدودکننده/مادی (دو یافتهٔ مادی اولیهٔ
 مستندات عمومی و race تست رفع شدند؛ nitهای باقی‌مانده هم اعمال شدند).
 **تحویل:** commit `7b25e14` روی `main` به هر دو remote push شد. رفع flake CI
-در R18 اضافه شد و release فعلاً انجام نشد. **قدم بعدی:** پس از سبزشدن CI روی
-commit نهایی (R17+R18)، batch واجد شرایط را طبق دروازه‌های `AGENTS.md` تگ و
-منتشر کن.
+در R18 اضافه شد و batch R17+R18 با تگ annotated `v1.3.0` (شیء `e0acb5f2…`)
+روی `dae857a` منتشر شد: Release عمومی id `461181047` با ۱۷ دارایی. CI `main`
+روی `dae857a` (run `46085313237`) ۶/۶ job سبز بود؛ اجرای CI خود تگ بعداً یک
+فلیک متفاوت داد که در R18 ثبت/رفع شد.
 
 ### R18 — پایدارسازی job «Build, vet and test» (۲۰۲۶-۱۱-۲۸)
 
@@ -291,8 +292,18 @@ commit نهایی (R17+R18)، batch واجد شرایط را طبق دروازه
 verdict `Ready with nits`؛ یافتهٔ مادی نبود و nitها (حذف helper بی‌استفاده،
 کامنت صف پیام‌ها، اولویت fail-closed بر cancel، مستندسازی coupling کد خروج
 tray) اعمال و در دور follow-up تأیید شد. **commitها:** `fb0392f` و `a2e42ae`
-روی `f2f64f9`. **قدم بعدی:** push و CI سبز روی commit نهایی، سپس release
-batch واجد شرایط R17+R18.
+روی `f2f64f9`؛ commit مستندات `dae857a`. **انتشار:** تگ annotated `v1.3.0`
+(شیء `e0acb5f2…`) روی `dae857a` و Release عمومی id `461181047` با ۱۷ دارایی؛
+`Release` run `46086807630` ۵/۵ job و CI `main` run `46085313237` ۶/۶ job سبز.
+**فلیک post-release:** اجرای CI خود تگ `v1.3.0` (run `46086807593`) در job
+`Build, vet and test` با `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill`
+شکست خورد: اسکن procfs بلافاصله پس از `cmd.Wait` یک entry با token دید، در حالی
+که `Wait` قبلاً child را reap کرده بود (پنجرهٔ کوتاه procfs/PID reuse). رفع
+test-only در `87cc759`: `liveProcessWithArg` فقط process زنده
+(non-zombie/non-X) را survivor می‌داند و `noProcessWithArg` تا ۳s با poll
+می‌گردد. رفتار محصول تغییر نکرد؛ چون این batch فقط test است، طبق `AGENTS.md`
+تگ/ریلیز تازه ساخته نشد و `v1.3.0` آخرین ریلیز عمومی می‌ماند. **قدم بعدی:**
+push `87cc759` و سبزشدن CI؛ سپس R16-I/J (design-only، شروع‌نشده).
 
 ### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
@@ -2236,14 +2247,21 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    محدودیت‌های R15-H (بدون اسکرین‌شات؛ Wayland/GNOME، desktop set/restore و
    autostart اجرانشده؛ proposal accept/recheck/clear و pool remove/test فقط با
    تست واحد؛ non-amd64 runtime-untested) در
-   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. آخرین commit پیش از
-   این به‌روزرسانی مستندات `902959f` است؛ پس از انتشار `v1.2.1` (روی `d90e17a`)
+   `spike/tray/evidence/r15h-acceptance-2026-11-26.md` است. در آن
+   به‌روزرسانی، آخرین commit مستندات `902959f` بود؛ پس از انتشار `v1.2.1`
+   (روی `d90e17a`)
    شاهد host TUN-active در `39c6c4f`
    (اجرای محصول روی `6f51554`) اضافه شد و در `bc7428e` مستند شد، و رفع test-only
    رقابت قفل `TestLaunchTrayUnavailable` در `902959f` انجام شد؛ CI آن
    (run `46069056473`) سبز است. **پس از `v1.2.1`، R17 (`7b25e14`) و R18
    (`fb0392f`+`a2e42ae`) کد محصول را تغییر دادند؛** CI/`Release` `v1.2.0` روی
    `a8ee4d3` و `v1.2.1` روی `d90e17a` سبز/موفق بودند و `v1.2.1` عمومی است.
+   `v1.3.0` با تگ annotated `e0acb5f2…` روی `dae857a` منتشر شد (Release id
+   `461181047`، ۱۷ دارایی) و اجرای CI خود تگ با یک فلیک procfs در
+   `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill` قرمز شد؛ رفع test-only
+   `87cc759` همان اسکن را به شرط زنده‌بودن process محدود کرد و به‌دلیل test-only
+   بودن، release تازه نساخت. **آخرین کد محصول `dae857a` و آخرین commit
+   test-only `87cc759` است.**
    flakiness گاه‌به‌گاه step `Test` در CI دیده شد و R18 آن را رفع کرد. دو رفع
    test-only جدا ثبت
    شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و
