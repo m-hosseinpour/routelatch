@@ -302,9 +302,10 @@ tray) اعمال و در دور follow-up تأیید شد. **commitها:** `fb03
 child مستقیم را reap کرده بود. رفع
 test-only در `87cc759`: `liveProcessWithArg` فقط process زنده
 (non-zombie/non-X) را survivor می‌داند و `noProcessWithArg` تا ۳s با poll
-می‌گردد. رفتار محصول تغییر نکرد؛ چون این batch فقط test است، طبق `AGENTS.md`
+می‌گردد؛ nitهای بازبینی (حذف helper و اصلاح توضیح) در `a259cf2`. رفتار محصول
+تغییر نکرد؛ چون این batch فقط test است، طبق `AGENTS.md`
 تگ/ریلیز تازه ساخته نشد و `v1.3.0` آخرین ریلیز عمومی می‌ماند. **قدم بعدی:**
-push `87cc759` و سبزشدن CI؛ سپس R16-I/J (design-only، شروع‌نشده).
+push `87cc759`+`a259cf2` و سبزشدن CI؛ سپس R16-I/J (design-only، شروع‌نشده).
 
 ### R16 — پوشش TUN (تعریف ۲۰۲۶-۱۱-۲۶؛ R16-A/B/C/D/E/F/G/H انجام شدند؛ A17 Accepted with limits؛ v1.2.0 و v1.2.1 (patch) منتشر شدند؛ TUN-active واقعی host روی یک Plasma/X11 PASS؛ R16-I/J research: `Ready for decision`؛ R16-I = design/contract pending؛ R16-J = separate pilot pending contract)
 
@@ -2262,7 +2263,7 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill` قرمز شد؛ رفع test-only
    `87cc759` همان اسکن را به شرط زنده‌بودن process محدود کرد و به‌دلیل test-only
    بودن، release تازه نساخت. **آخرین کد محصول `dae857a` و آخرین commit
-   test-only `87cc759` است.**
+   test-only `a259cf2` است.**
    flakiness گاه‌به‌گاه step `Test` در CI دیده شد و R18 آن را رفع کرد. دو رفع
    test-only جدا ثبت
    شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و
