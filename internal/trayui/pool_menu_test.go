@@ -619,6 +619,25 @@ func TestPoolScanJobDoesNotClaimSuccessWhenEveryRowIsCanceled(t *testing.T) {
 	}
 }
 
+func TestPoolScanJobDoesNotClaimSuccessOnZeroProgress(t *testing.T) {
+	fx := newFixture()
+	fx.pool, fx.counts = fixturePool(2)
+	noProgress := 0
+	fx.scanTested = &noProgress
+	s := newSetup(t, fx, nil)
+
+	if _, err := s.ctl.Trigger(context.Background(), ActionPoolScan, Target{}); err != nil {
+		t.Fatalf("scan trigger: %v", err)
+	}
+	waitFor(t, "pool scan job", func() bool { return s.ctl.View().Job == nil })
+	if got := s.ctl.View().LastAction; !strings.HasPrefix(got, "Failed:") || strings.Contains(got, "Pool checked") {
+		t.Fatalf("last action = %q, want a failed check, not success", got)
+	}
+	if got := s.caller.countOp(control.OpPoolScan); got != 1 {
+		t.Fatalf("pool.scan calls = %d, want 1: a no-progress page must stop the loop", got)
+	}
+}
+
 func poolLastRequest(t *testing.T, s *controllerSetup, op string) control.Request {
 	t.Helper()
 	reqs := s.caller.requests()

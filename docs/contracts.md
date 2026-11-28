@@ -804,18 +804,21 @@ desktop را مستقیم نمی‌کند؛ `doctor` و `desktop restore` آفل
 **Clear و restore point (D39).** `desktop.clear` کلید disable را می‌نویسد: GNOME
 `org.gnome.system.proxy mode=none` و KDE `kioslaverc:Proxy Settings/ProxyType=0`.
 بدون marker قبلی، ابتدا همهٔ مقادیر قابل‌restore فعلی خوانده و snapshot می‌شوند؛
-سپس فقط همان کلید disable نوشته و state با `applied=true` و `cleared=true` ذخیره
-می‌شود. marker هیچ مقدار Previous ساختگی ندارد: برای کلیدهای KDE که وجود ندارند
+سپس این restore point پیش از هر نوشتن روی دسکتاپ با `applied=true` و `cleared=true`
+ذخیره می‌شود و در پایان فقط همان کلید disable نوشته می‌شود. marker هیچ مقدار
+Previous ساختگی ندارد: برای کلیدهای KDE که وجود ندارند
 مقدار خالی یعنی «در restore حذف کن»، و مقدار GNOME خالی خطا است.
 با marker موجود، Clear فقط وقتی می‌نویسد که کلید disable هنوز همان مقدار
-RouteLatch را داشته باشد؛ ویرایش کاربر دست‌نخورده می‌ماند و فقط گزارش می‌شود.
+RouteLatch را داشته باشد؛ marker به‌روزشده هم پیش از نوشتن ذخیره می‌شود، ویرایش
+کاربر دست‌نخورده می‌ماند و فقط گزارش می‌شود.
 اگر مقدار از قبل `none`/`0` باشد، هیچ نوشتنی روی تنظیم دسکتاپ انجام نمی‌شود
 و فقط notice «already disabled» برمی‌گردد (بدون ساخت marker در حالت بدون marker). پس از
 Clear، `restore` همان restore point اولیه را برمی‌گرداند؛ `desktop proxy set`
 بعدی مالکیت را دوباره می‌گیرد، کلیدهای ویرایش‌نشده را به Previous اصلی نگه
 می‌دارد و فقط کلیدهای دست‌کاری‌شده را نقطهٔ restore تازه می‌کند. شکست نوشتن یا
-تأیید مقدار، کلید disable را به مقدار پیش از Clear برمی‌گرداند (KDE absent دوباره
-حذف می‌شود) و در صورت شکست rollback پیام صریح restore می‌دهد. این op به listener
+تأیید مقدار، هم marker را به وضعیت پیش از Clear و هم کلید disable را به مقدار پیش از
+Clear برمی‌گرداند (KDE absent دوباره حذف می‌شود) و در صورت شکست rollback پیام
+صریح restore می‌دهد. این op به listener
 زنده و health سرویس نیاز ندارد و در حالت stopped هم کار می‌کند. Clear فقط وقتی در
 tray غیرفعال است که پلتفرم پشتیبانی نشود (با دلیل) یا status نامعلوم/ناخوانا باشد.
 
@@ -1119,7 +1122,7 @@ process به‌خاطر وضعیت سراسری مجاز نیست.
 | --- | --- | --- |
 | هدفمند | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank | `diagnose`/`recheck` و `pool test` مجاز؛ `pool.scan` با trigger manual اجرا می‌شود |
 | همه از پروکسی | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank | `pool test` و `pool.scan` (manual) مجاز؛ `diagnose`/`recheck` با `policy_denied` رد می‌شوند و پیشنهادی ساخته نمی‌شود |
-| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` و `pool.scan` (هر دو manual) مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ تشخیص دستی و پیشنهاد ممنوع (`policy_denied`) |
+| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` و `pool.scan` با trigger دستی در همین حالت هم اجرا می‌شوند و هیچ سطح هشدار قابل‌نمایشی برای «ترافیک از pool می‌رود» وجود ندارد؛ تشخیص دستی و پیشنهاد ممنوع (`policy_denied`) |
 | متوقف | probe و worker وجود ندارد؛ listenerها بسته‌اند | management socket پاسخ می‌دهد: `status`/`rules list`/`pool list` exit `0` با `mode=stopped`؛ `env`/`exec` و `pool test` → exit `3`؛ خروج از stopped فقط با process جدید |
 
 گیت تشخیص برای مسیر خودکار هم همین است: `evaluate` در all-proxy و all-direct و

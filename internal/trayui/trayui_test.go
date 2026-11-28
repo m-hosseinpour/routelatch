@@ -156,6 +156,9 @@ type fixture struct {
 	// scanOutcome makes every fixture pool.scan row report that outcome, so a
 	// test can check that an all-canceled page is not claimed as success.
 	scanOutcome *contract.ProbeOutcome
+	// scanTested overrides the Tested count of a fixture pool.scan page so a
+	// test can check that a page making no progress is not claimed as success.
+	scanTested *int
 	// clearResult overrides the desktop.clear response when set, so tests can
 	// cover the service's no-op/user-modified outcomes.
 	clearResult *control.DesktopData
@@ -422,7 +425,11 @@ func (f *fixtureCaller) serve(req control.Request) (contract.Envelope, error) {
 				})
 			}
 		}
-		return ok(control.PoolScanData{Tested: end - offset, Total: len(fx.pool), Next: next, Truncated: next != -1, Results: results})
+		tested := end - offset
+		if fx.scanTested != nil {
+			tested = *fx.scanTested
+		}
+		return ok(control.PoolScanData{Tested: tested, Total: len(fx.pool), Next: next, Truncated: next != -1, Results: results})
 	case control.OpDesktopSet, control.OpDesktopRestore:
 		data := fx.desktop
 		data.Applied = req.Op == control.OpDesktopSet
