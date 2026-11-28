@@ -998,6 +998,8 @@ func (c *Controller) jobPoolScan(ctx context.Context, j *job, req control.Reques
 	cursor := 0
 	tested := 0
 	total := 0
+	rows := 0
+	canceled := 0
 	for {
 		callReq := req
 		callReq.Offset = cursor
@@ -1009,6 +1011,12 @@ func (c *Controller) jobPoolScan(ctx context.Context, j *job, req control.Reques
 		if err := decodeData(env, &data); err != nil {
 			return "", err
 		}
+		for _, row := range data.Results {
+			rows++
+			if row.Outcome == contract.OutcomeCanceled {
+				canceled++
+			}
+		}
 		total = data.Total
 		tested += data.Tested
 		c.setJobName(j, fmt.Sprintf("pool check %d/%d", tested, total))
@@ -1016,6 +1024,23 @@ func (c *Controller) jobPoolScan(ctx context.Context, j *job, req control.Reques
 			break
 		}
 		cursor = data.Next
+	}
+	// A page that makes no progress or a scan whose every row was canceled did
+	// no useful work; never report it as a completed check.
+	if total > 0 && tested == 0 {
+		return "", &contract.Failure{
+			Kind: contract.PoolUnavailable, Path: contract.PathPool, Op: "pool.scan",
+			Message: fmt.Sprintf("pool check stopped without testing any of %d exits", total),
+		}
+	}
+	if rows > 0 && canceled == rows {
+		return "", &contract.Failure{
+			Kind: contract.Canceled, Path: contract.PathPool, Op: "pool.scan",
+			Message: fmt.Sprintf("all %d probe results of the pool check were canceled", canceled),
+		}
+	}
+	if canceled > 0 {
+		return fmt.Sprintf("Pool checked (%d of %d exits; %d probes canceled)", tested, total, canceled), nil
 	}
 	return fmt.Sprintf("Pool checked (%d exits)", tested), nil
 }

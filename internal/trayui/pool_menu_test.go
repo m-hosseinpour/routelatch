@@ -57,7 +57,7 @@ func TestPoolGroupsShowCountsAndNestedPages(t *testing.T) {
 		t.Fatalf("pool group order = %v, want %v", groupOrder, wantOrder)
 	}
 	scan, ok := findNode(view.Root, "pool.scan")
-	if !ok || !scan.Enabled || scan.Action != ActionPoolScan || scan.Label != "Check all exits (best first)" {
+	if !ok || !scan.Enabled || scan.Action != ActionPoolScan || scan.Label != "Check all exits" {
 		t.Fatalf("scan node = %+v", scan)
 	}
 
@@ -600,6 +600,22 @@ func TestPoolScanJobLoopsWithCursorAndProgress(t *testing.T) {
 	}
 	if want := []string{"pool check", "pool check 3/7", "pool check 6/7"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("job progress names = %v, want %v", names, want)
+	}
+}
+
+func TestPoolScanJobDoesNotClaimSuccessWhenEveryRowIsCanceled(t *testing.T) {
+	fx := newFixture()
+	fx.pool, fx.counts = fixturePool(2)
+	canceled := contract.OutcomeCanceled
+	fx.scanOutcome = &canceled
+	s := newSetup(t, fx, nil)
+
+	if _, err := s.ctl.Trigger(context.Background(), ActionPoolScan, Target{}); err != nil {
+		t.Fatalf("scan trigger: %v", err)
+	}
+	waitFor(t, "pool scan job", func() bool { return s.ctl.View().Job == nil })
+	if got := s.ctl.View().LastAction; !strings.HasPrefix(got, "Failed:") || strings.Contains(got, "Pool checked") {
+		t.Fatalf("last action = %q, want a failed check, not success", got)
 	}
 }
 

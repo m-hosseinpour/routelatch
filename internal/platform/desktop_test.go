@@ -1219,6 +1219,70 @@ func TestClearWithoutMarkerAlreadyDisabledOnlyNotices(t *testing.T) {
 	}
 }
 
+func TestClearWithoutMarkerPersistsRestorePointBeforeWriting(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'manual'"
+	f.clearCalls()
+	var saves []contract.DesktopProxyState
+	saveErr := errors.New("state write failed")
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{
+		Kind: KindGNOME,
+		Save: func(_ context.Context, state contract.DesktopProxyState) error {
+			saves = append(saves, state)
+			return saveErr
+		},
+	})
+	if err == nil {
+		t.Fatal("Clear reported success after the restore point could not be saved")
+	}
+	if len(saves) != 1 || !saves[0].Applied || !saves[0].Cleared || len(saves[0].Keys) == 0 {
+		t.Fatalf("saved markers = %+v, want the prospective restore point before any write", saves)
+	}
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			t.Fatalf("Clear wrote the desktop before persisting its marker: %v", call)
+		}
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" {
+		t.Fatalf("mode = %q, want the unchanged manual", f.values["org.gnome.system.proxy mode"])
+	}
+	if result.StateChanged || result.State.Applied || result.State.Cleared || len(result.State.Keys) != 0 {
+		t.Fatalf("failed save recorded ownership in the result: %#v", result.State)
+	}
+}
+
+func TestClearWithoutMarkerWriteFailureRestoresTheStoredMarker(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'manual'"
+	f.writeErr["org.gnome.system.proxy mode"] = errors.New("gsettings failed")
+	var saves []contract.DesktopProxyState
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{
+		Kind: KindGNOME,
+		Save: func(_ context.Context, state contract.DesktopProxyState) error {
+			saves = append(saves, state)
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("Clear reported success after a failed desktop write")
+	}
+	if len(saves) != 2 {
+		t.Fatalf("saved markers = %d, want the restore point then its rollback", len(saves))
+	}
+	if !saves[0].Applied || !saves[0].Cleared {
+		t.Fatalf("first saved marker = %+v, want the prospective clear", saves[0])
+	}
+	if saves[1].Applied || saves[1].Cleared || len(saves[1].Keys) != 0 {
+		t.Fatalf("second saved marker = %+v, want the pre-clear state after rollback", saves[1])
+	}
+	if result.StateChanged || result.State.Applied || result.State.Cleared || len(result.State.Keys) != 0 {
+		t.Fatalf("failed write left ownership in the result: %#v", result.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" {
+		t.Fatalf("mode = %q after rollback, want manual", f.values["org.gnome.system.proxy mode"])
+	}
+}
+
 func TestClearWithoutMarkerWriteFailureRollsBackAndLeavesNoMarker(t *testing.T) {
 	f := gnomeSystem()
 	f.values["org.gnome.system.proxy mode"] = "'manual'"

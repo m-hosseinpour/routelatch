@@ -153,6 +153,9 @@ type fixture struct {
 	// scanBatch caps one fixture pool.scan call so tests can exercise the
 	// tray's cursor loop without hundreds of calls.
 	scanBatch int
+	// scanOutcome makes every fixture pool.scan row report that outcome, so a
+	// test can check that an all-canceled page is not claimed as success.
+	scanOutcome *contract.ProbeOutcome
 	// clearResult overrides the desktop.clear response when set, so tests can
 	// cover the service's no-op/user-modified outcomes.
 	clearResult *control.DesktopData
@@ -411,7 +414,15 @@ func (f *fixtureCaller) serve(req control.Request) (contract.Envelope, error) {
 		if next >= len(fx.pool) {
 			next = -1
 		}
-		return ok(control.PoolScanData{Tested: end - offset, Total: len(fx.pool), Next: next, Truncated: next != -1})
+		var results []control.ProbeTestResult
+		if fx.scanOutcome != nil {
+			for i := offset; i < end; i++ {
+				results = append(results, control.ProbeTestResult{
+					Exit: contract.ExitID(fx.pool[i].ID), Outcome: *fx.scanOutcome,
+				})
+			}
+		}
+		return ok(control.PoolScanData{Tested: end - offset, Total: len(fx.pool), Next: next, Truncated: next != -1, Results: results})
 	case control.OpDesktopSet, control.OpDesktopRestore:
 		data := fx.desktop
 		data.Applied = req.Op == control.OpDesktopSet

@@ -21,6 +21,11 @@ func scanRecord(id string, order int) contract.Record {
 
 func newScanService(t *testing.T, records []contract.Record) (*Service, *store.Store, store.Paths) {
 	t.Helper()
+	return newScanServiceMode(t, records, contract.ModeTargeted, false)
+}
+
+func newScanServiceMode(t *testing.T, records []contract.Record, mode contract.Mode, tunEnabled bool) (*Service, *store.Store, store.Paths) {
+	t.Helper()
 	st, paths := newServiceStore(t)
 	if _, err := st.Mutate(context.Background(), func(state *contract.State) error {
 		state.Records = records
@@ -30,6 +35,7 @@ func newScanService(t *testing.T, records []contract.Record) (*Service, *store.S
 	}
 	if _, err := st.MutateConfig(context.Background(), func(cfg *contract.Config) error {
 		cfg.Probes.Targets = []string{}
+		cfg.TunEnabled = tunEnabled
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -42,7 +48,7 @@ func newScanService(t *testing.T, records []contract.Record) (*Service, *store.S
 	engine := probes.NewEngine(probes.Options{
 		Record:     func(id contract.ExitID) (contract.Record, bool) { rec, ok := byID[id]; return rec, ok },
 		AllRecords: func() []contract.Record { return records },
-		Mode:       func() contract.Mode { return contract.ModeTargeted },
+		Mode:       func() contract.Mode { return mode },
 		Clock:      time.Now,
 		Dial: func(context.Context, string, string) (net.Conn, error) {
 			client, server := net.Pipe()
@@ -53,6 +59,40 @@ func newScanService(t *testing.T, records []contract.Record) (*Service, *store.S
 	svc.prober = engine
 	t.Cleanup(engine.Close)
 	return svc, st, paths
+}
+
+func TestPoolScanRunsInEveryModeAndTunPreference(t *testing.T) {
+	modes := []contract.Mode{contract.ModeTargeted, contract.ModeProxyAll, contract.ModeDirectAll}
+	for _, mode := range modes {
+		for _, tun := range []bool{false, true} {
+			name := string(mode)
+			if tun {
+				name += "/tun-on"
+			} else {
+				name += "/tun-off"
+			}
+			t.Run(name, func(t *testing.T) {
+				svc, st, _ := newScanServiceMode(t, []contract.Record{scanRecord("x-a", 0)}, mode, tun)
+				data, err := svc.poolScan(context.Background(), Request{Op: OpPoolScan})
+				if err != nil {
+					t.Fatalf("pool.scan in %s: %v", mode, err)
+				}
+				if data.Tested != 1 || data.Total != 1 || data.Next != -1 || len(data.Results) != 1 {
+					t.Fatalf("scan in %s = %+v, want one tested exit and completion", mode, data)
+				}
+				if data.Results[0].Outcome == contract.OutcomeCanceled {
+					t.Fatalf("scan in %s reported a canceled probe: %+v", mode, data.Results[0])
+				}
+				after, err := st.Load(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(after.State.Health) != 1 {
+					t.Fatalf("scan in %s wrote %d health rows, want one: the probe did not run", mode, len(after.State.Health))
+				}
+			})
+		}
+	}
 }
 
 func TestPoolScanCursorAndLimitPaging(t *testing.T) {

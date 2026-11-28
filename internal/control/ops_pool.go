@@ -617,10 +617,12 @@ type PoolScanData struct {
 }
 
 // poolScan checks every dialable exit in stable pool order, starting at the
-// caller's cursor. It never changes the mode, connected users or the automatic
-// selection; only health evidence and its cached summary are written. One call
-// is bounded by PoolScanBudget so the tray can show progress through repeated
-// calls instead of holding one management request for the whole pool.
+// caller's cursor. The user starts it explicitly, so it uses TriggerManual:
+// that trigger is allowed in all-direct mode, where automatic probes are not.
+// It never changes the mode, connected users or the automatic selection; only
+// health evidence and its cached summary are written. One call is bounded by
+// PoolScanBudget so the tray can show progress through repeated calls instead
+// of holding one management request for the whole pool.
 func (s *Service) poolScan(ctx context.Context, req Request) (PoolScanData, error) {
 	return s.poolScanWithBudget(ctx, req, contract.PoolScanBudget)
 }
@@ -677,7 +679,7 @@ func (s *Service) poolScanWithBudget(ctx context.Context, req Request, budget ti
 		exit := exits[end]
 		probeCtx, cancel := context.WithTimeout(scanCtx, contract.ProbeTimeout+2*time.Second)
 		m, err := s.prober.RunMeasurement(probeCtx, contract.ProbeRequest{
-			Kind: contract.ProbeTransport, Exit: exit, Trigger: contract.TriggerRerank,
+			Kind: contract.ProbeTransport, Exit: exit, Trigger: contract.TriggerManual,
 			PolicyVersion: snap.State.PolicyVersion,
 		})
 		cancel()
@@ -693,7 +695,7 @@ func (s *Service) poolScanWithBudget(ctx context.Context, req Request, budget ti
 				probeCtx, cancel := context.WithTimeout(scanCtx, contract.ProbeTimeout+2*time.Second)
 				em, eerr := s.prober.RunMeasurement(probeCtx, contract.ProbeRequest{
 					Kind: contract.ProbeEgress, Exit: exit, Destination: dst,
-					Trigger: contract.TriggerRerank, PolicyVersion: snap.State.PolicyVersion,
+					Trigger: contract.TriggerManual, PolicyVersion: snap.State.PolicyVersion,
 				})
 				cancel()
 				if eerr != nil {

@@ -486,7 +486,7 @@ func (c *Controller) poolMenuLocked(engine EngineState) Node {
 	}
 
 	children = append(children,
-		c.actionItem("pool.scan", "Check all exits (best first)", ActionPoolScan, Target{}),
+		c.actionItem("pool.scan", "Check all exits", ActionPoolScan, Target{}),
 		c.actionItem("pool.refresh", "Refresh all sources", ActionPoolRefresh, Target{}),
 		c.actionItem("pool.rerank", "Re-rank now", ActionPoolRerank, Target{}),
 	)
@@ -580,9 +580,9 @@ func desktopStatusLabel(d DesktopView) string {
 		return "Desktop proxy: loading…"
 	case !d.Supported:
 		return "Desktop proxy: unsupported" + environmentSuffix(d)
-	case d.Cleared:
+	case d.Cleared && len(d.Conflict) == 0:
 		return "Desktop proxy: cleared (disabled)" + environmentSuffix(d)
-	case d.Applied:
+	case d.Applied || d.Cleared:
 		label := "Desktop proxy: applied" + environmentSuffix(d)
 		if len(d.Conflict) > 0 {
 			label += " · conflict: " + strings.Join(d.Conflict, ", ")

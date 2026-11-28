@@ -613,7 +613,7 @@ func applyConfigValue(cfg *contract.Config, key, value string) error {
 		}
 		cfg.Probes.CooldownMax = n
 	case "probes.targets":
-		var targets []string
+		targets := []string{}
 		if strings.TrimSpace(value) != "" {
 			for _, raw := range strings.Split(value, ",") {
 				raw = strings.TrimSpace(raw)

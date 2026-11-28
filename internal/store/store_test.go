@@ -424,8 +424,13 @@ func TestLegacyBackupTamperRejected(t *testing.T) {
 
 func writeLegacyBackup(t *testing.T, s *Store, state []byte, checksum string) string {
 	t.Helper()
+	return writeLegacyBackupSchema(t, s, state, checksum, contract.SchemaVersionCurrent)
+}
+
+func writeLegacyBackupSchema(t *testing.T, s *Store, state []byte, checksum string, schema contract.SchemaVersion) string {
+	t.Helper()
 	env := backupEnvelope{
-		SchemaVersion: contract.SchemaVersionCurrent,
+		SchemaVersion: schema,
 		CreatedAt:     time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC),
 		Checksum:      checksum,
 		State:         state,
@@ -550,7 +555,7 @@ func TestOpenScrubsLegacyProposalResidue(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(canonical)
-	backupPath := writeLegacyBackup(t, s, payload, "sha256:"+hex.EncodeToString(sum[:]))
+	backupPath := writeLegacyBackupSchema(t, s, payload, "sha256:"+hex.EncodeToString(sum[:]), 1)
 	beforeEntries, err := os.ReadDir(paths.Backup)
 	if err != nil {
 		t.Fatal(err)
@@ -584,8 +589,17 @@ func TestOpenScrubsLegacyProposalResidue(t *testing.T) {
 	if err := json.Unmarshal(raw, &env); err != nil {
 		t.Fatal(err)
 	}
-	if env.SchemaVersion != contract.SchemaVersionCurrent || env.CreatedAt.IsZero() {
-		t.Fatalf("backup envelope fields changed: %+v", env)
+	if env.SchemaVersion != 1 || env.CreatedAt.IsZero() {
+		t.Fatalf("scrubbed v1 envelope changed: %+v", env)
+	}
+	var payloadCheck struct {
+		SchemaVersion contract.SchemaVersion `json:"schema_version"`
+	}
+	if err := json.Unmarshal(env.State, &payloadCheck); err != nil {
+		t.Fatal(err)
+	}
+	if payloadCheck.SchemaVersion != env.SchemaVersion {
+		t.Fatalf("scrubbed payload schema %d disagrees with envelope %d", payloadCheck.SchemaVersion, env.SchemaVersion)
 	}
 	afterEntries, err := os.ReadDir(paths.Backup)
 	if err != nil {

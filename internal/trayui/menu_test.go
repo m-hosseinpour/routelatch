@@ -280,6 +280,39 @@ func TestStoppedDisablesDynamicAndMutationActions(t *testing.T) {
 	}
 }
 
+func TestDesktopClearedConflictStillGatesQuitAndCutWarnings(t *testing.T) {
+	fx := newFixture()
+	// A cleared marker whose recorded value no longer holds means the user
+	// re-enabled the proxy: it is live again, not a disabled setting.
+	fx.desktop = control.DesktopData{
+		Environment: "GNOME", Supported: true, Applied: true, Cleared: true, PreviousSet: true,
+		Conflict: []string{"org.gnome.system.proxy mode"},
+	}
+	s := newSetup(t, fx, nil)
+	view := s.ctl.View()
+	if n, _ := findNode(view.Root, "quit.now"); n.Visible {
+		t.Fatal("plain Quit visible while a cleared marker conflicts with a live proxy")
+	}
+	for _, key := range []string{"quit.restore", "quit.keep"} {
+		n, ok := findNode(view.Root, key)
+		if !ok || !n.Visible || !n.Enabled {
+			t.Fatalf("%q = %+v", key, n)
+		}
+	}
+	for _, key := range []string{"mode.desktop-warning", "advanced.restart.warning"} {
+		n, ok := findNode(view.Root, key)
+		if !ok || n.Enabled || !strings.Contains(n.Label, "cuts it") {
+			t.Fatalf("%q = %+v, want the applied-proxy cut warning", key, n)
+		}
+	}
+	if n, _ := findNode(view.Root, "desktop.status"); !strings.Contains(n.Label, "conflict") || strings.Contains(n.Label, "cleared (disabled)") {
+		t.Fatalf("desktop status = %q, want a visible conflict instead of cleared (disabled)", n.Label)
+	}
+	if _, err := s.ctl.Trigger(context.Background(), ActionQuit, Target{}); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("plain Quit with a cleared-but-conflicting desktop proxy = %v", err)
+	}
+}
+
 func TestDesktopAppliedShapesQuitAndDisablesSetInStopped(t *testing.T) {
 	fx := newFixture()
 	fx.desktop = control.DesktopData{Environment: "KDE", Supported: true, Applied: true, PreviousSet: true, Conflict: []string{"http_proxy"}}

@@ -232,10 +232,13 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 به‌روز شوند. درخواست «کارهای باز را شروع کن» فقط taskهای رفع‌مانع‌شده را مجاز می‌کند؛
 نصب سرویس، تغییر شبکه/دسکتاپ و انتشار به مقصد جدید/تغییر remote مجوز جدا می‌خواهند؛ انتشار batch واجد شرایط طبق سیاست `AGENTS.md` (مجوز ایستادهٔ ۲۰۲۶-۱۱-۲۶) بدون درخواست جدا مجاز است.
 
-### R19 — چرخهٔ سلامت، بررسی کامل pool، ترتیب قوانین و منوی tray (تعریف/پیاده‌سازی ۲۰۲۶-۱۱-۲۸؛ commit/بازبینی/انتشار نشده)
+### R19 — چرخهٔ سلامت، بررسی کامل pool، ترتیب قوانین و منوی tray (تعریف/پیاده‌سازی ۲۰۲۶-۱۱-۲۸؛ commit شد؛ بازبینی اول Not ready و رفع یافته‌ها در commit پیگیری؛ انتشار نشده)
 
-**وضعیت واحد: پیاده‌سازی در درخت کار انجام شده، ولی این batch هنوز commit، بازبینی
-مستقل و انتشار نشده است.**
+**وضعیت واحد: پیاده‌سازی در commitهای `fad271f` و `13d4b4f` روی `main` ثبت شده و
+full suite سبز است. بازبینی مستقل اول verdict **Not ready** داد و یافته‌های آن
+(scan در all-direct، پایداری restore point پیش از clear، و رفتار cleared+conflict
+در tray) در یک commit پیگیری رفع می‌شوند. قدم بعد دور تأیید همان بازبین، سپس
+push، CI روی commit تگ‌شده و انتشار `v1.4.0` است.**
 درخواست کاربر و پاسخ‌های تأییدشده در D34–D41 ثبت شدند. تغییرها:
 
 - **Accept as domain suffix:** `internal/trayui` آیتم را فقط برای پیشنهاد `route`
@@ -258,9 +261,12 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   mutation در `applyMeasurements`. `Rotate` دیگر cursor ندارد.
 - **`pool.scan`:** cursor/limit، batch ۱۰۰، بودجهٔ ۸ دقیقه در هر فراخوانی،
   transport و سپس egress برای targetهای پیکربندی‌شده، اعمال health در یک mutation
-  و `Next=-1` در پایان؛ timeout مدیریتی ۱۰ دقیقه. job tray «Check all exits (best
-  first)» تا پایان cursor را دنبال می‌کند و نام job را با `pool check x/y`
-  به‌روز می‌کند.
+  و `Next=-1` در پایان؛ timeout مدیریتی ۱۰ دقیقه. scan کاربرآغازشده است و از
+  trigger `manual` استفاده می‌کند، پس در all-direct هم probe واقعی اجرا می‌شود؛
+  ترتیب walk همان ترتیب پایدار pool است (best-first فقط ترتیب نمایش گروه‌های
+  Healthy/Reachable است) و label «Check all exits» است. job tray تا پایان cursor
+  را دنبال می‌کند، نام job را با `pool check x/y` به‌روز می‌کند و صفحهٔ بدون
+  پیشرفت یا تماماً canceled را شکست گزارش می‌کند، نه موفقیت.
 - **تأخیر/Reachable:** `ExitHealth.TransportLatencyMS`/`TransportSuccessAt`، پاک‌شدن
   شواهد endpoint با شکست transport و عدم ارتقا به Healthy؛ گروه‌های Healthy /
   Reachable · delay checked / Untested / Cooling / Unsupported با sort تأخیر
@@ -273,7 +279,9 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
   بررسی می‌شود تا بکاپ v1 پس از ارتقا معتبر بماند.
 - **Clear desktop proxy:** `desktop.clear` با/بدون marker، در حالت stopped و
   already-disabled؛ snapshot کلیدها به‌عنوان restore point، نوشتن فقط کلید disable،
-  `applied+cleared`، حفظ restore point در Apply بعدی و rollback در شکست.
+  `applied+cleared`، حفظ restore point در Apply بعدی و rollback در شکست. restore
+  point پیش از نوشتن desktop به store سپرده می‌شود (مثل marker در Apply) و اگر
+  نوشتن شکست بخورد، desktop و marker با هم به حالت قبلی برمی‌گردند.
 - **تشخیص فقط targeted:** `diagnose`/`recheck` در all-proxy/all-direct با
   `PolicyDenied`؛ گیت خودکار در `evaluate` از قبل همان بود و تست رگرسیون D21 در
   `internal/control/d21_mode_gating_test.go` اضافه شد (بدون مقصد در reply، log یا
@@ -281,21 +289,29 @@ fixture، report یا سرویس بیرونی قرار نگیرد.
 - **صفحه‌بندی تودرتو:** حذف `ActionPageNext/ActionPagePrevious` و page state؛
   زنجیرهٔ `Page n/m` در انتهای هر صفحه، `PageSize=20` و سقف عمق منو ۵۱۲.
 
-**checkها (اجراشده در ۲۰۲۶-۱۱-۲۸ روی همین درخت dirty):** `go build ./...` و
-`go vet ./...` سبز؛ `go test -count=1` روی `internal/probes`، `internal/pool`،
-`internal/store`، `internal/control`، `internal/diagnostics`، `internal/platform`
-و `internal/trayui` سبز؛ `CGO_ENABLED=1 go test -race ./internal/probes` سبز؛
-`go test -count=1 ./internal/acceptance` سبز (۲۷۴ PASS، ۰ FAIL، ۱۵ NOTE،
-۱۱۶.۵۵۴s). دو تست acceptance (`TestLegacyStoredCoolingRecordsDeriveUnsupported` و
-`TestR13BDifferingRuntimeOneLock`) با TMPDIR طولانی به‌خاطر سقف مسیر socket
-شکست می‌خورند؛ با TMPDIR کوتاه سبزند و به این batch مربوط نیستند. اجرای کامل
-`go test -count=1 ./...` هنوز انجام نشده است. **بازبینی مستقل انجام نشده.**
+**checkها (اجراشده در ۲۰۲۶-۱۱-۲۸):** `gofmt -w`/`gofmt -l` تمیز؛ `go build ./...`
+و `go vet ./...` سبز؛ `go test -count=1 ./...` کامل سبز (acceptance ۱۱۴٫۴۹۶s،
+app ۱۸٫۲۶۰s، engine ۱۰٫۸۳۵s)؛ `CGO_ENABLED=1 go test -race -count=1
+./internal/probes ./internal/control ./internal/trayui` سبز. یک اجرای اول full
+suite یک flake نامرتبط در `internal/app`
+(`TestSessionBusHandshakeHonoursDeadline/tray_probe` با connection reset به‌جای
+deadline) داد؛ تست ایزوله سبز شد و اجرای کامل بعدی هم سبز بود. تست‌های رگرسیون
+افزوده‌شده: mode-matrix برای `pool.scan` (targeted/all-proxy/all-direct × TUN
+on/off)، گیت Quit/Mode/Restart برای cleared+conflict، پایداری marker پیش از
+desktop write، شکست job وقتی همهٔ ردیف‌های scan canceled‌اند، و scrub یک
+envelope واقعی v1. دو تست acceptance
+(`TestLegacyStoredCoolingRecordsDeriveUnsupported` و `TestR13BDifferingRuntimeOneLock`)
+با TMPDIR طولانی به‌خاطر سقف مسیر socket شکست می‌خورند؛ با TMPDIR کوتاه سبزند و
+به این batch مربوط نیستند.
 
-**قدم بعد:** اجرای کامل `go test ./...`؛
-بازبینی مستقل read-only؛ commit و push؛ سبزشدن CI؛ سپس این batch کاربرمحور یک
-minor است و `v1.4.0` پس از سبزبودن CI روی commit تگ‌شده منتشر می‌شود (هنوز انجام
-نشده). بازبینی میدانی Clear روی دسکتاپ واقعی و منوی تودرتو روی host واقعی مجوز
-محیط جدا می‌خواهد.
+**بازبینی مستقل:** دور اول verdict **Not ready** با یافته‌های B1 (موفقیت کاذب
+`pool.scan` در all-direct)، I1 (پایداری restore point پس از clear)، I2
+(رفتار cleared+conflict در tray) و چند nit. رفع‌ها در commit پیگیری همین R19
+انجام شده و منتظر دور تأیید بازبین است.
+
+**قدم بعد:** دور تأیید بازبین روی commit پیگیری؛ سپس push؛ سبزشدن CI؛ و انتشار
+`v1.4.0` پس از سبزبودن CI روی commit تگ‌شده (هنوز انجام نشده). بازبینی میدانی
+Clear روی دسکتاپ واقعی و منوی تودرتو روی host واقعی مجوز محیط جدا می‌خواهد.
 
 ### R17 — حذف تأیید دو مرحله‌ای از tray (تعریف/انجام ۲۰۲۶-۱۱-۲۸)
 
@@ -2327,10 +2343,11 @@ CI روی `d14da10` سبز شد، تگ annotated روی همان commit بازس
    `461181047`، ۱۷ دارایی) و اجرای CI خود تگ با یک فلیک procfs در
    `TestLaunchSupervisorPIDFDOpenFailureUsesRawKill` قرمز شد؛ رفع test-only
    `87cc759` همان اسکن را به شرط زنده‌بودن process محدود کرد و به‌دلیل test-only
-   بودن، release تازه نساخت. **آخرین کد محصول `dae857a` و آخرین commit
-   test-only `a259cf2` است.** **پس از آن، batch R19 در درخت کار پیاده‌سازی شده
-   ولی commit/بازبینی/انتشار نشده است؛ وضعیت، checkها، gap باز suffix و قدم بعد
-   فقط در R19 ثبت‌اند.**
+   بودن، release تازه نساخت. **آخرین کد محصول منتشرشده `dae857a` و آخرین commit
+   test-only `a259cf2` است.** **پس از آن، batch R19 در `fad271f` (کد) و
+   `13d4b4f` (مستندات) روی `main` commit شد؛ بازبینی مستقل اول Not ready داد و
+   رفع یافته‌ها در commit پیگیری است و انتشار R19 هنوز انجام نشده است؛ وضعیت کامل
+   در R19 ثبت شده است.**
    flakiness گاه‌به‌گاه step `Test` در CI دیده شد و R18 آن را رفع کرد. دو رفع
    test-only جدا ثبت
    شده‌اند: `TestLaunchCancellationStopsSupervisorAndChildren` در `e4859db` و

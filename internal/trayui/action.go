@@ -337,9 +337,10 @@ func (c *Controller) desktopAppliedOrUnknownLocked() bool {
 	d := c.snap.Desktop
 	// Never-read is unknown, not "not applied": the initial menu must not offer
 	// a plain Quit that could leave an applied desktop proxy behind. A cleared
-	// proxy is disabled, so it cannot break the connection and does not force
-	// the restore/keep choice.
-	return d.Err || !d.Known || (d.Applied && !d.Cleared)
+	// proxy is disabled, but only while its recorded value still holds: a
+	// conflict means the user changed the setting, so it can be live again and
+	// is treated like an applied proxy.
+	return d.Err || !d.Known || (d.Applied && (!d.Cleared || len(d.Conflict) > 0))
 }
 
 // desktopCutWarningLocked is the visible warning under Mode when stopping or
@@ -350,7 +351,7 @@ func (c *Controller) desktopCutWarningLocked() string {
 	switch {
 	case d.Err || !d.Known:
 		return "Desktop proxy state unknown; stopping or restarting may cut it"
-	case d.Applied && !d.Cleared:
+	case d.Applied && (!d.Cleared || len(d.Conflict) > 0):
 		return "Desktop proxy applied; stopping or restarting cuts it until listening resumes"
 	default:
 		return ""

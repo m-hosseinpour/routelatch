@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"routelatch/internal/contract"
 )
 
 // Residue is the result of the legacy proposal-history scrub that Open runs.
@@ -168,12 +170,19 @@ func (s *Store) scrubBackupFile(path string) {
 
 	// Verify the file before touching it. A backup that does not verify is
 	// residue we cannot safely rewrite.
-	st, _, err := readBackup(path)
-	if err != nil {
+	if _, _, err := readBackup(path); err != nil {
 		s.addResidueWarning("%s does not verify; left untouched", label)
 		return
 	}
-	canonical, err := canonicalState(st)
+	// Re-encode the payload as it was stored, not the migrated form: a v1
+	// payload must stay v1 so the rewritten file keeps the envelope's schema
+	// version and the same ordering rules it had before the scrub.
+	var stored contract.State
+	if err := json.Unmarshal(env.State, &stored); err != nil {
+		s.addResidueWarning("%s could not be rewritten; left untouched", label)
+		return
+	}
+	canonical, err := canonicalState(stored)
 	if err != nil {
 		s.addResidueWarning("%s could not be rewritten; left untouched", label)
 		return

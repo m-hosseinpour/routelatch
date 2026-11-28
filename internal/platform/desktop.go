@@ -345,6 +345,11 @@ func (a *DesktopAdapter) reapplyAfterClear(ctx context.Context, opts ApplyOption
 type ClearOptions struct {
 	Kind  Kind
 	State contract.DesktopProxyState
+	// Save, when set, is called before any desktop key is written and receives
+	// the marker that describes the resulting state. The caller must persist it
+	// so a crash between the marker write and the desktop write still leaves a
+	// restore point. A Save error aborts Clear before it changes a setting.
+	Save func(context.Context, contract.DesktopProxyState) error
 }
 
 // ClearResult reports a desktop-proxy clear. The ownership marker is kept so
@@ -380,7 +385,7 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 	state := opts.State
 	result := ClearResult{State: state}
 	if !state.Applied && len(state.Keys) == 0 {
-		return a.clearWithoutMarker(ctx, opts.Kind, result)
+		return a.clearWithoutMarker(ctx, opts, result)
 	}
 	if !state.Applied {
 		return result, stateFailure("platform.desktop.clear",
@@ -443,9 +448,17 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 				changed = true
 			}
 		}
-		result.State.Applied = true
-		result.State.Cleared = true
-		result.State.Keys = keys
+		next := state
+		next.Applied = true
+		next.Cleared = true
+		next.Keys = keys
+		if changed {
+			if err := a.saveClear(ctx, opts, next); err != nil {
+				result.Failed = append(result.Failed, layout.name)
+				return result, err
+			}
+		}
+		result.State = next
 		result.StateChanged = changed
 		result.AlreadyDisabled = true
 		result.Notice = "the system proxy is already disabled"
@@ -455,9 +468,42 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 		result.UserModified = append(result.UserModified, layout.name)
 		return result, nil
 	}
+	keys := make([]contract.DesktopKey, len(state.Keys))
+	copy(keys, state.Keys)
+	for i := range keys {
+		if keys[i].Name == layout.name {
+			keys[i].Applied = disableValue
+		}
+	}
+	next := state
+	next.Applied = true
+	next.Cleared = true
+	next.Keys = keys
+	// Persist the marker before touching the setting. If the process dies
+	// after the write, the stored restore point and the applied value still
+	// describe the cleared desktop.
+	if err := a.saveClear(ctx, opts, next); err != nil {
+		result.Failed = append(result.Failed, layout.name)
+		return result, err
+	}
+	result.State = next
+	result.StateChanged = true
+	// undo restores both the desktop setting and the previously stored marker
+	// after a failed write, so state and desktop stay consistent.
+	undo := func() error {
+		if rbErr := a.rollbackDisable(ctx, tools, layout, key.Applied); rbErr != nil {
+			return rbErr
+		}
+		if saveErr := a.saveClear(ctx, opts, state); saveErr != nil {
+			return saveErr
+		}
+		result.State = state
+		result.StateChanged = false
+		return nil
+	}
 	if err := a.writeValue(ctx, tools, layout, disableValue); err != nil {
 		result.Failed = append(result.Failed, layout.name)
-		if rbErr := a.rollbackDisable(ctx, tools, layout, key.Applied); rbErr != nil {
+		if rbErr := undo(); rbErr != nil {
 			f := commandFailure("platform.desktop.clear", errors.Join(err, rbErr))
 			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
 				"run `routelatch desktop proxy restore` after checking the desktop settings"
@@ -468,7 +514,7 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 	got, err := a.readValue(ctx, tools, layout)
 	if err != nil || got != disableValue {
 		result.Failed = append(result.Failed, layout.name)
-		if rbErr := a.rollbackDisable(ctx, tools, layout, key.Applied); rbErr != nil {
+		if rbErr := undo(); rbErr != nil {
 			return result, commandFailure("platform.desktop.clear",
 				errors.Join(errors.New("desktop setting did not retain the cleared value"), rbErr))
 		}
@@ -477,17 +523,6 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 		}
 		return result, commandFailure("platform.desktop.clear", errors.New("desktop setting did not retain the cleared value"))
 	}
-	keys := make([]contract.DesktopKey, len(state.Keys))
-	copy(keys, state.Keys)
-	for i := range keys {
-		if keys[i].Name == layout.name {
-			keys[i].Applied = disableValue
-		}
-	}
-	result.State.Applied = true
-	result.State.Cleared = true
-	result.State.Keys = keys
-	result.StateChanged = true
 	result.Cleared = []string{layout.name}
 	return result, nil
 }
@@ -496,7 +531,8 @@ func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearRes
 // the disable key for the first time. The snapshot becomes the marker so that
 // "restore previous" can still return the setting that existed before the
 // clear, and so a later Apply keeps it as the original restore point.
-func (a *DesktopAdapter) clearWithoutMarker(ctx context.Context, kind Kind, result ClearResult) (ClearResult, error) {
+func (a *DesktopAdapter) clearWithoutMarker(ctx context.Context, opts ClearOptions, result ClearResult) (ClearResult, error) {
+	kind := opts.Kind
 	if !validKind(kind) {
 		return result, localFailure(contract.Unsupported, "platform.desktop.clear",
 			"this desktop environment is not supported; only GNOME and KDE desktop proxy settings can be cleared")
@@ -555,45 +591,79 @@ func (a *DesktopAdapter) clearWithoutMarker(ctx context.Context, kind Kind, resu
 		}
 		keys = append(keys, contract.DesktopKey{Name: l.name, Applied: applied, Previous: value})
 	}
-	result.State = contract.DesktopProxyState{
+	next := contract.DesktopProxyState{
 		Applied:     true,
 		Environment: string(kind),
 		AppliedAt:   a.clock()().UTC(),
 		Cleared:     true,
 		Keys:        keys,
 	}
+	// The restore point exists only in this snapshot, so persist it before the
+	// first desktop write. A crash after the write then still has a marker that
+	// Restore can use.
+	if err := a.saveClear(ctx, opts, next); err != nil {
+		result.Failed = append(result.Failed, layout.name)
+		return result, err
+	}
+	result.State = next
+	result.StateChanged = true
+	// undo restores the setting and removes the marker after a failed write.
+	undo := func() error {
+		if rbErr := a.rollbackDisable(ctx, tools, layout, currentDisable); rbErr != nil {
+			return rbErr
+		}
+		if saveErr := a.saveClear(ctx, opts, contract.DesktopProxyState{}); saveErr != nil {
+			return saveErr
+		}
+		result.State = contract.DesktopProxyState{}
+		result.StateChanged = false
+		return nil
+	}
 	if err := a.writeValue(ctx, tools, layout, disableValue); err != nil {
 		result.Failed = append(result.Failed, layout.name)
-		if rbErr := a.rollbackDisable(ctx, tools, layout, currentDisable); rbErr != nil {
-			result.StateChanged = true
+		if rbErr := undo(); rbErr != nil {
 			f := commandFailure("platform.desktop.clear", errors.Join(err, rbErr))
 			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
 				"run `routelatch desktop proxy restore` after checking the desktop settings"
 			return result, f
 		}
-		result.State = contract.DesktopProxyState{}
 		return result, commandFailure("platform.desktop.clear", err)
 	}
 	got, err := a.readValue(ctx, tools, layout)
 	if err != nil || got != disableValue {
 		result.Failed = append(result.Failed, layout.name)
-		rbErr := a.rollbackDisable(ctx, tools, layout, currentDisable)
-		if rbErr != nil {
-			result.StateChanged = true
+		if rbErr := undo(); rbErr != nil {
 			f := commandFailure("platform.desktop.clear", errors.Join(errors.New("desktop setting did not retain the cleared value"), rbErr))
 			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
 				"run `routelatch desktop proxy restore` after checking the desktop settings"
 			return result, f
 		}
-		result.State = contract.DesktopProxyState{}
 		if err != nil {
 			return result, commandFailure("platform.desktop.clear", err)
 		}
 		return result, commandFailure("platform.desktop.clear", errors.New("desktop setting did not retain the cleared value"))
 	}
-	result.StateChanged = true
 	result.Cleared = []string{layout.name}
 	return result, nil
+}
+
+// saveClear persists a clear marker when the caller supplied a Save hook. The
+// hook runs before any desktop write, so a failure means nothing changed.
+func (a *DesktopAdapter) saveClear(ctx context.Context, opts ClearOptions, state contract.DesktopProxyState) error {
+	if opts.Save == nil {
+		return nil
+	}
+	if err := opts.Save(ctx, state); err != nil {
+		var failure *contract.Failure
+		if errors.As(err, &failure) {
+			return failure
+		}
+		f := localFailure(contract.Internal, "platform.desktop.clear",
+			"could not record the desktop proxy restore point; nothing was changed")
+		f.Err = err
+		return f
+	}
+	return nil
 }
 
 // rollbackDisable returns the disable key to its pre-clear value and verifies

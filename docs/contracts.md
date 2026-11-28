@@ -636,7 +636,8 @@ probe استفاده شد.
 جدا ندارد: فایل قدیمی با نسخهٔ `1` پذیرفته می‌شود و فقط در نخستین نوشتن config
 نسخهٔ فعلی را می‌گیرد. `probes.targets` پیش‌فرض دو target فعال دارد (§۶.۱)؛ کلید
 غایب یعنی همان پیش‌فرض‌ها، فهرست صریحاً خالی (`[]`) خالی می‌ماند و
-`config set probes.targets=` آن را پاک می‌کند. این شماره را با `schema_version`
+`config set probes.targets=` آن را پاک می‌کند و همان `[]` (نه `null`) را در config
+ذخیره می‌کند. این شماره را با `schema_version`
 پروتکل management (§۴.۶) اشتباه نکنید؛ آن جداگانه `1` است.
 
 هر دو آدرس باید loopback باشند (`127.0.0.1` یا `::1`)؛ هر چیز دیگر `unsupported` با
@@ -1055,7 +1056,7 @@ merge بر اساس `DedupeKey` → commit. اگر یک منبع شکست بخو
 | نوع | چه می‌سنجد | triggerهای مجاز |
 | --- | --- | --- |
 | `transport` | فقط endpoint خروجی: TCP و در صورت نیاز TLS/pin | startup، rotation، rerank، manual، after-failure |
-| `egress` | dial از exit به هدف پیکربندی‌شده + اولین بایت (یا برای `tls://` یک handshake کامل) | manual، rerank (scan هم از همین trigger استفاده می‌کند)، rotation (اگر هدف تعریف شده) |
+| `egress` | dial از exit به هدف پیکربندی‌شده + اولین بایت (یا برای `tls://` یک handshake کامل) | manual (scan هم user-initiated است و از همین trigger استفاده می‌کند)، rerank، rotation (اگر هدف تعریف شده) |
 | `direct_tcp` | اتصال مستقیم به مقصد، بدون بایت برنامه | failure (تشخیص)، manual |
 | `direct_tls` | TLS مستقیم با SNI و verification کامل | failure (تشخیص)، manual |
 
@@ -1116,9 +1117,9 @@ process به‌خاطر وضعیت سراسری مجاز نیست.
 
 | حالت | probe خودکار | دستی |
 | --- | --- | --- |
-| هدفمند | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank (scan هم rerank است) | `diagnose`/`recheck` و `pool test` مجاز |
-| همه از پروکسی | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank (scan هم rerank است) | `pool test` مجاز؛ `diagnose`/`recheck` با `policy_denied` رد می‌شوند و پیشنهادی ساخته نمی‌شود |
-| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ تشخیص دستی و پیشنهاد ممنوع (`policy_denied`) |
+| هدفمند | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank | `diagnose`/`recheck` و `pool test` مجاز؛ `pool.scan` با trigger manual اجرا می‌شود |
+| همه از پروکسی | transport (startup + چرخهٔ ۱۰ دقیقه‌ای + after-failure)؛ egress فقط با trigger صریح/rerank | `pool test` و `pool.scan` (manual) مجاز؛ `diagnose`/`recheck` با `policy_denied` رد می‌شوند و پیشنهادی ساخته نمی‌شود |
+| همه مستقیم | هیچ probe خودکار (نه pool، نه تشخیص)؛ health با تاریخ کهنه نمایش داده می‌شود | `pool test` و `pool.scan` (هر دو manual) مجاز با اخطار «ترافیک از pool می‌رود، نه از حالت»؛ تشخیص دستی و پیشنهاد ممنوع (`policy_denied`) |
 | متوقف | probe و worker وجود ندارد؛ listenerها بسته‌اند | management socket پاسخ می‌دهد: `status`/`rules list`/`pool list` exit `0` با `mode=stopped`؛ `env`/`exec` و `pool test` → exit `3`؛ خروج از stopped فقط با process جدید |
 
 گیت تشخیص برای مسیر خودکار هم همین است: `evaluate` در all-proxy و all-direct و
@@ -1387,7 +1388,7 @@ RouteLatch
     Untested (N) ▸                               pages
     Cooling (N) ▸                                pages
     Unsupported/Invalid (N) ▸                    pages
-    Check all exits (best first)                 job
+    Check all exits                             job
     Refresh all sources                          job
     Re-rank now
     Test selected exit | Test first 20 usable    job
@@ -1452,10 +1453,13 @@ desired=false باشد. آیتم غیرقابل‌اجرا با دلیل کوت�
 Untested، Cooling و Unsupported/Invalid. Healthy و Reachable با تأخیر صعودی مرتب
 می‌شوند و ردیف بدون اندازه‌گیری آخر می‌آید؛ هر exit برچسب `· N ms` یا `· delay —`
 دارد. Reachable یعنی endpoint شاهد دارد ولی egress اثبات نشده و Healthy نیست (D36).
-«Check all exits (best first)» یک job است و تا پایان آن actionهای تغییردهنده
-غیرفعال می‌مانند؛ برخلاف «Test first 20 usable» (همان سقف `MaxPoolTestExits`) کل
-pool قابل‌dial را با cursor پوشش می‌دهد. بررسی کامل، اتصال‌های کاربر را قطع نمی‌کند
-و mode/selected exit را تغییر نمی‌دهد.
+«Check all exits» یک job است و تا پایان آن actionهای تغییردهنده غیرفعال می‌مانند؛
+برخلاف «Test first 20 usable» (همان سقف `MaxPoolTestExits`) کل pool قابل‌dial را با
+cursor به ترتیب پایدار pool (همان order کاربر از `pool.Build`، نه بهترین‌تأخیر)
+پوشش می‌دهد. مرتب‌سازی best-first فقط در گروه‌های نمایشی Healthy/Reachable است.
+بررسی کامل، اتصال‌های کاربر را قطع نمی‌کند و mode/selected exit را تغییر نمی‌دهد.
+اگر یک صفحه هیچ exitی را تست نکند یا همهٔ ردیف‌ها canceled باشند، job با شکست
+گزارش می‌دهد و «Pool checked» نمی‌گوید.
 `N` در «Proposals (N)» تعداد pending است؛ decided/expired زیر
 «Show decided» و در صورت زیادبودن با همان صفحه‌بندی ۲۰آیتمی تودرتو می‌آیند. اگر
 `status.diagnostics.enabled=false` باشد، Accept/Reject/Recheck غیرفعال‌اند
@@ -1536,7 +1540,8 @@ actionهای تغییردهنده disabled‌اند و ریشه یک آیتم «
 jobهای تعریف‌شده: pool refresh/test/scan، proposal recheck، desktop set/restore/clear،
 backup، doctor، restart و autostart toggle. job «Check all exits» نام خود را با
 پیشرفت («pool check x/y») به‌روز می‌کند و فقط وقتی `next=-1` شد یا batch پیشرفت
-نکرد تمام می‌شود. status هر ۲ ثانیه و لیست‌ها هر ۱۵
+نکرد تمام می‌شود؛ توقف بدون هیچ probe یا صفحهٔ تماماً canceled موفقیت گزارش
+نمی‌شود. status هر ۲ ثانیه و لیست‌ها هر ۱۵
 ثانیه (و بلافاصله پس از action) refresh می‌شوند؛ فراخوانی status/list یک
 deadline کوتاه (۱–۲ ثانیه) دارد، در goroutine جدا اجرا می‌شود و tick بعدی را
 بلوکه نمی‌کند؛ تغییرها با fingerprint مقایسه می‌شوند تا rebuild بی‌مورد رخ

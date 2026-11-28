@@ -472,19 +472,26 @@ func (s *Service) desktopClear(ctx context.Context) (DesktopData, error) {
 		kind = detected
 	}
 	adapter := s.desktopAdapterFor(nil)
-	result, err := adapter.Clear(ctx, platform.ClearOptions{Kind: kind, State: state})
-	if result.StateChanged {
-		after, merr := s.store.Mutate(ctx, func(st *contract.State) error {
-			st.Desktop = result.State
-			return nil
-		})
-		if merr != nil {
-			if err != nil {
-				return DesktopData{}, errors.Join(err, merr)
+	var saved *contract.Snapshot
+	result, err := adapter.Clear(ctx, platform.ClearOptions{
+		Kind: kind, State: state,
+		// Persist the restore point before the desktop write, mirroring Apply:
+		// a crash or a failed state write must not leave a disabled desktop
+		// without the marker Restore needs.
+		Save: func(ctx context.Context, marker contract.DesktopProxyState) error {
+			after, merr := s.store.Mutate(ctx, func(st *contract.State) error {
+				st.Desktop = marker
+				return nil
+			})
+			if merr != nil {
+				return merr
 			}
-			return DesktopData{}, merr
-		}
-		s.snap.Store(&after)
+			saved = &after
+			return nil
+		},
+	})
+	if saved != nil {
+		s.snap.Store(saved)
 	}
 	if err != nil {
 		return DesktopData{}, err

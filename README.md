@@ -263,7 +263,7 @@ routing/pool policy of its own. The menu is in English in this release.
 | Mode | Switch between targeted, all-proxy and all-direct; `Stop listening` closes the traffic listeners. In stopped mode, `Restart engine to resume` replaces the engine process first. |
 | Proposals | Pending suggestions with Accept, Reject and Recheck; `Show decided` and `Clear decided/expired`. |
 | Approved rules | The approved list, newest first, with per-rule removal and details, 20 rows per page. Further pages are nested `Page n/m` submenus inside the page, not Previous/Next actions. Add a rule from the Terminal menu. |
-| Pool | Counts, auto/pinned exit, groups `Healthy` / `Reachable · delay checked` / `Untested` / `Cooling` / `Unsupported`, each exit labelled with its measured delay, 20 rows per page with nested pages. Healthy and Reachable are ordered best delay first. Check all exits (best first), refresh, re-rank, test selected/first 20, and remove. Imports stay in the Terminal menu. |
+| Pool | Counts, auto/pinned exit, groups `Healthy` / `Reachable · delay checked` / `Untested` / `Cooling` / `Unsupported`, each exit labelled with its measured delay, 20 rows per page with nested pages. Healthy and Reachable are ordered best delay first. Check all exits, refresh, re-rank, test selected/first 20, and remove. Imports stay in the Terminal menu. |
 | Desktop proxy | Status and refresh, plus Set/Re-apply, Restore and Clear (disable the system proxy). Clear works with or without a previous marker, while stopped, and when the proxy is already disabled; it keeps the restore point. Only GNOME (`gsettings`) and KDE Plasma (`kwriteconfig`) are supported. |
 | Diagnostics | Run doctor, doctor results, warnings, the log path, and the proxy environment. |
 | Data | Back up state now (the backup is written under the data directory). Restore and arbitrary paths stay in the CLI. |
@@ -297,9 +297,12 @@ disabled while the engine is unavailable or stopped. Dynamic labels are
 sanitized and bounded, and notifications/logs carry counts, modes, short IDs
 and paths, never destination hostnames, share URLs or credentials.
 
-`Check all exits (best first)` is a job: it walks the usable pool with a cursor,
-shows progress in the job name, and keeps other mutating actions disabled until
-it finishes, so a large pool can take several minutes. An exit label shows the
+`Check all exits` is a job: it walks the usable pool in stable pool order with a
+cursor, shows progress in the job name, and keeps other mutating actions disabled
+until it finishes, so a large pool can take several minutes. The scan order is
+the stored pool order; best-first applies only to the displayed Healthy and
+Reachable groups. If a page tests no exit or every row is canceled, the job
+reports a failure instead of claiming a completed check. An exit label shows the
 last measured TCP/TLS round trip (`· N ms`) or `· delay —`; the `Reachable`
 group means its endpoint answered but egress is not proven. Nesting one `Page
 n/m` menu per page keeps navigation inside the open menu but makes the menu
@@ -578,8 +581,9 @@ source revision it prints **274 PASS, 0 FAIL and 15 NOTE in about 117 s** (run
 2026-11-28). NOTE means a gated or impossible check, not a pass; the gated tests
 stay skipped unless a real desktop or authorized user-manager check is enabled.
 `go build ./...`, `go vet ./...`, the focused package tests and
-`go test -race ./internal/probes` are green; a full `go test ./...` run for the
-post-v1.3.0 changes is still pending before release.
+`go test -race ./internal/probes ./internal/control ./internal/trayui` are green;
+the full `go test -count=1 ./...` suite (including the acceptance run above) is
+also green on this revision (run 2026-11-28).
 
 Packaging for v1.3.0 was built and published by the `Release` workflow run
 `46086807630` from the annotated tag `v1.3.0` (object
