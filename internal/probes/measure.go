@@ -53,12 +53,7 @@ func (e *Engine) measureTransport(ctx context.Context, req contract.ProbeRequest
 	// record for http or an unknown scheme (pool.EffectiveStatus derives it as
 	// unsupported) and a stored hysteria2 gecko record with no obfs password.
 	// An empty protocol keeps its previous handling.
-	if rec.Status == contract.RecordInvalid || rec.Status == contract.RecordUnsupported ||
-		(rec.Protocol != "" && !rec.Protocol.Supported()) ||
-		(rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "") ||
-		rec.Security == contract.SecurityReality ||
-		(rec.Protocol == contract.ProtocolHysteria2 &&
-			contract.Hysteria2ObfsPasswordMissing(rec.Hysteria2Obfs, rec.Hysteria2ObfsPassword)) {
+	if !probeable(rec) {
 		m.Result.Outcome = contract.OutcomeRejected
 		m.Result.Failure = contract.Unsupported
 		m.Result.Duration = e.opts.Clock().Sub(start)
@@ -98,6 +93,29 @@ func (e *Engine) measureTransport(ctx context.Context, req contract.ProbeRequest
 	m.Result.Duration = e.opts.Clock().Sub(start)
 	m.Attributable = rec.Status != contract.RecordUnsupported
 	return m
+}
+
+// probeable reports whether a transport probe would actually dial the record,
+// matching the guard in measureTransport. Rotation skips the rest so a record
+// that can never gain health cannot hold the front of every batch.
+func probeable(rec contract.Record) bool {
+	if rec.Status == contract.RecordInvalid || rec.Status == contract.RecordUnsupported {
+		return false
+	}
+	if rec.Protocol != "" && !rec.Protocol.Supported() {
+		return false
+	}
+	if rec.InsecureTLS && rec.PinnedPeerCertSHA256 == "" {
+		return false
+	}
+	if rec.Security == contract.SecurityReality {
+		return false
+	}
+	if rec.Protocol == contract.ProtocolHysteria2 &&
+		contract.Hysteria2ObfsPasswordMissing(rec.Hysteria2Obfs, rec.Hysteria2ObfsPassword) {
+		return false
+	}
+	return true
 }
 
 func (e *Engine) measureEgress(ctx context.Context, req contract.ProbeRequest, start time.Time) Measurement {
@@ -144,7 +162,14 @@ func (e *Engine) measureEgress(ctx context.Context, req contract.ProbeRequest, s
 		m.Result.Exit = dialResult.Exit
 	}
 	defer conn.Close()
+	if req.Destination.TLS {
+		return e.measureEgressTLS(ctx, m, conn, req.Destination, start)
+	}
 	m.Phase = PhaseFirstByte
+	// Close on cancellation so a stopped service does not wait for the full
+	// first-byte deadline to unblock this read.
+	stopClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopClose()
 	_ = conn.SetReadDeadline(time.Now().Add(e.opts.FirstByte))
 	var buf [1]byte
 	n, readErr := conn.Read(buf[:])
@@ -178,6 +203,58 @@ func (e *Engine) measureEgress(ctx context.Context, req contract.ProbeRequest, s
 		m.Attributable = false
 	}
 	return m
+}
+
+// measureEgressTLS completes a TLS handshake through an already-dialed pool
+// connection. A completed handshake is egress success: the ServerHello and the
+// certificate flight are destination bytes that the exit carried. A handshake
+// that receives bytes but fails (alert, bad record, untrusted certificate) is
+// not egress success and never changes exit health. A timeout stays
+// non-attributable exactly like the first-byte path.
+func (e *Engine) measureEgressTLS(ctx context.Context, m Measurement, conn net.Conn, dst contract.Destination, start time.Time) Measurement {
+	m.Phase = PhaseHandshake
+	counted := &countingConn{Conn: conn}
+	handshakeCtx, cancel := context.WithTimeout(ctx, e.opts.FirstByte)
+	defer cancel()
+	tlsConn, err := e.handshake(handshakeCtx, counted, e.egressTLSConfig(dst))
+	m.Result.Duration = e.opts.Clock().Sub(start)
+	m.Result.BytesDown = counted.read
+	if err == nil {
+		_ = tlsConn.Close()
+		m.Phase = PhaseNone
+		m.Result.Outcome = contract.OutcomeSuccess
+		m.Attributable = true
+		return m
+	}
+	var netErr net.Error
+	switch {
+	case errors.Is(err, context.Canceled):
+		m.Result.Outcome = contract.OutcomeCanceled
+		m.Result.Failure = contract.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		m.Result.Outcome = contract.OutcomeTimeout
+		m.Result.Failure = contract.Timeout
+	case errors.As(err, &netErr) && netErr.Timeout():
+		m.Result.Outcome = contract.OutcomeTimeout
+		m.Result.Failure = contract.Timeout
+	default:
+		m.Result.Outcome = contract.OutcomeTLSFailure
+		m.Result.Failure = contract.TLSFailure
+	}
+	return m
+}
+
+// countingConn counts downlink bytes so a successful handshake reports real
+// evidence instead of an invented byte.
+type countingConn struct {
+	net.Conn
+	read int64
+}
+
+func (c *countingConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	c.read += int64(n)
+	return n, err
 }
 
 func (e *Engine) measureDirectTCP(ctx context.Context, req contract.ProbeRequest, start time.Time) Measurement {
@@ -259,6 +336,24 @@ func (e *Engine) handshake(ctx context.Context, conn net.Conn, cfg *tls.Config) 
 // trust anchor, matching the pinned core's semantics (tls/config.go verifyChain).
 // A leaf pin is an exact-certificate constraint; it is never a blanket
 // skip-verify switch.
+// egressTLSConfig verifies the destination with the normal trust store and
+// sets SNI to the configured host. RootCAs and TLSNow exist only so offline
+// tests can trust a local CA; production never skips verification.
+func (e *Engine) egressTLSConfig(dst contract.Destination) *tls.Config {
+	serverName := dst.Host
+	if dst.Kind == contract.DestIP {
+		serverName = dst.Addr.String()
+	}
+	cfg := &tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS12}
+	if e.opts.RootCAs != nil {
+		cfg.RootCAs = e.opts.RootCAs
+	}
+	if e.opts.TLSNow != nil {
+		cfg.Time = e.opts.TLSNow
+	}
+	return cfg
+}
+
 func tlsConfigFor(rec contract.Record) *tls.Config {
 	serverName := rec.SNI
 	if serverName == "" {

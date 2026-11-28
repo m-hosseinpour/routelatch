@@ -532,7 +532,7 @@ func (s *Service) poolTest(ctx context.Context, req Request) (PoolTestData, erro
 	if strings.TrimSpace(req.Input) != "" {
 		dst, ok := probes.ParseTarget(req.Input)
 		if !ok {
-			return PoolTestData{}, usage("pool test target must be host:port")
+			return PoolTestData{}, usage("pool test target must be host:port, tcp://host:port or tls://host:port")
 		}
 		target = dst
 		kind = contract.ProbeEgress
@@ -604,11 +604,155 @@ func (s *Service) poolTest(ctx context.Context, req Request) (PoolTestData, erro
 	return PoolTestData{Results: results, Truncated: truncated}, nil
 }
 
+// PoolScanData is one `pool.scan` slice. Next is the cursor for the following
+// call, or -1 when every exit was checked. Tested counts exits attempted, not
+// probes (an exit with a configured target gets a transport and an egress
+// probe). Results carries the same documented rows as `pool test`.
+type PoolScanData struct {
+	Tested    int               `json:"tested"`
+	Total     int               `json:"total"`
+	Next      int               `json:"next"`
+	Results   []ProbeTestResult `json:"results,omitempty"`
+	Truncated bool              `json:"truncated,omitempty"`
+}
+
+// poolScan checks every dialable exit in stable pool order, starting at the
+// caller's cursor. It never changes the mode, connected users or the automatic
+// selection; only health evidence and its cached summary are written. One call
+// is bounded by PoolScanBudget so the tray can show progress through repeated
+// calls instead of holding one management request for the whole pool.
+func (s *Service) poolScan(ctx context.Context, req Request) (PoolScanData, error) {
+	return s.poolScanWithBudget(ctx, req, contract.PoolScanBudget)
+}
+
+// poolScanWithBudget is poolScan with an injectable probe budget so tests can
+// exercise the cutoff deterministically without waiting for the real bound.
+func (s *Service) poolScanWithBudget(ctx context.Context, req Request, budget time.Duration) (PoolScanData, error) {
+	s.opMu.Lock()
+	stopped := s.stopped
+	s.opMu.Unlock()
+	if stopped {
+		return PoolScanData{}, &contract.Failure{Kind: contract.Stopped, Path: contract.PathLocal, Op: "pool.scan", Message: "service is stopped; no probe can run"}
+	}
+	if s.prober == nil {
+		return PoolScanData{}, &contract.Failure{Kind: contract.Stopped, Path: contract.PathLocal, Op: "pool.scan", Message: "the probe engine is not running"}
+	}
+	snap := s.Snapshot()
+	p := pool.Build(snap.State, s.now().UTC())
+	exits := make([]contract.ExitID, 0, len(snap.State.Records))
+	for _, rec := range p.Records() {
+		if pool.Dialable(rec) {
+			exits = append(exits, contract.ExitID(rec.ID))
+		}
+	}
+	total := len(exits)
+	if total == 0 {
+		return PoolScanData{Tested: 0, Total: 0, Next: -1}, nil
+	}
+	cursor := req.Offset
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total
+	}
+	limit := req.Limit
+	if limit <= 0 || limit > contract.PoolScanBatch {
+		limit = contract.PoolScanBatch
+	}
+	var targets []contract.Destination
+	for _, raw := range snap.Config.Probes.Targets {
+		if dst, ok := probes.ParseTarget(raw); ok {
+			targets = append(targets, dst)
+		}
+	}
+
+	scanCtx, cancelScan := context.WithTimeout(ctx, budget)
+	defer cancelScan()
+	results := make([]ProbeTestResult, 0, limit)
+	measurements := make([]probes.Measurement, 0, limit)
+	tested := 0
+	end := cursor
+	for end < total && tested < limit && scanCtx.Err() == nil {
+		exit := exits[end]
+		probeCtx, cancel := context.WithTimeout(scanCtx, contract.ProbeTimeout+2*time.Second)
+		m, err := s.prober.RunMeasurement(probeCtx, contract.ProbeRequest{
+			Kind: contract.ProbeTransport, Exit: exit, Trigger: contract.TriggerRerank,
+			PolicyVersion: snap.State.PolicyVersion,
+		})
+		cancel()
+		if err != nil {
+			results = append(results, probeErrorResult(exit, contract.ProbeTransport, err))
+		} else {
+			measurements = append(measurements, m)
+			results = append(results, probeResultRow(exit, m))
+			for _, dst := range targets {
+				if scanCtx.Err() != nil {
+					break
+				}
+				probeCtx, cancel := context.WithTimeout(scanCtx, contract.ProbeTimeout+2*time.Second)
+				em, eerr := s.prober.RunMeasurement(probeCtx, contract.ProbeRequest{
+					Kind: contract.ProbeEgress, Exit: exit, Destination: dst,
+					Trigger: contract.TriggerRerank, PolicyVersion: snap.State.PolicyVersion,
+				})
+				cancel()
+				if eerr != nil {
+					results = append(results, probeErrorResult(exit, contract.ProbeEgress, eerr))
+					continue
+				}
+				measurements = append(measurements, em)
+				results = append(results, probeResultRow(exit, em))
+			}
+		}
+		tested++
+		end++
+	}
+
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	now := s.now().UTC()
+	after, err := s.store.Mutate(ctx, func(st *contract.State) error {
+		for _, m := range measurements {
+			pool.ApplyProbe(st, m.Result, now)
+		}
+		pool.SyncStatuses(st, now)
+		return nil
+	})
+	if err != nil {
+		return PoolScanData{Tested: tested, Total: total, Next: -1, Results: results}, err
+	}
+	s.snap.Store(&after)
+	next := end
+	if next >= total {
+		next = -1
+	}
+	truncated := next != -1
+	s.logger.Logf(levelInfo, "pool.scan", "tested=%d total=%d next=%d truncated=%t", tested, total, next, truncated)
+	return PoolScanData{Tested: tested, Total: total, Next: next, Results: results, Truncated: truncated}, nil
+}
+
+func probeResultRow(exit contract.ExitID, m probes.Measurement) ProbeTestResult {
+	return ProbeTestResult{
+		Exit: exit, Kind: m.Result.Kind, Outcome: m.Result.Outcome,
+		DurationMS: m.Result.Duration.Milliseconds(), BytesDown: m.Result.BytesDown,
+		Failure: m.Result.Failure,
+	}
+}
+
+func probeErrorResult(exit contract.ExitID, kind contract.ProbeKind, err error) ProbeTestResult {
+	outcome := contract.OutcomeCanceled
+	failure := contract.Canceled
+	if errors.Is(err, context.DeadlineExceeded) {
+		outcome = contract.OutcomeTimeout
+		failure = contract.Timeout
+	}
+	return ProbeTestResult{Exit: exit, Kind: kind, Outcome: outcome, Failure: failure}
+}
+
 func isRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
 }
-
 func mapImportError(err error) error {
 	if err == nil {
 		return nil

@@ -150,6 +150,12 @@ type fixture struct {
 	env         control.EnvData
 	doctor      control.DoctorData
 	backup      string
+	// scanBatch caps one fixture pool.scan call so tests can exercise the
+	// tray's cursor loop without hundreds of calls.
+	scanBatch int
+	// clearResult overrides the desktop.clear response when set, so tests can
+	// cover the service's no-op/user-modified outcomes.
+	clearResult *control.DesktopData
 }
 
 func newFixture() fixture {
@@ -200,7 +206,9 @@ func newFixture() fixture {
 
 func fixtureRules(n int) []control.RuleView {
 	out := make([]control.RuleView, 0, n)
-	for i := 0; i < n; i++ {
+	// The service stores and returns approved rules newest first: the highest
+	// fixture index is the newest rule and comes first.
+	for i := n - 1; i >= 0; i-- {
 		out = append(out, control.RuleView{
 			ID: contract.RuleID(fmt.Sprintf("r-%03d", i)), Kind: contract.RuleDomain,
 			Host: fmt.Sprintf("rule-%03d.example", i), Origin: contract.RuleOriginUser,
@@ -266,6 +274,7 @@ type fixtureCaller struct {
 	gateOp    string
 	gate      chan struct{}
 	entered   chan struct{}
+	onCall    func(control.Request)
 }
 
 func newFixtureCaller(fx fixture) *fixtureCaller {
@@ -277,8 +286,12 @@ func (f *fixtureCaller) Call(ctx context.Context, req control.Request) (contract
 	f.calls = append(f.calls, req)
 	transport, failOp, failKind, failMsg := f.transport, f.failOp, f.failKind, f.failMsg
 	gateOp, gate, entered := f.gateOp, f.gate, f.entered
+	onCall := f.onCall
 	f.mu.Unlock()
 
+	if onCall != nil {
+		onCall(req)
+	}
 	if gate != nil && req.Op == gateOp {
 		if entered != nil {
 			select {
@@ -375,9 +388,46 @@ func (f *fixtureCaller) serve(req control.Request) (contract.Envelope, error) {
 		return ok(control.PoolRemoveData{Removed: contract.RecordID(req.ID), Closed: 0})
 	case control.OpPoolTest:
 		return ok(control.PoolTestData{Results: []control.ProbeTestResult{{Exit: contract.ExitID(req.ID), Outcome: contract.OutcomeSuccess}}})
+	case control.OpPoolScan:
+		limit := req.Limit
+		if limit <= 0 || limit > contract.PoolScanBatch {
+			limit = contract.PoolScanBatch
+		}
+		if fx.scanBatch > 0 && limit > fx.scanBatch {
+			limit = fx.scanBatch
+		}
+		offset := req.Offset
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > len(fx.pool) {
+			offset = len(fx.pool)
+		}
+		end := offset + limit
+		if end > len(fx.pool) {
+			end = len(fx.pool)
+		}
+		next := end
+		if next >= len(fx.pool) {
+			next = -1
+		}
+		return ok(control.PoolScanData{Tested: end - offset, Total: len(fx.pool), Next: next, Truncated: next != -1})
 	case control.OpDesktopSet, control.OpDesktopRestore:
 		data := fx.desktop
 		data.Applied = req.Op == control.OpDesktopSet
+		return ok(data)
+	case control.OpDesktopClear:
+		f.mu.Lock()
+		if override := f.fx.clearResult; override != nil {
+			data := *override
+			f.mu.Unlock()
+			return ok(data)
+		}
+		data := f.fx.desktop
+		data.Cleared = true
+		data.Applied = true
+		f.fx.desktop = data
+		f.mu.Unlock()
 		return ok(data)
 	case control.OpBackup:
 		return ok(control.BackupData{Ref: contract.BackupRef{Path: fx.backup, SchemaVersion: 1}})

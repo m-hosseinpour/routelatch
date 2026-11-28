@@ -122,8 +122,8 @@ func TestA10CLISurface(t *testing.T) {
 	refPath := str(ref["path"])
 	checksum := str(ref["checksum"])
 	if refPath != "" && strings.HasPrefix(refPath, filepath.Join(dir, "backup")+string(os.PathSeparator)) &&
-		strings.HasPrefix(checksum, "sha256:") && num(ref["schema_version"]) == 1 && str(ref["created_at"]) != "" {
-		r.pass("A10", "backup returns a ref inside the private backup dir with schema 1 and a sha256 checksum")
+		strings.HasPrefix(checksum, "sha256:") && num(ref["schema_version"]) == 2 && str(ref["created_at"]) != "" {
+		r.pass("A10", "backup returns a ref inside the private backup dir with schema 2 and a sha256 checksum")
 	} else {
 		r.fail("A10", "backup ref: %+v", ref)
 	}

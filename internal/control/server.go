@@ -277,7 +277,7 @@ func writeEnvelope(w net.Conn, env contract.Envelope) error {
 
 func requestTimeout(op string) time.Duration {
 	switch op {
-	case OpPoolTest:
+	case OpPoolTest, OpPoolScan:
 		return 10 * time.Minute
 	case OpDiagnose, OpProposalsRecheck:
 		// A manual diagnosis runs up to two bounded probes; the documented
@@ -290,7 +290,7 @@ func requestTimeout(op string) time.Duration {
 		// A subscription fetch is bounded by SourceTotalTimeout (30s); a file
 		// import is local. The 5s default would cut a valid fetch short.
 		return 60 * time.Second
-	case OpDesktopSet, OpDesktopRestore, OpBackup, OpRestore:
+	case OpDesktopSet, OpDesktopRestore, OpDesktopClear, OpBackup, OpRestore:
 		return 30 * time.Second
 	case OpTunEnable, OpTunDisable, OpMode:
 		// The TUN service allows a 30s operation, the client outlives that

@@ -621,7 +621,7 @@ func applyConfigValue(cfg *contract.Config, key, value string) error {
 					continue
 				}
 				if _, ok := probes.ParseTarget(raw); !ok {
-					return usage("probes.targets must be comma-separated host:port values")
+					return usage("probes.targets must be comma-separated host:port, tcp://host:port or tls://host:port values; empty clears the list")
 				}
 				targets = append(targets, raw)
 			}

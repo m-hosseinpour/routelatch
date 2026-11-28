@@ -1120,3 +1120,566 @@ func contains(list []string, want string) bool {
 	}
 	return false
 }
+
+func TestClearWithoutMarkerSnapshotsAndDisablesGNOME(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'manual'"
+	f.values["org.gnome.system.proxy.http host"] = "'old-proxy'"
+	f.values["org.gnome.system.proxy.http port"] = "3128"
+	f.clearCalls()
+
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if len(result.Cleared) != 1 || result.Cleared[0] != "org.gnome.system.proxy mode" ||
+		!result.StateChanged || result.AlreadyDisabled {
+		t.Fatalf("clear without a marker = %+v, want one mode write", result)
+	}
+	if !result.State.Applied || !result.State.Cleared || result.State.Environment != "gnome" ||
+		len(result.State.Keys) != 8 {
+		t.Fatalf("clear state = %#v, want an applied+cleared 8-key snapshot", result.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'none'" {
+		t.Fatalf("mode = %q after clear, want none", f.values["org.gnome.system.proxy mode"])
+	}
+	// Clear writes only the disable key; the other settings keep their values.
+	if f.values["org.gnome.system.proxy.http host"] != "'old-proxy'" ||
+		f.values["org.gnome.system.proxy.http port"] != "3128" {
+		t.Fatalf("clear changed a non-disable key: %#v", f.values)
+	}
+	sets := 0
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			sets++
+			if call.args[2] != "mode" {
+				t.Fatalf("clear wrote a non-disable key: %v", call)
+			}
+		}
+	}
+	if sets != 1 {
+		t.Fatalf("clear made %d writes, want exactly one (mode)", sets)
+	}
+	restorePoint := map[string]string{}
+	for _, key := range result.State.Keys {
+		restorePoint[key.Name] = key.Previous
+	}
+	if restorePoint["org.gnome.system.proxy mode"] != "'manual'" ||
+		restorePoint["org.gnome.system.proxy.http host"] != "'old-proxy'" {
+		t.Fatalf("restore point = %#v, want the pre-clear values", restorePoint)
+	}
+
+	restored, err := newAdapter(f).Restore(context.Background(), result.State)
+	if err != nil {
+		t.Fatalf("Restore after a marker-less clear: %v", err)
+	}
+	if restored.State.Applied || restored.State.Cleared || len(restored.State.Keys) != 0 {
+		t.Fatalf("restore after clear left ownership behind: %#v", restored.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" ||
+		f.values["org.gnome.system.proxy.http host"] != "'old-proxy'" ||
+		f.values["org.gnome.system.proxy.http port"] != "3128" {
+		t.Fatalf("restore did not reinstate the pre-clear values: %#v", f.values)
+	}
+}
+
+func TestClearWithoutMarkerWorksWithoutHealthChecker(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'auto'"
+	adapter := newAdapter(f)
+	// Clear must work while the service is stopped, so it never consults the
+	// listener health that Apply requires.
+	adapter.Health = nil
+	result, err := adapter.Clear(context.Background(), ClearOptions{Kind: KindGNOME})
+	if err != nil {
+		t.Fatalf("Clear without a health checker: %v", err)
+	}
+	if !result.StateChanged || f.values["org.gnome.system.proxy mode"] != "'none'" {
+		t.Fatalf("clear = %+v values=%#v, want mode none", result, f.values)
+	}
+}
+
+func TestClearWithoutMarkerAlreadyDisabledOnlyNotices(t *testing.T) {
+	f := gnomeSystem()
+	f.clearCalls()
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if !result.AlreadyDisabled || result.Notice == "" || result.StateChanged || len(result.Cleared) != 0 {
+		t.Fatalf("clear of an already-disabled proxy = %+v, want an idempotent notice", result)
+	}
+	if result.State.Applied || result.State.Cleared || len(result.State.Keys) != 0 {
+		t.Fatalf("clear of an already-disabled proxy recorded ownership: %#v", result.State)
+	}
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			t.Fatalf("clear wrote an already-disabled proxy: %v", call)
+		}
+	}
+}
+
+func TestClearWithoutMarkerWriteFailureRollsBackAndLeavesNoMarker(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'manual'"
+	f.writeErr["org.gnome.system.proxy mode"] = errors.New("gsettings failed")
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME})
+	if err == nil {
+		t.Fatal("Clear reported success after a failed write")
+	}
+	if !contains(result.Failed, "org.gnome.system.proxy mode") {
+		t.Fatalf("failed clear = %+v, want the mode key reported as failed", result)
+	}
+	if result.StateChanged || result.State.Applied || result.State.Cleared || len(result.State.Keys) != 0 {
+		t.Fatalf("failed clear recorded ownership: %#v", result.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" {
+		t.Fatalf("failed clear left mode = %q, want the previous manual", f.values["org.gnome.system.proxy mode"])
+	}
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || failure.Kind != contract.ExternalToolFailed {
+		t.Fatalf("error = %v, want external_tool_failed", err)
+	}
+}
+
+func TestApplyAfterMarkerlessClearKeepsTheOriginalRestorePoint(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'manual'"
+	f.values["org.gnome.system.proxy.http host"] = "'old-proxy'"
+	f.values["org.gnome.system.proxy.http port"] = "3128"
+	cleared, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	f.clearCalls()
+
+	again, err := newAdapter(f).Apply(context.Background(), ApplyOptions{
+		Kind: KindGNOME, Targets: testTargets, Previous: cleared.State,
+	})
+	if err != nil {
+		t.Fatalf("Apply after a marker-less clear: %v", err)
+	}
+	if !again.Applied || again.Cleared || len(again.Keys) != 8 {
+		t.Fatalf("re-apply state = %#v, want applied with all keys", again)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" ||
+		f.values["org.gnome.system.proxy.http host"] != "'127.0.0.1'" {
+		t.Fatalf("re-apply did not write the proxy values: %#v", f.values)
+	}
+	for _, key := range again.Keys {
+		switch key.Name {
+		case "org.gnome.system.proxy mode":
+			if key.Previous != "'manual'" {
+				t.Fatalf("mode restore point = %q, want the pre-clear manual", key.Previous)
+			}
+		case "org.gnome.system.proxy.http host":
+			if key.Previous != "'old-proxy'" {
+				t.Fatalf("http host restore point = %q, want the pre-clear value", key.Previous)
+			}
+		}
+	}
+	if _, err := newAdapter(f).Restore(context.Background(), again); err != nil {
+		t.Fatalf("Restore after re-apply: %v", err)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" ||
+		f.values["org.gnome.system.proxy.http host"] != "'old-proxy'" {
+		t.Fatalf("restore did not return to the pre-clear values: %#v", f.values)
+	}
+}
+
+func TestKDEClearWithoutMarkerSnapshotsAndDisables(t *testing.T) {
+	f := kdeSystem()
+	f.values["ProxyType"] = "1"
+	f.clearCalls()
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindKDE})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if len(result.Cleared) != 1 || result.Cleared[0] != "kioslaverc:Proxy Settings/ProxyType" ||
+		!result.StateChanged {
+		t.Fatalf("clear without a marker = %+v, want one ProxyType write", result)
+	}
+	if f.values["ProxyType"] != "0" {
+		t.Fatalf("ProxyType = %q after clear, want 0", f.values["ProxyType"])
+	}
+	if f.values["httpProxy"] != "http://old-proxy 3128" {
+		t.Fatalf("clear changed a non-disable key: %#v", f.values)
+	}
+	sets := 0
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && contains(call.args, "--") {
+			sets++
+			if keyOf(call.args) != "ProxyType" {
+				t.Fatalf("clear wrote a non-disable key: %v", call)
+			}
+		}
+	}
+	if sets != 1 {
+		t.Fatalf("clear made %d writes, want exactly one (ProxyType)", sets)
+	}
+	for _, key := range result.State.Keys {
+		if key.Name == "kioslaverc:Proxy Settings/ProxyType" &&
+			(key.Applied != "0" || key.Previous != "1") {
+			t.Fatalf("ProxyType key = %+v, want applied 0 and previous 1", key)
+		}
+	}
+
+	// Apply after the clear must accept the partial (absent keys omitted)
+	// snapshot and keep the pre-clear restore point.
+	again, err := newAdapter(f).Apply(context.Background(), ApplyOptions{
+		Kind: KindKDE, Targets: testTargets, Previous: result.State,
+	})
+	if err != nil {
+		t.Fatalf("Apply after a marker-less KDE clear: %v", err)
+	}
+	if !again.Applied || again.Cleared || len(again.Keys) != 6 {
+		t.Fatalf("re-apply state = %#v, want applied with all keys", again)
+	}
+	if f.values["ProxyType"] != "1" {
+		t.Fatalf("re-apply ProxyType = %q, want 1", f.values["ProxyType"])
+	}
+	if _, err := newAdapter(f).Restore(context.Background(), again); err != nil {
+		t.Fatalf("Restore after re-apply: %v", err)
+	}
+	if f.values["ProxyType"] != "1" || f.values["httpProxy"] != "http://old-proxy 3128" {
+		t.Fatalf("restore did not return to the pre-clear values: %#v", f.values)
+	}
+}
+
+func TestKDEClearWithoutMarkerTreatsAnAbsentProxyTypeAsDisabled(t *testing.T) {
+	f := kdeSystem()
+	delete(f.values, "ProxyType")
+	f.clearCalls()
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindKDE})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if !result.AlreadyDisabled || result.Notice == "" || result.StateChanged {
+		t.Fatalf("clear with no ProxyType = %+v, want an idempotent notice", result)
+	}
+	for _, call := range f.calls {
+		if call.name == "kwriteconfig6" && contains(call.args, "--") {
+			t.Fatalf("clear wrote a missing disable key: %v", call)
+		}
+	}
+}
+
+func keyOf(args []string) string {
+	for i, arg := range args {
+		if arg == "--key" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func TestGNOMEClearAdoptsAManuallyDisabledModeAndKeepsTheRestorePoint(t *testing.T) {
+	f := gnomeSystem()
+	f.values["org.gnome.system.proxy mode"] = "'auto'"
+	state := applyGNOME(t, f)
+	// The user disabled the proxy in the desktop settings after RouteLatch
+	// applied it. Clear must treat that as already disabled, adopt it, and
+	// keep the original restore point.
+	f.values["org.gnome.system.proxy mode"] = "'none'"
+	f.clearCalls()
+
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: state})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if !result.AlreadyDisabled || !result.StateChanged || len(result.Cleared) != 0 ||
+		!result.State.Cleared || !result.State.Applied {
+		t.Fatalf("clear of a manually disabled mode = %+v, want adopted ownership", result)
+	}
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			t.Fatalf("clear wrote a mode that was already disabled: %v", call)
+		}
+	}
+	for _, key := range result.State.Keys {
+		if key.Name == "org.gnome.system.proxy mode" &&
+			(key.Applied != "'none'" || key.Previous != "'auto'") {
+			t.Fatalf("mode key = %+v, want applied none and previous auto", key)
+		}
+	}
+	if _, err := newAdapter(f).Restore(context.Background(), result.State); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'auto'" {
+		t.Fatalf("restore mode = %q, want the original auto", f.values["org.gnome.system.proxy mode"])
+	}
+}
+
+func TestGNOMEClearDisablesOnlyTheModeKeyAndKeepsPreviousValues(t *testing.T) {
+	f := gnomeSystem()
+	state := applyGNOME(t, f)
+	f.clearCalls()
+
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: state})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if len(result.Cleared) != 1 || result.Cleared[0] != "org.gnome.system.proxy mode" {
+		t.Fatalf("cleared keys = %v, want only the mode key", result.Cleared)
+	}
+	if !result.State.Applied || !result.State.Cleared || len(result.State.Keys) != len(state.Keys) {
+		t.Fatalf("clear state = %#v, want applied+cleared with the marker kept", result.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'none'" {
+		t.Fatalf("mode = %q after clear, want none", f.values["org.gnome.system.proxy mode"])
+	}
+	// Every non-disable key still holds RouteLatch's applied value: clear must
+	// not silently restore the whole proxy.
+	for key, want := range map[string]string{
+		"org.gnome.system.proxy.http host":  "'127.0.0.1'",
+		"org.gnome.system.proxy.http port":  "8317",
+		"org.gnome.system.proxy.socks host": "'127.0.0.1'",
+	} {
+		if got := f.values[key]; got != want {
+			t.Fatalf("%s = %q after clear, want %q", key, got, want)
+		}
+	}
+	sets := 0
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			sets++
+			if call.args[2] != "mode" {
+				t.Fatalf("clear wrote a non-disable key: %v", call)
+			}
+		}
+	}
+	if sets != 1 {
+		t.Fatalf("clear made %d writes, want exactly one (mode)", sets)
+	}
+
+	original := map[string]contract.DesktopKey{}
+	for _, key := range state.Keys {
+		original[key.Name] = key
+	}
+	for _, key := range result.State.Keys {
+		before := original[key.Name]
+		if key.Name == "org.gnome.system.proxy mode" {
+			if key.Applied != "'none'" || key.Previous != before.Previous {
+				t.Fatalf("cleared mode key = %+v, want applied none and the original previous %q", key, before.Previous)
+			}
+			continue
+		}
+		if key != before {
+			t.Fatalf("%s = %+v after clear, want unchanged %+v", key.Name, key, before)
+		}
+	}
+}
+
+func TestGNOMEClearLeavesAUserEditedModeAlone(t *testing.T) {
+	f := gnomeSystem()
+	state := applyGNOME(t, f)
+	f.values["org.gnome.system.proxy mode"] = "'auto'"
+	f.clearCalls()
+
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: state})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if len(result.Cleared) != 0 || !contains(result.UserModified, "org.gnome.system.proxy mode") {
+		t.Fatalf("clear of a user-edited mode = %+v, want a user-modified report", result)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'auto'" {
+		t.Fatalf("user mode was overwritten: %q", f.values["org.gnome.system.proxy mode"])
+	}
+	if result.State.Cleared || !result.State.Applied || len(result.State.Keys) != len(state.Keys) {
+		t.Fatalf("clear of a user-edited mode changed the marker: %#v", result.State)
+	}
+	for _, call := range f.calls {
+		if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+			t.Fatalf("clear wrote a user-edited key: %v", call)
+		}
+	}
+}
+
+func TestGNOMEClearWriteFailureReportsAndKeepsOwnership(t *testing.T) {
+	f := gnomeSystem()
+	state := applyGNOME(t, f)
+	f.writeErr["org.gnome.system.proxy mode"] = errors.New("gsettings failed")
+
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: state})
+	if err == nil {
+		t.Fatal("Clear reported success after a failed write")
+	}
+	if len(result.Cleared) != 0 || !contains(result.Failed, "org.gnome.system.proxy mode") {
+		t.Fatalf("failed clear = %+v, want the mode key reported as failed", result)
+	}
+	if result.State.Cleared || !result.State.Applied || len(result.State.Keys) != len(state.Keys) {
+		t.Fatalf("failed clear changed the ownership marker: %#v", result.State)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" {
+		t.Fatalf("failed clear changed mode: %q", f.values["org.gnome.system.proxy mode"])
+	}
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || failure.Kind != contract.ExternalToolFailed {
+		t.Fatalf("error = %v, want external_tool_failed", err)
+	}
+}
+
+func TestGNOMERestoreAfterClearReturnsTheOriginalValues(t *testing.T) {
+	f := gnomeSystem()
+	state := applyGNOME(t, f)
+	cleared, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: state})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	result, err := newAdapter(f).Restore(context.Background(), cleared.State)
+	if err != nil {
+		t.Fatalf("Restore after Clear: %v", err)
+	}
+	if result.State.Applied || result.State.Cleared || len(result.State.Keys) != 0 {
+		t.Fatalf("restore after clear left ownership behind: %#v", result.State)
+	}
+	for key, want := range map[string]string{
+		"org.gnome.system.proxy mode":         "'none'",
+		"org.gnome.system.proxy.http host":    "''",
+		"org.gnome.system.proxy.http port":    "0",
+		"org.gnome.system.proxy.socks host":   "''",
+		"org.gnome.system.proxy.socks port":   "0",
+		"org.gnome.system.proxy ignore-hosts": "[]",
+	} {
+		if got := f.values[key]; got != want {
+			t.Fatalf("%s = %q after restore, want %q", key, got, want)
+		}
+	}
+}
+
+func TestGNOMEApplyAfterClearRetakesOwnershipAndKeepsTheOriginalRestorePoint(t *testing.T) {
+	f := gnomeSystem()
+	original := applyGNOME(t, f)
+	cleared, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: original})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	f.clearCalls()
+
+	var saved contract.DesktopProxyState
+	savedBeforeWrite := false
+	again, err := newAdapter(f).Apply(context.Background(), ApplyOptions{
+		Kind: KindGNOME, Targets: testTargets, Previous: cleared.State,
+		Save: func(_ context.Context, marker contract.DesktopProxyState) error {
+			saved = marker
+			savedBeforeWrite = true
+			for _, call := range f.calls {
+				if call.name == "gsettings" && len(call.args) == 4 && call.args[0] == "set" {
+					savedBeforeWrite = false
+				}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Apply after Clear: %v", err)
+	}
+	if !savedBeforeWrite {
+		t.Fatal("re-apply after clear saved ownership after writing the desktop")
+	}
+	if !again.Applied || again.Cleared || len(again.Keys) != len(original.Keys) {
+		t.Fatalf("re-apply state = %#v, want applied with all keys", again)
+	}
+	if !saved.Applied || saved.Cleared {
+		t.Fatalf("saved marker = %#v, want applied without cleared", saved)
+	}
+	if f.values["org.gnome.system.proxy mode"] != "'manual'" ||
+		f.values["org.gnome.system.proxy.http host"] != "'127.0.0.1'" {
+		t.Fatalf("re-apply did not write the proxy values: %#v", f.values)
+	}
+	restorePoint := map[string]string{}
+	for _, key := range original.Keys {
+		restorePoint[key.Name] = key.Previous
+	}
+	for _, key := range again.Keys {
+		if key.Previous != restorePoint[key.Name] {
+			t.Fatalf("%s restore point = %q after re-apply, want the original %q", key.Name, key.Previous, restorePoint[key.Name])
+		}
+	}
+
+	result, err := newAdapter(f).Restore(context.Background(), again)
+	if err != nil {
+		t.Fatalf("Restore after re-apply: %v", err)
+	}
+	if result.State.Applied || f.values["org.gnome.system.proxy mode"] != "'none'" ||
+		f.values["org.gnome.system.proxy.http host"] != "''" {
+		t.Fatalf("restore after re-apply did not return the original values: %#v", f.values)
+	}
+}
+
+func TestGNOMEApplyAfterClearRollsBackToTheClearedStateOnFailure(t *testing.T) {
+	f := gnomeSystem()
+	original := applyGNOME(t, f)
+	cleared, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindGNOME, State: original})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	f.clearCalls()
+	f.writeErr["org.gnome.system.proxy mode"] = errors.New("write failed")
+
+	state, err := newAdapter(f).Apply(context.Background(), ApplyOptions{
+		Kind: KindGNOME, Targets: testTargets, Previous: cleared.State,
+	})
+	if err == nil {
+		t.Fatal("re-apply after clear reported success after a failed write")
+	}
+	if state.Applied || len(state.Keys) != 0 {
+		t.Fatalf("re-apply returned ownership after a clean rollback: %#v", state)
+	}
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || !strings.Contains(failure.Message, "previous values were restored") {
+		t.Fatalf("error = %v, want a clear rollback message", err)
+	}
+	// Rollback returns to the live cleared state, not to the pre-RouteLatch
+	// restore point: the user's clear must survive a failed re-apply.
+	if f.values["org.gnome.system.proxy mode"] != "'none'" {
+		t.Fatalf("rollback mode = %q, want the cleared none", f.values["org.gnome.system.proxy mode"])
+	}
+	if f.values["org.gnome.system.proxy.http host"] != "'127.0.0.1'" {
+		t.Fatalf("rollback http host = %q, want the cleared RouteLatch value", f.values["org.gnome.system.proxy.http host"])
+	}
+}
+
+func TestKDEClearDisablesOnlyProxyTypeAndKeepsTheRestorePoint(t *testing.T) {
+	f := kdeSystem()
+	state, err := newAdapter(f).Apply(context.Background(), ApplyOptions{Kind: KindKDE, Targets: testTargets})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	f.clearCalls()
+	result, err := newAdapter(f).Clear(context.Background(), ClearOptions{Kind: KindKDE, State: state})
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if len(result.Cleared) != 1 || result.Cleared[0] != "kioslaverc:Proxy Settings/ProxyType" {
+		t.Fatalf("cleared keys = %v, want only ProxyType", result.Cleared)
+	}
+	if f.values["ProxyType"] != "0" || f.values["httpProxy"] != "http://127.0.0.1 8317" {
+		t.Fatalf("KDE clear values = %#v", f.values)
+	}
+	for _, key := range result.State.Keys {
+		switch key.Name {
+		case "kioslaverc:Proxy Settings/ProxyType":
+			if key.Applied != "0" {
+				t.Fatalf("ProxyType applied = %q after clear, want 0", key.Applied)
+			}
+		default:
+			for _, before := range state.Keys {
+				if before.Name == key.Name && key != before {
+					t.Fatalf("%s changed on clear: %+v -> %+v", key.Name, before, key)
+				}
+			}
+		}
+	}
+
+	restored, err := newAdapter(f).Restore(context.Background(), result.State)
+	if err != nil {
+		t.Fatalf("Restore after KDE clear: %v", err)
+	}
+	if restored.State.Applied || f.values["ProxyType"] != "0" ||
+		f.values["httpProxy"] != "http://old-proxy 3128" {
+		t.Fatalf("KDE restore after clear = %#v values=%#v", restored.State, f.values)
+	}
+}

@@ -353,6 +353,15 @@ func (s *Store) readConfigLocked() (contract.Config, error) {
 	return cfg, nil
 }
 
+// DefaultProbeTargets are the enabled-by-default egress-proof targets. They
+// complete a TLS handshake through the exit, so a reachable exit can become
+// healthy without any user data. They are documented and removable:
+// `config set probes.targets=` clears the list for transport-only health.
+var DefaultProbeTargets = []string{
+	"tls://cloudflare.com:443",
+	"tls://www.gstatic.com:443",
+}
+
 // DefaultConfig is the documented v1 configuration.
 func DefaultConfig() contract.Config {
 	return contract.Config{
@@ -364,7 +373,8 @@ func DefaultConfig() contract.Config {
 			Enabled: true, QueueLimit: 32, MaxConcurrent: 1, RetentionDays: 30,
 		},
 		Probes: contract.ProbeConfig{
-			Targets: []string{}, TimeoutMS: int(contract.ProbeTimeout / time.Millisecond),
+			Targets:      append([]string(nil), DefaultProbeTargets...),
+			TimeoutMS:    int(contract.ProbeTimeout / time.Millisecond),
 			CooldownBase: int(contract.ProbeCooldownBase / time.Second),
 			CooldownMax:  int(contract.ProbeCooldownMax / time.Second),
 		},
@@ -421,7 +431,10 @@ func defaultState(now time.Time) contract.State {
 }
 
 // policyVersionAdvanced enforces §4.4 step 3: a change to mode, rules or the
-// manual exit selection must carry a strictly greater policy version.
+// manual exit selection must carry a strictly greater policy version. The rule
+// comparison includes order: stored order is part of the rule set, so an
+// order-only edit still advances the version even though routing decisions do
+// not depend on it.
 func policyVersionAdvanced(before, after contract.State) error {
 	changed := before.Mode != after.Mode ||
 		before.SelectedExit != after.SelectedExit ||
@@ -439,17 +452,34 @@ func migrateState(from contract.SchemaVersion, st contract.State) (contract.Stat
 	switch from {
 	case 0:
 		// Version 0 is a state file written before schema_version was added.
-		// The field set did not change between those files and v1, so the
-		// migration is only the version stamp plus documented defaults.
-		st.SchemaVersion = contract.SchemaVersionCurrent
+		// It also stored rules oldest first, like version 1.
 		if st.Mode == "" {
 			st.Mode = contract.ModeTargeted
 		}
+		reverseRules(st.Rules)
+		st.SchemaVersion = contract.SchemaVersionCurrent
+		return st, nil
+	case 1:
+		// Version 1 appended new rules, so its list is oldest first. Version 2
+		// stores newest first; reversing here is the one-time migration. The
+		// version stamp makes it idempotent: a version-2 file never reverses
+		// again. Order is not routing input, so PolicyVersion is deliberately
+		// unchanged; policyVersionAdvanced stays order-sensitive, so a later
+		// order-only edit still has to advance the version (docs/contracts.md
+		// §4.4, §4.5).
+		reverseRules(st.Rules)
+		st.SchemaVersion = contract.SchemaVersionCurrent
 		return st, nil
 	case contract.SchemaVersionCurrent:
 		return st, nil
 	default:
 		return contract.State{}, corruptFailure(fmt.Sprintf("no migration path from state schema %d", from), nil)
+	}
+}
+
+func reverseRules(rules []contract.Rule) {
+	for i, j := 0, len(rules)-1; i < j; i, j = i+1, j-1 {
+		rules[i], rules[j] = rules[j], rules[i]
 	}
 }
 

@@ -63,8 +63,9 @@ func ApplyProbe(st *contract.State, res contract.ProbeResult, now time.Time) {
 		}
 		if res.Kind == contract.ProbeTransport {
 			// A transport success proves the endpoint, not egress. It clears a
-			// cooldown but never promotes to healthy (§5.3).
-			recordTransportSuccess(st, res.Exit, now)
+			// cooldown but never promotes to healthy (§5.3). The measured RTT is
+			// kept as the exit's display delay and makes it "reachable".
+			recordTransportSuccess(st, res.Exit, latencyMS(res.Duration), now)
 		}
 	case contract.OutcomeUnconfirmed, contract.OutcomeCanceled:
 		// No evidence: neither cooling nor success.
@@ -72,6 +73,11 @@ func ApplyProbe(st *contract.State, res contract.ProbeResult, now time.Time) {
 	default:
 		if res.Failure == "" || res.Attribution != contract.ProbeAttributionExit || !IsTransportFailure(res.Failure) {
 			return
+		}
+		if res.Kind == contract.ProbeTransport {
+			// The latest endpoint probe failed; a previous endpoint success
+			// must not keep the exit displayed as reachable.
+			clearTransportSuccess(st, res.Exit)
 		}
 		recordFailure(st, res.Exit, res.Failure, now)
 	}
@@ -83,9 +89,10 @@ func RecordUsage(st *contract.State, exit contract.ExitID, latency time.Duration
 	recordSuccess(st, exit, latencyMS(latency), now, true)
 }
 
-// RecordTransportSuccess clears a cooldown after a successful endpoint probe.
-func RecordTransportSuccess(st *contract.State, exit contract.ExitID, now time.Time) {
-	recordTransportSuccess(st, exit, now)
+// RecordTransportSuccess records endpoint evidence and clears a cooldown. It
+// keeps the status unknown: a successful endpoint probe is not egress proof.
+func RecordTransportSuccess(st *contract.State, exit contract.ExitID, latency time.Duration, now time.Time) {
+	recordTransportSuccess(st, exit, latencyMS(latency), now)
 }
 
 // RecordTransportFailure cools an exit for an attributable transport failure.
@@ -155,13 +162,18 @@ func recordSuccess(st *contract.State, exit contract.ExitID, latency int64, now 
 	syncRecordStatusAt(st, *h, now)
 }
 
-func recordTransportSuccess(st *contract.State, exit contract.ExitID, now time.Time) {
+func recordTransportSuccess(st *contract.State, exit contract.ExitID, latency int64, now time.Time) {
 	idx := healthIndex(st, exit)
 	if idx < 0 {
-		return
+		st.Health = append(st.Health, contract.ExitHealth{Exit: exit, Status: contract.HealthUnknown})
+		idx = len(st.Health) - 1
 	}
 	h := &st.Health[idx]
 	h.LastSuccessAt = now
+	h.TransportSuccessAt = now
+	if latency > 0 {
+		h.TransportLatencyMS = latency
+	}
 	h.ConsecutiveFailures = 0
 	h.CooldownUntil = time.Time{}
 	h.LastFailureKind = ""
@@ -169,6 +181,15 @@ func recordTransportSuccess(st *contract.State, exit contract.ExitID, now time.T
 		h.Status = contract.HealthUnknown
 	}
 	syncRecordStatusAt(st, *h, now)
+}
+
+func clearTransportSuccess(st *contract.State, exit contract.ExitID) {
+	idx := healthIndex(st, exit)
+	if idx < 0 {
+		return
+	}
+	st.Health[idx].TransportLatencyMS = 0
+	st.Health[idx].TransportSuccessAt = time.Time{}
 }
 
 func recordFailure(st *contract.State, exit contract.ExitID, kind contract.ErrorKind, now time.Time) {

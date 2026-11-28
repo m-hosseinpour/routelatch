@@ -974,7 +974,7 @@ func TestConfigTunEnabledAdditiveNoMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load old config: %v", err)
 	}
-	if snap.Config.TunEnabled || snap.Config.SchemaVersion != 1 || snap.State.SchemaVersion != 1 {
+	if snap.Config.TunEnabled || snap.Config.SchemaVersion != contract.SchemaVersionCurrent || snap.State.SchemaVersion != contract.SchemaVersionCurrent {
 		t.Fatalf("old config decoded cfg=%+v state schema=%d", snap.Config, snap.State.SchemaVersion)
 	}
 	if _, err := st.MutateConfig(ctx, func(cfg *contract.Config) error {
@@ -994,8 +994,8 @@ func TestConfigTunEnabledAdditiveNoMigration(t *testing.T) {
 	if err := json.Unmarshal(raw, &encoded); err != nil {
 		t.Fatal(err)
 	}
-	if encoded.SchemaVersion != 1 {
-		t.Fatalf("config schema_version=%d, want 1 (no migration)", encoded.SchemaVersion)
+	if encoded.SchemaVersion != contract.SchemaVersionCurrent {
+		t.Fatalf("config schema_version=%d, want %d", encoded.SchemaVersion, contract.SchemaVersionCurrent)
 	}
 	if encoded.TunEnabled == nil || !*encoded.TunEnabled {
 		t.Fatalf("config JSON = %s, want explicit tun_enabled=true", raw)

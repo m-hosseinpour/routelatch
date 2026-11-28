@@ -150,7 +150,38 @@ type ProposalAcceptData struct {
 	RuleID contract.RuleID `json:"rule_id"`
 }
 
-func (s *Service) acceptProposal(ctx context.Context, rawID string) (ProposalAcceptData, error) {
+// acceptRuleKind maps the optional `rule_kind` of proposals.accept to the rule
+// kind to create. An empty kind keeps the proposal's natural rule (exact
+// domain or exact IP); a hostname proposal can widen to domain_suffix. A kind
+// that does not fit the proposal is refused before the proposal is consumed,
+// so a request never silently creates a different kind than it asked for.
+func acceptRuleKind(raw string, dst contract.Destination) (contract.RuleKind, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		switch dst.Kind {
+		case contract.DestDomain:
+			return contract.RuleDomain, nil
+		case contract.DestIP:
+			return contract.RuleIP, nil
+		default:
+			return "", usage("proposals accept needs a domain or IP proposal")
+		}
+	case "domain", "exact":
+		if dst.Kind != contract.DestDomain {
+			return "", usage("an address proposal cannot become a domain rule; omit rule_kind")
+		}
+		return contract.RuleDomain, nil
+	case "domain_suffix", "suffix":
+		if dst.Kind != contract.DestDomain {
+			return "", usage("rule kind domain_suffix needs a hostname proposal; this proposal is an address")
+		}
+		return contract.RuleDomainSuffix, nil
+	default:
+		return "", usage("rule kind must be domain, domain_suffix or empty")
+	}
+}
+
+func (s *Service) acceptProposal(ctx context.Context, rawID, rawKind string) (ProposalAcceptData, error) {
 	s.propsMu.Lock()
 	defer s.propsMu.Unlock()
 	id := contract.ProposalID(strings.TrimSpace(rawID))
@@ -160,7 +191,11 @@ func (s *Service) acceptProposal(ctx context.Context, rawID string) (ProposalAcc
 	if s.diag == nil {
 		return ProposalAcceptData{}, &contract.Failure{Kind: contract.Stopped, Path: contract.PathLocal, Op: "proposals.accept", Message: "diagnostics are not running"}
 	}
-	if p, ok := s.props.Get(id); ok && p.Kind == contract.ProposalUnroute {
+	p, found := s.props.Get(id)
+	if found && p.Kind == contract.ProposalUnroute {
+		if strings.TrimSpace(rawKind) != "" {
+			return ProposalAcceptData{}, usage("an unroute proposal removes a rule; rule_kind does not apply")
+		}
 		ruleID, err := s.props.AcceptUnroute(proposals.UnrouteID(id))
 		if err != nil {
 			return ProposalAcceptData{}, mapProposalError(err)
@@ -172,14 +207,21 @@ func (s *Service) acceptProposal(ctx context.Context, rawID string) (ProposalAcc
 		}
 		return ProposalAcceptData{RuleID: ruleID}, nil
 	}
+	// Validate the requested kind against the pending proposal before Accept
+	// consumes it: a refused request must leave the proposal pending.
+	if !found {
+		return ProposalAcceptData{}, mapProposalError(proposals.ErrNotFound)
+	}
+	kind, err := acceptRuleKind(rawKind, p.Destination)
+	if err != nil {
+		return ProposalAcceptData{}, err
+	}
 	dest, err := s.diag.Accept(id)
 	if err != nil {
 		return ProposalAcceptData{}, mapProposalError(err)
 	}
-	kind := contract.RuleDomain
 	operand := dest.Host
 	if dest.Kind == contract.DestIP {
-		kind = contract.RuleIP
 		operand = dest.Addr.Unmap().String()
 	}
 	if _, err := s.addRule(ctx, Request{Input: operand, RuleKind: string(kind), Note: "accepted from diagnostic proposal " + string(id)}); err != nil {
@@ -278,6 +320,8 @@ type DesktopData struct {
 	Environment  string   `json:"environment,omitempty"`
 	Supported    bool     `json:"supported"`
 	Applied      bool     `json:"applied"`
+	Cleared      bool     `json:"cleared,omitempty"`
+	ClearedKeys  []string `json:"cleared_keys,omitempty"`
 	PreviousSet  bool     `json:"previous_set"`
 	Conflict     []string `json:"conflict,omitempty"`
 	Restored     []string `json:"restored,omitempty"`
@@ -286,13 +330,21 @@ type DesktopData struct {
 	Notice       string   `json:"notice,omitempty"`
 }
 
+func (s *Service) desktopAdapterFor(health platform.HealthChecker) *platform.DesktopAdapter {
+	if s.desktopAdapter != nil {
+		return s.desktopAdapter(health)
+	}
+	return &platform.DesktopAdapter{Runner: platform.ExecRunner{}, Health: health, Now: s.now}
+}
+
 func (s *Service) desktopStatus(ctx context.Context) (DesktopData, error) {
 	s.opMu.Lock()
 	snap := s.Snapshot()
 	s.opMu.Unlock()
 	kind, err := platform.DetectDesktop(os.LookupEnv)
 	out := DesktopData{
-		Applied: snap.State.Desktop.Applied, PreviousSet: len(snap.State.Desktop.Keys) > 0,
+		Applied: snap.State.Desktop.Applied, Cleared: snap.State.Desktop.Cleared,
+		PreviousSet: len(snap.State.Desktop.Keys) > 0,
 	}
 	if snap.State.Desktop.Environment != "" {
 		out.Environment = SanitizeTerminal(snap.State.Desktop.Environment)
@@ -304,7 +356,7 @@ func (s *Service) desktopStatus(ctx context.Context) (DesktopData, error) {
 	if snap.State.Desktop.Applied {
 		// Reading the desktop settings can block on an external tool, so it
 		// happens after opMu is released: status must not stall mutations.
-		adapter := &platform.DesktopAdapter{Runner: platform.ExecRunner{}, Now: s.now}
+		adapter := s.desktopAdapterFor(nil)
 		changed, verifyErr := adapter.Conflicts(ctx, snap.State.Desktop)
 		switch {
 		case verifyErr != nil:
@@ -343,7 +395,7 @@ func (s *Service) desktopApply(ctx context.Context) (DesktopData, error) {
 	defer s.pubMu.Unlock()
 	snap := s.Snapshot()
 	targets := platform.Targets{HTTPListen: s.httpAddr, SOCKSListen: s.socksAddr}
-	adapter := &platform.DesktopAdapter{Runner: platform.ExecRunner{}, Health: serviceHealth{s: s}, Now: s.now}
+	adapter := s.desktopAdapterFor(serviceHealth{s: s})
 	state, err := adapter.Apply(ctx, platform.ApplyOptions{
 		Kind: kind, Targets: targets, Previous: snap.State.Desktop, InstanceID: randomID("d-"),
 		Save: func(ctx context.Context, marker contract.DesktopProxyState) error {
@@ -377,7 +429,7 @@ func (s *Service) desktopRestore(ctx context.Context) (DesktopData, error) {
 	if !snap.State.Desktop.Applied && len(snap.State.Desktop.Keys) == 0 {
 		return DesktopData{Applied: false, PreviousSet: false, Notice: "no desktop proxy setting was applied by RouteLatch"}, nil
 	}
-	adapter := &platform.DesktopAdapter{Runner: platform.ExecRunner{}, Now: s.now}
+	adapter := s.desktopAdapterFor(nil)
 	result, err := adapter.Restore(ctx, snap.State.Desktop)
 	if err != nil {
 		return DesktopData{}, err
@@ -394,6 +446,59 @@ func (s *Service) desktopRestore(ctx context.Context) (DesktopData, error) {
 		Environment: snap.State.Desktop.Environment, Supported: true,
 		Applied: result.State.Applied, PreviousSet: len(result.State.Keys) > 0,
 		Restored: result.Restored, UserModified: result.UserModified, Failed: result.Failed,
+	}, nil
+}
+
+// desktopClear disables the system proxy while keeping (or creating) the
+// ownership marker, so a later restore still returns the user's original
+// values. It needs no live listener, so it also works while listening is
+// stopped; without a recorded environment it uses the detected desktop kind.
+func (s *Service) desktopClear(ctx context.Context) (DesktopData, error) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	snap := s.Snapshot()
+	state := snap.State.Desktop
+	kind := platform.Kind(state.Environment)
+	if kind != platform.KindGNOME && kind != platform.KindKDE {
+		detected, err := platform.DetectDesktop(os.LookupEnv)
+		if err != nil {
+			return DesktopData{}, &contract.Failure{
+				Kind: contract.Unsupported, Path: contract.PathLocal, Op: "desktop.clear",
+				Message: "this desktop environment is not supported; only GNOME and KDE desktop proxy settings can be cleared",
+			}
+		}
+		kind = detected
+	}
+	adapter := s.desktopAdapterFor(nil)
+	result, err := adapter.Clear(ctx, platform.ClearOptions{Kind: kind, State: state})
+	if result.StateChanged {
+		after, merr := s.store.Mutate(ctx, func(st *contract.State) error {
+			st.Desktop = result.State
+			return nil
+		})
+		if merr != nil {
+			if err != nil {
+				return DesktopData{}, errors.Join(err, merr)
+			}
+			return DesktopData{}, merr
+		}
+		s.snap.Store(&after)
+	}
+	if err != nil {
+		return DesktopData{}, err
+	}
+	environment := state.Environment
+	if environment == "" {
+		environment = string(kind)
+	}
+	return DesktopData{
+		Environment: environment, Supported: true,
+		Applied: result.State.Applied, Cleared: result.State.Cleared,
+		PreviousSet: len(result.State.Keys) > 0,
+		ClearedKeys: result.Cleared, Notice: result.Notice,
+		UserModified: result.UserModified, Failed: result.Failed,
 	}, nil
 }
 

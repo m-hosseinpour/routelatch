@@ -17,8 +17,9 @@ const (
 	// service is in all-direct mode.
 	ProbeTransport ProbeKind = "transport"
 	// ProbeEgress dials one configured ProbeConfig target through the exit and
-	// waits for the first downlink byte. It is the only honest proof that an
-	// exit passed traffic, because a nil pool dial proves nothing (T1).
+	// either waits for the first downlink byte (host:port) or completes a TLS
+	// handshake (tls://host:port). It is the only honest proof that an exit
+	// passed traffic, because a nil pool dial proves nothing (T1).
 	ProbeEgress ProbeKind = "egress"
 	// ProbeDirectTCP connects directly to the destination. It never sends
 	// application bytes and never replays the failed request.

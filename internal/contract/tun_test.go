@@ -13,8 +13,8 @@ import (
 // version 1, false when an older file omits it, and always emitted (the config
 // file lists scalar preferences explicitly; omitempty would hide false).
 func TestTunConfigAdditiveJSON(t *testing.T) {
-	if contract.SchemaVersionCurrent != 1 {
-		t.Fatalf("schema version moved to %d; tun_enabled is additive in 1", contract.SchemaVersionCurrent)
+	if contract.SchemaVersionCurrent != 2 {
+		t.Fatalf("schema version = %d; version 2 adds the newest-first rule order", contract.SchemaVersionCurrent)
 	}
 	var old contract.Config
 	oldJSON := []byte(`{"schema_version":1,"http_listen":"127.0.0.1:8317","socks_listen":"127.0.0.1:8318","log_level":"info"}`)
@@ -24,8 +24,8 @@ func TestTunConfigAdditiveJSON(t *testing.T) {
 	if old.TunEnabled {
 		t.Fatal("missing tun_enabled decoded true, want false")
 	}
-	if old.SchemaVersion != contract.SchemaVersionCurrent {
-		t.Fatalf("schema_version=%d, want 1 without migration", old.SchemaVersion)
+	if old.SchemaVersion != 1 {
+		t.Fatalf("schema_version=%d, want the file's version 1", old.SchemaVersion)
 	}
 
 	for _, want := range []bool{false, true} {
@@ -41,8 +41,8 @@ func TestTunConfigAdditiveJSON(t *testing.T) {
 		if !present || value != want {
 			t.Fatalf("config JSON = %s, want explicit tun_enabled=%v", raw, want)
 		}
-		if decoded["schema_version"] != float64(1) {
-			t.Fatalf("config JSON = %s, want schema_version 1", raw)
+		if decoded["schema_version"] != float64(contract.SchemaVersionCurrent) {
+			t.Fatalf("config JSON = %s, want schema_version %d", raw, contract.SchemaVersionCurrent)
 		}
 	}
 }

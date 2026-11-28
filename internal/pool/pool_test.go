@@ -684,3 +684,93 @@ func TestRecordTunnelFailureCoolsWithoutDestinationClaim(t *testing.T) {
 		t.Fatalf("empty exit created a health row: %+v", st.Health)
 	}
 }
+
+func TestTransportSuccessRecordsEndpointEvidenceButStaysUnknown(t *testing.T) {
+	now := t0()
+	st := &contract.State{Records: []contract.Record{record("x-a", 0, contract.RecordUnknown)}}
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeTransport, Exit: "x-a", Outcome: contract.OutcomeSuccess,
+		Duration: 120 * time.Millisecond,
+	}, now)
+	if len(st.Health) != 1 {
+		t.Fatalf("health rows = %d, want one endpoint record", len(st.Health))
+	}
+	h := st.Health[0]
+	if h.Status != contract.HealthUnknown {
+		t.Fatalf("transport success status = %s, want unknown (endpoint is not egress proof)", h.Status)
+	}
+	if h.TransportLatencyMS != 120 || !h.TransportSuccessAt.Equal(now) {
+		t.Fatalf("endpoint evidence = %dms/%v, want 120ms/%v", h.TransportLatencyMS, h.TransportSuccessAt, now)
+	}
+	if !h.LastSuccessAt.Equal(now) {
+		t.Fatalf("last success = %v, want %v", h.LastSuccessAt, now)
+	}
+	if st.Records[0].Status != contract.RecordUnknown {
+		t.Fatalf("record status = %s, want unknown", st.Records[0].Status)
+	}
+
+	// A sub-millisecond round trip is still a real measured delay.
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeTransport, Exit: "x-a", Outcome: contract.OutcomeSuccess,
+		Duration: 400 * time.Microsecond,
+	}, now.Add(time.Second))
+	if h := st.Health[0]; h.TransportLatencyMS != 1 {
+		t.Fatalf("sub-millisecond latency = %dms, want 1", h.TransportLatencyMS)
+	}
+}
+
+func TestTransportFailureClearsEarlierEndpointEvidence(t *testing.T) {
+	now := t0()
+	st := &contract.State{Records: []contract.Record{record("x-a", 0, contract.RecordUnknown)}}
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeTransport, Exit: "x-a", Outcome: contract.OutcomeSuccess,
+		Duration: 80 * time.Millisecond,
+	}, now)
+
+	// A destination-level egress failure is not endpoint evidence and must not
+	// erase the last successful endpoint measurement.
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeEgress, Exit: "x-a", Outcome: contract.OutcomeUnconfirmed,
+		Failure: contract.DestinationUnconfirmed, Attribution: contract.ProbeAttributionExit,
+	}, now.Add(time.Second))
+	if h := st.Health[0]; h.TransportLatencyMS != 80 || h.TransportSuccessAt.IsZero() {
+		t.Fatalf("egress failure erased endpoint evidence: %+v", h)
+	}
+
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeTransport, Exit: "x-a", Outcome: contract.OutcomeTimeout,
+		Failure: contract.Timeout, Attribution: contract.ProbeAttributionExit,
+	}, now.Add(2*time.Second))
+	h := st.Health[0]
+	if h.TransportLatencyMS != 0 || !h.TransportSuccessAt.IsZero() {
+		t.Fatalf("transport failure kept endpoint evidence: %+v", h)
+	}
+	if h.Status != contract.HealthCooling || h.ConsecutiveFailures != 1 {
+		t.Fatalf("transport failure health = %+v, want cooling/1", h)
+	}
+}
+
+func TestEgressSuccessIsWhatMakesAnExitHealthy(t *testing.T) {
+	now := t0()
+	st := &contract.State{Records: []contract.Record{record("x-a", 0, contract.RecordUnknown)}}
+
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeTransport, Exit: "x-a", Outcome: contract.OutcomeSuccess,
+		Duration: 40 * time.Millisecond,
+	}, now)
+	if st.Health[0].Status != contract.HealthUnknown {
+		t.Fatalf("endpoint evidence made the exit healthy: %+v", st.Health[0])
+	}
+
+	ApplyProbe(st, contract.ProbeResult{
+		Kind: contract.ProbeEgress, Exit: "x-a", Outcome: contract.OutcomeSuccess,
+		BytesDown: 1, Duration: 90 * time.Millisecond, Attribution: contract.ProbeAttributionExit,
+	}, now.Add(time.Second))
+	h := st.Health[0]
+	if h.Status != contract.HealthHealthy || h.Samples != 1 || h.EWMALatencyMS != 90 {
+		t.Fatalf("egress success health = %+v, want healthy with one sample", h)
+	}
+	if st.Records[0].Status != contract.RecordHealthy {
+		t.Fatalf("record status = %s, want healthy", st.Records[0].Status)
+	}
+}

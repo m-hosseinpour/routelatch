@@ -9,8 +9,10 @@ import (
 // application version and only moves with a migration (docs/contracts.md §4.5).
 type SchemaVersion int
 
-// SchemaVersionCurrent is the only version this build writes.
-const SchemaVersionCurrent SchemaVersion = 1
+// SchemaVersionCurrent is the only version this build writes. Version 2 stores
+// approved rules newest first; the store reverses a version-1 list once at load
+// (docs/contracts.md §4.5).
+const SchemaVersionCurrent SchemaVersion = 2
 
 // Config is the read-mostly configuration file (config.json). Changing a
 // listener address requires a service restart; the service never rebinds a
@@ -24,8 +26,9 @@ type Config struct {
 	Probes        ProbeConfig       `json:"probes"`
 	// TunEnabled is the persisted user preference for the TUN overlay (R16).
 	// It is additive in schema version 1: an older config without the key
-	// decodes to false. It is always emitted, like the other scalar config
-	// fields, but it is a wish, not proof that TUN is on
+	// decodes to false. Version 2 only changes the stored rule order, so the
+	// key stays additive and always emitted, like the other scalar config
+	// fields; it is a wish, not proof that TUN is on
 	// (docs/contracts.md §10.2).
 	TunEnabled bool `json:"tun_enabled"`
 }
@@ -40,11 +43,16 @@ type DiagnosticsConfig struct {
 	RetentionDays int  `json:"retention_days"`
 }
 
-// ProbeConfig holds the explicit targets a health probe may use. An empty
-// list means "transport and passive signals only"; RouteLatch never invents a
-// third-party target (docs/contracts.md §6.1).
+// ProbeConfig holds the explicit targets a health probe may use. RouteLatch
+// never invents a third-party target (docs/contracts.md §6.1); the store seeds
+// two documented defaults that the user can remove with `config set
+// probes.targets=`. An explicitly empty list means "transport and passive
+// signals only".
 type ProbeConfig struct {
-	Targets      []string `json:"targets"` // "host:port"; egress probes send the hostname unresolved
+	// Targets are egress-proof targets. "host:port" or "tcp://host:port"
+	// reads the first downlink byte; "tls://host:port" completes a TLS
+	// handshake with SNI set to host. The hostname is sent unresolved.
+	Targets      []string `json:"targets"`
 	TimeoutMS    int      `json:"timeout_ms"`
 	CooldownBase int      `json:"cooldown_base"` // seconds; doubled per consecutive transport failure
 	CooldownMax  int      `json:"cooldown_max"`  // seconds
@@ -59,13 +67,16 @@ type State struct {
 	Mode          Mode          `json:"mode"`
 	// SelectedExit pins one exit for new pool dials. Empty means automatic
 	// ranking; a pinned exit that fails is an error, never a silent switch.
-	SelectedExit ExitID            `json:"selected_exit,omitempty"`
-	Rules        []Rule            `json:"rules"`
-	Sources      []Source          `json:"sources"`
-	Records      []Record          `json:"records"`
-	Health       []ExitHealth      `json:"health"`
-	Desktop      DesktopProxyState `json:"desktop"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	SelectedExit ExitID `json:"selected_exit,omitempty"`
+	// Rules are approved destinations in newest-first order: a newly approved
+	// rule is at index 0. The order is part of the stored contract; routing
+	// matching ignores it (docs/contracts.md §4.3, §7.3).
+	Rules     []Rule            `json:"rules"`
+	Sources   []Source          `json:"sources"`
+	Records   []Record          `json:"records"`
+	Health    []ExitHealth      `json:"health"`
+	Desktop   DesktopProxyState `json:"desktop"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // DesktopProxyState is the ownership marker for the optional desktop proxy
@@ -78,6 +89,10 @@ type DesktopProxyState struct {
 	AppliedAt   time.Time    `json:"applied_at,omitzero"`
 	InstanceID  string       `json:"instance_id,omitempty"`
 	Keys        []DesktopKey `json:"keys,omitempty"`
+	// Cleared means RouteLatch disabled the system proxy after taking
+	// ownership. Keys are retained so a later restore can still return the
+	// user's original values (docs/contracts.md §4.8).
+	Cleared bool `json:"cleared,omitempty"`
 }
 
 // DesktopKey is one setting RouteLatch wrote.

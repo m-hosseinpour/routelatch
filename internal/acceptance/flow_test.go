@@ -97,19 +97,24 @@ func TestEndToEnd(t *testing.T) {
 	}
 	rules := svc.mustOK("rules", "list").list(t, "rules")
 	gotKinds := map[string]string{}
+	gotOrder := make([]string, 0, len(rules))
 	for _, rule := range rules {
 		operand := str(rule["host"]) + str(rule["addr"]) + str(rule["prefix"])
 		gotKinds[str(rule["kind"])] = operand
+		gotOrder = append(gotOrder, operand)
 	}
+	// Stored order is newest first, so the last approval is listed first.
+	wantOrder := []string{"203.0.113.0/24", "2001:db8::10", "suffix.rl.test", "exact.rl.test"}
 	okRules := len(rules) == 4 &&
+		strings.Join(gotOrder, ",") == strings.Join(wantOrder, ",") &&
 		gotKinds["domain"] == "exact.rl.test" &&
 		gotKinds["domain_suffix"] == "suffix.rl.test" &&
 		gotKinds["ip"] == "2001:db8::10" &&
 		gotKinds["cidr"] == "203.0.113.0/24"
 	if !okRules {
-		r.fail("A02", "rules list=%+v, want the four accepted kinds", gotKinds)
+		r.fail("A02", "rules list=%+v order=%v, want the four accepted kinds newest first", gotKinds, gotOrder)
 	} else {
-		r.pass("A02", "exact domain, domain suffix, IP and CIDR rules accepted and listed")
+		r.pass("A02", "exact domain, domain suffix, IP and CIDR rules accepted and listed newest first")
 	}
 
 	// A rule that would widen scope with a port is rejected instead of being

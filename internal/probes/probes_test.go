@@ -13,6 +13,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"routelatch/internal/contract"
+	"routelatch/internal/pool"
 )
 
 func rec(id string, transport contract.Transport, security contract.Security) contract.Record {
@@ -368,6 +370,204 @@ func TestEgressProbeFirstByte(t *testing.T) {
 			t.Fatalf("m=%+v", m)
 		}
 	})
+}
+
+// testTLSMaterial creates a test CA and a leaf certificate for dnsName, and
+// returns the client trust pool plus the server TLS configuration.
+func testTLSMaterial(t *testing.T, dnsName string) (*x509.CertPool, *tls.Config) {
+	t.Helper()
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Test Egress CA"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		IsCA: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: dnsName},
+		DNSNames:  []string{dnsName},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leafTemplate, ca, &leafKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	return roots, &tls.Config{
+		Certificates: []tls.Certificate{{Certificate: [][]byte{leafDER}, PrivateKey: leafKey}},
+		MinVersion:   tls.VersionTLS12,
+	}
+}
+
+// serveTLS accepts connections and completes a handshake until the listener is
+// closed.
+func serveTLS(ln net.Listener) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go func(c net.Conn) {
+			defer c.Close()
+			if tc, ok := c.(*tls.Conn); ok {
+				_ = tc.Handshake()
+			}
+		}(conn)
+	}
+}
+
+func TestEgressTLSHandshakeMarksEgressSuccess(t *testing.T) {
+	roots, serverCfg := testTLSMaterial(t, "target.example.com")
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go serveTLS(ln)
+
+	records := []contract.Record{rec("x-a", contract.TransportRaw, contract.SecurityNone)}
+	opts := baseOptions(records, nil)
+	opts.RootCAs = roots
+	opts.FirstByte = 2 * time.Second
+	opts.Pool = fakePool{fn: func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+		conn, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			return contract.PoolDialResult{}, err
+		}
+		return contract.PoolDialResult{Conn: conn, Exit: "x-a", Proof: contract.ProofAccepted}, nil
+	}}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	dst := contract.Destination{Kind: contract.DestDomain, Host: "target.example.com", Port: 443, TLS: true}
+	m, err := e.RunMeasurement(context.Background(), contract.ProbeRequest{
+		Kind: contract.ProbeEgress, Exit: "x-a", Trigger: contract.TriggerManual,
+		Destination: dst, PolicyVersion: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Result.Outcome != contract.OutcomeSuccess || m.Result.BytesDown <= 0 || !m.Attributable {
+		t.Fatalf("tls egress measurement=%+v, want success with downlink bytes", m)
+	}
+	if m.Result.Attribution != contract.ProbeAttributionExit || m.Phase != PhaseNone {
+		t.Fatalf("attribution=%q phase=%q", m.Result.Attribution, m.Phase)
+	}
+
+	st := contract.State{}
+	pool.ApplyProbe(&st, m.Result, time.Now())
+	if len(st.Health) != 1 || st.Health[0].Status != contract.HealthHealthy {
+		t.Fatalf("health=%+v, want healthy after a completed handshake", st.Health)
+	}
+}
+
+func TestEgressTLSFailedHandshakeIsNotEgressSuccess(t *testing.T) {
+	_, serverCfg := testTLSMaterial(t, "target.example.com")
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go serveTLS(ln)
+
+	records := []contract.Record{rec("x-a", contract.TransportRaw, contract.SecurityNone)}
+	opts := baseOptions(records, nil)
+	// No test CA in the trust store: the certificate flight arrives but
+	// verification fails, which proves reachability only.
+	opts.FirstByte = 2 * time.Second
+	opts.Pool = fakePool{fn: func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+		conn, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			return contract.PoolDialResult{}, err
+		}
+		return contract.PoolDialResult{Conn: conn, Exit: "x-a", Proof: contract.ProofAccepted}, nil
+	}}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	dst := contract.Destination{Kind: contract.DestDomain, Host: "target.example.com", Port: 443, TLS: true}
+	m, err := e.RunMeasurement(context.Background(), contract.ProbeRequest{
+		Kind: contract.ProbeEgress, Exit: "x-a", Trigger: contract.TriggerManual,
+		Destination: dst, PolicyVersion: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Result.Outcome != contract.OutcomeTLSFailure || m.Result.Failure != contract.TLSFailure || m.Attributable {
+		t.Fatalf("tls egress measurement=%+v, want non-attributable tls_failure", m)
+	}
+	if m.Result.Attribution != contract.ProbeAttributionNone {
+		t.Fatalf("attribution=%q, want none", m.Result.Attribution)
+	}
+
+	st := contract.State{}
+	pool.ApplyProbe(&st, m.Result, time.Now())
+	if len(st.Health) != 0 {
+		t.Fatalf("health=%+v, a failed handshake must not promote or cool an exit", st.Health)
+	}
+}
+
+func TestEgressTLSHandshakeTimeoutIsNotAttributable(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+
+	records := []contract.Record{rec("x-a", contract.TransportRaw, contract.SecurityNone)}
+	opts := baseOptions(records, nil)
+	opts.FirstByte = 50 * time.Millisecond
+	opts.Pool = fakePool{fn: func(context.Context, contract.PoolDialRequest) (contract.PoolDialResult, error) {
+		conn, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			return contract.PoolDialResult{}, err
+		}
+		return contract.PoolDialResult{Conn: conn, Exit: "x-a", Proof: contract.ProofAccepted}, nil
+	}}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	dst := contract.Destination{Kind: contract.DestDomain, Host: "target.example.com", Port: 443, TLS: true}
+	m, err := e.RunMeasurement(context.Background(), contract.ProbeRequest{
+		Kind: contract.ProbeEgress, Exit: "x-a", Trigger: contract.TriggerManual,
+		Destination: dst, PolicyVersion: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Result.Outcome != contract.OutcomeTimeout || m.Attributable || m.Phase != PhaseHandshake {
+		t.Fatalf("tls egress measurement=%+v, want a non-attributable handshake timeout", m)
+	}
+	select {
+	case conn := <-accepted:
+		_ = conn.Close()
+	default:
+	}
 }
 
 func TestEgressRequiresPoolAndTarget(t *testing.T) {
@@ -785,14 +985,235 @@ func TestProbeKeySeparatesEgressTargets(t *testing.T) {
 }
 
 func TestParseTarget(t *testing.T) {
-	for _, raw := range []string{"example.com:443", "203.0.113.8:443", "[2001:db8::1]:8443"} {
-		if _, ok := ParseTarget(raw); !ok {
+	for _, raw := range []string{"example.com:443", "203.0.113.8:443", "[2001:db8::1]:8443", "tcp://example.com:443"} {
+		got, ok := ParseTarget(raw)
+		if !ok {
 			t.Fatalf("target %q rejected", raw)
 		}
+		if got.TLS {
+			t.Fatalf("target %q unexpectedly uses TLS", raw)
+		}
 	}
-	for _, raw := range []string{"example.com", "example.com:0", "a b:443", ":443"} {
+	for _, raw := range []string{"tls://example.com:443", "TLS://203.0.113.8:8443", "tls://[2001:db8::1]:8443"} {
+		got, ok := ParseTarget(raw)
+		if !ok {
+			t.Fatalf("tls target %q rejected", raw)
+		}
+		if !got.TLS {
+			t.Fatalf("tls target %q lost its scheme", raw)
+		}
+	}
+	for _, raw := range []string{
+		"example.com", "example.com:0", "a b:443", ":443",
+		"tls://example.com", "tls://example.com:0", "tls://:443", "tls://0.0.0.0:443",
+		"https://example.com:443", "http://example.com:443", "quic://example.com:443", "://example.com:443",
+	} {
 		if _, ok := ParseTarget(raw); ok {
 			t.Fatalf("target %q accepted", raw)
+		}
+	}
+}
+
+func rotationRecord(id string, order int) contract.Record {
+	r := rec(id, contract.TransportRaw, contract.SecurityNone)
+	r.Order = order
+	return r
+}
+
+func transportExits(batch []contract.ProbeRequest) []contract.ExitID {
+	out := make([]contract.ExitID, 0, len(batch))
+	for _, req := range batch {
+		if req.Kind == contract.ProbeTransport {
+			out = append(out, req.Exit)
+		}
+	}
+	return out
+}
+
+func TestRotationPrefersUnseenThenOldestLastChecked(t *testing.T) {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	records := []contract.Record{
+		rotationRecord("x-seen-old", 0),
+		rotationRecord("x-seen-failed", 1),
+		rotationRecord("x-unseen", 2),
+		rotationRecord("x-seen-new", 3),
+	}
+	healthByExit := map[contract.ExitID]contract.ExitHealth{
+		"x-seen-old":    {Exit: "x-seen-old", Status: contract.HealthUnknown, LastSuccessAt: now.Add(-2 * time.Hour)},
+		"x-seen-failed": {Exit: "x-seen-failed", Status: contract.HealthCooling, LastFailureAt: now.Add(-3 * time.Hour)},
+		"x-seen-new":    {Exit: "x-seen-new", Status: contract.HealthUnknown, LastSuccessAt: now.Add(-time.Hour)},
+	}
+	opts := baseOptions(records, nil)
+	opts.Clock = func() time.Time { return now }
+	opts.Health = func(id contract.ExitID) (contract.ExitHealth, bool) {
+		h, ok := healthByExit[id]
+		return h, ok
+	}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	batch := e.Rotate(now)
+	got := transportExits(batch)
+	want := []contract.ExitID{"x-unseen", "x-seen-failed", "x-seen-old", "x-seen-new"}
+	if len(got) != len(want) {
+		t.Fatalf("rotation exits = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rotation exits = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestRotationBatchIsBoundedAndReservesEgressSlots(t *testing.T) {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	records := make([]contract.Record, 0, 200)
+	for i := 0; i < 200; i++ {
+		records = append(records, rotationRecord("x-"+strconv.Itoa(i), i))
+	}
+	opts := baseOptions(records, nil)
+	opts.Clock = func() time.Time { return now }
+	opts.Targets = []string{"tls://a.example.com:443", "tls://b.example.com:443"}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	batch := e.Rotate(now)
+	if len(batch) != contract.HealthProbeBatch {
+		t.Fatalf("batch = %d probes, want %d", len(batch), contract.HealthProbeBatch)
+	}
+	transports, egress := 0, 0
+	egressTargets := map[string]bool{}
+	for _, req := range batch {
+		switch req.Kind {
+		case contract.ProbeTransport:
+			transports++
+		case contract.ProbeEgress:
+			egress++
+			if req.Trigger != contract.TriggerRotate || req.Exit == "" {
+				t.Fatalf("egress probe = %+v, want rotate with an explicit exit", req)
+			}
+			if !req.Destination.TLS {
+				t.Fatalf("egress probe = %+v, lost tls:// marker", req)
+			}
+			egressTargets[req.Destination.Host] = true
+		}
+	}
+	if transports != contract.HealthProbeBatch-len(opts.Targets) || egress != len(opts.Targets) {
+		t.Fatalf("batch = %d transport + %d egress, want %d + %d",
+			transports, egress, contract.HealthProbeBatch-len(opts.Targets), len(opts.Targets))
+	}
+	if !egressTargets["a.example.com"] || !egressTargets["b.example.com"] {
+		t.Fatalf("configured egress targets without a reserved slot: %v", egressTargets)
+	}
+}
+
+func TestRotationCapsEgressShareAndRotatesTargets(t *testing.T) {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	records := make([]contract.Record, 0, 60)
+	for i := 0; i < 60; i++ {
+		records = append(records, rotationRecord("x-"+strconv.Itoa(i), i))
+	}
+	targets := make([]string, 0, 60)
+	for i := 0; i < 60; i++ {
+		targets = append(targets, "tls://t"+strconv.Itoa(i)+".example.com:443")
+	}
+	opts := baseOptions(records, nil)
+	opts.Clock = func() time.Time { return now }
+	opts.Targets = targets
+	e := NewEngine(opts)
+	defer e.Close()
+
+	first := e.Rotate(now)
+	transports, egress := 0, map[string]bool{}
+	for _, req := range first {
+		switch req.Kind {
+		case contract.ProbeTransport:
+			transports++
+		case contract.ProbeEgress:
+			egress[req.Destination.Host] = true
+		}
+	}
+	if len(first) != contract.HealthProbeBatch {
+		t.Fatalf("batch = %d, want %d", len(first), contract.HealthProbeBatch)
+	}
+	if transports < contract.HealthProbeBatch/2 || len(egress) > contract.HealthProbeBatch/2 {
+		t.Fatalf("egress starved endpoint rotation: %d transports, %d egress", transports, len(egress))
+	}
+	if len(egress) == 0 || len(egress) == len(targets) {
+		t.Fatalf("egress share = %d of %d targets, want a bounded subset", len(egress), len(targets))
+	}
+
+	second := e.Rotate(now.Add(contract.HealthProbeInterval))
+	secondTargets := map[string]bool{}
+	for _, req := range second {
+		if req.Kind == contract.ProbeEgress {
+			secondTargets[req.Destination.Host] = true
+		}
+	}
+	rotated := false
+	for host := range secondTargets {
+		if !egress[host] {
+			rotated = true
+			break
+		}
+	}
+	if !rotated {
+		t.Fatal("the same egress target subset ran twice; targets beyond the cap are starved")
+	}
+}
+
+func TestRotationDoesNotStarveUnseenRecords(t *testing.T) {
+	start := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	const total = 150
+	records := make([]contract.Record, 0, total)
+	for i := 0; i < total; i++ {
+		records = append(records, rotationRecord("x-"+strconv.Itoa(i), i))
+	}
+	healthByExit := map[contract.ExitID]contract.ExitHealth{}
+	opts := baseOptions(records, nil)
+	opts.Clock = func() time.Time { return start }
+	opts.Health = func(id contract.ExitID) (contract.ExitHealth, bool) {
+		h, ok := healthByExit[id]
+		return h, ok
+	}
+	e := NewEngine(opts)
+	defer e.Close()
+
+	seen := map[contract.ExitID]bool{}
+	cycle := func(at time.Time) []contract.ExitID {
+		batch := transportExits(e.Rotate(at))
+		for _, exit := range batch {
+			seen[exit] = true
+			healthByExit[exit] = contract.ExitHealth{
+				Exit: exit, Status: contract.HealthUnknown, LastSuccessAt: at,
+			}
+		}
+		return batch
+	}
+
+	first := cycle(start)
+	if len(first) != contract.HealthProbeBatch {
+		t.Fatalf("first cycle = %d exits, want %d", len(first), contract.HealthProbeBatch)
+	}
+	firstCycle := make(map[contract.ExitID]bool, len(first))
+	for _, exit := range first {
+		firstCycle[exit] = true
+	}
+	second := cycle(start.Add(contract.HealthProbeInterval))
+	if len(second) != contract.HealthProbeBatch {
+		t.Fatalf("second cycle = %d exits, want %d", len(second), contract.HealthProbeBatch)
+	}
+	// Cycle two spends its allowance on the 50 unseen exits plus the oldest
+	// seen records, so every record is checked within two cycles.
+	unseen := total - contract.HealthProbeBatch
+	for i := 0; i < unseen; i++ {
+		if firstCycle[second[i]] {
+			t.Fatalf("cycle two entry %d (%s) was already checked in cycle one; unseen-first order was lost", i, second[i])
+		}
+	}
+	for _, r := range records {
+		if !seen[contract.ExitID(r.ID)] {
+			t.Fatalf("exit %s was not checked in two cycles (starvation)", r.ID)
 		}
 	}
 }

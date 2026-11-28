@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -103,7 +104,6 @@ type Controller struct {
 	mu         sync.Mutex
 	snap       Snapshot
 	job        *job
-	pages      map[Section]int
 	lastAction string
 	restarting bool
 
@@ -131,9 +131,8 @@ func New(opts Options) (*Controller, error) {
 		opts.RestartTimeout = defaultRestartTimeout
 	}
 	return &Controller{
-		opts:  opts,
-		snap:  Snapshot{Engine: EngineLoading, Paths: opts.Paths},
-		pages: make(map[Section]int),
+		opts: opts,
+		snap: Snapshot{Engine: EngineLoading, Paths: opts.Paths},
 	}, nil
 }
 
@@ -169,7 +168,6 @@ func (c *Controller) View() View {
 	c.mu.Lock()
 	notes := c.expireLocked(c.opts.Now())
 	engine := c.engineLocked()
-	c.clampPagesLocked()
 	fp := c.menuFingerprintLocked(engine)
 	if fp != c.cachedFP {
 		c.cachedRoot = c.buildMenuLocked(engine)
@@ -232,18 +230,6 @@ func (c *Controller) Trigger(ctx context.Context, action Action, target Target) 
 	c.mu.Lock()
 	notes := c.expireLocked(c.opts.Now())
 
-	switch action {
-	case ActionPageNext, ActionPagePrevious:
-		delta := 1
-		if action == ActionPagePrevious {
-			delta = -1
-		}
-		c.pageStepLocked(target.Section, delta)
-		c.mu.Unlock()
-		c.notify(notes)
-		return Result{Status: ResultCompleted}, nil
-	}
-
 	if kindOf(action) == kindNone {
 		c.mu.Unlock()
 		c.notify(notes)
@@ -298,8 +284,6 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 	busy := c.job != nil
 
 	switch action {
-	case ActionPageNext, ActionPagePrevious:
-		return nil
 	case ActionTerminalMenu, ActionShowLogPath:
 		if engine == EngineLoading {
 			return ErrUnavailable
@@ -375,7 +359,7 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 		}
 	}
 	switch action {
-	case ActionProposalAccept, ActionProposalReject, ActionProposalRecheck:
+	case ActionProposalAccept, ActionProposalAcceptSuffix, ActionProposalReject, ActionProposalRecheck:
 		if !c.snap.Status.DiagnosticsEnabled {
 			return ErrBlocked
 		}
@@ -395,6 +379,10 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 		if !c.desktopRestoreAllowedLocked() {
 			return ErrBlocked
 		}
+	case ActionDesktopClear:
+		if !c.desktopClearAllowedLocked() {
+			return ErrBlocked
+		}
 	case ActionTunEnable, ActionTunDisable:
 		if c.tunActionBlockedReasonLocked(action) != "" {
 			return ErrBlocked
@@ -406,7 +394,7 @@ func (c *Controller) allowedLocked(action Action, target Target) error {
 func stoppedActionAllowed(action Action) bool {
 	switch action {
 	case ActionModeTargeted, ActionModeAllProxy, ActionModeAllDirect,
-		ActionDesktopRefresh, ActionDesktopRestore, ActionBackup, ActionTunDisable:
+		ActionDesktopRefresh, ActionDesktopRestore, ActionDesktopClear, ActionBackup, ActionTunDisable:
 		return true
 	default:
 		// Pool/probe/rules mutation, proposals and diagnostics do not run while
@@ -448,6 +436,27 @@ func (c *Controller) desktopSetAllowedLocked() bool {
 func (c *Controller) desktopRestoreAllowedLocked() bool {
 	d := c.snap.Desktop
 	return d.Known && !d.Err && d.Supported
+}
+
+// desktopClearAllowedLocked makes Clear available whenever a supported
+// desktop backend is known: with or without a previous marker, while the
+// service is stopped, and even when the proxy already reports cleared. The
+// operation is idempotent and reports an already-disabled setting as a notice.
+func (c *Controller) desktopClearAllowedLocked() bool {
+	d := c.snap.Desktop
+	return d.Known && !d.Err && d.Supported
+}
+
+func (c *Controller) desktopClearBlockedReasonLocked() string {
+	d := c.snap.Desktop
+	switch {
+	case !d.Known || d.Err:
+		return "desktop proxy status is unknown"
+	case !d.Supported:
+		return "this desktop environment is not supported"
+	default:
+		return ""
+	}
 }
 
 // tunActionBlockedReasonLocked is the one rule behind both the disabled menu
@@ -548,7 +557,7 @@ func (c *Controller) runJob(j *job) {
 	case kindAutostart:
 		message, err = c.jobAutostart(j.ctx)
 	case kindRequest:
-		message, err = c.jobRequest(j.ctx, j.action, j.target)
+		message, err = c.jobRequest(j.ctx, j, j.action, j.target)
 	default:
 		err = ErrBlocked
 	}
@@ -675,13 +684,6 @@ func (c *Controller) Tick() {
 	notes := c.expireLocked(c.opts.Now())
 	c.mu.Unlock()
 	c.notify(notes)
-}
-
-// SetPage requests one list page. View clamps it to the current page count.
-func (c *Controller) SetPage(section Section, page int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.pages[section] = page
 }
 
 // Close cancels a running job and marks it interrupted. It does not contact
@@ -839,6 +841,11 @@ func (c *Controller) runRequest(ctx context.Context, action Action, target Targe
 		if p, ok := c.proposalSnapshot(target.ProposalID); ok && p.Kind == contract.ProposalUnroute {
 			message = "Unroute accepted; rule removed"
 		}
+	case ActionProposalAcceptSuffix:
+		message = "Proposal accepted as a domain suffix"
+		if p, ok := c.proposalSnapshot(target.ProposalID); ok && p.Kind == contract.ProposalUnroute {
+			message = "Unroute accepted; rule removed"
+		}
 	case ActionProposalReject:
 		message = "Proposal rejected"
 	case ActionPoolSelectAuto:
@@ -876,10 +883,13 @@ func (c *Controller) failSync(action Action, err error) (Result, error) {
 
 // ---------- job execution ----------
 
-func (c *Controller) jobRequest(ctx context.Context, action Action, target Target) (string, error) {
+func (c *Controller) jobRequest(ctx context.Context, j *job, action Action, target Target) (string, error) {
 	req, ok := requestFor(action, target)
 	if !ok {
 		return "", ErrBlocked
+	}
+	if action == ActionPoolScan {
+		return c.jobPoolScan(ctx, j, req)
 	}
 	env, err := c.call(ctx, req)
 	if err != nil {
@@ -918,6 +928,28 @@ func (c *Controller) jobRequest(ctx context.Context, action Action, target Targe
 		// "restored" would overstate the result. The service notice means there
 		// was nothing to restore; use fixed tray text rather than caller text.
 		return desktopRestoreSummary(data, "Desktop proxy"), nil
+	case ActionDesktopClear:
+		var data control.DesktopData
+		if err := decodeData(env, &data); err != nil {
+			return "", err
+		}
+		c.applyDesktop(desktopFromData(data))
+		switch {
+		case len(data.UserModified) > 0:
+			return "Desktop proxy not cleared; " + userModifiedSummary(len(data.UserModified)), nil
+		case len(data.Failed) > 0:
+			return "Desktop proxy could not be cleared", nil
+		case len(data.ClearedKeys) > 0:
+			return "Desktop proxy cleared", nil
+		case data.Notice != "":
+			// Already disabled or nothing to clear: say so instead of claiming
+			// a write that did not happen.
+			return "Desktop proxy: " + SanitizeLabel(data.Notice), nil
+		case data.Cleared:
+			return "Desktop proxy cleared", nil
+		default:
+			return "Desktop proxy could not be cleared", nil
+		}
 	case ActionPoolRefresh:
 		return "Sources refreshed", nil
 	case ActionPoolTest, ActionPoolTestFirst20:
@@ -960,6 +992,40 @@ func (c *Controller) jobRequest(ctx context.Context, action Action, target Targe
 	default:
 		return "Done: " + action.String(), nil
 	}
+}
+
+func (c *Controller) jobPoolScan(ctx context.Context, j *job, req control.Request) (string, error) {
+	cursor := 0
+	tested := 0
+	total := 0
+	for {
+		callReq := req
+		callReq.Offset = cursor
+		env, err := c.call(ctx, callReq)
+		if err != nil {
+			return "", err
+		}
+		var data control.PoolScanData
+		if err := decodeData(env, &data); err != nil {
+			return "", err
+		}
+		total = data.Total
+		tested += data.Tested
+		c.setJobName(j, fmt.Sprintf("pool check %d/%d", tested, total))
+		if data.Next < 0 || data.Tested == 0 || data.Next <= cursor {
+			break
+		}
+		cursor = data.Next
+	}
+	return fmt.Sprintf("Pool checked (%d exits)", tested), nil
+}
+
+func (c *Controller) setJobName(j *job, name string) {
+	c.mu.Lock()
+	if c.job == j {
+		c.job.Name = name
+	}
+	c.mu.Unlock()
 }
 
 func (c *Controller) jobAutostart(ctx context.Context) (string, error) {
@@ -1041,81 +1107,37 @@ func userModifiedSummary(n int) string {
 	return fmt.Sprintf("%d user-modified settings left unchanged", n)
 }
 
-// ---------- pagination ----------
+// ---------- pool groups ----------
 
-func (c *Controller) pageStepLocked(section Section, delta int) {
-	page, _ := c.pageLocked(section)
-	page += delta
-	c.pages[section] = page
-	c.pageLocked(section) // clamp immediately
-}
-
-// pageLocked returns the clamped current page (1-based) and total pages.
-func (c *Controller) pageLocked(section Section) (int, int) {
-	total := c.sectionLenLocked(section)
-	pages := (total + PageSize - 1) / PageSize
-	if pages < 1 {
-		pages = 1
-	}
-	page := c.pages[section]
-	if page < 1 {
-		page = 1
-	}
-	if page > pages {
-		page = pages
-	}
-	c.pages[section] = page
-	return page, pages
-}
-
-func (c *Controller) sectionLenLocked(section Section) int {
-	switch section {
-	case SectionRules:
-		return len(c.snap.Rules)
-	case SectionProposalsPending:
-		n := 0
-		for _, p := range c.snap.Proposals {
-			if p.Status == contract.ProposalPending {
-				n++
-			}
-		}
-		return n
-	case SectionProposalsDecided:
-		n := 0
-		for _, p := range c.snap.Proposals {
-			if p.Status != contract.ProposalPending {
-				n++
-			}
-		}
-		return n
-	case SectionPoolHealthy, SectionPoolUntested, SectionPoolCooling, SectionPoolUnusable:
-		return len(c.poolGroupLocked(section))
-	default:
-		return 0
-	}
-}
-
-func (c *Controller) clampPagesLocked() {
-	for _, s := range []Section{
-		SectionRules, SectionProposalsPending, SectionProposalsDecided,
-		SectionPoolHealthy, SectionPoolUntested, SectionPoolCooling, SectionPoolUnusable,
-	} {
-		c.pageLocked(s)
-	}
-}
-
+// poolGroupLocked returns one group in display order. Healthy and reachable
+// rows are ordered by measured delay (zero/unknown last), so a checked list
+// shows its best exit first; the other groups keep the stable user order.
 func (c *Controller) poolGroupLocked(section Section) []PoolRow {
 	var out []PoolRow
 	for _, row := range c.snap.Pool.Rows {
-		if poolGroupOf(row.Status) == section {
+		if poolGroupOf(row) == section {
 			out = append(out, row)
 		}
+	}
+	if section == SectionPoolHealthy || section == SectionPoolReachable {
+		sort.SliceStable(out, func(i, j int) bool {
+			a, b := out[i].DelayMS, out[j].DelayMS
+			if (a == 0) != (b == 0) {
+				return a != 0
+			}
+			if a != b {
+				return a < b
+			}
+			return false
+		})
 	}
 	return out
 }
 
-func poolGroupOf(status contract.RecordStatus) Section {
-	switch status {
+// poolGroupOf maps one row to its menu group. Reachable is a display view of
+// endpoint evidence; it does not change the record status or the selection.
+func poolGroupOf(row PoolRow) Section {
+	switch row.Status {
 	case contract.RecordHealthy:
 		return SectionPoolHealthy
 	case contract.RecordCooling:
@@ -1123,6 +1145,9 @@ func poolGroupOf(status contract.RecordStatus) Section {
 	case contract.RecordUnsupported, contract.RecordInvalid:
 		return SectionPoolUnusable
 	default:
+		if row.Reachable {
+			return SectionPoolReachable
+		}
 		return SectionPoolUntested
 	}
 }
@@ -1145,7 +1170,6 @@ type fingerprintPayload struct {
 	Job        *Job
 	LastAction string
 	Restarting bool
-	Pages      map[Section]int
 	IsLoaded   bool
 	ListsKnown bool
 }
@@ -1167,7 +1191,6 @@ func (c *Controller) menuFingerprintLocked(engine EngineState) string {
 		Job:        copyJob(c.job),
 		LastAction: c.lastAction,
 		Restarting: c.restarting,
-		Pages:      c.pages,
 		IsLoaded:   c.snap.Engine != EngineLoading,
 		ListsKnown: c.snap.ListsKnown,
 	}

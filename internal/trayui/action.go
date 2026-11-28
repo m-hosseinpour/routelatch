@@ -19,6 +19,7 @@ const (
 	ActionTunEnable
 	ActionTunDisable
 	ActionProposalAccept
+	ActionProposalAcceptSuffix
 	ActionProposalReject
 	ActionProposalRecheck
 	ActionProposalsClear
@@ -30,9 +31,11 @@ const (
 	ActionPoolRerank
 	ActionPoolTest
 	ActionPoolTestFirst20
+	ActionPoolScan
 	ActionDesktopRefresh
 	ActionDesktopSet
 	ActionDesktopRestore
+	ActionDesktopClear
 	ActionBackup
 	ActionDoctor
 	ActionAutostartToggle
@@ -41,8 +44,6 @@ const (
 	ActionQuit
 	ActionQuitRestoreDesktop
 	ActionQuitKeepDesktop
-	ActionPageNext
-	ActionPagePrevious
 )
 
 // allActions is every public action, including ActionNone. The action mapping
@@ -58,6 +59,7 @@ var allActions = []Action{
 	ActionTunEnable,
 	ActionTunDisable,
 	ActionProposalAccept,
+	ActionProposalAcceptSuffix,
 	ActionProposalReject,
 	ActionProposalRecheck,
 	ActionProposalsClear,
@@ -69,9 +71,11 @@ var allActions = []Action{
 	ActionPoolRerank,
 	ActionPoolTest,
 	ActionPoolTestFirst20,
+	ActionPoolScan,
 	ActionDesktopRefresh,
 	ActionDesktopSet,
 	ActionDesktopRestore,
+	ActionDesktopClear,
 	ActionBackup,
 	ActionDoctor,
 	ActionAutostartToggle,
@@ -80,8 +84,6 @@ var allActions = []Action{
 	ActionQuit,
 	ActionQuitRestoreDesktop,
 	ActionQuitKeepDesktop,
-	ActionPageNext,
-	ActionPagePrevious,
 }
 
 // String is the stable, log-safe action name. It is the only action detail a
@@ -106,6 +108,8 @@ func (a Action) String() string {
 		return "tun.disable"
 	case ActionProposalAccept:
 		return "proposal.accept"
+	case ActionProposalAcceptSuffix:
+		return "proposal.accept-suffix"
 	case ActionProposalReject:
 		return "proposal.reject"
 	case ActionProposalRecheck:
@@ -128,12 +132,16 @@ func (a Action) String() string {
 		return "pool.test"
 	case ActionPoolTestFirst20:
 		return "pool.test-first20"
+	case ActionPoolScan:
+		return "pool.scan"
 	case ActionDesktopRefresh:
 		return "desktop.refresh"
 	case ActionDesktopSet:
 		return "desktop.set"
 	case ActionDesktopRestore:
 		return "desktop.restore"
+	case ActionDesktopClear:
+		return "desktop.clear"
 	case ActionBackup:
 		return "backup"
 	case ActionDoctor:
@@ -150,10 +158,6 @@ func (a Action) String() string {
 		return "quit.restore-desktop"
 	case ActionQuitKeepDesktop:
 		return "quit.keep-desktop"
-	case ActionPageNext:
-		return "page.next"
-	case ActionPagePrevious:
-		return "page.previous"
 	default:
 		return "unknown"
 	}
@@ -165,20 +169,18 @@ type Target struct {
 	ProposalID contract.ProposalID
 	RuleID     contract.RuleID
 	ExitID     contract.ExitID
-	Section    Section
 }
 
-// Section identifies one independently paginated menu list.
+// Section identifies one pool group in the menu. It is not pagination state:
+// every page is rendered as a nested submenu inside the same list.
 type Section string
 
 const (
-	SectionRules            Section = "rules"
-	SectionProposalsPending Section = "proposals.pending"
-	SectionProposalsDecided Section = "proposals.decided"
-	SectionPoolHealthy      Section = "pool.healthy"
-	SectionPoolUntested     Section = "pool.untested"
-	SectionPoolCooling      Section = "pool.cooling"
-	SectionPoolUnusable     Section = "pool.unsupported"
+	SectionPoolHealthy   Section = "pool.healthy"
+	SectionPoolReachable Section = "pool.reachable"
+	SectionPoolUntested  Section = "pool.untested"
+	SectionPoolCooling   Section = "pool.cooling"
+	SectionPoolUnusable  Section = "pool.unsupported"
 )
 
 type actionKind int
@@ -197,10 +199,10 @@ const (
 func kindOf(a Action) actionKind {
 	switch a {
 	case ActionModeTargeted, ActionModeAllProxy, ActionModeAllDirect, ActionStopListening,
-		ActionProposalAccept, ActionProposalReject, ActionProposalRecheck, ActionProposalsClear,
+		ActionProposalAccept, ActionProposalAcceptSuffix, ActionProposalReject, ActionProposalRecheck, ActionProposalsClear,
 		ActionRuleRemove, ActionPoolSelectAuto, ActionPoolSelect, ActionPoolRemove,
-		ActionPoolRefresh, ActionPoolRerank, ActionPoolTest, ActionPoolTestFirst20,
-		ActionDesktopRefresh, ActionDesktopSet, ActionDesktopRestore, ActionBackup, ActionDoctor,
+		ActionPoolRefresh, ActionPoolRerank, ActionPoolTest, ActionPoolTestFirst20, ActionPoolScan,
+		ActionDesktopRefresh, ActionDesktopSet, ActionDesktopRestore, ActionDesktopClear, ActionBackup, ActionDoctor,
 		ActionTunEnable, ActionTunDisable:
 		return kindRequest
 	case ActionRestartEngine:
@@ -213,7 +215,7 @@ func kindOf(a Action) actionKind {
 		return kindTerminal
 	case ActionQuit, ActionQuitKeepDesktop:
 		return kindLifecycle
-	case ActionShowLogPath, ActionPageNext, ActionPagePrevious:
+	case ActionShowLogPath:
 		return kindLocal
 	default:
 		return kindNone
@@ -238,6 +240,8 @@ func requestFor(a Action, t Target) (control.Request, bool) {
 		return control.Request{Op: control.OpTunDisable}, true
 	case ActionProposalAccept:
 		return control.Request{Op: control.OpProposalsAccept, ID: string(t.ProposalID)}, true
+	case ActionProposalAcceptSuffix:
+		return control.Request{Op: control.OpProposalsAccept, ID: string(t.ProposalID), RuleKind: string(contract.RuleDomainSuffix)}, true
 	case ActionProposalReject:
 		return control.Request{Op: control.OpProposalsReject, ID: string(t.ProposalID)}, true
 	case ActionProposalRecheck:
@@ -260,12 +264,16 @@ func requestFor(a Action, t Target) (control.Request, bool) {
 		return control.Request{Op: control.OpPoolTest, ID: string(t.ExitID)}, true
 	case ActionPoolTestFirst20:
 		return control.Request{Op: control.OpPoolTest}, true
+	case ActionPoolScan:
+		return control.Request{Op: control.OpPoolScan, Limit: contract.PoolScanBatch}, true
 	case ActionDesktopRefresh:
 		return control.Request{Op: control.OpDesktopStatus}, true
 	case ActionDesktopSet:
 		return control.Request{Op: control.OpDesktopSet}, true
 	case ActionDesktopRestore:
 		return control.Request{Op: control.OpDesktopRestore}, true
+	case ActionDesktopClear:
+		return control.Request{Op: control.OpDesktopClear}, true
 	case ActionBackup:
 		return control.Request{Op: control.OpBackup}, true
 	case ActionDoctor:
@@ -292,12 +300,16 @@ func jobName(a Action) (string, bool) {
 		return "pool refresh", true
 	case ActionPoolTest, ActionPoolTestFirst20:
 		return "pool test", true
+	case ActionPoolScan:
+		return "pool check", true
 	case ActionProposalRecheck:
 		return "proposal recheck", true
 	case ActionDesktopSet:
 		return "desktop set", true
 	case ActionDesktopRestore:
 		return "desktop restore", true
+	case ActionDesktopClear:
+		return "desktop clear", true
 	case ActionBackup:
 		return "backup", true
 	case ActionDoctor:
@@ -324,8 +336,10 @@ func (c *Controller) proposalByIDLocked(id contract.ProposalID) (Proposal, bool)
 func (c *Controller) desktopAppliedOrUnknownLocked() bool {
 	d := c.snap.Desktop
 	// Never-read is unknown, not "not applied": the initial menu must not offer
-	// a plain Quit that could leave an applied desktop proxy behind.
-	return d.Err || !d.Known || d.Applied
+	// a plain Quit that could leave an applied desktop proxy behind. A cleared
+	// proxy is disabled, so it cannot break the connection and does not force
+	// the restore/keep choice.
+	return d.Err || !d.Known || (d.Applied && !d.Cleared)
 }
 
 // desktopCutWarningLocked is the visible warning under Mode when stopping or
@@ -336,7 +350,7 @@ func (c *Controller) desktopCutWarningLocked() string {
 	switch {
 	case d.Err || !d.Known:
 		return "Desktop proxy state unknown; stopping or restarting may cut it"
-	case d.Applied:
+	case d.Applied && !d.Cleared:
 		return "Desktop proxy applied; stopping or restarting cuts it until listening resumes"
 	default:
 		return ""

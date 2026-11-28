@@ -178,6 +178,9 @@ type Service struct {
 
 	trayProbe  func(context.Context) error
 	pidfdProbe func() error
+	// desktopAdapter is a test seam for the desktop proxy adapter. Production
+	// code leaves it nil and gets the platform ExecRunner.
+	desktopAdapter func(platform.HealthChecker) *platform.DesktopAdapter
 
 	httpListen    string
 	socksListen   string
@@ -190,8 +193,10 @@ type Service struct {
 	// persisted stopped state and has not yet opened the engine at all.
 	stoppedByThisProcess bool
 
-	probeStop chan struct{}
-	probeOnce sync.Once
+	probeStop   chan struct{}
+	probeDone   chan struct{}
+	probeCancel context.CancelFunc
+	probeOnce   sync.Once
 }
 
 // NewService loads the snapshot, builds the initial policy and creates an
@@ -526,7 +531,15 @@ func (s *Service) startNetwork(ctx context.Context, pubHeld bool) error {
 			}
 			return contract.Record{}, false
 		},
-		AllRecords:         func() []contract.Record { return s.Snapshot().State.Records },
+		AllRecords: func() []contract.Record { return s.Snapshot().State.Records },
+		Health: func(id contract.ExitID) (contract.ExitHealth, bool) {
+			for _, h := range s.Snapshot().State.Health {
+				if h.Exit == id {
+					return h, true
+				}
+			}
+			return contract.ExitHealth{}, false
+		},
 		Mode:               func() contract.Mode { return s.Snapshot().State.Mode },
 		DiagnosticsEnabled: func() bool { return s.Snapshot().Config.Diagnostics.Enabled },
 		PolicyVersion:      func() contract.PolicyVersion { return s.policy.Load().PolicyVersion() },
@@ -598,8 +611,13 @@ func (s *Service) startProbeLoop() {
 	if s.probeStop != nil || s.prober == nil {
 		return
 	}
+	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	s.probeDone = done
+	s.probeCancel = cancel
 	s.probeStop = make(chan struct{})
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -608,14 +626,13 @@ func (s *Service) startProbeLoop() {
 				return
 			case <-ticker.C:
 				reqs := s.prober.Rotate(s.now())
-				for _, req := range reqs {
-					ctx, cancel := context.WithTimeout(context.Background(), contract.ProbeTimeout)
-					m, err := s.prober.RunMeasurement(ctx, req)
-					cancel()
-					if err == nil {
-						s.applyMeasurement(m)
-					}
+				if len(reqs) == 0 {
+					continue
 				}
+				result := s.prober.RunBatch(ctx, reqs)
+				s.applyMeasurements(ctx, result.Measurements)
+				s.logger.Logf(levelInfo, "probes.rotate",
+					"started=%d remaining=%d", result.Started, result.Remaining)
 			}
 		}
 	}()
@@ -623,20 +640,51 @@ func (s *Service) startProbeLoop() {
 
 func (s *Service) stopProbeLoop() {
 	s.probeOnce.Do(func() {
-		if s.probeStop != nil {
-			close(s.probeStop)
+		stop, done, cancel := s.probeStop, s.probeDone, s.probeCancel
+		if stop == nil {
+			return
+		}
+		close(stop)
+		if cancel != nil {
+			cancel()
+		}
+		if done != nil {
+			<-done
 		}
 	})
 }
 
+// applyMeasurement publishes a single measurement through the same one-write
+// path as a cycle.
 func (s *Service) applyMeasurement(m probes.Measurement) {
-	s.pubMu.Lock()
+	s.applyMeasurements(context.Background(), []probes.Measurement{m})
+}
+
+// applyMeasurements publishes one rotation cycle with a single store mutation.
+// The cycle is the only writer of its health results; applying each sample
+// separately would let an older snapshot be published after a newer one.
+// Acquisition is cancellation-aware: a caller such as restore may already hold
+// pubMu while it waits for this loop to stop.
+func (s *Service) applyMeasurements(ctx context.Context, ms []probes.Measurement) {
+	if len(ms) == 0 || ctx.Err() != nil {
+		return
+	}
+	for !s.pubMu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
 	defer s.pubMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	now := s.now().UTC()
 	snap, err := s.store.Mutate(ctx, func(st *contract.State) error {
-		pool.ApplyProbe(st, m.Result, s.now().UTC())
-		pool.SyncStatuses(st, s.now().UTC())
+		for _, m := range ms {
+			pool.ApplyProbe(st, m.Result, now)
+		}
+		pool.SyncStatuses(st, now)
 		return nil
 	})
 	if err != nil {
@@ -669,6 +717,8 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 		return s.poolRefresh(ctx, req)
 	case OpPoolTest:
 		return s.poolTest(ctx, req)
+	case OpPoolScan:
+		return s.poolScan(ctx, req)
 	case OpPoolSelect:
 		return s.poolSelect(ctx, req.ID)
 	case OpPoolRerank:
@@ -680,7 +730,7 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 	case OpProposalsList:
 		return s.listProposals(), nil
 	case OpProposalsAccept:
-		return s.acceptProposal(ctx, req.ID)
+		return s.acceptProposal(ctx, req.ID, req.RuleKind)
 	case OpProposalsReject:
 		return s.rejectProposal(ctx, req.ID, req.Note)
 	case OpProposalsRecheck:
@@ -703,6 +753,8 @@ func (s *Service) Handle(ctx context.Context, req Request) (any, error) {
 		return s.desktopApply(ctx)
 	case OpDesktopRestore:
 		return s.desktopRestore(ctx)
+	case OpDesktopClear:
+		return s.desktopClear(ctx)
 	case OpBackup:
 		return s.backup(ctx)
 	case OpRestore:

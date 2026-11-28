@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,27 +33,45 @@ func countDirectChildrenWithPrefix(n Node, prefix string) int {
 	return count
 }
 
-// TestPoolGroupsShowCountsAndTwentyRowPages covers the 176-row fixture, the
-// four contract groups, their counts, and the fixed 20-row local pagination.
-func TestPoolGroupsShowCountsAndTwentyRowPages(t *testing.T) {
+// TestPoolGroupsShowCountsAndNestedPages covers the 176-row fixture, the five
+// display groups, their counts, and the fixed 20-row nested local pagination.
+func TestPoolGroupsShowCountsAndNestedPages(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
 	view := s.ctl.View()
-	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "176 records · 140 usable · 100 healthy · 20 cooling" {
+	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "176 records · 140 usable · 100 healthy · 0 reachable · 20 cooling" {
 		t.Fatalf("pool summary = %q", n.Label)
+	}
+
+	poolMenu, _ := findNode(view.Root, "pool")
+	var groupOrder []string
+	for _, child := range poolMenu.Children {
+		if strings.HasPrefix(child.Key, "pool.group.") {
+			groupOrder = append(groupOrder, child.Key)
+		}
+	}
+	wantOrder := []string{
+		"pool.group.pool.healthy", "pool.group.pool.reachable", "pool.group.pool.untested",
+		"pool.group.pool.cooling", "pool.group.pool.unsupported",
+	}
+	if !reflect.DeepEqual(groupOrder, wantOrder) {
+		t.Fatalf("pool group order = %v, want %v", groupOrder, wantOrder)
+	}
+	scan, ok := findNode(view.Root, "pool.scan")
+	if !ok || !scan.Enabled || scan.Action != ActionPoolScan || scan.Label != "Check all exits (best first)" {
+		t.Fatalf("scan node = %+v", scan)
 	}
 
 	groups := []struct {
 		key      string
 		label    string
-		page     string
+		nextPage string
 		rows     int
-		hasPages bool
 	}{
-		{"pool.group.pool.healthy", "Healthy (100)", "Page 1/5", 20, true},
-		{"pool.group.pool.untested", "Untested (40)", "Page 1/2", 20, true},
-		{"pool.group.pool.cooling", "Cooling (20)", "", 20, false},
-		{"pool.group.pool.unsupported", "Unsupported/Invalid (16)", "", 16, false},
+		{"pool.group.pool.healthy", "Healthy (100)", "Page 2/5", 20},
+		{"pool.group.pool.reachable", "Reachable · delay checked (0)", "", 0},
+		{"pool.group.pool.untested", "Untested (40)", "Page 2/2", 20},
+		{"pool.group.pool.cooling", "Cooling (20)", "", 20},
+		{"pool.group.pool.unsupported", "Unsupported/Invalid (16)", "", 16},
 	}
 	for _, tc := range groups {
 		group, ok := findNode(view.Root, tc.key)
@@ -64,57 +84,26 @@ func TestPoolGroupsShowCountsAndTwentyRowPages(t *testing.T) {
 		if got := countDirectChildrenWithPrefix(group, "pool.row."); got != tc.rows {
 			t.Fatalf("%s rows = %d, want %d", tc.key, got, tc.rows)
 		}
-		page, ok := findNode(group, tc.key+".page")
-		if !tc.hasPages {
+		page, ok := findNode(group, tc.key+".page.2")
+		if tc.nextPage == "" {
 			if ok {
-				t.Fatalf("%s rendered page controls for a single page", tc.key)
+				t.Fatalf("%s rendered a page submenu for a single page", tc.key)
 			}
 			continue
 		}
-		if !ok || page.Label != tc.page {
-			t.Fatalf("%s page = %+v, want %q", tc.key, page, tc.page)
-		}
-		prev, _ := findNode(group, tc.key+".prev")
-		next, _ := findNode(group, tc.key+".next")
-		if prev.Enabled || !next.Enabled {
-			t.Fatalf("%s page 1 controls: prev=%t next=%t", tc.key, prev.Enabled, next.Enabled)
+		if !ok || page.Label != tc.nextPage {
+			t.Fatalf("%s page 2 = %+v, want %q", tc.key, page, tc.nextPage)
 		}
 	}
 
-	// Page navigation changes the healthy rows without crossing group counts.
-	if _, err := s.ctl.Trigger(ctx, ActionPageNext, Target{Section: SectionPoolHealthy}); err != nil {
-		t.Fatal(err)
-	}
-	view = s.ctl.View()
+	// Page 2 of the healthy group lives inside page 1 and keeps the stable
+	// user order (no measured delay to sort by in this fixture).
 	healthy, _ := findNode(view.Root, "pool.group.pool.healthy")
-	if page, _ := findNode(healthy, "pool.group.pool.healthy.page"); page.Label != "Page 2/5" {
-		t.Fatalf("healthy page after next = %q", page.Label)
-	}
-	rows := make([]string, 0, PageSize)
-	for _, child := range healthy.Children {
-		if strings.HasPrefix(child.Key, "pool.row.") {
-			rows = append(rows, child.Key)
-		}
-	}
-	if len(rows) != PageSize {
-		t.Fatalf("healthy page 2 rows = %d", len(rows))
-	}
-	if want := poolRowKey(fixturePoolID(PageSize)); rows[0] != want {
-		t.Fatalf("healthy page 2 starts at %q, want %q", rows[0], want)
-	}
-
-	// The last page clamps and disables Next.
-	s.ctl.SetPage(SectionPoolUntested, 99)
-	view = s.ctl.View()
-	untested, _ := findNode(view.Root, "pool.group.pool.untested")
-	if page, _ := findNode(untested, "pool.group.pool.untested.page"); page.Label != "Page 2/2" {
-		t.Fatalf("clamped untested page = %q", page.Label)
-	}
-	if next, _ := findNode(untested, "pool.group.pool.untested.next"); next.Enabled {
-		t.Fatal("Next enabled on the last page")
-	}
-	if got := countDirectChildrenWithPrefix(untested, "pool.row."); got != PageSize {
-		t.Fatalf("untested last page rows = %d", got)
+	page2, _ := findNode(healthy, "pool.group.pool.healthy.page.2")
+	if want := poolRowKey(fixturePoolID(PageSize)); countDirectChildrenWithPrefix(page2, "pool.row.") != PageSize {
+		t.Fatalf("healthy page 2 rows = %d", countDirectChildrenWithPrefix(page2, "pool.row."))
+	} else if _, ok := findNode(page2, want); !ok {
+		t.Fatalf("healthy page 2 does not contain %q", want)
 	}
 }
 
@@ -351,7 +340,7 @@ func TestLegacyUndialableRowsAreUnsupportedNotUsable(t *testing.T) {
 	}
 	s := newSetup(t, fx, nil)
 	view := s.ctl.View()
-	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "3 records · 1 usable · 0 healthy · 0 cooling" {
+	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "3 records · 1 usable · 0 healthy · 0 reachable · 0 cooling" {
 		t.Fatalf("summary = %q", n.Label)
 	}
 	for key, label := range map[string]string{
@@ -441,6 +430,176 @@ func TestPoolJobFailureNotificationIsSanitized(t *testing.T) {
 	if containsControl(last.Body) || runeLen(last.Body) > HeaderLimit ||
 		strings.Contains(last.Body, "secret") || strings.Contains(last.Body, "http") {
 		t.Fatalf("notification leaked raw service text: %q", last.Body)
+	}
+}
+
+// TestPoolGroupsSortByDelayAndLabelEachExit covers the display groups, the
+// delay-ascending order inside Healthy/Reachable (unmeasured last), and the
+// per-exit delay label. Endpoint success alone must never land in Healthy.
+func TestPoolGroupsSortByDelayAndLabelEachExit(t *testing.T) {
+	probed := time.Date(2026, 11, 28, 12, 0, 0, 0, time.UTC)
+	row := func(id, name string, status contract.RecordStatus, h *contract.ExitHealth) pool.Row {
+		return pool.Row{
+			ID: contract.RecordID(id), Status: status, DisplayName: name,
+			Protocol: contract.ProtocolVLESS, Health: h,
+		}
+	}
+	healthy := func(latency int64) *contract.ExitHealth {
+		return &contract.ExitHealth{Status: contract.HealthHealthy, TransportLatencyMS: latency, TransportSuccessAt: probed}
+	}
+	reachable := func(latency int64) *contract.ExitHealth {
+		return &contract.ExitHealth{Status: contract.HealthUnknown, TransportLatencyMS: latency, TransportSuccessAt: probed}
+	}
+
+	fx := newFixture()
+	fx.pool = []pool.Row{
+		row("x-h-slow", "healthy slow", contract.RecordHealthy, healthy(120)),
+		row("x-h-ewma", "healthy ewma", contract.RecordHealthy, &contract.ExitHealth{Status: contract.HealthHealthy, EWMALatencyMS: 10}),
+		row("x-h-fast", "healthy fast", contract.RecordHealthy, healthy(40)),
+		row("x-h-none", "healthy unmeasured", contract.RecordHealthy, &contract.ExitHealth{Status: contract.HealthHealthy}),
+		row("x-r-slow", "reachable slow", contract.RecordUnknown, reachable(90)),
+		row("x-r-fast", "reachable fast", contract.RecordUnknown, reachable(30)),
+		row("x-r-none", "reachable unmeasured", contract.RecordUnknown, &contract.ExitHealth{Status: contract.HealthUnknown, TransportSuccessAt: probed}),
+		row("x-u-plain", "never probed", contract.RecordUnknown, nil),
+		row("x-c-cooling", "cooling", contract.RecordCooling, nil),
+		row("x-s-unsupported", "unsupported", contract.RecordUnsupported, nil),
+	}
+	fx.counts = pool.Counts{Total: 10, Usable: 8, Healthy: 4, Unknown: 4, Cooling: 1, Unsupported: 1}
+	s := newSetup(t, fx, nil)
+	view := s.ctl.View()
+
+	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "10 records · 8 usable · 4 healthy · 3 reachable · 1 cooling" {
+		t.Fatalf("pool summary = %q", n.Label)
+	}
+	for key, label := range map[string]string{
+		"pool.group.pool.healthy":     "Healthy (4)",
+		"pool.group.pool.reachable":   "Reachable · delay checked (3)",
+		"pool.group.pool.untested":    "Untested (1)",
+		"pool.group.pool.cooling":     "Cooling (1)",
+		"pool.group.pool.unsupported": "Unsupported/Invalid (1)",
+	} {
+		if n, _ := findNode(view.Root, key); n.Label != label {
+			t.Fatalf("%s label = %q, want %q", key, n.Label, label)
+		}
+	}
+
+	wantRowKeys := func(ids ...string) []string {
+		out := make([]string, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, poolRowKey(contract.RecordID(id)))
+		}
+		return out
+	}
+	cases := []struct {
+		group string
+		want  []string
+	}{
+		{"pool.group.pool.healthy", wantRowKeys("x-h-ewma", "x-h-fast", "x-h-slow", "x-h-none")},
+		{"pool.group.pool.reachable", wantRowKeys("x-r-fast", "x-r-slow", "x-r-none")},
+		{"pool.group.pool.untested", wantRowKeys("x-u-plain")},
+		{"pool.group.pool.cooling", wantRowKeys("x-c-cooling")},
+		{"pool.group.pool.unsupported", wantRowKeys("x-s-unsupported")},
+	}
+	for _, tc := range cases {
+		group, _ := findNode(view.Root, tc.group)
+		var got []string
+		for _, child := range group.Children {
+			if strings.HasPrefix(child.Key, "pool.row.") {
+				got = append(got, child.Key)
+			}
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s order = %v, want %v", tc.group, got, tc.want)
+		}
+	}
+
+	// Endpoint evidence is not egress proof: a transport-only success is
+	// Reachable, never Healthy.
+	healthyGroup, _ := findNode(view.Root, "pool.group.pool.healthy")
+	if _, ok := findNode(healthyGroup, poolRowKey("x-r-fast")); ok {
+		t.Fatal("a transport-only success was displayed as Healthy")
+	}
+	reachableGroup, _ := findNode(view.Root, "pool.group.pool.reachable")
+	if _, ok := findNode(reachableGroup, poolRowKey("x-h-fast")); ok {
+		t.Fatal("a healthy exit was displayed as Reachable")
+	}
+
+	labels := map[string]string{
+		"x-h-ewma":    "· 10 ms",
+		"x-r-fast":    "· 30 ms",
+		"x-h-none":    "· delay —",
+		"x-u-plain":   "· delay —",
+		"x-c-cooling": "· delay —",
+	}
+	for id, want := range labels {
+		node, ok := findNode(view.Root, poolRowKey(contract.RecordID(id)))
+		if !ok {
+			t.Fatalf("missing row %q", id)
+		}
+		if !strings.Contains(node.Label, want) {
+			t.Fatalf("%s label = %q, want it to contain %q", id, node.Label, want)
+		}
+	}
+}
+
+// TestPoolScanJobLoopsWithCursorAndProgress covers the tray-side pool scan:
+// each call carries the previous Next cursor, the job name shows progress, and
+// the loop stops at Next == -1.
+func TestPoolScanJobLoopsWithCursorAndProgress(t *testing.T) {
+	fx := newFixture()
+	rows, counts := fixturePool(7)
+	fx.pool, fx.counts = rows, counts
+	fx.scanBatch = 3
+
+	var mu sync.Mutex
+	var offsets, limits []int
+	var names []string
+	var s *controllerSetup
+	s = newSetup(t, fx, nil)
+	s.caller.mu.Lock()
+	s.caller.onCall = func(req control.Request) {
+		if req.Op != control.OpPoolScan {
+			return
+		}
+		mu.Lock()
+		offsets = append(offsets, req.Offset)
+		limits = append(limits, req.Limit)
+		mu.Unlock()
+		job := s.ctl.View().Job
+		name := ""
+		if job != nil {
+			name = job.Name
+		}
+		mu.Lock()
+		names = append(names, name)
+		mu.Unlock()
+	}
+	s.caller.mu.Unlock()
+
+	res, err := s.ctl.Trigger(context.Background(), ActionPoolScan, Target{})
+	if err != nil || res.Status != ResultJobStarted {
+		t.Fatalf("scan trigger = %+v, %v", res, err)
+	}
+	waitFor(t, "pool scan job", func() bool { return s.ctl.View().Job == nil })
+	if got := s.ctl.View().LastAction; got != "Pool checked (7 exits)" {
+		t.Fatalf("last action = %q", got)
+	}
+	if got := s.caller.countOp(control.OpPoolScan); got != 3 {
+		t.Fatalf("pool.scan calls = %d, want 3", got)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []int{0, 3, 6}; !reflect.DeepEqual(offsets, want) {
+		t.Fatalf("scan cursors = %v, want %v", offsets, want)
+	}
+	for i, limit := range limits {
+		if limit != contract.PoolScanBatch {
+			t.Fatalf("call %d limit = %d, want %d", i, limit, contract.PoolScanBatch)
+		}
+	}
+	if want := []string{"pool check", "pool check 3/7", "pool check 6/7"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("job progress names = %v, want %v", names, want)
 	}
 }
 

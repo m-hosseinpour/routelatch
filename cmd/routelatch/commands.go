@@ -91,7 +91,7 @@ func (c *cli) pool(ctx context.Context, args []string) int {
 	case "test":
 		fs := c.newFlags("pool test")
 		exit := fs.String("exit", "", "one exit id")
-		target := fs.String("target", "", "egress target host:port")
+		target := fs.String("target", "", "egress target host:port, tcp://host:port or tls://host:port")
 		if err := fs.Parse(args[1:]); err != nil {
 			return c.localFailure("pool test", usageErr("invalid pool test flags"))
 		}

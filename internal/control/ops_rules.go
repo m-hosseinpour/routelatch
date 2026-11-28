@@ -174,7 +174,8 @@ func ruleView(r contract.Rule) RuleView {
 	return v
 }
 
-// RulesListData is the `rules list` payload.
+// RulesListData is the `rules list` payload. Rules keep the stored newest-first
+// order so CLI output matches state.json and the tray.
 type RulesListData struct {
 	Rules []RuleView `json:"rules"`
 }
@@ -263,7 +264,9 @@ func (s *Service) addRule(ctx context.Context, req Request) (RuleAddData, error)
 				return nil
 			}
 		}
-		st.Rules = append(st.Rules, parsed)
+		// Stored order is newest first: a new rule becomes index 0. The CLI,
+		// state.json and the tray all read this one order.
+		st.Rules = append([]contract.Rule{parsed}, st.Rules...)
 		st.PolicyVersion++
 		added = true
 		return nil
@@ -327,6 +330,8 @@ func (s *Service) removeRule(ctx context.Context, rawID string) (RuleRemoveData,
 		return RuleRemoveData{}, NotFound("rule " + string(id))
 	}
 	_, nextPolicy, err := s.mutateAndCommit(ctx, func(st *contract.State) error {
+		// Filtering in place keeps the relative order of the remaining rules,
+		// so a removal never reshuffles the newest-first list.
 		out := st.Rules[:0]
 		for _, r := range st.Rules {
 			if r.ID == id {

@@ -690,17 +690,76 @@ func TestManualDiagnoseIsBoundedAndIndependentOfDisable(t *testing.T) {
 	}
 }
 
-func TestManualDiagnoseAllDirectAllowedAndStoppedRefused(t *testing.T) {
+func TestManualDiagnoseOnlyInTargetedMode(t *testing.T) {
 	h := newHarness(t)
-	*h.mode = contract.ModeDirectAll
-	if _, err := h.m.Diagnose(context.Background(), hostPort(t, "example.com:80")); err != nil {
-		t.Fatalf("manual diagnose in all-direct: %v", err)
+	dst := hostPort(t, "example.com:80")
+
+	// Targeted is allowed with or without TUN: this layer never consults TUN,
+	// so the same targeted mode must pass in both host states.
+	if _, err := h.m.Diagnose(context.Background(), dst); err != nil {
+		t.Fatalf("manual diagnose in targeted: %v", err)
 	}
+
+	for _, mode := range []contract.Mode{contract.ModeDirectAll, contract.ModeProxyAll} {
+		*h.mode = mode
+		_, err := h.m.Diagnose(context.Background(), dst)
+		var f *contract.Failure
+		if !errors.As(err, &f) || f.Kind != contract.PolicyDenied {
+			t.Fatalf("diagnose in %s error = %v, want policy_denied", mode, err)
+		}
+	}
+
+	// A denied diagnosis must not probe, store evidence or create a proposal.
+	callsBefore := h.prober.callCount()
+	proposalsBefore := len(h.store.all())
+	*h.mode = contract.ModeProxyAll
+	if _, err := h.m.Diagnose(context.Background(), hostPort(t, "other.example.com:443")); err == nil {
+		t.Fatal("diagnose in all-proxy was accepted")
+	}
+	if h.prober.callCount() != callsBefore || len(h.store.all()) != proposalsBefore {
+		t.Fatalf("a denied diagnosis ran %d probes and stored %d proposals",
+			h.prober.callCount()-callsBefore, len(h.store.all())-proposalsBefore)
+	}
+
 	*h.mode = contract.ModeStopped
-	_, err := h.m.Diagnose(context.Background(), hostPort(t, "example.com:80"))
+	_, err := h.m.Diagnose(context.Background(), dst)
 	var f *contract.Failure
 	if !errors.As(err, &f) || f.Kind != contract.Stopped {
-		t.Fatalf("stopped diagnose error = %v", err)
+		t.Fatalf("stopped diagnose error = %v, want stopped", err)
+	}
+}
+
+func TestRecheckOnlyInTargetedMode(t *testing.T) {
+	h := newHarness(t)
+	dst := hostPort(t, "example.com:80")
+	id := fakeID(dst)
+	h.store.byID[id] = contract.Proposal{
+		ID: id, Destination: dst, Status: contract.ProposalPending,
+		CreatedAt: h.clock.now(), ExpiresAt: h.clock.now().Add(contract.ProposalRetention),
+	}
+
+	for _, mode := range []contract.Mode{contract.ModeDirectAll, contract.ModeProxyAll} {
+		*h.mode = mode
+		_, err := h.m.Recheck(context.Background(), id)
+		var f *contract.Failure
+		if !errors.As(err, &f) || f.Kind != contract.PolicyDenied {
+			t.Fatalf("recheck in %s error = %v, want policy_denied", mode, err)
+		}
+	}
+	if h.prober.callCount() != 0 {
+		t.Fatalf("a denied recheck ran %d probes", h.prober.callCount())
+	}
+
+	// Targeted remains allowed and appends evidence.
+	*h.mode = contract.ModeTargeted
+	h.prober.fn = func(_ context.Context, req contract.ProbeRequest) (contract.ProbeResult, error) {
+		return contract.ProbeResult{
+			Kind: req.Kind, Destination: req.Destination, StartedAt: time.Now(),
+			Outcome: contract.OutcomeRefused, Failure: contract.ConnectRefused, Eligible: true,
+		}, nil
+	}
+	if _, err := h.m.Recheck(context.Background(), id); err != nil {
+		t.Fatalf("recheck in targeted: %v", err)
 	}
 }
 

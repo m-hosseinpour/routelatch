@@ -58,13 +58,30 @@ const (
 	// ProbeTimeout bounds one probe overall, including a pool dial and the
 	// first-byte wait.
 	ProbeTimeout = 20 * time.Second
-	// ProbeFirstByte bounds the wait for the first downlink byte after a probe
-	// dial succeeded. It applies only to egress probes; it is never a read
-	// deadline on a user tunnel, so idle SSH/WebSocket sessions are not cut.
+	// ProbeFirstByte bounds the wait for the first downlink byte, or for a
+	// tls:// target for the handshake to finish, after a probe dial succeeded.
+	// It applies only to egress probes; it is never a read deadline on a user
+	// tunnel, so idle SSH/WebSocket sessions are not cut.
 	ProbeFirstByte = 8 * time.Second
 	// HealthProbeInterval is the automatic transport-probe rotation in
 	// targeted and all-proxy modes. It sends no destination traffic.
 	HealthProbeInterval = 10 * time.Minute
+	// HealthCycleBudget bounds how long one rotation cycle starts new probes.
+	// Half the interval leaves a full ProbeTimeout for the last in-flight
+	// probe, so a slow cycle cannot overrun and stack the next one.
+	HealthCycleBudget = 5 * time.Minute
+	// HealthProbeBatch bounds one automatic transport-probe rotation. It is
+	// deliberately larger than the manual pool-test cap so a new or changed
+	// pool is seen within one or two cycles; unseen and least-recently checked
+	// exits are selected first (docs/contracts.md §6.3, §6.4).
+	HealthProbeBatch = 100
+	// PoolScanBatch bounds one `pool.scan` management call. The tray's full
+	// check calls it repeatedly with the returned cursor until every exit has
+	// been checked; a single call may stop earlier at PoolScanBudget.
+	PoolScanBatch = 100
+	// PoolScanBudget bounds the probe work in one `pool.scan` call so a large
+	// pool cannot exceed the management socket deadline.
+	PoolScanBudget = 8 * time.Minute
 	// ProbeCooldownBase is the first cooldown after a transport-level failure.
 	ProbeCooldownBase = 60 * time.Second
 	// ProbeCooldownMax caps exponential cooldown.

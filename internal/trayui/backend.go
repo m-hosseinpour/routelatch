@@ -392,7 +392,10 @@ func buildTree(root Node) (*tree, error) {
 	seen := make(map[string]bool)
 	var convert func(Node, int) (*tree, error)
 	convert = func(n Node, depth int) (*tree, error) {
-		if depth > 64 {
+		// Nested page menus add one level per page. The bound still rejects a
+		// malformed or runaway tree while allowing a large pool (thousands of
+		// rows at PageSize) to stay reachable.
+		if depth > 512 {
 			return nil, errors.New("trayui: menu tree is too deep")
 		}
 		if n.Key == "" {

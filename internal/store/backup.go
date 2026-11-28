@@ -238,8 +238,10 @@ func readBackup(path string) (contract.State, backupEnvelope, error) {
 	return migrated, env, nil
 }
 
+// canonicalState is the byte form a backup's checksum covers. It keeps the
+// schema version recorded in the payload instead of forcing the current one:
+// a backup written by an older build must still verify after an upgrade.
 func canonicalState(st contract.State) ([]byte, error) {
-	st.SchemaVersion = contract.SchemaVersionCurrent
 	return json.Marshal(st)
 }
 
@@ -265,7 +267,7 @@ func legacyCanonicalState(raw []byte) ([]byte, error) {
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return nil, err
 	}
-	st.SchemaVersion = contract.SchemaVersionCurrent
+	// Keep the payload's schema version for the same reason as canonicalState.
 	return json.Marshal(st)
 }
 

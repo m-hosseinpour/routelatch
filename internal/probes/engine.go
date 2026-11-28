@@ -1,18 +1,21 @@
 // Package probes owns measurement concurrency, scheduling limits, retention
 // and evidence attribution. It never replays a user request and never sends
 // user data: a probe either touches an exit endpoint or completes a dial and
-// waits for one downlink byte (docs/contracts.md §6).
+// waits for one downlink byte or a TLS handshake (docs/contracts.md §6).
 package probes
 
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
 	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"routelatch/internal/contract"
@@ -24,6 +27,7 @@ type Options struct {
 	Pool               contract.PoolDialer
 	Record             func(contract.ExitID) (contract.Record, bool)
 	AllRecords         func() []contract.Record
+	Health             func(contract.ExitID) (contract.ExitHealth, bool)
 	Mode               func() contract.Mode
 	DiagnosticsEnabled func() bool
 	PolicyVersion      func() contract.PolicyVersion
@@ -34,6 +38,11 @@ type Options struct {
 	// defaults use net.Dialer and crypto/tls with full verification.
 	Dial         func(ctx context.Context, network, address string) (net.Conn, error)
 	TLSHandshake func(ctx context.Context, conn net.Conn, cfg *tls.Config) (net.Conn, error)
+	// RootCAs and TLSNow override the egress TLS trust store and clock. Both
+	// are nil in production, which keeps the system roots and wall clock; they
+	// exist so offline tests can verify against a local test CA.
+	RootCAs *x509.CertPool
+	TLSNow  func() time.Time
 	// LocalControl is an optional caller-supplied check of the machine's own
 	// network. It is never run to compare direct against pool and is nil by
 	// default; only a configured check can mark a failure as a local outage.
@@ -46,6 +55,7 @@ type Options struct {
 	DiagnosticConcurrent int
 	RotationInterval     time.Duration
 	RotationBatch        int
+	RotationBudget       time.Duration
 	Targets              []string
 }
 
@@ -70,6 +80,15 @@ type Measurement struct {
 	Phase        Phase
 }
 
+// BatchResult is one automatic rotation cycle. Measurements are in request
+// order. Remaining counts requests the cycle budget stopped before starting;
+// their health is untouched, so the next rotation offers them again.
+type BatchResult struct {
+	Measurements []Measurement
+	Started      int
+	Remaining    int
+}
+
 var _ contract.Prober = (*Engine)(nil)
 
 // Engine implements contract.Prober.
@@ -84,7 +103,7 @@ type Engine struct {
 	closed     bool
 	cond       *sync.Cond
 	lastRotate time.Time
-	rotateAt   int
+	rotations  uint64
 	lastProbe  map[string]time.Time
 	inflight   map[string]bool
 
@@ -127,7 +146,10 @@ func NewEngine(opts Options) *Engine {
 		opts.RotationInterval = contract.HealthProbeInterval
 	}
 	if opts.RotationBatch <= 0 {
-		opts.RotationBatch = 8
+		opts.RotationBatch = contract.HealthProbeBatch
+	}
+	if opts.RotationBudget <= 0 {
+		opts.RotationBudget = contract.HealthCycleBudget
 	}
 	if opts.Clock == nil {
 		opts.Clock = time.Now
@@ -214,6 +236,12 @@ func (e *Engine) RunMeasurement(ctx context.Context, req contract.ProbeRequest) 
 }
 
 func (e *Engine) runMeasurement(ctx context.Context, req contract.ProbeRequest, acquire bool) (Measurement, error) {
+	return e.measureRequest(ctx, req, acquire, true, e.opts.Timeout)
+}
+
+// measureRequest is runMeasurement with the callback and deadline left to the
+// caller, so a concurrent batch can bound and report its own cycle.
+func (e *Engine) measureRequest(ctx context.Context, req contract.ProbeRequest, acquire, notify bool, timeout time.Duration) (Measurement, error) {
 	if err := e.checkPolicy(req); err != nil {
 		return Measurement{}, err
 	}
@@ -239,7 +267,7 @@ func (e *Engine) runMeasurement(ctx context.Context, req contract.ProbeRequest, 
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, e.opts.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	start := e.opts.Clock()
 	m := e.measure(ctx, req, start)
@@ -267,7 +295,7 @@ func (e *Engine) runMeasurement(ctx context.Context, req contract.ProbeRequest, 
 			LocalOutage: m.LocalOutage,
 		})
 	}
-	if e.opts.OnMeasurement != nil {
+	if e.opts.OnMeasurement != nil && notify {
 		e.opts.OnMeasurement(m)
 	}
 	return m, nil
@@ -312,13 +340,17 @@ func probeKey(req contract.ProbeRequest) string {
 }
 
 func destinationKey(dst contract.Destination) string {
+	scheme := ""
+	if dst.TLS {
+		scheme = "tls://"
+	}
 	switch dst.Kind {
 	case contract.DestDomain:
-		return dst.Host + ":" + strconv.Itoa(int(dst.Port))
+		return scheme + dst.Host + ":" + strconv.Itoa(int(dst.Port))
 	case contract.DestIP:
-		return dst.Addr.String() + ":" + strconv.Itoa(int(dst.Port))
+		return scheme + dst.Addr.String() + ":" + strconv.Itoa(int(dst.Port))
 	default:
-		return string(dst.Kind)
+		return scheme + string(dst.Kind)
 	}
 }
 
@@ -345,8 +377,11 @@ func (e *Engine) CancelQueued(ctx context.Context) (int, error) {
 }
 
 // Rotate returns the next automatic transport batch when the interval elapsed.
-// It returns nothing outside targeted/all-proxy modes, so all-direct and
-// stopped never generate background activity.
+// Unseen and least-recently checked exits come first, so a newly imported item
+// is checked within one or two cycles and a large pool is covered round-robin
+// without a cursor that can skip records after a health change. It returns
+// nothing outside targeted/all-proxy modes, so all-direct and stopped never
+// generate background activity.
 func (e *Engine) Rotate(now time.Time) []contract.ProbeRequest {
 	mode := e.mode()
 	if mode != contract.ModeTargeted && mode != contract.ModeProxyAll {
@@ -361,48 +396,229 @@ func (e *Engine) Rotate(now time.Time) []contract.ProbeRequest {
 		return nil
 	}
 	e.lastRotate = now
-	cursor := e.rotateAt
+	e.rotations++
+	rotation := e.rotations
 	e.mu.Unlock()
 
 	records := e.opts.AllRecords()
 	if len(records) == 0 {
 		return nil
 	}
+	type candidate struct {
+		rec  contract.Record
+		last time.Time
+	}
+	candidates := make([]candidate, 0, len(records))
+	for _, rec := range records {
+		if !probeable(rec) {
+			continue
+		}
+		var last time.Time
+		if e.opts.Health != nil {
+			if h, ok := e.opts.Health(contract.ExitID(rec.ID)); ok {
+				last = h.LastSuccessAt
+				if h.LastFailureAt.After(last) {
+					last = h.LastFailureAt
+				}
+			}
+		}
+		candidates = append(candidates, candidate{rec: rec, last: last})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
+		aSeen, bSeen := !a.last.IsZero(), !b.last.IsZero()
+		if aSeen != bSeen {
+			return !aSeen
+		}
+		if !a.last.Equal(b.last) {
+			return a.last.Before(b.last)
+		}
+		if a.rec.Order != b.rec.Order {
+			return a.rec.Order < b.rec.Order
+		}
+		return a.rec.ID < b.rec.ID
+	})
+
 	var batch []contract.ProbeRequest
-	transports := 0
-	for i := 0; i < len(records) && len(batch) < e.opts.RotationBatch; i++ {
-		rec := records[(cursor+i)%len(records)]
+	validTargets := make([]contract.Destination, 0, len(e.opts.Targets))
+	for _, rawTarget := range e.opts.Targets {
+		if dst, ok := ParseTarget(rawTarget); ok {
+			validTargets = append(validTargets, dst)
+		}
+	}
+	// Configured egress targets get one slot each per cycle, but egress may
+	// never take more than half the batch (and never the last transport slot).
+	// When targets outnumber the cap, the starting target rotates per cycle so
+	// none is starved.
+	egressSlots := len(validTargets)
+	if maxEgress := e.opts.RotationBatch / 2; egressSlots > maxEgress {
+		egressSlots = maxEgress
+	}
+	if egressSlots >= e.opts.RotationBatch {
+		egressSlots = e.opts.RotationBatch - 1
+	}
+	if egressSlots < 0 {
+		egressSlots = 0
+	}
+	transportLimit := e.opts.RotationBatch - egressSlots
+	if transportLimit < 1 {
+		transportLimit = 1
+	}
+	for i := 0; i < len(candidates) && len(batch) < transportLimit; i++ {
 		batch = append(batch, contract.ProbeRequest{
-			Kind: contract.ProbeTransport, Exit: contract.ExitID(rec.ID), Trigger: contract.TriggerRotate,
+			Kind: contract.ProbeTransport, Exit: contract.ExitID(candidates[i].rec.ID),
+			Trigger: contract.TriggerRotate,
 		})
-		transports++
 	}
 	// Egress rotation runs only when the user configured a target; RouteLatch
 	// never invents a third-party destination (§6.1).
-	for i, rawTarget := range e.opts.Targets {
-		if len(batch) >= e.opts.RotationBatch {
-			break
-		}
-		dst, ok := ParseTarget(rawTarget)
-		if !ok {
-			continue
-		}
+	if len(candidates) > 0 && len(validTargets) > 0 {
 		version := contract.PolicyVersion(0)
 		if e.opts.PolicyVersion != nil {
 			version = e.opts.PolicyVersion()
 		}
-		// Name the exit explicitly so a probe never moves the user's automatic
-		// selection through the shared DialPool selector.
-		exit := contract.ExitID(records[(cursor+i)%len(records)].ID)
-		batch = append(batch, contract.ProbeRequest{
-			Kind: contract.ProbeEgress, Trigger: contract.TriggerRotate, Exit: exit,
-			Destination: dst, PolicyVersion: version,
-		})
+		start := 0
+		if len(validTargets) > egressSlots {
+			start = int(rotation % uint64(len(validTargets)))
+		}
+		for i := 0; i < egressSlots; i++ {
+			if len(batch) >= e.opts.RotationBatch {
+				break
+			}
+			dst := validTargets[(start+i)%len(validTargets)]
+			// Name the exit explicitly so a probe never moves the user's
+			// automatic selection through the shared DialPool selector.
+			exit := contract.ExitID(candidates[i%len(candidates)].rec.ID)
+			batch = append(batch, contract.ProbeRequest{
+				Kind: contract.ProbeEgress, Trigger: contract.TriggerRotate, Exit: exit,
+				Destination: dst, PolicyVersion: version,
+			})
+		}
 	}
-	e.mu.Lock()
-	e.rotateAt = (cursor + transports) % len(records)
-	e.mu.Unlock()
 	return batch
+}
+
+// RunBatch runs one rotation batch with at most the health semaphore's
+// concurrency. The cycle budget bounds how long new probes are started: work
+// that cannot fit leaves its record untouched for the next rotation instead of
+// stacking a second cycle. Egress and transport slots are interleaved so a
+// cutoff reduces both. Results are aggregated and reported by the caller in one
+// step; per-cycle state is owned by its single writer.
+func (e *Engine) RunBatch(ctx context.Context, reqs []contract.ProbeRequest) BatchResult {
+	if len(reqs) == 0 {
+		return BatchResult{}
+	}
+	order := batchOrder(reqs)
+	workers := cap(e.healthSem)
+	if workers < 1 {
+		workers = 1
+	}
+	if workers > len(order) {
+		workers = len(order)
+	}
+	cycleCtx, cancelCycle := context.WithTimeout(ctx, e.opts.RotationBudget)
+	defer cancelCycle()
+	deadline := e.opts.Clock().Add(e.opts.RotationBudget)
+	timeout := e.batchTimeout()
+
+	results := make([]Measurement, len(reqs))
+	done := make([]bool, len(reqs))
+	var next, started atomic.Int64
+
+	// A fixed worker count keeps goroutines bounded; the shared health
+	// semaphore keeps the batch inside the same probe concurrency limit as
+	// user-triggered work.
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for {
+				if !e.cycleOpen(ctx, cycleCtx, deadline) {
+					return
+				}
+				select {
+				case e.healthSem <- struct{}{}:
+				case <-cycleCtx.Done():
+					return
+				}
+				if !e.cycleOpen(ctx, cycleCtx, deadline) {
+					<-e.healthSem
+					return
+				}
+				i := int(next.Add(1)) - 1
+				if i >= len(order) {
+					<-e.healthSem
+					return
+				}
+				request := reqs[order[i]]
+				started.Add(1)
+				m, err := e.measureRequest(ctx, request, false, false, timeout)
+				<-e.healthSem
+				if err != nil {
+					continue
+				}
+				results[order[i]] = m
+				done[order[i]] = true
+			}
+		}()
+	}
+	wg.Wait()
+
+	out := make([]Measurement, 0, len(reqs))
+	for i := range results {
+		if done[i] {
+			out = append(out, results[i])
+		}
+	}
+	if e.opts.OnMeasurement != nil {
+		for _, m := range out {
+			e.opts.OnMeasurement(m)
+		}
+	}
+	n := int(started.Load())
+	return BatchResult{Measurements: out, Started: n, Remaining: len(reqs) - n}
+}
+
+func (e *Engine) cycleOpen(ctx context.Context, cycle context.Context, deadline time.Time) bool {
+	return ctx.Err() == nil && cycle.Err() == nil && e.opts.Clock().Before(deadline)
+}
+
+// batchTimeout caps the configured timeout to half the interval headroom, so a
+// probe started just before the budget cutoff cannot make the cycle overrun.
+func (e *Engine) batchTimeout() time.Duration {
+	timeout := e.opts.Timeout
+	if headroom := e.opts.RotationInterval - e.opts.RotationBudget; headroom > 0 {
+		if limit := headroom / 2; limit > 0 && timeout > limit {
+			timeout = limit
+		}
+	}
+	return timeout
+}
+
+// batchOrder interleaves reserved egress probes with transports, starting with
+// egress. A budget cutoff then reduces both kinds instead of starving transports
+// behind a long target list while still giving every target its first slot.
+func batchOrder(reqs []contract.ProbeRequest) []int {
+	egress := make([]int, 0, len(reqs))
+	transports := make([]int, 0, len(reqs))
+	for i, req := range reqs {
+		if req.Kind == contract.ProbeEgress {
+			egress = append(egress, i)
+			continue
+		}
+		transports = append(transports, i)
+	}
+	order := make([]int, 0, len(reqs))
+	for i := 0; i < len(egress) || i < len(transports); i++ {
+		if i < len(egress) {
+			order = append(order, egress[i])
+		}
+		if i < len(transports) {
+			order = append(order, transports[i])
+		}
+	}
+	return order
 }
 
 // Retention exposes the bounded sample store for status/rerank consumers.
@@ -544,16 +760,36 @@ func (e *Engine) isConfiguredTarget(dst contract.Destination) bool {
 		if !ok {
 			continue
 		}
-		if parsed.Kind == dst.Kind && parsed.Port == dst.Port && parsed.Host == dst.Host && parsed.Addr == dst.Addr {
+		if parsed.Kind == dst.Kind && parsed.Port == dst.Port && parsed.Host == dst.Host && parsed.Addr == dst.Addr && parsed.TLS == dst.TLS {
 			return true
 		}
 	}
 	return false
 }
 
-// ParseTarget converts "host:port" to a Destination without resolving it.
+// ParseTarget converts a configured egress target to a Destination without
+// resolving it. Accepted forms are:
+//
+//	host:port          read the first downlink byte (banner-style targets)
+//	tcp://host:port    the same read, stated explicitly
+//	tls://host:port    complete a TLS handshake with SNI set to host
+//
+// An unknown scheme is rejected rather than silently treated as a hostname.
 func ParseTarget(raw string) (contract.Destination, bool) {
-	host, portRaw, err := net.SplitHostPort(strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+	useTLS := false
+	if i := strings.Index(raw, "://"); i >= 0 {
+		switch strings.ToLower(raw[:i]) {
+		case "tcp":
+			useTLS = false
+		case "tls":
+			useTLS = true
+		default:
+			return contract.Destination{}, false
+		}
+		raw = raw[i+3:]
+	}
+	host, portRaw, err := net.SplitHostPort(raw)
 	if err != nil {
 		return contract.Destination{}, false
 	}
@@ -567,10 +803,10 @@ func ParseTarget(raw string) (contract.Destination, bool) {
 		if !ip.IsValid() || ip.IsUnspecified() {
 			return contract.Destination{}, false
 		}
-		return contract.Destination{Kind: contract.DestIP, Addr: ip, Port: uint16(port)}, true
+		return contract.Destination{Kind: contract.DestIP, Addr: ip, Port: uint16(port), TLS: useTLS}, true
 	}
 	if host == "" || strings.ContainsAny(host, " /@?#\t\r\n") {
 		return contract.Destination{}, false
 	}
-	return contract.Destination{Kind: contract.DestDomain, Host: strings.ToLower(host), Port: uint16(port)}, true
+	return contract.Destination{Kind: contract.DestDomain, Host: strings.ToLower(host), Port: uint16(port), TLS: useTLS}, true
 }

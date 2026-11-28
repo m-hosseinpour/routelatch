@@ -60,7 +60,7 @@ func TestDeterministicMenuTreeMatchesContract(t *testing.T) {
 	if n, _ := findNode(view.Root, "rules"); n.Label != "Approved rules (117)" {
 		t.Fatalf("rules = %q", n.Label)
 	}
-	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "176 records · 140 usable · 100 healthy · 20 cooling" {
+	if n, _ := findNode(view.Root, "pool.summary"); n.Label != "176 records · 140 usable · 100 healthy · 0 reachable · 20 cooling" {
 		t.Fatalf("summary = %q", n.Label)
 	}
 	if n, _ := findNode(view.Root, "quit.now"); !n.Visible || !n.Enabled {
@@ -98,49 +98,81 @@ func TestDeterministicMenuTreeMatchesContract(t *testing.T) {
 	}
 }
 
-func TestPaginationTwentyRowsAndClamp(t *testing.T) {
+// TestNestedPaginationTwentyRowsAndDepth covers the fixed 20-row local page
+// size and the nested page submenu: page 2 lives inside page 1, page 6 is
+// reachable through the chain, and no Previous/Next action exists.
+func TestNestedPaginationTwentyRowsAndDepth(t *testing.T) {
 	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
 	view := s.ctl.View()
-	if node, _ := findNode(view.Root, "rules.page"); node.Label != "Page 1/6" {
-		t.Fatalf("rules page = %q", node.Label)
-	}
 	if count := countRuleNodes(view.Root); count != PageSize {
 		t.Fatalf("page 1 rule nodes = %d, want %d", count, PageSize)
 	}
-	if next, _ := findNode(view.Root, "rules.next"); !next.Enabled {
-		t.Fatal("next page disabled on page 1")
+	rules, _ := findNode(view.Root, "rules")
+	page2, ok := directChild(rules, "rules.page.2")
+	if !ok || page2.Label != "Page 2/6" || page2.Kind != NodeSubmenu {
+		t.Fatalf("rules page 2 = %+v", page2)
 	}
-	if _, err := s.ctl.Trigger(ctx, ActionPageNext, Target{Section: SectionRules}); err != nil {
-		t.Fatal(err)
+	page3, ok := directChild(page2, "rules.page.2.page.3")
+	if !ok || page3.Label != "Page 3/6" {
+		t.Fatalf("page 3 nested in page 2 = %+v", page3)
 	}
-	if node, _ := findNode(s.ctl.View().Root, "rules.page"); node.Label != "Page 2/6" {
-		t.Fatalf("after next = %q", node.Label)
+	if _, ok := findNode(page3, "rules.page.2.page.3.page.4.page.5.page.6"); !ok {
+		t.Fatal("page 6 is not reachable through the nested page chain")
 	}
-	s.ctl.SetPage(SectionRules, 99)
-	view = s.ctl.View()
-	if node, _ := findNode(view.Root, "rules.page"); node.Label != "Page 6/6" {
-		t.Fatalf("clamped page = %q", node.Label)
-	}
-	if next, _ := findNode(view.Root, "rules.next"); next.Enabled {
-		t.Fatal("next page enabled on the last page")
-	}
-	if prev, _ := findNode(view.Root, "rules.prev"); !prev.Enabled {
-		t.Fatal("previous page disabled on the last page")
-	}
-	if count := countRuleNodes(view.Root); count != 17 {
-		t.Fatalf("last page rule nodes = %d, want 17", count)
+	if depth := maxDepth(view.Root, 0); depth < 6 {
+		t.Fatalf("nested pages reach depth %d, want at least 6", depth)
 	}
 
-	if node, _ := findNode(view.Root, "pool.group.pool.healthy.page"); node.Label != "Page 1/5" {
-		t.Fatalf("healthy page = %q", node.Label)
+	healthy, _ := findNode(view.Root, "pool.group.pool.healthy")
+	if got := countDirectChildrenWithPrefix(healthy, "pool.row."); got != PageSize {
+		t.Fatalf("healthy page 1 rows = %d, want %d", got, PageSize)
 	}
-	if node, _ := findNode(view.Root, "pool.group.pool.untested.page"); node.Label != "Page 1/2" {
-		t.Fatalf("untested page = %q", node.Label)
+	healthyPage2, ok := directChild(healthy, "pool.group.pool.healthy.page.2")
+	if !ok || healthyPage2.Label != "Page 2/5" {
+		t.Fatalf("healthy page 2 = %+v", healthyPage2)
 	}
-	if _, ok := findNode(view.Root, "pool.group.pool.cooling.page"); ok {
-		t.Fatal("single-page cooling group has page controls")
+	wantFirst := poolRowKey(fixturePoolID(PageSize))
+	if _, ok := directChild(healthyPage2, wantFirst); !ok {
+		t.Fatalf("healthy page 2 does not start at %q", wantFirst)
 	}
+	if _, ok := directChild(healthy, wantFirst); ok {
+		t.Fatal("healthy page 1 also renders a page-2 row")
+	}
+	untested, _ := findNode(view.Root, "pool.group.pool.untested")
+	if page, ok := directChild(untested, "pool.group.pool.untested.page.2"); !ok || page.Label != "Page 2/2" {
+		t.Fatalf("untested page 2 = %+v", page)
+	}
+	if _, ok := findNode(view.Root, "pool.group.pool.cooling.page.2"); ok {
+		t.Fatal("single-page cooling group rendered a page submenu")
+	}
+
+	walk(view.Root, func(n Node) {
+		if strings.HasSuffix(n.Key, ".prev") || strings.HasSuffix(n.Key, ".next") {
+			t.Fatalf("pagination action node %q still exists", n.Key)
+		}
+		if n.Label == "Previous page" || n.Label == "Next page" {
+			t.Fatalf("pagination action label %q still exists", n.Label)
+		}
+	})
+}
+
+func directChild(n Node, key string) (Node, bool) {
+	for _, child := range n.Children {
+		if child.Key == key {
+			return child, true
+		}
+	}
+	return Node{}, false
+}
+
+func maxDepth(n Node, depth int) int {
+	max := depth
+	for _, child := range n.Children {
+		if d := maxDepth(child, depth+1); d > max {
+			max = d
+		}
+	}
+	return max
 }
 
 func countRuleNodes(root Node) int {
@@ -226,7 +258,7 @@ func TestStoppedDisablesDynamicAndMutationActions(t *testing.T) {
 	view := s.ctl.View()
 	for _, key := range []string{
 		"mode.stop", "proposals.clear", "rules.r-000.remove",
-		"pool.auto", "pool.refresh", "pool.rerank", "pool.test.first20",
+		"pool.auto", "pool.refresh", "pool.rerank", "pool.scan", "pool.test.first20",
 		"desktop.set", "diagnostics.doctor",
 	} {
 		n, ok := findNode(view.Root, key)
@@ -294,8 +326,8 @@ func TestDiagnosticsDisabledOnlyDisablesProposalDecisions(t *testing.T) {
 	fx.status["diagnostics"] = map[string]any{"enabled": false, "queued": 0}
 	s := newSetup(t, fx, nil)
 	view := s.ctl.View()
-	for _, id := range []string{"p-route-1", "p-route-2", "p-unroute-1"} {
-		for _, suffix := range []string{".accept", ".reject", ".recheck"} {
+	for _, id := range []string{"p-route-1", "p-route-2"} {
+		for _, suffix := range []string{".accept", ".accept-suffix", ".reject", ".recheck"} {
 			n, ok := findNode(view.Root, "proposals.pending."+id+suffix)
 			if !ok {
 				t.Fatalf("missing %s", id+suffix)
@@ -304,6 +336,24 @@ func TestDiagnosticsDisabledOnlyDisablesProposalDecisions(t *testing.T) {
 				t.Fatalf("%s enabled with diagnostics off", id+suffix)
 			}
 		}
+	}
+	for _, suffix := range []string{".accept", ".reject", ".recheck"} {
+		n, ok := findNode(view.Root, "proposals.pending.p-unroute-1"+suffix)
+		if !ok {
+			t.Fatalf("missing p-unroute-1%s", suffix)
+		}
+		if n.Enabled {
+			t.Fatalf("p-unroute-1%s enabled with diagnostics off", suffix)
+		}
+	}
+	if _, ok := findNode(view.Root, "proposals.pending.p-unroute-1.accept-suffix"); ok {
+		t.Fatal("an unroute proposal offered suffix acceptance")
+	}
+	if _, err := s.ctl.Trigger(context.Background(), ActionProposalAcceptSuffix, Target{ProposalID: "p-route-1"}); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("suffix accept with diagnostics off = %v, want ErrBlocked", err)
+	}
+	if got := s.caller.countOp(control.OpProposalsAccept); got != 0 {
+		t.Fatalf("blocked suffix accept reached the socket %d times", got)
 	}
 	if n, _ := findNode(view.Root, "proposals.decided"); n.Label != "Show decided (2)" {
 		t.Fatalf("decided = %q", n.Label)
@@ -323,6 +373,9 @@ func TestUnrouteRecheckIsDisabled(t *testing.T) {
 	accept, _ := findNode(view.Root, "proposals.pending.p-unroute-1.accept")
 	if !accept.Enabled {
 		t.Fatal("unroute accept should be available")
+	}
+	if _, ok := findNode(view.Root, "proposals.pending.p-unroute-1.accept-suffix"); ok {
+		t.Fatal("an unroute proposal offered suffix acceptance")
 	}
 }
 
@@ -354,7 +407,7 @@ func TestMaliciousDynamicLabelsAreSanitized(t *testing.T) {
 	if status, _ := findNode(view.Root, "status"); runeLen(status.Label) > HeaderLimit {
 		t.Fatalf("header too long: %d", runeLen(status.Label))
 	}
-	if n, _ := findNode(view.Root, "rules.r-000.details.note"); containsControl(n.Label) {
+	if n, _ := findNode(view.Root, "rules.r-116.details.note"); containsControl(n.Label) {
 		t.Fatalf("rule detail leaked controls: %q", n.Label)
 	}
 }
@@ -371,6 +424,7 @@ func TestEmptyListsRenderDisabledHints(t *testing.T) {
 	view := s.ctl.View()
 	for _, key := range []string{
 		"proposals.pending.empty", "rules.empty", "pool.group.pool.healthy.empty",
+		"pool.group.pool.reachable.empty",
 		"pool.group.pool.unsupported.empty", "diagnostics.warnings.empty", "diagnostics.results.empty",
 	} {
 		n, ok := findNode(view.Root, key)

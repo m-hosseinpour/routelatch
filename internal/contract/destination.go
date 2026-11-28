@@ -32,6 +32,11 @@ type Destination struct {
 	Addr   netip.Addr   `json:"addr,omitzero"`   // DestIP; DestCIDR: network address
 	Prefix netip.Prefix `json:"prefix,omitzero"` // DestCIDR only
 	Port   uint16       `json:"port,omitempty"`
+	// TLS is set only by a probe target with an explicit tls:// scheme. It
+	// asks an egress probe to complete a TLS handshake instead of reading the
+	// first downlink byte. Destination normalization never sets it, so it has
+	// no effect on routing or rules.
+	TLS bool `json:"tls,omitempty"`
 }
 
 // DestClass is the policy class of a destination, computed before any rule

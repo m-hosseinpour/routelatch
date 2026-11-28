@@ -3,7 +3,7 @@ package trayui
 import (
 	"context"
 	"errors"
-	"strconv"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -12,71 +12,75 @@ import (
 	"routelatch/internal/control"
 )
 
-// pageRuleKeys returns the rule submenu keys rendered on the current page.
-func pageRuleKeys(root Node) []string {
-	rules, ok := findNode(root, "rules")
-	if !ok {
-		return nil
+// TestRulesRenderNewestFirstAcrossNestedPages covers newest-first order from
+// the stored data through the menu, and that every rule is reachable exactly
+// once through the nested page submenus.
+func TestRulesRenderNewestFirstAcrossNestedPages(t *testing.T) {
+	fx := newFixture()
+	s := newSetup(t, fx, nil)
+	view := s.ctl.View()
+
+	// The service returns the stored newest-first order; the menu preserves it.
+	if len(fx.rules) != 117 || fx.rules[0].ID != "r-116" || fx.rules[116].ID != "r-000" {
+		t.Fatalf("fixture order = first=%q last=%q", fx.rules[0].ID, fx.rules[116].ID)
 	}
+	snap := s.ctl.Snapshot()
+	if len(snap.Rules) != 117 || snap.Rules[0].ID != "r-116" || snap.Rules[116].ID != "r-000" {
+		t.Fatalf("snapshot order = first %q, last %q; want newest first", snap.Rules[0].ID, snap.Rules[116].ID)
+	}
+
+	rules, ok := findNode(view.Root, "rules")
+	if !ok || rules.Label != "Approved rules (117)" {
+		t.Fatalf("rules label = %q", rules.Label)
+	}
+	if keys := directRuleKeys(rules); len(keys) != PageSize || keys[0] != "rules.r-116" {
+		t.Fatalf("page 1 keys = %v", keys)
+	}
+	page2, ok := directChild(rules, "rules.page.2")
+	if !ok {
+		t.Fatal("rules page 2 is not a child of page 1")
+	}
+	if keys := directRuleKeys(page2); len(keys) != PageSize || keys[0] != "rules.r-096" {
+		t.Fatalf("page 2 keys = %v, want 20 keys starting at r-096", keys)
+	}
+
+	// Walk only the page chain, not each rule's own Details submenu.
+	seen := make(map[string]bool, 117)
+	var order []string
+	var collect func(Node)
+	collect = func(n Node) {
+		for _, child := range n.Children {
+			rest := strings.TrimPrefix(child.Key, "rules.")
+			switch {
+			case strings.HasPrefix(child.Key, "rules.page."):
+				collect(child)
+			case strings.HasPrefix(rest, "r-") && !strings.Contains(rest, "."):
+				if seen[child.Key] {
+					t.Fatalf("rule %q appears on more than one page", child.Key)
+				}
+				seen[child.Key] = true
+				order = append(order, child.Key)
+			}
+		}
+	}
+	collect(rules)
+	if len(seen) != 117 {
+		t.Fatalf("reachable rules = %d, want 117", len(seen))
+	}
+	if order[0] != "rules.r-116" || order[len(order)-1] != "rules.r-000" {
+		t.Fatalf("nested order = first %q, last %q", order[0], order[len(order)-1])
+	}
+}
+
+func directRuleKeys(n Node) []string {
 	out := make([]string, 0, PageSize)
-	for _, child := range rules.Children {
-		if strings.HasPrefix(child.Key, "rules.r-") {
+	for _, child := range n.Children {
+		rest := strings.TrimPrefix(child.Key, "rules.")
+		if strings.HasPrefix(rest, "r-") && !strings.Contains(rest, ".") {
 			out = append(out, child.Key)
 		}
 	}
 	return out
-}
-
-func TestRulePagesCoverAll117RulesOnce(t *testing.T) {
-	s := newSetup(t, newFixture(), nil)
-	ctx := context.Background()
-
-	seen := make(map[string]bool, 117)
-	for page := 1; page <= 6; page++ {
-		view := s.ctl.View()
-		label, ok := findNode(view.Root, "rules.page")
-		if !ok {
-			t.Fatalf("page %d: no page label", page)
-		}
-		wantLabel := "Page " + strconv.Itoa(page) + "/6"
-		if label.Label != wantLabel {
-			t.Fatalf("page %d label = %q, want %q", page, label.Label, wantLabel)
-		}
-		keys := pageRuleKeys(view.Root)
-		wantCount := PageSize
-		if page == 6 {
-			wantCount = 117 - 5*PageSize
-		}
-		if len(keys) != wantCount {
-			t.Fatalf("page %d has %d rule nodes, want %d", page, len(keys), wantCount)
-		}
-		for _, key := range keys {
-			if seen[key] {
-				t.Fatalf("rule %q appears on more than one page", key)
-			}
-			seen[key] = true
-		}
-		prev, _ := findNode(view.Root, "rules.prev")
-		next, _ := findNode(view.Root, "rules.next")
-		if page == 1 && prev.Enabled {
-			t.Fatal("Previous page enabled on page 1")
-		}
-		if page == 6 && next.Enabled {
-			t.Fatal("Next page enabled on the last page")
-		}
-		if page < 6 {
-			if _, err := s.ctl.Trigger(ctx, ActionPageNext, Target{Section: SectionRules}); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	if len(seen) != 117 {
-		t.Fatalf("reachable rules = %d, want 117", len(seen))
-	}
-	// The count label is the full list, not the current page.
-	if n, _ := findNode(s.ctl.View().Root, "rules"); n.Label != "Approved rules (117)" {
-		t.Fatalf("rules label = %q", n.Label)
-	}
 }
 
 func TestRuleRemoveRunsOnClickWithTheSelectedRule(t *testing.T) {
@@ -146,6 +150,70 @@ func TestProposalAcceptRouteRunsOnTheClick(t *testing.T) {
 		if strings.Contains(note.Body, "other.example") {
 			t.Fatalf("notification leaked the proposal destination: %q", note.Body)
 		}
+	}
+}
+
+// TestProposalAcceptSuffixOnlyForHostnameRoutes covers the suffix acceptance
+// action: it is offered only for hostname route proposals and sends
+// rule_kind=domain_suffix, while plain Accept stays exact-domain.
+func TestProposalAcceptSuffixOnlyForHostnameRoutes(t *testing.T) {
+	fx := newFixture()
+	fx.proposals = append(fx.proposals, control.ProposalView{
+		ID: "p-ip-route", Kind: contract.ProposalRoute,
+		Destination: contract.Destination{Kind: contract.DestIP, Addr: netip.MustParseAddr("192.0.2.10"), Port: 443},
+		Status:      contract.ProposalPending,
+	})
+	s := newSetup(t, fx, nil)
+	view := s.ctl.View()
+
+	for _, id := range []string{"p-ip-route", "p-unroute-1"} {
+		if n, ok := findNode(view.Root, "proposals.pending."+id+".accept-suffix"); ok {
+			t.Fatalf("%s offered suffix acceptance: %+v", id, n)
+		}
+	}
+	node, ok := findNode(view.Root, "proposals.pending.p-route-1.accept-suffix")
+	if !ok || !node.Enabled || node.Action != ActionProposalAcceptSuffix || node.Target.ProposalID != "p-route-1" {
+		t.Fatalf("suffix node = %+v", node)
+	}
+	if node.Label != "Accept as domain suffix" {
+		t.Fatalf("suffix label = %q", node.Label)
+	}
+
+	res, err := s.ctl.Trigger(context.Background(), node.Action, node.Target)
+	if err != nil || res.Status != ResultCompleted {
+		t.Fatalf("suffix accept = %+v, %v", res, err)
+	}
+	var last control.Request
+	for _, req := range s.caller.requests() {
+		if req.Op == control.OpProposalsAccept {
+			last = req
+		}
+	}
+	if last.ID != "p-route-1" || last.RuleKind != string(contract.RuleDomainSuffix) {
+		t.Fatalf("suffix accept request = %+v", last)
+	}
+	if got := s.ctl.View().LastAction; got != "Proposal accepted as a domain suffix" {
+		t.Fatalf("last action = %q", got)
+	}
+	for _, note := range s.notifier.all() {
+		if strings.Contains(note.Body, "routed.example") {
+			t.Fatalf("notification leaked the proposal destination: %q", note.Body)
+		}
+	}
+
+	// Plain Accept does not choose a rule kind: the service keeps the exact
+	// domain rule it proposed.
+	if _, err := s.ctl.Trigger(context.Background(), ActionProposalAccept, Target{ProposalID: "p-route-2"}); err != nil {
+		t.Fatalf("plain accept: %v", err)
+	}
+	last = control.Request{}
+	for _, req := range s.caller.requests() {
+		if req.Op == control.OpProposalsAccept {
+			last = req
+		}
+	}
+	if last.ID != "p-route-2" || last.RuleKind != "" {
+		t.Fatalf("plain accept request = %+v", last)
 	}
 }
 
@@ -293,6 +361,7 @@ func TestProposalActionsNeverPutDestinationsInOutcomeText(t *testing.T) {
 	fx := newFixture()
 	fx.proposals = []control.ProposalView{
 		{ID: "p-d21-accept", Kind: contract.ProposalRoute, Destination: contract.Destination{Kind: contract.DestDomain, Host: canary, Port: 443}, Status: contract.ProposalPending},
+		{ID: "p-d21-suffix", Kind: contract.ProposalRoute, Destination: contract.Destination{Kind: contract.DestDomain, Host: canary, Port: 443}, Status: contract.ProposalPending},
 		{ID: "p-d21-reject", Kind: contract.ProposalRoute, Destination: contract.Destination{Kind: contract.DestDomain, Host: canary, Port: 443}, Status: contract.ProposalPending},
 		{ID: "p-d21-recheck", Kind: contract.ProposalRoute, Destination: contract.Destination{Kind: contract.DestDomain, Host: canary, Port: 443}, Status: contract.ProposalPending},
 		{ID: "p-d21-unroute", Kind: contract.ProposalUnroute, RuleID: "r-000", Destination: contract.Destination{Kind: contract.DestDomain, Host: canary, Port: 443}, Status: contract.ProposalPending},
@@ -314,6 +383,8 @@ func TestProposalActionsNeverPutDestinationsInOutcomeText(t *testing.T) {
 		texts = append(texts, res.Message)
 	}
 	step(ActionProposalAccept, Target{ProposalID: "p-d21-accept"})
+	record()
+	step(ActionProposalAcceptSuffix, Target{ProposalID: "p-d21-suffix"})
 	record()
 	step(ActionProposalReject, Target{ProposalID: "p-d21-reject"})
 	record()
@@ -337,7 +408,7 @@ func TestProposalActionsNeverPutDestinationsInOutcomeText(t *testing.T) {
 		}
 	}
 	// D21 allows the destination only as the live in-memory menu view.
-	if snap := s.ctl.Snapshot(); len(snap.Proposals) != 4 || snap.Proposals[0].Destination == "" {
+	if snap := s.ctl.Snapshot(); len(snap.Proposals) != 5 || snap.Proposals[0].Destination == "" {
 		t.Fatalf("live proposal view lost its destination: %+v", snap.Proposals)
 	}
 }

@@ -151,7 +151,15 @@ type ExitHealth struct {
 	ConsecutiveFailures int          `json:"consecutive_failures"`
 	EWMALatencyMS       int64        `json:"ewma_latency_ms"`
 	Samples             int          `json:"samples"`
-	CooldownUntil       time.Time    `json:"cooldown_until,omitzero"`
+	// TransportLatencyMS is the last successful endpoint TCP/TLS round trip.
+	// It is endpoint evidence only: it never promotes an exit to healthy and
+	// is shown as the exit's measured delay (docs/contracts.md §6.2, §7.3).
+	TransportLatencyMS int64 `json:"transport_latency_ms,omitempty"`
+	// TransportSuccessAt is the last successful endpoint probe. A non-zero
+	// value with an unknown status is the menu's "reachable, egress untested"
+	// view; it is never a health claim.
+	TransportSuccessAt time.Time `json:"transport_success_at,omitzero"`
+	CooldownUntil      time.Time `json:"cooldown_until,omitzero"`
 	// LastFailureKind is the transport-level kind that caused cooling. It is
 	// never a destination-level cause (docs/contracts.md §6.2).
 	LastFailureKind ErrorKind `json:"last_failure_kind,omitempty"`

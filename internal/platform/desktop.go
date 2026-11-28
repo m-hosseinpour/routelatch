@@ -198,6 +198,9 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 	if err := opts.Targets.Validate(); err != nil {
 		return contract.DesktopProxyState{}, err
 	}
+	if opts.Previous.Cleared {
+		return a.reapplyAfterClear(ctx, opts)
+	}
 	if opts.Previous.Applied {
 		if len(opts.Previous.Keys) == 0 {
 			return contract.DesktopProxyState{}, localFailure(contract.StateCorrupt, "platform.desktop.apply",
@@ -285,6 +288,346 @@ func (a *DesktopAdapter) Apply(ctx context.Context, opts ApplyOptions) (contract
 	return a.writeValues(ctx, tools, layouts, values, previous, previous, opts, &marker)
 }
 
+// reapplyAfterClear takes ownership again after Clear disabled the proxy. The
+// original restore point is kept for keys the user did not edit, so a later
+// restore still returns the setting that existed before the first apply.
+func (a *DesktopAdapter) reapplyAfterClear(ctx context.Context, opts ApplyOptions) (contract.DesktopProxyState, error) {
+	layouts := layoutsFor(opts.Kind)
+	if layouts == nil {
+		return contract.DesktopProxyState{}, localFailure(contract.Unsupported, "platform.desktop.apply",
+			"only GNOME and KDE Plasma desktop proxy settings are supported")
+	}
+	if !opts.Previous.Applied || len(opts.Previous.Keys) == 0 {
+		return contract.DesktopProxyState{}, localFailure(contract.StateCorrupt, "platform.desktop.apply",
+			"desktop proxy state says cleared but records no restore point; run `routelatch desktop proxy restore` first")
+	}
+	if opts.Previous.Environment != string(opts.Kind) {
+		return contract.DesktopProxyState{}, localFailure(contract.Unsupported, "platform.desktop.apply",
+			"a different desktop environment is already recorded; run `routelatch desktop proxy restore` first")
+	}
+	// A clear without a marker records only the values that existed: GNOME
+	// always has all of them, KDE omits absent keys. Missing layouts keep the
+	// live value as their restore point below.
+	seen := make(map[string]struct{}, len(opts.Previous.Keys))
+	for _, key := range opts.Previous.Keys {
+		if _, duplicate := seen[key.Name]; duplicate || !knownLayout(layouts, key.Name) {
+			return contract.DesktopProxyState{}, localFailure(contract.StateCorrupt, "platform.desktop.apply",
+				"desktop proxy state names an invalid setting; run `routelatch desktop proxy restore` first")
+		}
+		seen[key.Name] = struct{}{}
+	}
+	if err := verifyServiceHealth(ctx, a.Health, opts.Targets, "platform.desktop.apply"); err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	tools, err := a.resolveTools(ctx, opts.Kind)
+	if err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	current, edited, err := a.readAppliedState(ctx, tools, layouts, opts.Previous)
+	if err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	values, err := valuesFor(opts.Kind, opts.Targets)
+	if err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	restorePoint := reapplyRestorePoint(layouts, opts.Previous, current, edited)
+	marker := a.markerFor(opts, layouts, values, restorePoint)
+	if err := a.saveMarker(ctx, opts, marker); err != nil {
+		return contract.DesktopProxyState{}, err
+	}
+	return a.writeValues(ctx, tools, layouts, values, current, restorePoint, opts, &marker)
+}
+
+// ClearOptions describes a clear request. Kind is consulted only when State
+// records no environment yet, which is exactly the case where Clear takes a
+// restore-point snapshot before disabling the proxy for the first time.
+type ClearOptions struct {
+	Kind  Kind
+	State contract.DesktopProxyState
+}
+
+// ClearResult reports a desktop-proxy clear. The ownership marker is kept so
+// Restore can still revert to the user's original values.
+type ClearResult struct {
+	State           contract.DesktopProxyState
+	Cleared         []string
+	AlreadyDisabled bool
+	StateChanged    bool
+	UserModified    []string
+	Failed          []string
+	Notice          string
+}
+
+func disableSetting(kind Kind) (name, value string, ok bool) {
+	switch kind {
+	case KindGNOME:
+		return "org.gnome.system.proxy mode", gvariantString("none"), true
+	case KindKDE:
+		return "kioslaverc:Proxy Settings/ProxyType", "0", true
+	default:
+		return "", "", false
+	}
+}
+
+// Clear disables the system proxy (GNOME mode=none, KDE ProxyType=0). With a
+// recorded marker it only writes when the disable key still holds RouteLatch's
+// value; a user edit is left untouched. Without a marker it snapshots the
+// current values as a new restore point, then writes the disable key alone, so
+// `restore` can still return the user's original settings. It never needs the
+// service health checker, so it works while listening is stopped.
+func (a *DesktopAdapter) Clear(ctx context.Context, opts ClearOptions) (ClearResult, error) {
+	state := opts.State
+	result := ClearResult{State: state}
+	if !state.Applied && len(state.Keys) == 0 {
+		return a.clearWithoutMarker(ctx, opts.Kind, result)
+	}
+	if !state.Applied {
+		return result, stateFailure("platform.desktop.clear",
+			"desktop proxy state has settings but is not marked applied; nothing was changed")
+	}
+	if len(state.Keys) == 0 {
+		return result, stateFailure("platform.desktop.clear",
+			"desktop proxy state says applied but records no settings; nothing was changed")
+	}
+	kind := Kind(state.Environment)
+	if !validKind(kind) {
+		return result, localFailure(contract.Unsupported, "platform.desktop.clear",
+			"desktop proxy state names an unsupported environment; clear the desktop setting manually")
+	}
+	layouts := layoutsFor(kind)
+	disableName, disableValue, ok := disableSetting(kind)
+	if !ok {
+		return result, stateFailure("platform.desktop.clear", "this build does not know the disable setting")
+	}
+	layout, ok := layoutByName(layouts, disableName)
+	if !ok {
+		return result, stateFailure("platform.desktop.clear", "this build does not know the disable setting")
+	}
+	var key contract.DesktopKey
+	found := false
+	for _, k := range state.Keys {
+		if k.Name != disableName {
+			continue
+		}
+		key, found = k, true
+		break
+	}
+	if !found {
+		return result, stateFailure("platform.desktop.clear",
+			"desktop proxy state records no disable setting; nothing was changed")
+	}
+	if key.Applied == "" {
+		return result, stateFailure("platform.desktop.clear",
+			"desktop proxy state has an empty applied value; nothing was changed")
+	}
+	tools, err := a.resolveTools(ctx, kind)
+	if err != nil {
+		return result, localFailure(contract.Unsupported, "platform.desktop.clear",
+			"the desktop settings tool needed to clear the proxy is not available")
+	}
+	current, err := a.readValue(ctx, tools, layout)
+	if err != nil {
+		result.Failed = append(result.Failed, layout.name)
+		return result, commandFailure("platform.desktop.clear", err)
+	}
+	if current == disableValue {
+		// The setting is already disabled. Adopt it as ours so a later restore
+		// still knows the value it replaced; nothing is written.
+		keys := make([]contract.DesktopKey, len(state.Keys))
+		copy(keys, state.Keys)
+		changed := !state.Cleared
+		for i := range keys {
+			if keys[i].Name == layout.name && keys[i].Applied != disableValue {
+				keys[i].Applied = disableValue
+				changed = true
+			}
+		}
+		result.State.Applied = true
+		result.State.Cleared = true
+		result.State.Keys = keys
+		result.StateChanged = changed
+		result.AlreadyDisabled = true
+		result.Notice = "the system proxy is already disabled"
+		return result, nil
+	}
+	if current != key.Applied {
+		result.UserModified = append(result.UserModified, layout.name)
+		return result, nil
+	}
+	if err := a.writeValue(ctx, tools, layout, disableValue); err != nil {
+		result.Failed = append(result.Failed, layout.name)
+		if rbErr := a.rollbackDisable(ctx, tools, layout, key.Applied); rbErr != nil {
+			f := commandFailure("platform.desktop.clear", errors.Join(err, rbErr))
+			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
+				"run `routelatch desktop proxy restore` after checking the desktop settings"
+			return result, f
+		}
+		return result, commandFailure("platform.desktop.clear", err)
+	}
+	got, err := a.readValue(ctx, tools, layout)
+	if err != nil || got != disableValue {
+		result.Failed = append(result.Failed, layout.name)
+		if rbErr := a.rollbackDisable(ctx, tools, layout, key.Applied); rbErr != nil {
+			return result, commandFailure("platform.desktop.clear",
+				errors.Join(errors.New("desktop setting did not retain the cleared value"), rbErr))
+		}
+		if err != nil {
+			return result, commandFailure("platform.desktop.clear", err)
+		}
+		return result, commandFailure("platform.desktop.clear", errors.New("desktop setting did not retain the cleared value"))
+	}
+	keys := make([]contract.DesktopKey, len(state.Keys))
+	copy(keys, state.Keys)
+	for i := range keys {
+		if keys[i].Name == layout.name {
+			keys[i].Applied = disableValue
+		}
+	}
+	result.State.Applied = true
+	result.State.Cleared = true
+	result.State.Keys = keys
+	result.StateChanged = true
+	result.Cleared = []string{layout.name}
+	return result, nil
+}
+
+// clearWithoutMarker snapshots every restorable current value before writing
+// the disable key for the first time. The snapshot becomes the marker so that
+// "restore previous" can still return the setting that existed before the
+// clear, and so a later Apply keeps it as the original restore point.
+func (a *DesktopAdapter) clearWithoutMarker(ctx context.Context, kind Kind, result ClearResult) (ClearResult, error) {
+	if !validKind(kind) {
+		return result, localFailure(contract.Unsupported, "platform.desktop.clear",
+			"this desktop environment is not supported; only GNOME and KDE desktop proxy settings can be cleared")
+	}
+	layouts := layoutsFor(kind)
+	disableName, disableValue, ok := disableSetting(kind)
+	if !ok {
+		return result, stateFailure("platform.desktop.clear", "this build does not know the disable setting")
+	}
+	layout, ok := layoutByName(layouts, disableName)
+	if !ok {
+		return result, stateFailure("platform.desktop.clear", "this build does not know the disable setting")
+	}
+	tools, err := a.resolveTools(ctx, kind)
+	if err != nil {
+		return result, localFailure(contract.Unsupported, "platform.desktop.clear",
+			"the desktop settings tool needed to clear the proxy is not available")
+	}
+	// Read every current value before anything is written: the snapshot is the
+	// only restore point a clear without a marker can offer.
+	values := make(map[string]string, len(layouts))
+	for i := len(layouts) - 1; i >= 0; i-- {
+		value, err := a.readValue(ctx, tools, layouts[i])
+		if err != nil {
+			result.Failed = append(result.Failed, layouts[i].name)
+			return result, commandFailure("platform.desktop.clear", err)
+		}
+		if value != "" {
+			if err := validateStoredValue(value); err != nil {
+				return result, localFailure(contract.Unsupported, "platform.desktop.clear",
+					"the current desktop setting contains a value RouteLatch cannot safely restore; nothing was changed")
+			}
+		} else if kind == KindGNOME {
+			return result, localFailure(contract.ExternalToolFailed, "platform.desktop.clear",
+				"gsettings returned an empty value for a key that always has one; nothing was changed")
+		}
+		values[layouts[i].name] = value
+	}
+	currentDisable := values[disableName]
+	// KDE reports an absent ProxyType as empty, and its default is NoProxy.
+	if currentDisable == disableValue || (kind == KindKDE && currentDisable == "") {
+		result.AlreadyDisabled = true
+		result.Notice = "the system proxy is already disabled"
+		return result, nil
+	}
+	keys := make([]contract.DesktopKey, 0, len(layouts))
+	for _, l := range layouts {
+		value := values[l.name]
+		if l.name != disableName && value == "" {
+			// KDE absent keys need no restore point; restore would delete them.
+			continue
+		}
+		applied := value
+		if l.name == disableName {
+			applied = disableValue
+		}
+		keys = append(keys, contract.DesktopKey{Name: l.name, Applied: applied, Previous: value})
+	}
+	result.State = contract.DesktopProxyState{
+		Applied:     true,
+		Environment: string(kind),
+		AppliedAt:   a.clock()().UTC(),
+		Cleared:     true,
+		Keys:        keys,
+	}
+	if err := a.writeValue(ctx, tools, layout, disableValue); err != nil {
+		result.Failed = append(result.Failed, layout.name)
+		if rbErr := a.rollbackDisable(ctx, tools, layout, currentDisable); rbErr != nil {
+			result.StateChanged = true
+			f := commandFailure("platform.desktop.clear", errors.Join(err, rbErr))
+			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
+				"run `routelatch desktop proxy restore` after checking the desktop settings"
+			return result, f
+		}
+		result.State = contract.DesktopProxyState{}
+		return result, commandFailure("platform.desktop.clear", err)
+	}
+	got, err := a.readValue(ctx, tools, layout)
+	if err != nil || got != disableValue {
+		result.Failed = append(result.Failed, layout.name)
+		rbErr := a.rollbackDisable(ctx, tools, layout, currentDisable)
+		if rbErr != nil {
+			result.StateChanged = true
+			f := commandFailure("platform.desktop.clear", errors.Join(errors.New("desktop setting did not retain the cleared value"), rbErr))
+			f.Message = "could not disable the desktop proxy and rollback was incomplete; " +
+				"run `routelatch desktop proxy restore` after checking the desktop settings"
+			return result, f
+		}
+		result.State = contract.DesktopProxyState{}
+		if err != nil {
+			return result, commandFailure("platform.desktop.clear", err)
+		}
+		return result, commandFailure("platform.desktop.clear", errors.New("desktop setting did not retain the cleared value"))
+	}
+	result.StateChanged = true
+	result.Cleared = []string{layout.name}
+	return result, nil
+}
+
+// rollbackDisable returns the disable key to its pre-clear value and verifies
+// the write. An empty KDE value means the key was absent and is deleted again.
+func (a *DesktopAdapter) rollbackDisable(ctx context.Context, tools desktopTools, layout keyLayout, previous string) error {
+	if previous == "" && tools.kind == KindKDE {
+		if err := a.deleteValue(ctx, tools, layout); err != nil {
+			return err
+		}
+		got, err := a.readValue(ctx, tools, layout)
+		if err != nil {
+			return err
+		}
+		if got != "" {
+			return errors.New("desktop setting did not retain the cleared previous absence")
+		}
+		return nil
+	}
+	if previous == "" {
+		return errors.New("cannot restore an empty GNOME value")
+	}
+	if err := a.writeValue(ctx, tools, layout, previous); err != nil {
+		return err
+	}
+	got, err := a.readValue(ctx, tools, layout)
+	if err != nil {
+		return err
+	}
+	if got != previous {
+		return errors.New("desktop setting did not retain the rollback value")
+	}
+	return nil
+}
+
 // readCurrentValues reads every managed key so its current value can become
 // the restore point of a new ownership marker.
 func (a *DesktopAdapter) readCurrentValues(ctx context.Context, tools desktopTools, layouts []keyLayout) ([]string, error) {
@@ -349,14 +692,26 @@ func (a *DesktopAdapter) readAppliedState(ctx context.Context, tools desktopTool
 // user never edited: their current value is RouteLatch's own, so replacing the
 // restore point with it would leave nothing to restore. Only edited keys use
 // the live value, which is what the user will expect `restore` to return to.
+// reapplyRestorePoint keeps the original pre-RouteLatch value for keys the
+// user never edited: their current value is RouteLatch's own, so replacing the
+// restore point with it would leave nothing to restore. Only edited keys use
+// the live value, which is what the user will expect `restore` to return to.
+// A layout the marker does not record (KDE keys absent at clear time) uses the
+// live value, which is still the user's original state.
 func reapplyRestorePoint(layouts []keyLayout, state contract.DesktopProxyState, current []string, edited []bool) []string {
 	original := make(map[string]string, len(state.Keys))
+	recorded := make(map[string]bool, len(state.Keys))
 	for _, key := range state.Keys {
 		original[key.Name] = key.Previous
+		recorded[key.Name] = true
 	}
 	point := make([]string, len(layouts))
 	for i, layout := range layouts {
-		point[i] = original[layout.name]
+		if recorded[layout.name] {
+			point[i] = original[layout.name]
+		} else {
+			point[i] = current[i]
+		}
 		if edited[i] {
 			point[i] = current[i]
 		}

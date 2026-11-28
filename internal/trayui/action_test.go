@@ -41,6 +41,7 @@ func TestActionRequestTable(t *testing.T) {
 		{ActionTunEnable, control.Request{Op: control.OpTunEnable}},
 		{ActionTunDisable, control.Request{Op: control.OpTunDisable}},
 		{ActionProposalAccept, control.Request{Op: control.OpProposalsAccept, ID: string(id)}},
+		{ActionProposalAcceptSuffix, control.Request{Op: control.OpProposalsAccept, ID: string(id), RuleKind: string(contract.RuleDomainSuffix)}},
 		{ActionProposalReject, control.Request{Op: control.OpProposalsReject, ID: string(id)}},
 		{ActionProposalRecheck, control.Request{Op: control.OpProposalsRecheck, ID: string(id)}},
 		{ActionProposalsClear, control.Request{Op: control.OpProposalsClear}},
@@ -52,9 +53,11 @@ func TestActionRequestTable(t *testing.T) {
 		{ActionPoolRerank, control.Request{Op: control.OpPoolRerank}},
 		{ActionPoolTest, control.Request{Op: control.OpPoolTest, ID: string(exit)}},
 		{ActionPoolTestFirst20, control.Request{Op: control.OpPoolTest}},
+		{ActionPoolScan, control.Request{Op: control.OpPoolScan, Limit: contract.PoolScanBatch}},
 		{ActionDesktopRefresh, control.Request{Op: control.OpDesktopStatus}},
 		{ActionDesktopSet, control.Request{Op: control.OpDesktopSet}},
 		{ActionDesktopRestore, control.Request{Op: control.OpDesktopRestore}},
+		{ActionDesktopClear, control.Request{Op: control.OpDesktopClear}},
 		{ActionBackup, control.Request{Op: control.OpBackup}},
 		{ActionDoctor, control.Request{Op: control.OpDoctor}},
 	}
@@ -91,7 +94,7 @@ func TestActionRequestTable(t *testing.T) {
 	if _, ok := requestFor(ActionNone, target); ok {
 		t.Fatal("ActionNone produced a request")
 	}
-	for _, action := range []Action{ActionTerminalMenu, ActionShowLogPath, ActionQuit, ActionQuitRestoreDesktop, ActionQuitKeepDesktop, ActionAutostartToggle, ActionPageNext, ActionPagePrevious} {
+	for _, action := range []Action{ActionTerminalMenu, ActionShowLogPath, ActionQuit, ActionQuitRestoreDesktop, ActionQuitKeepDesktop, ActionAutostartToggle} {
 		if _, ok := requestFor(action, target); ok {
 			t.Fatalf("%s must not be a management request", action)
 		}
@@ -107,9 +110,11 @@ func TestActionClassificationAndJobs(t *testing.T) {
 		ActionPoolRefresh:        "pool refresh",
 		ActionPoolTest:           "pool test",
 		ActionPoolTestFirst20:    "pool test",
+		ActionPoolScan:           "pool check",
 		ActionProposalRecheck:    "proposal recheck",
 		ActionDesktopSet:         "desktop set",
 		ActionDesktopRestore:     "desktop restore",
+		ActionDesktopClear:       "desktop clear",
 		ActionBackup:             "backup",
 		ActionDoctor:             "doctor",
 		ActionAutostartToggle:    "autostart",

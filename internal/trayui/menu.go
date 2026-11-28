@@ -322,29 +322,23 @@ func (c *Controller) proposalsMenuLocked(engine EngineState) Node {
 		}
 	}
 	children := make([]Node, 0, 8)
-	page, pages := c.pageLocked(SectionProposalsPending)
 	if !c.snap.ListsKnown {
 		children = append(children, disabledItem("proposals.pending.loading", "Proposal list refreshing…"))
 	} else if len(pending) == 0 {
 		children = append(children, disabledItem("proposals.pending.empty", "No pending proposals"))
 	} else {
-		for _, p := range pageSlice(pending, page) {
-			children = append(children, c.proposalNode(p))
-		}
-		children = append(children, c.pageNodes("proposals.pending", SectionProposalsPending, page, pages)...)
+		children = append(children, pagedNodes("proposals.pending", pending, c.proposalNode)...)
 	}
 
-	decidedChildren := make([]Node, 0, PageSize+3)
-	dpage, dpages := c.pageLocked(SectionProposalsDecided)
+	decidedChildren := make([]Node, 0, PageSize+2)
 	if !c.snap.ListsKnown {
 		decidedChildren = append(decidedChildren, disabledItem("proposals.decided.loading", "Proposal list refreshing…"))
 	} else if len(decided) == 0 {
 		decidedChildren = append(decidedChildren, disabledItem("proposals.decided.empty", "No decided or expired proposals"))
 	} else {
-		for _, p := range pageSlice(decided, dpage) {
-			decidedChildren = append(decidedChildren, disabledItem("proposals.decided."+stableKeyPart(string(p.ID)), proposalDecidedLabel(p)))
-		}
-		decidedChildren = append(decidedChildren, c.pageNodes("proposals.decided", SectionProposalsDecided, dpage, dpages)...)
+		decidedChildren = append(decidedChildren, pagedNodes("proposals.decided", decided, func(p Proposal) Node {
+			return disabledItem("proposals.decided."+stableKeyPart(string(p.ID)), proposalDecidedLabel(p))
+		})...)
 	}
 	decidedLabel := fmt.Sprintf("Show decided (%d)", len(decided))
 	if !c.snap.ListsKnown {
@@ -366,8 +360,11 @@ func (c *Controller) proposalNode(p Proposal) Node {
 	target := Target{ProposalID: p.ID}
 	children := []Node{
 		c.actionItem(key+".accept", "Accept", ActionProposalAccept, target),
-		c.actionItem(key+".reject", "Reject", ActionProposalReject, target),
 	}
+	if p.SuffixOK {
+		children = append(children, c.actionItem(key+".accept-suffix", "Accept as domain suffix", ActionProposalAcceptSuffix, target))
+	}
+	children = append(children, c.actionItem(key+".reject", "Reject", ActionProposalReject, target))
 	children = append(children, c.actionItem(key+".recheck", "Recheck", ActionProposalRecheck, target))
 	return submenu(key, proposalLabel(p), children...)
 }
@@ -400,17 +397,13 @@ func proposalDecidedLabel(p Proposal) string {
 }
 
 func (c *Controller) rulesMenuLocked(engine EngineState) Node {
-	page, pages := c.pageLocked(SectionRules)
 	children := make([]Node, 0, PageSize+5)
 	if !c.snap.ListsKnown {
 		children = append(children, disabledItem("rules.loading", "Rules list refreshing…"))
 	} else if len(c.snap.Rules) == 0 {
 		children = append(children, disabledItem("rules.empty", "No approved rules"))
 	} else {
-		for _, r := range pageSlice(c.snap.Rules, page) {
-			children = append(children, c.ruleNode(r))
-		}
-		children = append(children, c.pageNodes("rules", SectionRules, page, pages)...)
+		children = append(children, pagedNodes("rules", c.snap.Rules, c.ruleNode)...)
 	}
 	children = append(children, c.actionItem("rules.add.terminal", "Add rule… (Terminal menu)", ActionTerminalMenu, Target{}))
 	label := fmt.Sprintf("Approved rules (%d)", len(c.snap.Rules))
@@ -447,7 +440,17 @@ func ruleLabel(r Rule) string {
 
 func (c *Controller) poolMenuLocked(engine EngineState) Node {
 	counts := c.snap.Pool.Counts
-	summary := fmt.Sprintf("%d records · %d usable · %d healthy · %d cooling", counts.Total, counts.Usable, counts.Healthy, counts.Cooling)
+	reachable := 0
+	for _, row := range c.snap.Pool.Rows {
+		if poolGroupOf(row) == SectionPoolReachable {
+			reachable++
+		}
+	}
+	untested := counts.Unknown - reachable
+	if untested < 0 {
+		untested = 0
+	}
+	summary := fmt.Sprintf("%d records · %d usable · %d healthy · %d reachable · %d cooling", counts.Total, counts.Usable, counts.Healthy, reachable, counts.Cooling)
 	if !c.snap.ListsKnown {
 		summary = "Pool list refreshing…"
 	} else if counts.Total == 0 {
@@ -474,7 +477,8 @@ func (c *Controller) poolMenuLocked(engine EngineState) Node {
 		count   int
 	}{
 		{SectionPoolHealthy, "Healthy", counts.Healthy},
-		{SectionPoolUntested, "Untested", counts.Unknown},
+		{SectionPoolReachable, "Reachable · delay checked", reachable},
+		{SectionPoolUntested, "Untested", untested},
 		{SectionPoolCooling, "Cooling", counts.Cooling},
 		{SectionPoolUnusable, "Unsupported/Invalid", counts.Unsupported + counts.Invalid},
 	} {
@@ -482,6 +486,7 @@ func (c *Controller) poolMenuLocked(engine EngineState) Node {
 	}
 
 	children = append(children,
+		c.actionItem("pool.scan", "Check all exits (best first)", ActionPoolScan, Target{}),
 		c.actionItem("pool.refresh", "Refresh all sources", ActionPoolRefresh, Target{}),
 		c.actionItem("pool.rerank", "Re-rank now", ActionPoolRerank, Target{}),
 	)
@@ -496,9 +501,8 @@ func (c *Controller) poolMenuLocked(engine EngineState) Node {
 }
 
 func (c *Controller) poolGroupMenu(section Section, label string, count int) Node {
-	page, pages := c.pageLocked(section)
 	key := "pool.group." + string(section)
-	children := make([]Node, 0, PageSize+4)
+	children := make([]Node, 0, PageSize+2)
 	rows := c.poolGroupLocked(section)
 	title := fmt.Sprintf("%s (%d)", label, count)
 	if !c.snap.ListsKnown {
@@ -509,10 +513,7 @@ func (c *Controller) poolGroupMenu(section Section, label string, count int) Nod
 	if len(rows) == 0 {
 		children = append(children, disabledItem(key+".empty", "No "+strings.ToLower(label)+" exits"))
 	} else {
-		for _, row := range pageSlice(rows, page) {
-			children = append(children, c.poolRowNode(row))
-		}
-		children = append(children, c.pageNodes(key, section, page, pages)...)
+		children = append(children, pagedNodes(key, rows, c.poolRowNode)...)
 	}
 	return submenu(key, title, children...)
 }
@@ -538,6 +539,11 @@ func poolRowLabel(row PoolRow) string {
 		name = "exit " + shortID(string(row.ID))
 	}
 	label := fmt.Sprintf("%s · %s · %s", name, row.Protocol, row.Status)
+	if row.DelayMS > 0 {
+		label += fmt.Sprintf(" · %d ms", row.DelayMS)
+	} else {
+		label += " · delay —"
+	}
 	if row.Reason != "" {
 		label += " · " + row.Reason
 	}
@@ -550,6 +556,10 @@ func (c *Controller) desktopMenuLocked(engine EngineState) Node {
 	children = append(children, c.actionItem("desktop.refresh", "Refresh status", ActionDesktopRefresh, Target{}))
 	children = append(children, c.actionItem("desktop.set", "Set/Re-apply desktop proxy", ActionDesktopSet, Target{}))
 	children = append(children, c.actionItem("desktop.restore", "Restore previous desktop proxy", ActionDesktopRestore, Target{}))
+	children = append(children, c.actionItem("desktop.clear", "Clear desktop proxy (disable system proxy)", ActionDesktopClear, Target{}))
+	if reason := c.desktopClearBlockedReasonLocked(); reason != "" && c.snap.Desktop.Known && !c.snap.Desktop.Err {
+		children = append(children, disabledItem("desktop.clear.reason", "Clear unavailable: "+reason))
+	}
 	if d.Err {
 		children = append(children, disabledItem("desktop.reason", "Desktop proxy status could not be read; restore/keep is an explicit choice at Quit"))
 	} else if d.Known && !d.Supported {
@@ -570,6 +580,8 @@ func desktopStatusLabel(d DesktopView) string {
 		return "Desktop proxy: loading…"
 	case !d.Supported:
 		return "Desktop proxy: unsupported" + environmentSuffix(d)
+	case d.Cleared:
+		return "Desktop proxy: cleared (disabled)" + environmentSuffix(d)
 	case d.Applied:
 		label := "Desktop proxy: applied" + environmentSuffix(d)
 		if len(d.Conflict) > 0 {
@@ -715,34 +727,49 @@ func (c *Controller) quitMenuLocked() Node {
 	return submenu("quit", "Quit", children...)
 }
 
-func (c *Controller) pageNodes(prefix string, section Section, page, pages int) []Node {
-	if pages <= 1 {
-		return nil
-	}
-	status := disabledItem(prefix+".page", fmt.Sprintf("Page %d/%d", page, pages))
-	prev := c.actionItem(prefix+".prev", "Previous page", ActionPagePrevious, Target{Section: section})
-	prev.Enabled = prev.Enabled && page > 1
-	next := c.actionItem(prefix+".next", "Next page", ActionPageNext, Target{Section: section})
-	next.Enabled = next.Enabled && page < pages
-	return []Node{status, prev, next}
-}
-
-func pageSlice[T any](rows []T, page int) []T {
+// pagedNodes renders the first page of rows and, when there are more, one
+// submenu at the end whose children are the next page followed by another
+// submenu, recursively. The host closes the menu on every click, so this keeps
+// page navigation inside the open menu instead of Previous/Next actions that
+// would reopen it.
+func pagedNodes[T any](prefix string, rows []T, render func(T) Node) []Node {
 	if len(rows) == 0 {
 		return nil
 	}
+	pages := (len(rows) + PageSize - 1) / PageSize
+	out := renderPage(rows, 1, render)
+	if pages > 1 {
+		out = append(out, morePages(prefix, rows, 2, pages, render))
+	}
+	return out
+}
+
+func renderPage[T any](rows []T, page int, render func(T) Node) []Node {
 	start := (page - 1) * PageSize
+	end := start + PageSize
 	if start < 0 {
 		start = 0
 	}
-	if start >= len(rows) {
-		start = (len(rows) - 1) / PageSize * PageSize
+	if start > len(rows) {
+		start = len(rows)
 	}
-	end := start + PageSize
 	if end > len(rows) {
 		end = len(rows)
 	}
-	return rows[start:end]
+	out := make([]Node, 0, end-start)
+	for _, row := range rows[start:end] {
+		out = append(out, render(row))
+	}
+	return out
+}
+
+func morePages[T any](prefix string, rows []T, page, pages int, render func(T) Node) Node {
+	key := fmt.Sprintf("%s.page.%d", prefix, page)
+	children := renderPage(rows, page, render)
+	if page < pages {
+		children = append(children, morePages(key, rows, page+1, pages, render))
+	}
+	return submenu(key, fmt.Sprintf("Page %d/%d", page, pages), children...)
 }
 
 func firstNonEmpty(values ...string) string {

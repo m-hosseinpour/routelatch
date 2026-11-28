@@ -156,6 +156,13 @@ type PoolRow struct {
 	DisplayName string
 	Protocol    contract.Protocol
 	InsecureTLS bool
+	// DelayMS is the exit's measured delay: the last successful endpoint
+	// TCP/TLS round trip, or the egress EWMA when that is the only sample.
+	// Zero means no measurement yet.
+	DelayMS int64
+	// Reachable marks endpoint evidence without egress proof. It is a display
+	// view, never a health claim.
+	Reachable bool
 }
 
 // Proposal is one pending or decided diagnostic proposal. Destination is a
@@ -168,6 +175,9 @@ type Proposal struct {
 	Status      contract.ProposalStatus
 	ExpiresAt   time.Time
 	Note        string
+	// SuffixOK is true only for a route proposal whose destination is a
+	// hostname, so "Accept as domain suffix" can be offered.
+	SuffixOK bool
 }
 
 // DesktopView is the desktop-proxy state. Known=false with Err=true means the
@@ -178,6 +188,7 @@ type DesktopView struct {
 	Err          bool
 	Supported    bool
 	Applied      bool
+	Cleared      bool
 	PreviousSet  bool
 	Environment  string
 	Conflict     []string
@@ -350,6 +361,9 @@ func rulesFromData(d control.RulesListData) []Rule {
 			AddedAt: r.AddedAt,
 		})
 	}
+	// The service already returns approved rules newest first, so the menu
+	// preserves that order instead of reversing it a second time
+	// (docs/contracts.md §7.3).
 	return out
 }
 
@@ -371,6 +385,16 @@ func ruleOperand(r control.RuleView) string {
 func poolFromData(d control.PoolListData) PoolView {
 	rows := make([]PoolRow, 0, len(d.Records))
 	for _, r := range d.Records {
+		delay := int64(0)
+		reachable := false
+		if r.Health != nil {
+			delay = r.Health.TransportLatencyMS
+			if delay == 0 && r.Status == contract.RecordHealthy {
+				delay = r.Health.EWMALatencyMS
+			}
+			reachable = r.Status == contract.RecordUnknown &&
+				!r.Health.TransportSuccessAt.IsZero()
+		}
 		rows = append(rows, PoolRow{
 			ID:          contract.ExitID(r.ID),
 			Status:      r.Status,
@@ -378,6 +402,8 @@ func poolFromData(d control.PoolListData) PoolView {
 			DisplayName: SanitizeLabel(r.DisplayName),
 			Protocol:    r.Protocol,
 			InsecureTLS: r.InsecureTLS,
+			DelayMS:     delay,
+			Reachable:   reachable,
 		})
 	}
 	return PoolView{
@@ -403,6 +429,7 @@ func proposalsFromData(d control.ProposalsData) []Proposal {
 			Status:      p.Status,
 			ExpiresAt:   p.ExpiresAt,
 			Note:        SanitizeLabel(p.Note),
+			SuffixOK:    p.Kind != contract.ProposalUnroute && p.Destination.Kind == contract.DestDomain,
 		})
 	}
 	return out
@@ -436,6 +463,7 @@ func desktopFromData(d control.DesktopData) DesktopView {
 		Known:        true,
 		Supported:    d.Supported,
 		Applied:      d.Applied,
+		Cleared:      d.Cleared,
 		PreviousSet:  d.PreviousSet,
 		Environment:  SanitizeLabel(d.Environment),
 		Conflict:     sanitizeList(d.Conflict),

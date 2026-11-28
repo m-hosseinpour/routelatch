@@ -351,6 +351,15 @@ func (m *Manager) Diagnose(ctx context.Context, dst contract.Destination) (Diagn
 			Message: "service is stopped",
 		}
 	}
+	if m.mode() != contract.ModeTargeted {
+		// Only targeted mode compares a direct attempt with the pool. In
+		// all-proxy the destination is meant to use the pool, and all-direct is
+		// an explicit no-proposal mode (docs/contracts.md §6.3).
+		return DiagnoseResult{}, &contract.Failure{
+			Kind: contract.PolicyDenied, Path: contract.PathLocal, Op: "diagnostics.diagnose",
+			Message: "diagnostics and proposals run only in targeted mode",
+		}
+	}
 	if !validTarget(dst) {
 		return DiagnoseResult{}, &contract.Failure{
 			Kind: contract.InvalidDestination, Path: contract.PathLocal, Op: "diagnostics.diagnose",
@@ -380,6 +389,18 @@ func (m *Manager) Diagnose(ctx context.Context, dst contract.Destination) (Diagn
 // Recheck runs the same bounded direct probe for an existing proposal and
 // appends fresh evidence. It never revives a rejected or expired proposal.
 func (m *Manager) Recheck(ctx context.Context, id contract.ProposalID) (RecheckResult, error) {
+	if m.mode() == contract.ModeStopped {
+		return RecheckResult{}, &contract.Failure{
+			Kind: contract.Stopped, Path: contract.PathLocal, Op: "diagnostics.recheck",
+			Message: "service is stopped",
+		}
+	}
+	if m.mode() != contract.ModeTargeted {
+		return RecheckResult{}, &contract.Failure{
+			Kind: contract.PolicyDenied, Path: contract.PathLocal, Op: "diagnostics.recheck",
+			Message: "diagnostics and proposals run only in targeted mode",
+		}
+	}
 	if m.opts.Store == nil {
 		return RecheckResult{}, ErrNoStore
 	}

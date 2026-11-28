@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -275,12 +276,14 @@ type legacyStateDocument struct {
 	Proposals []contract.Proposal `json:"proposals"`
 }
 
-// legacyProposalState is a state document an older build could have written.
+// legacyProposalState is a version-1 state document an older build could have
+// written. The schema version stays literal: it is historical evidence, not the
+// version this build writes.
 func legacyProposalState(canary string) legacyStateDocument {
 	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
 	return legacyStateDocument{
 		State: contract.State{
-			SchemaVersion: contract.SchemaVersionCurrent,
+			SchemaVersion: 1,
 			PolicyVersion: 1,
 			Mode:          contract.ModeTargeted,
 			Rules:         []contract.Rule{},
@@ -685,5 +688,250 @@ func TestOpenScrubsLegacyTempResidue(t *testing.T) {
 	}
 	if _, err := os.Stat(backupTemp); err != nil {
 		t.Fatal("the scrub deleted the backup temp instead of rewriting it")
+	}
+}
+
+func writeConfigFile(t *testing.T, s *Store, raw string) {
+	t.Helper()
+	if err := os.WriteFile(s.Paths().Config, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDefaultConfigSeedsEgressTargets(t *testing.T) {
+	want := "tls://cloudflare.com:443,tls://www.gstatic.com:443"
+	if got := strings.Join(DefaultConfig().Probes.Targets, ","); got != want {
+		t.Fatalf("default targets = %q, want %q", got, want)
+	}
+
+	s := newTestStore(t)
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(snap.Config.Probes.Targets, ","); got != want {
+		t.Fatalf("loaded targets = %q, want %q", got, want)
+	}
+}
+
+func TestConfigWithoutTargetsKeyKeepsDefaults(t *testing.T) {
+	s := newTestStore(t)
+	writeConfigFile(t, s, `{"schema_version":1}`)
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(snap.Config.Probes.Targets, ","); got != strings.Join(DefaultProbeTargets, ",") {
+		t.Fatalf("targets = %q, want the defaults", got)
+	}
+}
+
+func TestExplicitEmptyTargetsStayEmpty(t *testing.T) {
+	s := newTestStore(t)
+	writeConfigFile(t, s, `{"schema_version":1,"probes":{"targets":[]}}`)
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Config.Probes.Targets) != 0 {
+		t.Fatalf("targets = %v, want an explicitly empty list", snap.Config.Probes.Targets)
+	}
+}
+
+func ruleIDs(rules []contract.Rule) []string {
+	out := make([]string, len(rules))
+	for i, rule := range rules {
+		out[i] = string(rule.ID)
+	}
+	return out
+}
+
+func writeVersionedState(t *testing.T, s *Store, st contract.State) []byte {
+	t.Helper()
+	raw, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Paths().State, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func migrationRules() []contract.Rule {
+	return []contract.Rule{
+		{ID: "r-old", Kind: contract.RuleDomain, Host: "old.example", Origin: contract.RuleOriginUser},
+		{ID: "r-mid", Kind: contract.RuleDomainSuffix, Host: "mid.example", Origin: contract.RuleOriginUser},
+		{ID: "r-new", Kind: contract.RuleDomain, Host: "new.example", Origin: contract.RuleOriginUser},
+	}
+}
+
+func TestV1RulesMigrateToNewestFirstOnce(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	st := contract.State{
+		SchemaVersion: 1, PolicyVersion: 9, Mode: contract.ModeTargeted,
+		Rules: migrationRules(), Sources: []contract.Source{}, Records: []contract.Record{},
+		Health: []contract.ExitHealth{}, UpdatedAt: time.Date(2026, 11, 20, 8, 0, 0, 0, time.UTC),
+	}
+	legacy := writeVersionedState(t, s, st)
+
+	snap, err := s.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State.SchemaVersion != contract.SchemaVersionCurrent {
+		t.Fatalf("migrated schema = %d, want %d", snap.State.SchemaVersion, contract.SchemaVersionCurrent)
+	}
+	if got, want := ruleIDs(snap.State.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("migrated rule order = %v, want %v", got, want)
+	}
+	// The migration only moves the list; contents and policy generation stay.
+	for i, want := range migrationRules() {
+		got := snap.State.Rules[len(snap.State.Rules)-1-i]
+		if got != want {
+			t.Fatalf("migrated rule %d = %+v, want %+v", i, got, want)
+		}
+	}
+	if snap.State.PolicyVersion != 9 {
+		t.Fatalf("policy version = %d, want 9 (order is not a routing change)", snap.State.PolicyVersion)
+	}
+	backup, err := os.ReadFile(s.Paths().State + ".bak")
+	if err != nil {
+		t.Fatalf("pre-migration backup missing: %v", err)
+	}
+	if string(backup) != string(legacy) {
+		t.Fatalf("pre-migration backup changed the old document:\n%s", backup)
+	}
+
+	// A second load finds version 2 and must not reverse again or rewrite.
+	migrated := readStateFile(t, s)
+	if snap2, err := s.Load(ctx); err != nil {
+		t.Fatal(err)
+	} else if got, want := ruleIDs(snap2.State.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("second load rule order = %v, want %v", got, want)
+	}
+	if again := readStateFile(t, s); string(again) != string(migrated) {
+		t.Fatal("a version-2 state was rewritten on the next load")
+	}
+}
+
+func TestV2RulesAreNotReversed(t *testing.T) {
+	s := newTestStore(t)
+	st := contract.State{
+		SchemaVersion: contract.SchemaVersionCurrent, PolicyVersion: 4, Mode: contract.ModeTargeted,
+		Rules: migrationRules(), Sources: []contract.Source{}, Records: []contract.Record{},
+		Health: []contract.ExitHealth{}, UpdatedAt: time.Date(2026, 11, 20, 8, 0, 0, 0, time.UTC),
+	}
+	raw := writeVersionedState(t, s, st)
+
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ruleIDs(snap.State.Rules), []string{"r-old", "r-mid", "r-new"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("version-2 rule order = %v, want untouched %v", got, want)
+	}
+	if after := readStateFile(t, s); string(after) != string(raw) {
+		t.Fatal("a current-schema state was rewritten")
+	}
+}
+
+func TestVersionZeroRulesMigrateToNewestFirst(t *testing.T) {
+	s := newTestStore(t)
+	st := contract.State{
+		PolicyVersion: 3, Mode: "", Rules: migrationRules(),
+		Sources: []contract.Source{}, Records: []contract.Record{}, Health: []contract.ExitHealth{},
+	}
+	writeVersionedState(t, s, st)
+
+	snap, err := s.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ruleIDs(snap.State.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("migrated rule order = %v, want %v", got, want)
+	}
+	if snap.State.SchemaVersion != contract.SchemaVersionCurrent || snap.State.Mode != contract.ModeTargeted {
+		t.Fatalf("migrated state = schema %d mode %q", snap.State.SchemaVersion, snap.State.Mode)
+	}
+}
+
+// TestRuleReorderNeedsPolicyVersion pins the guard the migration relies on: the
+// order is part of the stored rule set, so an order-only mutation without a new
+// policy version is refused instead of being mistaken for no change.
+func TestRuleReorderNeedsPolicyVersion(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	if _, err := s.Mutate(ctx, func(st *contract.State) error {
+		st.Rules = migrationRules()
+		st.PolicyVersion++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := s.Mutate(ctx, func(st *contract.State) error {
+		st.Rules[0], st.Rules[2] = st.Rules[2], st.Rules[0]
+		return nil
+	})
+	var failure *contract.Failure
+	if !errors.As(err, &failure) || failure.Kind != contract.Internal {
+		t.Fatalf("reorder without a policy version err = %v, want internal", err)
+	}
+
+	snap, err := s.Mutate(ctx, func(st *contract.State) error {
+		st.Rules[0], st.Rules[2] = st.Rules[2], st.Rules[0]
+		st.PolicyVersion++
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ruleIDs(snap.State.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("reordered rule order = %v, want %v", got, want)
+	}
+}
+
+// TestV1BackupRestoresAndMigratesRules proves a backup written by the previous
+// schema still verifies (its checksum covers the recorded version) and gets the
+// same newest-first migration on restore.
+func TestV1BackupRestoresAndMigratesRules(t *testing.T) {
+	s := newTestStore(t)
+	st := contract.State{
+		SchemaVersion: 1, PolicyVersion: 6, Mode: contract.ModeTargeted,
+		Rules: migrationRules(), Sources: []contract.Source{}, Records: []contract.Record{},
+		Health: []contract.ExitHealth{}, UpdatedAt: time.Date(2026, 11, 20, 8, 0, 0, 0, time.UTC),
+	}
+	payload, err := json.Marshal(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := canonicalState(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(canonical)
+	path := writeLegacyBackup(t, s, payload, "sha256:"+hex.EncodeToString(sum[:]))
+
+	inspected, got, err := s.InspectBackup(path)
+	if err != nil {
+		t.Fatalf("v1 backup did not verify: %v", err)
+	}
+	if inspected.Checksum != "sha256:"+hex.EncodeToString(sum[:]) {
+		t.Fatalf("checksum = %q", inspected.Checksum)
+	}
+	if ids, want := ruleIDs(got.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("inspected rule order = %v, want %v", ids, want)
+	}
+	restored, err := s.RestorePath(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ruleIDs(restored.State.Rules), []string{"r-new", "r-mid", "r-old"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("restored rule order = %v, want %v", got, want)
+	}
+	if restored.State.SchemaVersion != contract.SchemaVersionCurrent {
+		t.Fatalf("restored schema = %d", restored.State.SchemaVersion)
 	}
 }

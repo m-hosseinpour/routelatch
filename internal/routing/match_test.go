@@ -107,6 +107,42 @@ func TestMatchOriginAndOrderIndependent(t *testing.T) {
 	}
 }
 
+func TestMatchIsIdenticalAfterNewestFirstReversal(t *testing.T) {
+	// The stored list moved from oldest-first to newest-first in schema 2.
+	// Reversing it is a storage migration only: every decision stays the same.
+	rules := []contract.Rule{
+		{ID: "r-example", Kind: contract.RuleDomainSuffix, Host: "example.com"},
+		{ID: "r-deep", Kind: contract.RuleDomainSuffix, Host: "deep.example.com"},
+		{ID: "r-api", Kind: contract.RuleDomain, Host: "api.example.com"},
+		{ID: "r-wide", Kind: contract.RuleCIDR, Prefix: mustPrefix(t, "203.0.113.0/24")},
+		{ID: "r-narrow", Kind: contract.RuleCIDR, Prefix: mustPrefix(t, "203.0.113.0/25")},
+		{ID: "r-exact", Kind: contract.RuleIP, Addr: mustAddr(t, "203.0.113.8")},
+		{ID: "r-tie-b", Kind: contract.RuleDomain, Host: "tie.example"},
+		{ID: "r-tie-a", Kind: contract.RuleDomain, Host: "tie.example"},
+	}
+	reversed := make([]contract.Rule, len(rules))
+	for i, rule := range rules {
+		reversed[len(rules)-1-i] = rule
+	}
+	destinations := []contract.Destination{
+		domainDst("example.com", 443),
+		domainDst("api.example.com", 443),
+		domainDst("deep.api.example.com", 443),
+		domainDst("tie.example", 443),
+		domainDst("unmatched.example", 443),
+		ipDst(mustAddr(t, "203.0.113.8"), 443),
+		ipDst(mustAddr(t, "203.0.113.200"), 443),
+		ipDst(mustAddr(t, "198.51.100.1"), 443),
+	}
+	for _, dst := range destinations {
+		want, wantOK := Match(rules, dst)
+		got, gotOK := Match(reversed, dst)
+		if got != want || gotOK != wantOK {
+			t.Fatalf("reversal changed match for %+v: %+v/%v -> %+v/%v", dst, want, wantOK, got, gotOK)
+		}
+	}
+}
+
 func TestMatchTieUsesRuleID(t *testing.T) {
 	b := contract.Rule{ID: "r-b", Kind: contract.RuleDomainSuffix, Host: "example.com"}
 	a := contract.Rule{ID: "r-a", Kind: contract.RuleDomainSuffix, Host: "example.com"}

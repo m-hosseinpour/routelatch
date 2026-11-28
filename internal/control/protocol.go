@@ -48,6 +48,7 @@ const (
 	OpPoolRemove       = "pool.remove"
 	OpPoolRefresh      = "pool.refresh"
 	OpPoolTest         = "pool.test"
+	OpPoolScan         = "pool.scan"
 	OpPoolSelect       = "pool.select"
 	OpPoolRerank       = "pool.rerank"
 	OpImport           = "import"
@@ -65,6 +66,7 @@ const (
 	OpDesktopStatus    = "desktop.status"
 	OpDesktopSet       = "desktop.set"
 	OpDesktopRestore   = "desktop.restore"
+	OpDesktopClear     = "desktop.clear"
 	OpBackup           = "backup"
 	OpRestore          = "restore"
 	// TUN coverage is an overlay, not a Mode. The operations exist before the
@@ -94,6 +96,8 @@ func CommandName(op string) string {
 		return "pool refresh"
 	case OpPoolTest:
 		return "pool test"
+	case OpPoolScan:
+		return "pool scan"
 	case OpPoolSelect:
 		return "pool select"
 	case OpPoolRerank:
@@ -110,7 +114,7 @@ func CommandName(op string) string {
 		return "proposals clear"
 	case OpConfigGet, OpConfigSet, OpConfigPath:
 		return "config " + op[len("config."):]
-	case OpDesktopStatus, OpDesktopSet, OpDesktopRestore:
+	case OpDesktopStatus, OpDesktopSet, OpDesktopRestore, OpDesktopClear:
 		return "desktop proxy " + op[len("desktop."):]
 	case OpTunStatus:
 		return "tun status"

@@ -51,7 +51,7 @@ func (c *Client) Call(ctx context.Context, req Request) (contract.Envelope, erro
 	// pool test and diagnose can legitimately exceed the default request
 	// deadline; the server enforces the per-operation bound as well.
 	switch req.Op {
-	case OpPoolTest:
+	case OpPoolTest, OpPoolScan:
 		timeout = 10 * time.Minute
 	case OpDiagnose, OpProposalsRecheck:
 		timeout = 90 * time.Second
@@ -59,7 +59,7 @@ func (c *Client) Call(ctx context.Context, req Request) (contract.Envelope, erro
 		timeout = 95 * time.Second
 	case OpImport, OpPoolAdd:
 		timeout = 65 * time.Second
-	case OpDesktopSet, OpDesktopRestore, OpBackup, OpRestore:
+	case OpDesktopSet, OpDesktopRestore, OpDesktopClear, OpBackup, OpRestore:
 		timeout = 30 * time.Second
 	case OpTunEnable, OpTunDisable, OpMode:
 		// Must outlive the server's TUN/mode budget so a slow but successful
