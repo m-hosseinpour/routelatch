@@ -32,6 +32,7 @@ type socksPeer struct {
 	ln      net.Listener
 	cfg     socksPeerConfig
 	conns   atomic.Int64
+	open    atomic.Int64 // accepted connections still owned by the peer
 	mu      sync.Mutex
 	got     socksRequest
 	methods []byte
@@ -74,11 +75,13 @@ func (p *socksPeer) acceptLoop() {
 			return
 		}
 		p.conns.Add(1)
+		p.open.Add(1)
 		go p.handle(c)
 	}
 }
 
 func (p *socksPeer) handle(c net.Conn) {
+	defer p.open.Add(-1)
 	defer c.Close()
 	if p.cfg.silent {
 		// Read until the client gives up; nothing is ever sent, so the
@@ -514,7 +517,6 @@ func TestSocks5TunnelReturnsTypedErrors(t *testing.T) {
 // leaving it to the caller's deadline.
 func TestStopClosesPendingSocksHandshake(t *testing.T) {
 	p := newSocksPeer(t, socksPeerConfig{silent: true})
-	baseline := socketFDs(t)
 	e, err := engine.Start(engine.Options{
 		Exits:         []contract.Record{socksRecord("x-silent", "127.0.0.1", p.port(), "", "")},
 		PolicyVersion: 1,
@@ -535,9 +537,17 @@ func TestStopClosesPendingSocksHandshake(t *testing.T) {
 	if p.conns.Load() == 0 {
 		t.Fatalf("peer never accepted the handshake")
 	}
-	time.Sleep(50 * time.Millisecond)
-	if got := socketFDs(t); got < baseline+1 {
-		t.Fatalf("expected the pending exit socket to be open: fds %d, baseline %d", got, baseline)
+	// Observe the pending exit socket through the peer's accepted connection.
+	// A process-wide fd count is not attributable to this dial: sibling tests
+	// close their own sockets concurrently, so an unrelated close could cancel
+	// the expected count.
+	select {
+	case err := <-done:
+		t.Fatalf("the pending dial returned before Stop: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if got := p.open.Load(); got != 1 {
+		t.Fatalf("pending exit connections = %d, want 1", got)
 	}
 
 	start := time.Now()
@@ -555,8 +565,11 @@ func TestStopClosesPendingSocksHandshake(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("pending SOCKS5 dial was not released by Stop")
 	}
-	time.Sleep(50 * time.Millisecond)
-	if got := socketFDs(t); got > baseline+1 {
-		t.Fatalf("socket fds after Stop = %d, baseline %d", got, baseline)
+	deadline = time.Now().Add(2 * time.Second)
+	for p.open.Load() != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := p.open.Load(); got != 0 {
+		t.Fatalf("exit connections still open after Stop: %d", got)
 	}
 }
